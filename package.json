@@ -1,14 +1,18 @@
 {
   "version": "0.0.0",
   "scripts": {
-    "dev": "vite",
     "build": "vite build",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "start": "vite"
   },
   "devDependencies": {
     "vite": "^2.4.2"
   },
   "glitch": {
-    "projectType": "generated_static"
+    "projectType": "generated_static",
+    "buildDirectory": "build"
+  },
+  "engines": {
+    "node": "14.x"
   }
 }
