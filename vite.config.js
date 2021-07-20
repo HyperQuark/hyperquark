@@ -1,5 +1,6 @@
 const path = require("path");
 const { assemblyScript } = require("./rollup-as-loader.js");
+import { asc } from "rollup-plugin-assemblyscript";
 
 export default {
   css: {
@@ -7,9 +8,9 @@ export default {
       localsConvention: 'camelCaseOnly'
     }
   },
-  plugins: [assemblyScript({
+  plugins: [/*assemblyScript({
     include: /^.*?\.as$/
-  })],
+  })*/asc({})],
   build: {
     outDir: "build"
   },
