@@ -2,7 +2,7 @@ import { createFilter, FilterPattern } from "@rollup/pluginutils";
 import asCompiler from "assemblyscript/cli/asc";
 import { basename } from "path";
 import { promises as fs } from "fs";
-import { * as libSource } from "./rollup-as-loader-lib.js";
+import * as libSource from "./rollup-as-loader-lib.js";
 
 const PREFIX = "assemblyscript:";
 const LIB_IMPORT = "__assemblyscript-loader";
@@ -14,7 +14,7 @@ const defaultOpts = {
   compilerOptions: {}
 };
 
-export default function assets(_opts = {}) {
+module.exports = function assets(_opts = {}) {
   const opts = { ...defaultOpts, ..._opts };
   const filter = createFilter(opts.include, opts.exclude);
 
