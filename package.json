@@ -17,6 +17,8 @@
     "node": "14.x"
   },
   "dependencies": {
-    "assemblyscript": "^0.19.7"
+    "assemblyscript": "^0.19.7",
+    "babel-eslint": "^10.1.0",
+    "@assemblyscript/loader": "^0.19.7"
   }
 }
