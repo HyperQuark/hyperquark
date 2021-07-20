@@ -2,7 +2,7 @@ import { createFilter, FilterPattern } from "@rollup/pluginutils";
 import asCompiler from "assemblyscript/cli/asc";
 import { basename } from "path";
 import { promises as fs } from "fs";
-import { source as libSource } from "asset:./static/lib.js";
+import { * as libSource } from "./rollup-as-loader-lib.js";
 
 const PREFIX = "assemblyscript:";
 const LIB_IMPORT = "__assemblyscript-loader";
@@ -46,23 +46,23 @@ export default function assets(_opts = {}) {
       const source = await fs.readFile(assetPath);
 
       const options = opts.compilerOptions;
-      options.binaryFile ??= basename(id, ".ts") + ".wasm";
-      options.textFile ??= basename(options.binaryFile, ".wasm") + ".wat";
+      options.binaryFile ?? (options.binaryFile = basename(id, ".as") + ".wasm");
+      options.textFile ?? (options.textFile = basename(options.binaryFile, ".wasm") + ".wat");
 
       const { stderr, stdout, ...files } = asCompiler.compileString(
         source.toString(),
         options
       );
 
-      const errors = (stderr as unknown) as string[];
+      const errors = sderr;
 
       if (errors.length) {
         for (let err of errors) this.warn(err);
         return;
       }
 
-      let referenceId: string | undefined;
-      for (let name of Object.keys(files) as Array<keyof typeof files>) {
+      let referenceId;
+      for (let name of Object.keys(files)) {
         const source = files[name];
         if (!source) continue;
         if (!opts.emitText && name === options.textFile) continue;

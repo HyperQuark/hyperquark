@@ -1,5 +1,5 @@
 const path = require("path");
-const assemblyScript = require("@sebastianspeitel/rollup-plugin-assemblyscript-loader");
+const assemblyScript = require("./rollup-as-loader.js");
 
 export default {
   css: {
