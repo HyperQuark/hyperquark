@@ -12,6 +12,7 @@ instantiate({
   <a href="https://vitejs.dev/guide/features.html" target="_blank">Documentation</a>
   ${instance.exports.add(5, 7)}
 `;
+  console.log(instance.exports.table);
 });
 /*
 import wasmUrl from "asc:./test.as";

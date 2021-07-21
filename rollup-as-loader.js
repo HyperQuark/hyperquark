@@ -8,7 +8,7 @@ export function assemblyScript () {
       if (!/\.(t|a)s$/.test(id)) return;
       let z = await new Promise(async (resolve, reject) => {
         await asc.ready;
-        const { binary, text, stdout, stderr } = asc.compileString(code);
+        const { binary, text } = asc.compileString(code);
         const moo = `
           export const instantiate = options => new Promise(async resolve => resolve(await WebAssembly.instantiate(new Uint8Array([${binary.toString()}]), options)));
           `;
