@@ -22,10 +22,8 @@ export function assemblyScript() {
           readFileSync(fileId, { encoding: "utf-8" }),
           compilerOptions
         );
-        const moo = `
-          export const instantiate = options => new Promise(async resolve => resolve(await WebAssembly.instantiate(new Uint8Array([${binary.toString()}]), options)));
-          export const text = \`${text.replace(/`/g, '\\`')}\`;
-          `;
+        const moo = "export const instantiate = options => new Promise(async resolve => resolve(await WebAssembly.instantiate(new Uint8Array([" + binary.toString() + "]), options)));\
+          export const text = '" + text.replace(/`/g, '\\`').replace(/\n/g, '\\\n') + "';";
         console.log(moo);
         resolve({ code: moo });
       });
