@@ -1,19 +1,11 @@
 import "./style.css";
 
 import { instantiate, text } from "./test.as?exportTable&exportRuntime";
+import { Asdom } from "asdom/glue/index.js";
 
-instantiate({ env: { abort: () => console.log("Abort!") } }).then(
+instantiate({ env: { abort: () => console.log("Abort!") }, ...Asdom.wasmImports }).then(
   ({ instance }) => {
-    document.querySelector("#app").innerHTML = `
-  <h1>Hello Vite!</h1>
-  <a href="https://vitejs.dev/guide/features.html" target="_blank">Documentation</a>
-  <br />
-  ${instance.exports.add(5, 7)}
-  <br /> 
-  <pre>
-  ${text}
-  </pre>
-`;
+    Asdom.wasmExports = instance.exports
     console.log(instance.exports.table);
   }
 );

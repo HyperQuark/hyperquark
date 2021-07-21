@@ -23,7 +23,8 @@ export function assemblyScript() {
           compilerOptions
         );
         writeFileSync("/app/aa.md", text, { encoding: "utf-8" });
-        const moo = "export const instantiate = options => new Promise(async resolve => resolve(await WebAssembly.instantiate(new Uint8Array([" + binary.toString() + "]), options)));\
+        const moo = "import { instantiate as asInstantiate} from \"@assemblyscript/loader\";\
+        export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(new Uint8Array([" + binary.toString() + "]), options)));\
           export const text = '" + text.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, '\\n') + "';";
         console.log(moo);
         resolve({ code: moo });
