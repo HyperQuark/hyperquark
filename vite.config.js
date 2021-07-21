@@ -8,9 +8,9 @@ export default {
       localsConvention: 'camelCaseOnly'
     }
   },
-  plugins: [/*assemblyScript({
+  plugins: [assemblyScript({
     include: /^.*?\.as$/
-  })*/asc({})],
+  })/*asc()*/],
   build: {
     outDir: "build"
   },
