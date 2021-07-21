@@ -1,5 +1,5 @@
 import asc from "assemblyscript/cli/asc";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { parse as parseQueryString } from "query-string";
 
 export function assemblyScript() {
@@ -22,8 +22,9 @@ export function assemblyScript() {
           readFileSync(fileId, { encoding: "utf-8" }),
           compilerOptions
         );
+        writeFileSync("/app/aa.md", text, { encoding: "utf-8" });
         const moo = "export const instantiate = options => new Promise(async resolve => resolve(await WebAssembly.instantiate(new Uint8Array([" + binary.toString() + "]), options)));\
-          export const text = '" + text.replace(/`/g, '\\`').replace(/\n/g, '\\\n') + "';";
+          export const text = '" + text.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, '\\n') + "';";
         console.log(moo);
         resolve({ code: moo });
       });
