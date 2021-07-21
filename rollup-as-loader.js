@@ -7,10 +7,13 @@ export function assemblyScript() {
     name: "assemblyscript",
     async load(id) {
       console.log("aaaaaa");
-      if (!/\.(t|a)s$/.test(id)) return;
+      if (!/\.(t|a)s(\?.*?)?$/.test(id)) return;
       let [fileId, query] = id.split("?");
       let compilerOptions = parseQueryString(query || "");
-      console.log(fileId, query);
+      for (let option in compilerOptions) {
+        compilerOptions[option] ?? (compilerOptions[option] = true)
+      }
+      console.log(fileId, query, compilerOptions);
       let z = await new Promise(async (resolve, reject) => {
         await asc.ready;
         const { binary, text } = asc.compileString(
