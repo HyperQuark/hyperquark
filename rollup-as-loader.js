@@ -1,5 +1,6 @@
 import asc from "assemblyscript/cli/asc";
 import { readFileSync } from "fs";
+import { parse as parseQueryString } from "query-string";
 
 export function assemblyScript() {
   return {
@@ -7,7 +8,9 @@ export function assemblyScript() {
     async load(id) {
       console.log("aaaaaa");
       if (!/\.(t|a)s$/.test(id)) return;
-      let 
+      let [fileId, query] = id.split("?");
+      let compilerOptions = parseQueryString(query || "");
+      console.log(fileId, query);
       let z = await new Promise(async (resolve, reject) => {
         await asc.ready;
         const { binary, text } = asc.compileString(

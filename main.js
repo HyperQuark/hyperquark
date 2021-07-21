@@ -1,6 +1,6 @@
 import "./style.css";
 
-import { instantiate } from "./test.as";
+import { instantiate } from "./test.as?exportTable";
 
 instantiate({
   env: {
