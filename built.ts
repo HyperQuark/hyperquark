@@ -57,7 +57,7 @@ export declare function getNextSibling(id: usize): i32
 export declare function getPreviousSibling(id: usize): i32
 // @ts-expect-error
 @external('asDOM_Node', 'cloneNode')
-export declare function cloneNode(id: usize, deep?: boolean): i32
+declare function cloneNode(id: usize, deep?: boolean): i32
 // @ts-expect-error
 @external('asDOM_Node', 'getChildNodes')
 export declare function getChildNodes(nodeId: usize, listId: usize): void
@@ -261,7 +261,6 @@ export class NodeList<T extends Node> extends Object {
 	}
 	@operator('[]=')
 	private arrayWrite(index: i32, value: T): void {
-		ERROR('NodeList is not writable.')
 	}
 	// This makes TypeScript happy.
 	// The name must be "key" in AS (can be anything in TS). Open issue: https://github.com/AssemblyScript/assemblyscript/issues/1972
@@ -479,7 +478,6 @@ export class HTMLCollection extends Object {
 	}
 	@operator('[]=')
 	private arrayWrite(index: i32, value: Element): void {
-		ERROR('NodeList is not writable.')
 	}
 	// This makes TypeScript happy.
 	// The name must be "key" in AS (can be anything in TS). Open issue: https://github.com/AssemblyScript/assemblyscript/issues/1972
@@ -759,7 +757,7 @@ export abstract class Element extends Node {
 		return root
 	}
 }
-export class ShadowRootInit {
+class ShadowRootInit {
 	mode: string
 }
 export abstract class HTMLElement extends Element {

@@ -24,7 +24,11 @@ function resolveImport(id, cache) {
     }
   );
   //code = code.replace(/\/\*.+?\*\//gms, "");
-  return code.replace(/\s*?\n+\s*?/gm, "\n");
+  return code.replace(/\s*?\n+\s*?/gm, "\n")
+    // handle weird error edge cases
+    .replace("export class ShadowRootInit", "class ShadowRootInit")
+    .replace("export declare function cloneNode", "declare function cloneNode")
+  .replace("ERROR('NodeList is not writable.')", "")
 }
 
 async function load(id) {
@@ -44,7 +48,7 @@ async function load(id) {
     let code = resolveImport(fileId, cache);
     writeFileSync("/app/built.ts", code, {encoding:"utf-8"});
    // console.log(code);
-    console.log(/\/\*/.test(code));
+    console.log(/@ts-expect-error/.test(code));
     
       var { binary, text, stderr } = asc.compileString(code, compilerOptions);
     
