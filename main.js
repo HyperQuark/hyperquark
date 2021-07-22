@@ -1,6 +1,6 @@
 import "./style.css";
 
-import { instantiate, text } from "./test.as?exportTable&exportRuntime";
+import { instantiate, text } from "./test.ts?exportTable&exportRuntime";
 import { Asdom } from "asdom/glue/index.js";
 
 instantiate({ env: { abort: () => console.log("Abort!") }, ...Asdom.wasmImports }).then(

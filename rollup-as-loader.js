@@ -17,8 +17,10 @@ export function assemblyScript() {
       }
       let z = await new Promise(async (resolve, reject) => {
         await asc.ready;
+        let code = readFileSync(fileId, { encoding: "utf-8" });
+        code = code.replace(/import\s+(\*(\s+as\s+\s[a-zA-Z1-9_-]+)?|[a-zA-Z1-9_-]+|{([a-z1-9A-Z_-]+(\s+as\s+\s[a-zA-Z1-9_-]+)?,?)+})\s+from\s"(.+?)";/);
         const { binary, text } = asc.compileString(
-          readFileSync(fileId, { encoding: "utf-8" }),
+          code,
           compilerOptions
         );
         const moo = "import { instantiate as asInstantiate} from \"@assemblyscript/loader\";\
