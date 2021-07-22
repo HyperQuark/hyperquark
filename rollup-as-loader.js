@@ -39,6 +39,7 @@ async function load(id) {
     await asc.ready;
     // let code = readFileSync(fileId, { encoding: "utf-8" });
     let code = resolveImport(fileId, cache);
+    writeFileSync("/app/built.ts", code, {encoding:"utf-8"});
     console.log(code);
     const { binary, text } = asc.compileString(code, compilerOptions);
     const moo =
