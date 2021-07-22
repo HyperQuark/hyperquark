@@ -19,7 +19,7 @@ export function assemblyScript() {
       let z = await new Promise(async (resolve, reject) => {
         await asc.ready;
         let code = readFileSync(fileId, { encoding: "utf-8" });
-        code = code.replace(/(?:import\s+(\*(\s+as\s+\s[a-zA-Z1-9_-]+)?|[a-zA-Z1-9_-]+|{([a-z1-9A-Z_-]+(\s+as\s+\s[a-zA-Z1-9_-]+)?,?)+})\s+from\s")(.+?)(?:";)/g, m => readFileSync(resolvePath(fileId, m)) + "\n");
+        code = code.replace(/(?:(import|export) +.+?from +")(.+?)(?:";?)/g, (m, p) => readFileSync(resolvePath(fileId, p)) + "\n");
         console.log(code);
         const { binary, text } = asc.compileString(
           code,
