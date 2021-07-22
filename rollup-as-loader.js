@@ -5,6 +5,8 @@ import { parse as parseQueryString } from "query-string";
 
 function resolveImport(id, cache) {
   let code = readFileSync(id, { encoding: "utf-8" });
+  code = code.replace(/\/\*.??\*\//gms, "");
+  code = code.replace(/\/\/.+$/gm, "");
   code = code.replace(
     /(?:(?:import|export) +.+?from +(?:"|'))(.+?)(?:(?:"|');?$)/gms,
     (m, p) => {
@@ -21,7 +23,8 @@ function resolveImport(id, cache) {
       }
     }
   );
-  return code.replace(/\n+/g, "\n");
+  code = code.replace(/\/\*.+?\*\//gms, "");
+  return code.replace(/\n+/gm, "\n");
 }
 
 async function load(id) {
@@ -40,7 +43,8 @@ async function load(id) {
     // let code = readFileSync(fileId, { encoding: "utf-8" });
     let code = resolveImport(fileId, cache);
     writeFileSync("/app/built.ts", code, {encoding:"utf-8"});
-    console.log(code);
+   // console.log(code);
+    console.log(/\/\*/.test(code));
     const { binary, text } = asc.compileString(code, compilerOptions);
     const moo =
       'import { instantiate as asInstantiate} from "@assemblyscript/loader";\
@@ -53,7 +57,7 @@ async function load(id) {
         .replace(/'/g, "\\'")
         .replace(/\n/g, "\\n") +
       "';";
-    console.log(moo);
+  //  console.log(moo);
     resolve({ code: moo });
   });
   return z;
