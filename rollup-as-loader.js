@@ -1,5 +1,6 @@
 import asc from "assemblyscript/cli/asc";
 import { readFileSync, writeFileSync } from "fs";
+import { resolve as resolvePath } from "path";
 import { parse as parseQueryString } from "query-string";
 
 export function assemblyScript() {
@@ -18,7 +19,8 @@ export function assemblyScript() {
       let z = await new Promise(async (resolve, reject) => {
         await asc.ready;
         let code = readFileSync(fileId, { encoding: "utf-8" });
-        code = code.replace(/import\s+(\*(\s+as\s+\s[a-zA-Z1-9_-]+)?|[a-zA-Z1-9_-]+|{([a-z1-9A-Z_-]+(\s+as\s+\s[a-zA-Z1-9_-]+)?,?)+})\s+from\s"(.+?)";/);
+        code = code.replace(/(?:import\s+(\*(\s+as\s+\s[a-zA-Z1-9_-]+)?|[a-zA-Z1-9_-]+|{([a-z1-9A-Z_-]+(\s+as\s+\s[a-zA-Z1-9_-]+)?,?)+})\s+from\s")(.+?)(?:";)/g, m => readFileSync(resolvePath(fileId, m)) + "\n");
+        console.log(code);
         const { binary, text } = asc.compileString(
           code,
           compilerOptions
