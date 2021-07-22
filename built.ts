@@ -94,7 +94,6 @@ export declare function getLength(id: usize): i32
 @external('asDOM_NodeList', 'item')
 export declare function item(id: usize, index: i32): i32
 export enum ObjectType {
-	
 	unknown = 1,
 	body = 2,
 	div = 3,
@@ -111,9 +110,7 @@ export enum ObjectType {
 	h4 = 14,
 	h5 = 15,
 	h6 = 16,
-	
 	text = 100,
-	
 	htmlCollection = 200,
 	nodeListOfNode = 201,
 	nodeListOfElement = 202,
@@ -135,7 +132,6 @@ export class CustomElementRegistry extends Object {
 		this.__defs.set(tag, factory)
 	}
 	whenDefined(): void {
-		
 	}
 }
 export class Window extends Object {
@@ -177,8 +173,6 @@ export class NodeList<T extends Node> extends Object {
 	}
 	item(index: i32): T | null {
 		const id: i32 = item(this.__ptr__, index)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as T
@@ -191,13 +185,10 @@ export class NodeList<T extends Node> extends Object {
 	private arrayWrite(index: i32, value: T): void {
 		ERROR('NodeList is not writable.')
 	}
-	
-	
 	readonly [key: number]: T | null
 }
 ): Element {
 		let el: Element
-		
 		if (tag == 'body') el = new HTMLBodyElement()
 		else if (tag == 'div') el = new HTMLDivElement()
 		else if (tag == 'span') el = new HTMLSpanElement()
@@ -219,9 +210,6 @@ export class NodeList<T extends Node> extends Object {
 		setElement(this.__ptr__, el.__ptr__, tag)
 		return el
 	}
-	
-	
-	
 	createTextNode(data: string): Text {
 		const text = new Text()
 		createTextNode(this.__ptr__, text.__ptr__, data)
@@ -239,24 +227,18 @@ export class NodeList<T extends Node> extends Object {
 	}
 	get firstElementChild(): Element | null {
 		const id: i32 = getFirstElementChild(this.__ptr__)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
 	}
 	get lastElementChild(): Element | null {
 		const id: i32 = getLastElementChild(this.__ptr__)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
 	}
 	querySelector(selectors: string): Element | null {
 		const id = querySelector(this.__ptr__, selectors)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
@@ -273,7 +255,6 @@ export function logDebug(s: string): void {
 }
 export function makeObject(type: ObjectType): Object {
 	let obj: Object
-	
 	if (type == ObjectType.body) obj = new HTMLBodyElement()
 	else if (type == ObjectType.div) obj = new HTMLDivElement()
 	else if (type == ObjectType.span) obj = new HTMLSpanElement()
@@ -290,50 +271,31 @@ export function makeObject(type: ObjectType): Object {
 	else if (type == ObjectType.h5) obj = new HTMLHeadingElement()
 	else if (type == ObjectType.h6) obj = new HTMLHeadingElement()
 	else if (type === ObjectType.unknown) obj = new HTMLUnknownElement()
-	
 	else if (type === ObjectType.text) obj = new Text()
-	
 	else if (type === ObjectType.htmlCollection) obj = new HTMLCollection()
 	else if (type === ObjectType.nodeListOfNode) obj = new NodeList<Node>()
 	else if (type === ObjectType.nodeListOfElement) obj = new NodeList<Element>()
-	
 	else throw new Error('Hyphenated or custom elements not yet supported.')
 	return obj
 }
 export function idToNullOrObject(id: i32): Object | null {
 	logDebug('idToNullOrObject, ' + id.toString())
-	
 	if (id == 0) {
 		logDebug('idToNullOrObject returning null')
 		return null
 	}
-	
-	
-	
 	else if (id < 0) {
 		logDebug('idToNullOrObject id < 0')
 		const obj = makeObject(-id)
-		
-		
-		
 		trackNextRef(obj.__ptr__)
 		return obj
 	}
-	
-	
-	
-	
-	
-	
-	
-	
 	else {
 		logDebug('idToNullOrObject got reference ID: ' + id.toString())
-		return refs.get(id) as Object 
+		return refs.get(id) as Object
 	}
 }
 export class ShadowRoot extends DocumentFragment {
-	
 	set innerHTML(str: string) {
 		setInnerHTML(this.__ptr__, str)
 	}
@@ -378,32 +340,24 @@ export abstract class Element extends Node {
 	}
 	get firstElementChild(): Element | null {
 		const id: i32 = getFirstElementChild(this.__ptr__)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
 	}
 	get lastElementChild(): Element | null {
 		const id: i32 = getLastElementChild(this.__ptr__)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
 	}
 	get nextElementSibling(): Element | null {
 		const id: i32 = getNextElementSibling(this.__ptr__)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
 	}
 	get previousElementSibling(): Element | null {
 		const id: i32 = getPreviousElementSibling(this.__ptr__)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
@@ -419,8 +373,6 @@ export abstract class Element extends Node {
 	}
 	querySelector(selectors: string): Element | null {
 		const id = querySelector(this.__ptr__, selectors)
-		
-		
 		const result = idToNullOrObject(id)
 		if (!result) return null
 		else return result as Element
@@ -444,14 +396,11 @@ export class ShadowRootInit {
 	mode: string
 }
 export abstract class HTMLElement extends Element {
-	
-	
 	static observedAttributes: string[] = []
 	connectedCallback(): void {}
 	disconnectedCallback(): void {}
 	adoptedCallback(): void {}
 	attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {}
-	
 }
 export function asdom_connectedCallback(id: usize): void {
 	const el = refs.get(id) as HTMLElement
@@ -478,7 +427,7 @@ export const idof_Arrayi32 = idof<Array<i32>>()
 export function start(): void {
   const el = document.createElement("h1");
   el.setAttribute("foo", "bar");
-  const s: string = el.getAttribute("foo")!; 
+  const s: string = el.getAttribute("foo")!;
   el.innerHTML =  `
   <span style="font-weight: normal; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%)">
     <em>hello</em> from <strong>AssemblyScript</strong>

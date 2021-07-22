@@ -24,7 +24,7 @@ function resolveImport(id, cache) {
     }
   );
   code = code.replace(/\/\*.+?\*\//gms, "");
-  return code.replace(/\n+/gm, "\n");
+  return code.replace(/\s*?\n+\s*?/gm, "\n");
 }
 
 async function load(id) {
