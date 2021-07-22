@@ -1,6 +1,6 @@
-export * from "./node_modules/asdom/assembly/glue.ts";
+export * from "./node_modules/asdom/assembly/glue";
 
-import { document } from "./node_modules/asdom/assembly/index.ts";
+import { document } from "./node_modules/asdom/assembly/index";
 
 export function start(): void {
   const el = document.createElement("h1");
