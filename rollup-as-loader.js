@@ -14,7 +14,7 @@ function resolveImport(id, cache) {
       else p = "." + p;
       if (!/\.$/.test(p)) p += ".ts";
       else p = p + "/index.ts";
-      console.log(id, p, resolvePath(id, p));
+    //  console.log(id, p, resolvePath(id, p));
       let absId = resolvePath(id, p);
       if (cache[absId]) return "";
       else {

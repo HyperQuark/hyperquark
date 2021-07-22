@@ -794,17 +794,15 @@ export function asdom_attributeChangedCallback(
 	el.attributeChangedCallback(name, oldValue, newValue)
 }
 export const idof_Arrayi32 = idof<Array<i32>>()
-export function start(): void {
-  const el = document.createElement("h1");
-  el.setAttribute("foo", "bar");
-  const s: string = el.getAttribute("foo")!; // returns "bar"
-  el.innerHTML = /*html*/ `
+const el = document.createElement("h1");
+el.setAttribute("foo", "bar");
+const s: string = el.getAttribute("foo")!; // returns "bar"
+el.innerHTML = /*html*/ `
   <span style="font-weight: normal; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%)">
     <em>hello</em> from <strong>AssemblyScript</strong>
   </span>
 `;
-  document.body!.appendChild(el);
-}
+document.body!.appendChild(el);
 export function add(a: i32, b: i32): i32 {
   return a + b;
 }
