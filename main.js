@@ -7,7 +7,7 @@ instantiate({ env: { abort: () => console.log("Abort!") }, ...Asdom.wasmImports 
   ({ instance }) => {
     Asdom.wasmExports = instance.exports
     console.log(instance.exports.table);
-    instance.start();
+    instance.exports.start();
   }
 );
 /*

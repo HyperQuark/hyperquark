@@ -5,8 +5,8 @@ import { parse as parseQueryString } from "query-string";
 
 function resolveImport(id, cache) {
   let code = readFileSync(id, { encoding: "utf-8" });
-  code = code.replace(/\/\*.??\*\//gms, "");
-  code = code.replace(/\/\/.+$/gm, "");
+//  code = code.replace(/\/\*.??\*\//gms, "");
+//  code = code.replace(/\/\/.+$/gm, "");
   code = code.replace(
     /(?:(?:import|export) +.+?from +(?:"|'))(.+?)(?:(?:"|');?$)/gms,
     (m, p) => {
@@ -23,7 +23,7 @@ function resolveImport(id, cache) {
       }
     }
   );
-  code = code.replace(/\/\*.+?\*\//gms, "");
+  //code = code.replace(/\/\*.+?\*\//gms, "");
   return code.replace(/\s*?\n+\s*?/gm, "\n");
 }
 
@@ -45,17 +45,21 @@ async function load(id) {
     writeFileSync("/app/built.ts", code, {encoding:"utf-8"});
    // console.log(code);
     console.log(/\/\*/.test(code));
-    const { binary, text } = asc.compileString(code, compilerOptions);
+    
+      var { binary, text, stderr } = asc.compileString(code, compilerOptions);
+    
+      if (stderr.length) console.error(stderr.toString());
+    
     const moo =
       'import { instantiate as asInstantiate} from "@assemblyscript/loader";\
         export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(new Uint8Array([' +
-      binary.toString() +
+      binary?.toString() +
       "]), options)));\
           export const text = '" +
       text
-        .replace(/\\/g, "\\\\")
-        .replace(/'/g, "\\'")
-        .replace(/\n/g, "\\n") +
+        ?.replace(/\\/g, "\\\\")
+        ?.replace(/'/g, "\\'")
+        ?.replace(/\n/g, "\\n") +
       "';";
   //  console.log(moo);
     resolve({ code: moo });
