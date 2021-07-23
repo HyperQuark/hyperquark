@@ -28,7 +28,7 @@ self.addEventListener("activate", function(event) {
 });
 
 self.addEventListener("fetch", async event => {
-  console.log(event.request);
+//  console.log(event.request);
   event.respondWith(customHeaderRequestFetch(event));
 });
 function customHeaderRequestFetch(event) {

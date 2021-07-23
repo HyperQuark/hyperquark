@@ -2,56 +2,59 @@
 
 import "./style.css";
 
-import { instantiate, text } from "./test.ts?exportTable&exportRuntime&explicitStart";
+import {
+  instantiate,
+  text
+} from "./test.ts?exportTable&exportRuntime&explicitStart";
 import { Asdom } from "asdom/glue/index.js";
+import vm from "."
 import eruda from "eruda";
 eruda.init();
 
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').then(function(registration) {
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").then(
+    async registration => {
       // Registration was successful
-      console.log('ServiceWorker registration successful with scope: ', registration.scope);
-      e();
-    }, function(err) {
+      console.log(
+        "ServiceWorker registration successful with scope: ",
+        registration.scope
+      );
+      if (crossOriginIsolated) {
+        console.log("Phew everything's working (I think)");
+      } else {
+        console.log("COOP+COEP failed :C");
+        document.write(
+          "Please reload your page - if you see this message after reloading then something's gone wrong and you'll need to do some stuff to try and fix it that I can't be bothered to explain. Have a nice day :D"
+        );
+      }
+      main();
+    },
+    function(err) {
       // registration failed :(
-      console.log('ServiceWorker registration failed: ', err);
-    });
-}
-
-if (crossOriginIsolated) {
-  // Post SharedArrayBuffer
-  console.log("oui");
-} else {
-  // Do something else
-  console.log("nein");
-}
-
-const asdom = new Asdom();
-
-instantiate({ env: { abort: () => console.log("Abort!") }, ...asdom.wasmImports }).then(
-  ( instance ) => {
-    asdom.wasmExports = instance.exports
-    console.log(instance.exports.table);
-    instance.exports._start();
-  }
-);
-/*
-import wasmUrl from "asc:./test.as";
-
-WebAssembly.instantiateStreaming(fetch(wasmUrl), {}).then(({ instance }) =>
-  console.log(instance.exports.add(40, 2))
-);*/
-
-var req = new XMLHttpRequest();
-req.open('GET', document.location, false);
-req.send(null);
-var headers = req.getAllResponseHeaders().toLowerCase();
-headers = headers.split(/\n|\r|\r\n/g).reduce(function(a, b) {
-    if (b.length) {
-        var [ key, value ] = b.split(': ');
-        a[key] = value;
+      console.log("ServiceWorker registration failed: ", err);
+      document.write(
+        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. You might just be using an old, unupported browser."
+      );
     }
-    return a;
-}, {});
+  );
+}
 
-const e = () => console.log(headers);
+async function main() {
+  const asdom = new Asdom();
+
+  let instance = await instantiate({
+    env: { abort: () => console.log("Abort!") },
+    ...asdom.wasmImports
+  });
+  asdom.wasmExports = instance.exports;
+
+  const memory = new WebAssembly.Memory({
+    shared: true,
+    initial: 11,
+    maximum: 100
+  });
+  
+  let vmWorker = URL.createObjectURL(new Blob([vm.toString()]), {
+			type: "application/javascript; charset=utf-8",
+		});
+}

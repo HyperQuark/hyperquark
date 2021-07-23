@@ -1,13 +1,12 @@
 {
-  "version": "0.0.0",
+  "version": "0.0.1",
   "scripts": {
     "build": "vite build",
     "serve": "vite preview",
     "start": "vite"
   },
   "devDependencies": {
-    "vite": "^2.4.2",
-    "@sebastianspeitel/rollup-plugin-assemblyscript-loader": "^0.1.1"
+    "vite": "^2.4.2"
   },
   "glitch": {
     "projectType": "generated_static",
@@ -18,16 +17,11 @@
   },
   "dependencies": {
     "assemblyscript": "^0.19.7",
-    "babel-eslint": "^10.1.0",
     "@assemblyscript/loader": "^0.19.7",
     "eslint": "^7.31.0",
-    "typescript": ">=2.7",
-    "rollup": "^1.20.0||^2.0.0",
-    "@rollup/pluginutils": "^4.1.1",
-    "esbuild": "^0.12.15",
-    "rollup-plugin-assemblyscript": "^1.3.0",
     "query-string": "^7.0.1",
     "asdom": "lume/asdom",
-    "eruda": "^2.4.1"
+    "eruda": "^2.4.1",
+    "bijou.js": "^8.2.3"
   }
 }
