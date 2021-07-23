@@ -1,4 +1,4 @@
-import { ready as ascReady, createMemoryStream, main as ascMain } from "assemblyscript/cli/asc";
+import { ready as ascReady, createMemoryStream, main as ascMain, options as ascOptions } from "assemblyscript/cli/asc";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve as resolvePath } from "path";
 import { parse as parseQueryString } from "query-string";
@@ -39,9 +39,11 @@ async function load(id) {
   let compilerOptions = parseQueryString(query || "", {
     parseNumbers: true
   });
+  console.log(compilerOptions);
   for (let option in compilerOptions) {
     compilerOptions[option] ?? (compilerOptions[option] = true);
   }
+  console.log(compilerOptions);
   let z = await new Promise(async (resolve, reject) => {
     await ascReady;
     // let code = readFileSync(fileId, { encoding: "utf-8" });
@@ -49,11 +51,8 @@ async function load(id) {
    // writeFileSync("/app/built.ts", code, {encoding:"utf-8"});
    // console.log(code);
   //  console.log(/@ts-expect-error/.test(code));
-    
-      var { binary, text, stderr } = compileString(code, {
-        ...compilerOptions,
-        baseDir: "/app/"
-      });
+      
+      var { binary, text, stderr } = compileString(code, compilerOptions);
     
       if (stderr.length) console.error(stderr.toString());
     
@@ -91,7 +90,7 @@ const compileString = (sources, options) => {
   ];
   Object.keys(options || {}).forEach(key => {
     var val = options[key];
-    var opt = exports.options[key];
+    var opt = ascOptions[key];
     if (opt && opt.type === "b") {
       if (val) argv.push("--" + key);
     } else {
@@ -101,10 +100,17 @@ const compileString = (sources, options) => {
       else argv.push("--" + key, String(val));
     }
   });
-  exports.main(argv.concat(Object.keys(sources)), {
+  ascMain(argv.concat(Object.keys(sources)), {
     stdout: output.stdout,
     stderr: output.stderr,
-    readFile: name => readFileSync("/app/" + name, { encoding: "utf-8" }),
+    readFile: name => {
+      if (name === "input.ts") return sources["input.ts"];
+      try {
+       return readFileSync("/app/" + name, { encoding: "utf-8" });
+      } catch {
+        return null;
+      }
+    },
     writeFile: (name, contents) => { output[name] = contents; },
     listFiles: () => []
   });
