@@ -42,6 +42,15 @@ async function main() {
     initial: 11,
     maximum: 100
   });
+  
+  document.getElementById("app").innerHTML = `
+    <button id="start">green flag</button>
+    <button id="stop">stop</button>
+    <canvas id="stage"></canvas>
+    <br>
+    <br>
+    Running: <span id="running">false</span>
+  `
 
   let vm = new VM({ memory });
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });

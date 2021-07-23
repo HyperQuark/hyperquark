@@ -1,4 +1,4 @@
-import { initialise as initialiseWasm } from "./vm.ts?importMemory&maximumMemory=100&initialMemory=12&sharedMemory&noExportMemory";
+import { initialise as initialiseWasm } from "./vm.ts?importMemory&maximumMemory=100&initialMemory=12&sharedMemory&noExportMemory&enable=threads";
 
 export class vm {
   constructor({ memory }) {
