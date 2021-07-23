@@ -13,6 +13,14 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+if (crossOriginIsolated) {
+  // Post SharedArrayBuffer
+  alert("oui");
+} else {
+  // Do something else
+  alert("nein");
+}
+
 const asdom = new Asdom();
 
 instantiate({ env: { abort: () => console.log("Abort!") }, ...asdom.wasmImports }).then(
