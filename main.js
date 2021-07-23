@@ -2,12 +2,9 @@
 
 import "./style.css";
 
-import {
-  instantiate,
-  text
-} from "./test.ts?exportTable&exportRuntime&explicitStart";
-import { Asdom } from "asdom/glue/index.js";
-import vm from "."
+import { vm } from "./vm";
+import { createRenderer } from "./render";
+
 import eruda from "eruda";
 eruda.init();
 
@@ -40,21 +37,14 @@ if ("serviceWorker" in navigator) {
 }
 
 async function main() {
-  const asdom = new Asdom();
-
-  let instance = await instantiate({
-    env: { abort: () => console.log("Abort!") },
-    ...asdom.wasmImports
-  });
-  asdom.wasmExports = instance.exports;
-
   const memory = new WebAssembly.Memory({
     shared: true,
     initial: 11,
     maximum: 100
   });
-  
+
   let vmWorker = URL.createObjectURL(new Blob([vm.toString()]), {
-			type: "application/javascript; charset=utf-8",
-		});
+    type: "application/javascript; charset=utf-8"
+  });
+  createRenderer({ canvas: document.getElementById("stage"), memory: memory });
 }

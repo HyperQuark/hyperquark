@@ -1,0 +1,1 @@
+export const createRenderer = (canvas) => {console.log(canvas)};
