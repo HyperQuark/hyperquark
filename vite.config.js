@@ -1,6 +1,5 @@
 const path = require("path");
-const { assemblyScript } = require("./rollup-as-loader.js");
-import { asc } from "rollup-plugin-assemblyscript";
+const { assemblyScript } = require("./asloader.js");
 
 export default {
   css: {
@@ -17,11 +16,5 @@ export default {
     hmr: {
       port: 443 // Run the websocket server on the SSL port
     }
-  },
- /* resolve: {
-    alias: {
-      find: '@/',
-      replacement: path.resolve(__dirname, './src')
-    }
-  },*/
+  }
 }
