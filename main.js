@@ -30,7 +30,7 @@ if ("serviceWorker" in navigator) {
       // registration failed :(
       console.log("ServiceWorker registration failed: ", err);
       document.write(
-        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. You might just be using an old, unupported browser."
+        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. Of course, the problem could be that you might just be using an old, unupported browser."
       );
     }
   );
@@ -46,5 +46,5 @@ async function main() {
   let vmWorker = URL.createObjectURL(new Blob([vm.toString()]), {
     type: "application/javascript; charset=utf-8"
   });
-  createRenderer({ canvas: document.getElementById("stage"), memory: memory });
+  let renderer = createRenderer({ canvas: document.getElementById("stage"), memory: memory });
 }
