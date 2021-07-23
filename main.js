@@ -6,8 +6,8 @@ import { Asdom } from "asdom/glue/index.js";
 const asdom = new Asdom();
 
 instantiate({ env: { abort: () => console.log("Abort!") }, ...asdom.wasmImports }).then(
-  ({ instance }) => {
-    Asdom.wasmExports = instance.exports
+  ( instance ) => {
+    asdom.wasmExports = instance.exports
     console.log(instance.exports.table);
     instance.exports._start();
   }
