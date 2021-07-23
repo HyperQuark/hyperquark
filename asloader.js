@@ -17,11 +17,11 @@ async function load(id) {
   let compilerOptions = parseQueryString(query || "", {
     parseNumbers: true
   });
-  console.log(compilerOptions);
+//  console.log(compilerOptions);
   for (let option in compilerOptions) {
     compilerOptions[option] ?? (compilerOptions[option] = true);
   }
-  console.log(compilerOptions);
+//  console.log(compilerOptions);
   let z = await new Promise(async (resolve, reject) => {
     await ascReady;
     let code = readFileSync(fileId, { encoding: "utf-8" });

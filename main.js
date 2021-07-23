@@ -20,7 +20,7 @@ if ("serviceWorker" in navigator) {
         console.log("Phew everything's working (I think)");
       } else {
         console.log("COOP+COEP failed :C");
-        document.write(
+        document.body.textContent = (
           "Please reload your page - if you see this message after reloading then something's gone wrong and you'll need to do some stuff to try and fix it that I can't be bothered to explain. Have a nice day :D"
         );
       }
@@ -29,7 +29,7 @@ if ("serviceWorker" in navigator) {
     function(err) {
       // registration failed :(
       console.log("ServiceWorker registration failed: ", err);
-      document.write(
+      document.body.textContent = (
         "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. Of course, the problem could be that you might just be using an old, unupported browser."
       );
     }
@@ -37,11 +37,11 @@ if ("serviceWorker" in navigator) {
 }
 
 async function main() {
-  const memory = new WebAssembly.Memory({
+  /*const memory = new WebAssembly.Memory({
     shared: true,
     initial: 11,
     maximum: 100
-  });
+  });*/
   
   document.getElementById("app").innerHTML = `
     <button id="start">green flag</button>
@@ -52,6 +52,6 @@ async function main() {
     Running: <span id="running">false</span>
   `
 
-  let vm = new VM({ memory });
-  let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
+ // let vm = new VM({ memory });
+ // let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
 }

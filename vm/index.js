@@ -1,16 +1,22 @@
 import { initialise as initialiseWasm } from "./vm.ts?importMemory&maximumMemory=100&initialMemory=12&sharedMemory&noExportMemory&enable=threads";
 
-export class vm {
+export class VM {
+  memory;
+  worker;
+  mod;
   constructor({ memory }) {
-    
+    this.memory = memory;
     this.worker = URL.createObjectURL(new Blob([this.workerFn.toString()]), {
       type: "application/javascript; charset=utf-8"
     });
   }
   workerFn() {
-    onMessage = ({ data }) => {
-      switch (data.msg) {
+    let wasm;
+    onMessage = async ({ data }) => {
+      const { msg, initialise } = data;
+      switch (msg) {
         case "loadWasm":
+          wasm = initialise({ env
           break;
         case "start":
           break;
@@ -19,7 +25,4 @@ export class vm {
       }
     };
   }
-  memory;
-  worker;
-  mod;
 }
