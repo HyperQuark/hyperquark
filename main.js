@@ -20,10 +20,10 @@ if ('serviceWorker' in navigator) {
 
 if (crossOriginIsolated) {
   // Post SharedArrayBuffer
-  alert("oui");
+  console.log("oui");
 } else {
   // Do something else
-  alert("nein");
+  console.log("nein");
 }
 
 const asdom = new Asdom();
