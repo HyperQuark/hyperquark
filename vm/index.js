@@ -9,6 +9,7 @@ export class VM {
     this.worker = URL.createObjectURL(new Blob([this.workerFn.toString()]), {
       type: "application/javascript; charset=utf-8"
     });
+    //this.worker.postMessage({ msg: "loadWasm", initialise: initialiseWasm });
   }
   workerFn() {
     let wasm;
@@ -16,11 +17,15 @@ export class VM {
       const { msg, initialise } = data;
       switch (msg) {
         case "loadWasm":
-          wasm = initialise({ env
+          wasm = await initialise({ env: {
+            abort: () => console.log("Abort!")
+          }});
           break;
         case "start":
+          wasm.exports.start();
           break;
         case "stop":
+          wasm.exports.stop();
           break;
       }
     };
