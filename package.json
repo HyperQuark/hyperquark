@@ -27,6 +27,7 @@
     "esbuild": "^0.12.15",
     "rollup-plugin-assemblyscript": "^1.3.0",
     "query-string": "^7.0.1",
-    "asdom": "lume/asdom"
+    "asdom": "lume/asdom",
+    "eruda": "^2.4.1"
   }
 }

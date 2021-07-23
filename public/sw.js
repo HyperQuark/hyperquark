@@ -1,4 +1,4 @@
-var CACHE_NAME = "hyperquark-cache-v1";
+var CACHE_NAME = "hyperquark-cache-v1 ";
 var urlsToCache = [];
 
 self.addEventListener("install", function(event) {
@@ -27,10 +27,9 @@ self.addEventListener("activate", function(event) {
   );
 });
 
-/*self.addEventListener("fetch", event => {
+self.addEventListener("fetch", event => {
   event.respondWith(customHeaderRequestFetch(event));
 });
-*/
 function customHeaderRequestFetch(event) {
   // decide for yourself which values you provide to mode and credentials
   const newRequest = new Request(event.request, {

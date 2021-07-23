@@ -1,7 +1,11 @@
+/* global crossOriginIsolated */
+
 import "./style.css";
 
 import { instantiate, text } from "./test.ts?exportTable&exportRuntime&explicitStart";
 import { Asdom } from "asdom/glue/index.js";
+import eruda from "eruda";
+eruda.init();
 
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then(function(registration) {
