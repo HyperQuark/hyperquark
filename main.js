@@ -11,6 +11,7 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then(function(registration) {
       // Registration was successful
       console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      e();
     }, function(err) {
       // registration failed :(
       console.log('ServiceWorker registration failed: ', err);
@@ -40,3 +41,17 @@ import wasmUrl from "asc:./test.as";
 WebAssembly.instantiateStreaming(fetch(wasmUrl), {}).then(({ instance }) =>
   console.log(instance.exports.add(40, 2))
 );*/
+
+var req = new XMLHttpRequest();
+req.open('GET', document.location, false);
+req.send(null);
+var headers = req.getAllResponseHeaders().toLowerCase();
+headers = headers.split(/\n|\r|\r\n/g).reduce(function(a, b) {
+    if (b.length) {
+        var [ key, value ] = b.split(': ');
+        a[key] = value;
+    }
+    return a;
+}, {});
+
+const e = () => console.log(headers);
