@@ -2,8 +2,8 @@
 
 import "./style.css";
 
-import { vm } from "./vm";
-import { createRenderer } from "./render";
+import { VM } from "./vm";
+import { Renderer } from "./render";
 
 import eruda from "eruda";
 eruda.init();
@@ -43,8 +43,6 @@ async function main() {
     maximum: 100
   });
 
-  let vmWorker = URL.createObjectURL(new Blob([vm.toString()]), {
-    type: "application/javascript; charset=utf-8"
-  });
-  let renderer = createRenderer({ canvas: document.getElementById("stage"), memory: memory });
+  let vm = new VM({ memory });
+  let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
 }
