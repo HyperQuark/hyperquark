@@ -17,11 +17,11 @@ async function load(id) {
   let compilerOptions = parseQueryString(query || "", {
     parseNumbers: true
   });
-//  console.log(compilerOptions);
+  //  console.log(compilerOptions);
   for (let option in compilerOptions) {
     compilerOptions[option] ?? (compilerOptions[option] = true);
   }
-//  console.log(compilerOptions);
+  //  console.log(compilerOptions);
   let z = await new Promise(async (resolve, reject) => {
     await ascReady;
     let code = readFileSync(fileId, { encoding: "utf-8" });
@@ -31,9 +31,10 @@ async function load(id) {
 
     const moo =
       'import { instantiate as asInstantiate} from "@assemblyscript/loader";\
-        export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(new Uint8Array([' +
-      binary?.toString() +
-      "]), options)));\
+        export const binary = newUint8Array([' +
+      binary?.toString +
+      "]);\
+        export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(binary, options)));\
           export const text = '" +
       text
         ?.replace(/\\/g, "\\\\")
