@@ -11,12 +11,13 @@ export class VM {
     }));
   //  console.log(this.workerFn.toString().slice(12, -1));
     this.worker.onerror = e => console.error(e.message);
-    this.worker.onmessage = console.log;
-    this.worker.p
+    this.worker.onmessage = ({data})=>console.log(data);
+    this.worker.postMessage({ msg: "loadWasm", memory });
   }
   workerFn() {
     let wasm;
-    onMessage = async ({ data }) => {
+    onmessage = async ({ data }) => {
+      throw Error("f");
       postMessage("aa");
       const { msg, /*initialise, */memory } = data;
       switch (msg) {
