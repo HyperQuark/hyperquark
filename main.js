@@ -5,9 +5,6 @@ import "./style.css";
 import { VM } from "./vm";
 import { Renderer } from "./render";
 
-import eruda from "eruda";
-eruda.init();
-
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
     async registration => {
@@ -34,14 +31,14 @@ if ("serviceWorker" in navigator) {
       );
     }
   );
-}
+} else document.body.textContent = "You're using an unsupported browser :(";
 
 async function main() {
-  /*const memory = new WebAssembly.Memory({
+  const memory = new WebAssembly.Memory({
     shared: true,
     initial: 11,
     maximum: 100
-  });*/
+  });
   
   document.getElementById("app").innerHTML = `
     <button id="start">green flag</button>
@@ -52,6 +49,6 @@ async function main() {
     Running: <span id="running">false</span>
   `
 
- // let vm = new VM({ memory });
- // let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
+  let vm = new VM({ memory });
+  let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
 }
