@@ -19,9 +19,11 @@ export class Renderer {
         const canvasImageData = context.createImageData(480, 360);
         console.log("eeeeeee");
         const imageDataArray = wasmByteMemoryArray.slice(1, 480 * 360 * 4 + 1);
-        
+        console.log("iiiiiii");
         canvasImageData.data.set(imageDataArray);
-        context.putImageData(canvasImageData, 20, 0);
+        console.log("ooooooo");
+        context.putImageData(canvasImageData, 0, 0);
+        console.log("uuuuuuu");
       }
     };
    requestAnimationFrame(frame);

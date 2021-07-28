@@ -1,4 +1,5 @@
 import VMWorker from "./worker.js?worker";
+import loadProject from "./load.js";
 
 export class VM {
   constructor({ memory }) {
@@ -14,5 +15,8 @@ export class VM {
       };
       this.worker.postMessage({ msg: "loadWasm", memory: this.memory });
     });
+  }
+  load (id) {
+    return loadProject(id, this.memory);
   }
 }

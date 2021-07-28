@@ -13,5 +13,14 @@ self.addEventListener("message", async ({ data: { msg, memory }}) => {
       });
       postMessage(wasm.exports.e());
       break;
+    case "compile":
+      wasm.exports.compile();
+      break;
+    case "start":
+      wasm.exports.start();
+      break;
+    case "stop":
+      wasm.exports.stop()
+      break;
   };
 });
