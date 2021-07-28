@@ -50,6 +50,7 @@ async function main() {
   `
 
   let vm = new VM({ memory });
-  vm.init();
+  await vm.init();
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
+  renderer.start();
 }

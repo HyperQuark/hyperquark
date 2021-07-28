@@ -3,14 +3,15 @@ import { instantiate } from "./vm.ts?enable=threads&importMemory&noExportMemory&
 let wasm;
 
 self.addEventListener("message", async ({ data: { msg, memory }}) => {
-  self.postMessage(5);
+  postMessage(5);
   switch (msg) {
     case "loadWasm":
       wasm = await instantiate({
         env: {
-          
-          
+          memory
+        }
       });
+      postMessage(wasm.exports.e());
       break;
   };
 });
