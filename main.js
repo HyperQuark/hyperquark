@@ -2,7 +2,7 @@
 
 import "./style.css";
 
-import { VM } from "./vm";
+import { VM } from "./vm/js";
 import { Renderer } from "./render";
 
 if ("serviceWorker" in navigator) {

@@ -1,4 +1,4 @@
-import { instantiate } from "./vm.ts?enable=threads&importMemory&noExportMemory&sharedMemory&initialMemory=11&maximumMemory=100";
+import { instantiate } from "../as/vm.ts?enable=threads&importMemory&noExportMemory&sharedMemory&initialMemory=11&maximumMemory=100";
 
 let wasm;
 
