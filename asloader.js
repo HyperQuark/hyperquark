@@ -30,11 +30,11 @@ async function load(id) {
     if (stderr.length) console.error(stderr.toString());
 
     const moo =
-      'import { instantiate as asInstantiate} from "@assemblyscript/loader";\
-        export const binary = newUint8Array([' +
+      'import { instantiate as asInstantiate} from "@assemblyscript/loader";\n' +
+        'export const binary = newUint8Array([' +
       binary?.toString +
-      "]);\
-        export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(binary, options)));\
+      "]);\n" +
+        "export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(binary, options)));\
           export const text = '" +
       text
         ?.replace(/\\/g, "\\\\")
