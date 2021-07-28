@@ -28,11 +28,11 @@ async function load(id) {
     var { binary, text, stderr } = compileString(code, compilerOptions);
 
     if (stderr.length) console.error(stderr.toString());
-
+    
     const moo =
       'import { instantiate as asInstantiate} from "@assemblyscript/loader";\n' +
-        'export const binary = newUint8Array([' +
-      binary?.toString +
+        'export const binary = new Uint8Array([' +
+      binary?.toString() +
       "]);\n" +
         "export const instantiate = options => new Promise(async resolve => resolve(await asInstantiate(binary, options)));\
           export const text = '" +
@@ -71,6 +71,7 @@ const compileString = (sources, options) => {
       } else argv.push("--" + key, String(val));
     }
   });
+  
   ascMain(argv.concat(Object.keys(sources)), {
     stdout: output.stdout,
     stderr: output.stderr,
