@@ -4,6 +4,7 @@ import "./style.css";
 
 import { VM } from "./vm/js";
 import { Renderer } from "./render";
+import { instantiate } from "./vm/as/vm.ts";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
@@ -48,7 +49,9 @@ async function main() {
     <br>
     Running: <span id="running">false</span>
   `
-
+  let wasm = await instantiate({});
+  console.log(wasm.exports.e);
+  window.e = wasm.exports.e;
   let vm = new VM({ memory });
   await vm.init();
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });

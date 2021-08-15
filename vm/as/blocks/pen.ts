@@ -1,12 +1,13 @@
-let penDown: i32 = 0;
+let isPenDownVar: i32 = 0;
 
 export function isPenDown(): i32 {
-  return penDown;
+  return isPenDownVar;
 }
 
 export function penDown(): void {
-  penDown = 1;
+  isPenDownVar = 1;
 }
 export function penUp(): void {
-  penDown = 0;
+  isPenDownVar = 0;
 }
+

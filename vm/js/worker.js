@@ -11,7 +11,7 @@ self.addEventListener("message", async ({ data: { msg, memory }}) => {
           memory
         }
       });
-      postMessage(wasm.exports.e());
+      postMessage(5);
       break;
     case "compile":
       wasm.exports.compile();
