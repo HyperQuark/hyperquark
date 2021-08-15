@@ -53,6 +53,7 @@ async function main() {
   //console.log(wasm.exports.table.get(wasm.exports.e())());
   window.wasm = exports;
   console.log(wasm.e(), wasm.b());
+  
   let vm = new VM({ memory });
   await vm.init();
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
