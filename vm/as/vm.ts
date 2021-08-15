@@ -11,6 +11,7 @@ export function stop(): void {
   running = 0;
 }
 */
+/*
 function a (): i32 {
   return 72;
 }
@@ -21,10 +22,11 @@ function f (): i32 {
 
 let asdf: i32;
 
-export function e(): (arg0: i32) => i32 {
-  return (arg0) => arg0;
+export function e(): u32 {
+  return ((arg0: i32): i32 => arg0).index;
 }
 
-export function b (): () => i32 {
-  return f;
-}
+export function b (): u32 {
+  return f.index;
+}*/
+const a: (arg0: i32) => i32 = () => 56
