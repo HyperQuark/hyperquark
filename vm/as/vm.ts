@@ -14,6 +14,6 @@ function a (): i32 {
   return 72;
 }
 
-export function e(): i32 {
-  return ((): i32 => 56)();
+export function e(): () => i32 {
+  return a;
 }
