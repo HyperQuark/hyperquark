@@ -49,9 +49,10 @@ async function main() {
     <br>
     Running: <span id="running">false</span>
   `
-  let wasm = await instantiate({});
-  console.log(wasm.exports.table.get(wasm.exports.e())());
-  window.wasm = wasm;
+  let { exports } = await instantiate({});
+  //console.log(wasm.exports.table.get(wasm.exports.e())());
+  window.wasm = exports;
+  console.log(wasm.e(), wasm.b());
   let vm = new VM({ memory });
   await vm.init();
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
