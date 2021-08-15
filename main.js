@@ -1,4 +1,4 @@
-/* global crossOriginIsolated */
+/* global crossOriginIsolated wasm */
 
 import "./style.css";
 
@@ -53,10 +53,11 @@ async function main() {
   //console.log(wasm.exports.table.get(wasm.exports.e())());
   window.wasm = exports;
   console.log(wasm.e(), wasm.b());
-  
-  let vm = new VM({ memory });
+  console.log(wasm.table.get(new Uint32Array(exports.memory.buffer)[wasm.e() >> 2])(54455445));
+  console.log(wasm.table.get(new Uint32Array(exports.memory.buffer)[wasm.b() >> 2])());
+ /* let vm = new VM({ memory });
   await vm.init();
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
   renderer.start();
-
+*/
 }
