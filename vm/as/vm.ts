@@ -10,6 +10,10 @@ export function stop(): void {
   running = 0;
 }
 
+function a (): i32 {
+  return 72;
+}
+
 export function e(): i32 {
-  return 56;
+  return ((): i32 => 56)();
 }
