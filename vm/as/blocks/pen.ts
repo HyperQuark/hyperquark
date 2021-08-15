@@ -1,4 +1,12 @@
-export function isPenDown (): i32 {return 0};
+let penDown: i32 = 0;
 
-export function penDown():void{};
-export function penUp():void{}
+export function isPenDown(): i32 {
+  return penDown;
+}
+
+export function penDown(): void {
+  penDown = 1;
+}
+export function penUp(): void {
+  penDown = 0;
+}

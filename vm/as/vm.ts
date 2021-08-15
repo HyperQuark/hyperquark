@@ -1,4 +1,4 @@
-import { isPenDiwn, penDown, penUp } from "./blocks/pen";
+import { isPenDown, penDown, penUp } from "./blocks/pen";
 
 let running: i32 = 0;
 
