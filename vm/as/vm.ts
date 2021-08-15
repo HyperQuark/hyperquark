@@ -29,4 +29,4 @@ export function e(): u32 {
 export function b (): u32 {
   return f.index;
 }*/
-const a: (arg0: i32) => i32 = () => 56
+const a = (() => 56).toString;
