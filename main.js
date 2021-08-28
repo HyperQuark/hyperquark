@@ -78,11 +78,17 @@ function main() {
       result.push(byte | 0x80);
     }
   };
-  const createSection = (type, content) => [
-    type,
-    encodeSignedLeb128FromInt32(content.length),
-    ...content
-  ];
+  console.log(encodeSignedLeb128FromInt32(654553455445));
+  const createSection = (type, content) => {
+    let e = [
+      type,
+      //encodeSignedLeb128FromInt32(content.length),
+      content.length, // we're going to assume that each sect
+      ...content
+    ];
+    console.log(type, content, e);
+    return e;
+  }
   const typeSection = types => createSection(0x01, types);
   const types = {
     i32: 0x7f,
@@ -92,9 +98,9 @@ function main() {
   };
   const funcType = (paramTypes = [], returnTypes = []) => {
     let e = [
-    0x60,
-    paramTypes.length,
-    ...paramTypes,
+      0x60,
+      paramTypes.length,
+      ...paramTypes,
       returnTypes.length,
       ...returnTypes
     ];
