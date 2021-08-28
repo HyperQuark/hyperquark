@@ -1,5 +1,5 @@
 /* global crossOriginIsolated wasm */
-
+/*
 import "./style.css";
 
 import { VM } from "./vm/js";
@@ -60,4 +60,21 @@ async function main() {
   let renderer = new Renderer({ canvas: document.getElementById("stage"), memory });
   renderer.start();
 */
-}
+//}
+const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0];
+const encodeSignedLeb128FromInt32 = (value) => {
+  value |= 0;
+  const result = [];
+  while (true) {
+    const byte = value & 0x7f;
+    value >>= 7;
+    if (
+      (value === 0 && (byte & 0x40) === 0) ||
+      (value === -1 && (byte & 0x40) !== 0)
+    ) {
+      result.push(byte);
+      return result;
+    }
+    result.push(byte | 0x80);
+  }
+};
