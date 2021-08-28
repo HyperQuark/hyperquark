@@ -78,3 +78,12 @@ const encodeSignedLeb128FromInt32 = (value) => {
     result.push(byte | 0x80);
   }
 };
+const createSection = (type, content) => [type, encodeSignedLeb128FromInt32(content.length), ...content];
+const typeSection = (types) => createSection(0x01, types);
+const types = {
+  i32: 0x7F,
+  i64: 0x7E,
+  f32: 0x7D,
+  f64: 0x7C
+}
+const funcType = (paramTypes, returnType) => [0x60, paramTypes.length, ...paramTypes, ...[returnType]];
