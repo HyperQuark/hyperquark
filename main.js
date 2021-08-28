@@ -86,4 +86,6 @@ const types = {
   f32: 0x7D,
   f64: 0x7C
 }
-const funcType = (paramTypes, returnType) => [0x60, paramTypes.length, ...paramTypes, ...[returnType]];
+const funcType = (paramTypes = [], returnTypes = []) => [0x60, paramTypes.length, ...paramTypes, returnTypes.length, ...returnTypes];
+// we shouldn't needimports, here just in case
+// const importSection = imports => createSection(2, imports);
