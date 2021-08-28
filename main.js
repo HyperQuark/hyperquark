@@ -78,15 +78,15 @@ function main() {
       result.push(byte | 0x80);
     }
   };
-  console.log(encodeSignedLeb128FromInt32(654553455445));
+ // console.log(encodeSignedLeb128FromInt32(654553455445));
   const createSection = (type, content) => {
     let e = [
       type,
       //encodeSignedLeb128FromInt32(content.length),
-      content.length, // we're going to assume that each sect
+      content.length, // we're going to assume that each section isn't more than 127 bits long, plus I don't really understand when this leb128 thing is meant to be used, nor have I seen ang examples of it being used in wasm... we'll just assume it works
       ...content
     ];
-    console.log(type, content, e);
+    //console.log(type, content, e);
     return e;
   }
   const typeSection = types => createSection(0x01, types);
@@ -104,27 +104,28 @@ function main() {
       returnTypes.length,
       ...returnTypes
     ];
-    console.log(paramTypes, returnTypes, e)
+    //console.log(paramTypes, returnTypes, e)
     return e;
   }
   // we shouldn't needimports, here just in case
   // const importSection = imports => createSection(2, imports);
   const createWasmModule = ({ types }) => {
     //return new Uint8Array(
-     return wasmHeader.concat(
-        typeSection(types.map(t => funcType(t.params, t.returns)))
-      )
+    let a = types.map(t => funcType(t.params, t.returns)).flat(1);
+    //console.log("a", a);
+    return wasmHeader.concat(typeSection(a));
     //);
   };
-  console.log(
-    createWasmModule({
+  let wasm = createWasmModule({
       types: [
         {
           params: [types.i32, types.i32],
           returns: []
         }
       ]
-    })
-  );
+    });
+  console.log(wasm);
+  let mod = new WebAssembly.Module(new Uint8Array(wasm));
+  console.log(mod);
 }
 main();
