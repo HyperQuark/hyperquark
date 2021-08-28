@@ -89,3 +89,4 @@ const types = {
 const funcType = (paramTypes = [], returnTypes = []) => [0x60, paramTypes.length, ...paramTypes, returnTypes.length, ...returnTypes];
 // we shouldn't needimports, here just in case
 // const importSection = imports => createSection(2, imports);
+const createWasmModule = ({ types
