@@ -1,10 +1,12 @@
 /* global crossOriginIsolated wasm */
-/*
+
 import "./style.css";
 
+/*
 import { VM } from "./vm/js";
 import { Renderer } from "./render";
 import { instantiate } from "./vm/as/vm.ts?exportTable";
+*/
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
@@ -33,7 +35,7 @@ if ("serviceWorker" in navigator) {
     }
   );
 } else document.body.textContent = "You're using an unsupported browser :(";
-*/
+
 function main() {
   /* const memory = new WebAssembly.Memory({
     shared: true,
@@ -111,9 +113,9 @@ function main() {
   // const importSection = imports => createSection(2, imports);
   const createWasmModule = ({ types }) => {
     //return new Uint8Array(
-    let a = types.map(t => funcType(t.params, t.returns)).flat(1);
+    let a = [types.length, ...types.map(t => funcType(t.params, t.returns)).flat(1)];
     //console.log("a", a);
-    return wasmHeader.concat(typeSection(a));
+    return [...wasmHeader, ...typeSection(a)];
     //);
   };
   let wasm = createWasmModule({
@@ -128,4 +130,3 @@ function main() {
   let mod = new WebAssembly.Module(new Uint8Array(wasm));
   console.log(mod);
 }
-main();
