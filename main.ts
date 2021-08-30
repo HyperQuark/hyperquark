@@ -57,7 +57,7 @@ function main() {
   //}
   
   const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0] as const;
-  const encodeSignedLeb128FromInt32 = (value: number): Array<number> => {
+  const encodeSignedLeb128FromInt32 = value => {
     value |= 0;
     const result: Array<number> = [];
     while (true) {
@@ -73,10 +73,13 @@ function main() {
       result.push(byte | 0x80);
     }
   };
-  class Vector<T> extends Array<any> {
-    constructor (array: Array<T>) {
+  class Vector extends Array {
+    constructor (array) {
       array ||= [];
-      super([array.length, ...array])
+      return super([array.length, ...array]);
+    }
+    *[Symbol.iterator] () {
+      this.forEach(n => yield n);
     }
   }
   const createSection = (type, content) => {
@@ -96,38 +99,29 @@ function main() {
     f32: 0x7d,
     f64: 0x7c
   };
-  enum possibleTypes {
-    i32 = 0x7f,
-    i64 = 0x7e,
-    f32 = 0x7d,
-    f64 = 0x7c
-  }
-  class funcType extends Array<number> {
-    constructor (paramTypes: Array<number>, returnTypes: Array<number>) {
-      super();
-      let e: Array<number> = [
+  class funcType extends Array {
+    constructor (paramTypes, returnTypes) {
+      console.log(paramTypes, returnTypes)
+      return super([
         0x60,
-        ...new Vector<number>(paramTypes),
-        ...new Vector<number>(returnTypes)
-      ];
-      [].splice.call(this, 0, 0, ...e);
+        ...new Vector(paramTypes),
+        ...new Vector(returnTypes)
+      ]);
       //console.log(paramTypes, returnTypes, e)
     }
   };
-  // we shouldn't needimports, here just in case
-  // const importSection = imports => createSection(2, imports);
-  interface wasmType { 
-    params: Array<possibleTypes>,
-    returns: Array<possibleTypes>
-  }
   class WasmUint8Array extends Uint8Array {
-    constructor ({ types }: { types: Array<wasmType> }) {
-      let a: Vector<number> = (new Vector<number[]>(types.map(t => new funcType(t.params, t.returns)))).flat(2) as Vector<number>;
+    constructor ({ types }) {
+      let a = (new Vector(types.map(t => {
+        let e = new funcType(t.params, t.returns)
+        console.log("hmm", e);
+        return e
+      }))).flat(2);
       console.log(a);
       super([...wasmHeader, ...typeSection(a)])
     }
   };
-  let wasm: WasmUint8Array = new WasmUint8Array({
+  let wasm = new WasmUint8Array({
     types: [
       {
         params: [types.i32, types.i32],
