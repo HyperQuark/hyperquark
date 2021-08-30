@@ -75,11 +75,10 @@ function main(): void {
   };
   class Vector<T> extends Array<any> {
     constructor (array: Array<T>) {
-      console.log(array)
+      array ||= [];
       super([array.length, ...array])
     }
   }
-  // console.log(encodeSignedLeb128FromInt32(654553455445));
   const createSection = (type, content) => {
     let e = [
       type,
@@ -103,16 +102,16 @@ function main(): void {
     f32 = 0x7d,
     f64 = 0x7c
   }
-  const funcType = (paramTypes = [], returnTypes = []) => {
-    let e = [
-      0x60,
-      paramTypes.length,
-      ...paramTypes,
-      returnTypes.length,
-      ...returnTypes
-    ];
-    //console.log(paramTypes, returnTypes, e)
-    return e;
+  class funcType extends Array<number> {
+    constructor (paramTypes: Array<number>, returnTypes: Array<number>) {
+      let e: Array<number> = [
+        0x60,
+        ...new Vector<number>(paramTypes),
+        ...new Vector<number>(returnTypes)
+      ];
+      //console.log(paramTypes, returnTypes, e)
+      super([...e]);
+    }
   };
   // we shouldn't needimports, here just in case
   // const importSection = imports => createSection(2, imports);
@@ -122,7 +121,8 @@ function main(): void {
   }
   class WasmUint8Array extends Uint8Array {
     constructor ({ types }: { types: Array<wasmType> }) {
-      let a: Vector<number> = (new Vector<number[]>(types.map(t => funcType(t.params, t.returns)))).flat(1) as Vector<number>;
+      let a: Vector<number> = (new Vector<number[]>(types.map(t => new funcType(t.params, t.returns)))).flat(2) as Vector<number>;
+      console.log(a);
       super([...wasmHeader, ...typeSection(a)])
     }
   };
