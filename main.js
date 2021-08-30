@@ -2,6 +2,8 @@
 
 import "./style.css";
 
+import Buffer from "buffer";
+
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
     async registration => {
@@ -128,4 +130,5 @@ function main() {
   console.log(wasm);
   let mod = new WebAssembly.Module(new Uint8Array(wasm));
   console.log(mod);
+  console.log(utf8.deco("hello"))
 }
