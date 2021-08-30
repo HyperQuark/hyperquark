@@ -2,7 +2,7 @@
 
 import "./style.css";
 
-import Buffer from "buffer";
+import { Buffer } from "buffer";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
@@ -58,7 +58,6 @@ function main() {
 */
   //}
 
-  const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0];
   const sLeb128 = value => {
     value |= 0;
     const result = [];
@@ -88,36 +87,37 @@ function main() {
   class StringVector extends Vector {
     
   }
-  const createSection = (type, content) => {
-    let e = [
-      type,
-      //encodeSignedLeb128FromInt32(content.length),
-      content.length, // we're going to assume that each section isn't more than 127 bits long, plus I don't really understand when this leb128 thing is meant to be used, nor have I seen any examples of it being used in wasm... we'll just assume it works
-      ...content
-    ];
-    //console.log(type, content, e);
-    return e;
+  class Section extends Array {
+    constructor (type, content) {
+      super(type, ...new Vector(...content))
+    }
   };
-  const typeSection = types => createSection(0x01, types);
+  class TypeSection extends Section {
+    constructor (types) {
+      super(0x01, types);
+    }
+  }
   const types = {
     i32: 0x7f,
     i64: 0x7e,
     f32: 0x7d,
     f64: 0x7c
   };
-  class funcType extends Array {
+  class FuncType extends Array {
     constructor(paramTypes, returnTypes) {
       super(0x60, ...new Vector(...paramTypes), ...new Vector(...returnTypes));
     }
   }
   class WasmUint8Array extends Uint8Array {
     constructor({ types }) {
-      let a = new Vector(
-        ...types.map(t => new funcType(t.params, t.returns))
+      let typeSec = new Vector(
+        ...types.map(t => new FuncType(t.params, t.returns))
       ).flat(1);
-      console.log(a);
-      super([...wasmHeader, ...typeSection(a)]);
+      super([...WasmUint8Array.WasmHeader, ...new TypeSection(typeSec)]);
     }
+    static MagicNumber = [0, 97, 115, 109];
+    static Version = [1, 0, 0, 0];
+    static WasmHeader = [...WasmUint8Array.MagicNumber, ...WasmUint8Array.Version];
   }
   let wasm = new WasmUint8Array({
     types: [
@@ -130,5 +130,4 @@ function main() {
   console.log(wasm);
   let mod = new WebAssembly.Module(new Uint8Array(wasm));
   console.log(mod);
-  console.log(Buffer.from("hello"))
 }
