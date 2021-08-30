@@ -56,12 +56,12 @@ function main() {
 */
   //}
 
-  const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0] as const;
-  const encodeSignedLeb128FromInt32 = value => {
+  const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0];
+  const uLeb128FromInt32 = value => {
     value |= 0;
-    const result: Array<number> = [];
+    const result = [];
     while (true) {
-      const byte: number = value & 0x7f;
+      const byte = value & 0x7f;
       value >>= 7;
       if (
         (value === 0 && (byte & 0x40) === 0) ||
@@ -76,11 +76,12 @@ function main() {
   class Vector extends Array {
     constructor (array) {
       array ||= [];
-      super([array.length, ...array]);
+      if (array.length) super(...uLeb128array.length, ...array);
+      else {
+        super(0);
+        this.push(0);
+      }
     }
-   /* *[Symbol.iterator] () {
-      this.forEach(n => yield n);
-    }*/
   }
   const createSection = (type, content) => {
     let e = [
@@ -102,12 +103,11 @@ function main() {
   class funcType extends Array {
     constructor (paramTypes, returnTypes) {
       console.log(paramTypes, returnTypes)
-      super([
+      super(
         0x60,
         ...new Vector(paramTypes),
         ...new Vector(returnTypes)
-      ]);
-      //console.log(paramTypes, returnTypes, e)
+      );
     }
   };
   class WasmUint8Array extends Uint8Array {
@@ -116,7 +116,7 @@ function main() {
         let e = new funcType(t.params, t.returns)
         console.log("hmm", e);
         return e
-      }))).flat(2);
+      }))).flat(1);
       console.log(a);
       super([...wasmHeader, ...typeSection(a)])
     }
