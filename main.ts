@@ -61,6 +61,7 @@ function main(): void {
   renderer.start();
 */
   //}
+  
   const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0];
   const encodeSignedLeb128FromInt32 = value => {
     value |= 0;
@@ -96,6 +97,7 @@ function main(): void {
     f32: 0x7d,
     f64: 0x7c
   };
+  enum types = 
   const funcType = (paramTypes = [], returnTypes = []) => {
     let e = [
       0x60,
@@ -109,17 +111,17 @@ function main(): void {
   };
   // we shouldn't needimports, here just in case
   // const importSection = imports => createSection(2, imports);
-  const createWasmModule = ({ types }) => {
-    //return new Uint8Array(
-    let a = [
-      types.length,
-      ...types.map(t => funcType(t.params, t.returns)).flat(1)
-    ];
-    //console.log("a", a);
-    return [...wasmHeader, ...typeSection(a)];
-    //);
+  class WasmUint8Array extends Uint8Array {
+    constructor ({ types }: { types: Array<{params: number, returns: number[]> }) {
+      let a = [
+        types.length,
+        ...types.map(t => funcType(t.params, t.returns)).flat(1)
+      ];
+      //console.log("a", a);
+      super([...wasmHeader, ...typeSection(a)])
+    }
   };
-  let wasm = createWasmModule({
+  let wasm: WasmUint8Array = new WasmUint8Array({
     types: [
       {
         params: [types.i32, types.i32],

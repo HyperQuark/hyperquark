@@ -4,7 +4,7 @@
     "build": "vite build",
     "serve": "vite preview",
     "start": "vite",
-    "test": "tsc main --lib ES2020 --lib dom --noEmit"
+    "test": "tsc main --lib ES2020,DOM --noEmit"
   },
   "devDependencies": {
     "vite": "^2.4.2"
