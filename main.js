@@ -57,7 +57,7 @@ function main() {
   //}
 
   const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0];
-  const uLeb128FromInt32 = value => {
+  const sLeb128 = value => {
     value |= 0;
     const result = [];
     while (true) {
@@ -74,20 +74,23 @@ function main() {
     }
   };
   class Vector extends Array {
-    constructor (array) {
-      array ||= [];
-      if (array.length) super(...uLeb128array.length, ...array);
+    constructor(...array) {
+      array ||= []; // eslint-disable-line
+      if (array.length) super(...sLeb128(array.length), ...array);
       else {
         super(0);
         this.push(0);
       }
     }
   }
+  class StringVector extends Vector {
+    
+  }
   const createSection = (type, content) => {
     let e = [
       type,
       //encodeSignedLeb128FromInt32(content.length),
-      content.length, // we're going to assume that each section isn't more than 127 bits long, plus I don't really understand when this leb128 thing is meant to be used, nor have I seen ang examples of it being used in wasm... we'll just assume it works
+      content.length, // we're going to assume that each section isn't more than 127 bits long, plus I don't really understand when this leb128 thing is meant to be used, nor have I seen any examples of it being used in wasm... we'll just assume it works
       ...content
     ];
     //console.log(type, content, e);
@@ -101,26 +104,19 @@ function main() {
     f64: 0x7c
   };
   class funcType extends Array {
-    constructor (paramTypes, returnTypes) {
-      console.log(paramTypes, returnTypes)
-      super(
-        0x60,
-        ...new Vector(paramTypes),
-        ...new Vector(returnTypes)
-      );
+    constructor(paramTypes, returnTypes) {
+      super(0x60, ...new Vector(...paramTypes), ...new Vector(...returnTypes));
     }
-  };
+  }
   class WasmUint8Array extends Uint8Array {
-    constructor ({ types }) {
-      let a = (new Vector(types.map(t => {
-        let e = new funcType(t.params, t.returns)
-        console.log("hmm", e);
-        return e
-      }))).flat(1);
+    constructor({ types }) {
+      let a = new Vector(
+        ...types.map(t => new funcType(t.params, t.returns))
+      ).flat(1);
       console.log(a);
-      super([...wasmHeader, ...typeSection(a)])
+      super([...wasmHeader, ...typeSection(a)]);
     }
-  };
+  }
   let wasm = new WasmUint8Array({
     types: [
       {
