@@ -63,7 +63,7 @@ function main(): void {
   //}
   
   const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0] as const;
-  const encodeSignedLeb128FromInt32 = (value: number): Array => {
+  const encodeSignedLeb128FromInt32 = (value: number): Array<number> => {
     value |= 0;
     const result: Array<number> = [];
     while (true) {
@@ -79,9 +79,9 @@ function main(): void {
       result.push(byte | 0x80);
     }
   };
-  class Vector extends Array<any> {
-    constructor (array: Iterable<any>) {
-      super([array.length, ...array])
+  class Vector<T> extends Array<number | T> {
+    constructor (array: Array<T>) {
+      super([array.length as number, ...array as T[]])
     }
   }
   // console.log(encodeSignedLeb128FromInt32(654553455445));
@@ -121,9 +121,13 @@ function main(): void {
   };
   // we shouldn't needimports, here just in case
   // const importSection = imports => createSection(2, imports);
+  interface wasmType { 
+    params: Array<possibleTypes>,
+    returns: Array<possibleTypes>
+  }
   class WasmUint8Array extends Uint8Array {
-    constructor ({ types }: { types: Array<{params: Array<possibleTypes>, returns: Array<possibleTypes> }> }) {
-      let a: Vector = (new Vector(types.map(t => funcType(t.params, t.returns)))).flat(1);
+    constructor ({ types }: { types: Array<wasmType> }) {
+      let a: Vector<wasmType> = (new Vector<wasmType>(types.map(t => funcType(t.params, t.returns)))).flat(1);
       super([...wasmHeader, ...typeSection(a)])
     }
   };
