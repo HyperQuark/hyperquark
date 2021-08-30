@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) {
       // registration failed :(
       console.log("ServiceWorker registration failed: ", err);
       document.body.textContent =
-        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. Of course, the problem could be that you might just be using an old, unupported browser.";
+        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. Of course, the problem could be that you might just be using an old, unupported browser, but in theory you should grt a shorter error for that.";
     }
   );
 } else document.body.textContent = "You're using an unsupported browser :(";
@@ -85,7 +85,9 @@ function main() {
     }
   }
   class StringVector extends Vector {
-    
+    constructor (str) {
+      super(...Buffer.from(str, "utf-8"));
+    }
   }
   class Section extends Array {
     constructor (type, content) {
