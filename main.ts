@@ -4,7 +4,7 @@ import "./style.css";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
-    async (registration: ServiceWorkerRegistration): Promise<void> => {
+    async registration => {
       // Registration was successful
       console.log(
         "ServiceWorker registration successful with scope: ",
@@ -19,7 +19,7 @@ if ("serviceWorker" in navigator) {
       }
       main();
     },
-    (err: Error): void => {
+    err => {
       // registration failed :(
       console.log("ServiceWorker registration failed: ", err);
       document.body.textContent =
@@ -28,14 +28,14 @@ if ("serviceWorker" in navigator) {
   );
 } else document.body.textContent = "You're using an unsupported browser :(";
 
-function main(): void {
+function main() {
   /* const memory = new WebAssembly.Memory({
     shared: true,
     initial: 11,
     maximum: 100
   });*/
 
-  document.getElementById("app")!.innerHTML = `
+  document.getElementById("app").innerHTML = `
     <button id="start">green flag</button>
     <button id="stop">stop</button>
     <canvas id="stage"></canvas>
