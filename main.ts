@@ -2,12 +2,6 @@
 
 import "./style.css";
 
-/*
-import { VM } from "./vm/js";
-import { Renderer } from "./render";
-import { instantiate } from "./vm/as/vm.ts?exportTable";
-*/
-
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
     async (registration: ServiceWorkerRegistration): Promise<void> => {
@@ -79,9 +73,10 @@ function main(): void {
       result.push(byte | 0x80);
     }
   };
-  class Vector<T> extends Array<number | T> {
+  class Vector<T> extends Array<any> {
     constructor (array: Array<T>) {
-      super([array.length as number, ...array as T[]])
+      console.log(array)
+      super([array.length, ...array])
     }
   }
   // console.log(encodeSignedLeb128FromInt32(654553455445));
@@ -127,7 +122,7 @@ function main(): void {
   }
   class WasmUint8Array extends Uint8Array {
     constructor ({ types }: { types: Array<wasmType> }) {
-      let a: Vector<wasmType> = (new Vector<wasmType>(types.map(t => funcType(t.params, t.returns)))).flat(1);
+      let a: Vector<number> = (new Vector<number[]>(types.map(t => funcType(t.params, t.returns)))).flat(1) as Vector<number>;
       super([...wasmHeader, ...typeSection(a)])
     }
   };

@@ -7,7 +7,7 @@ export default {
       localsConvention: 'camelCaseOnly'
     }
   },
-  plugins: [assemblyScript()],
+  plugins: [/*(assemblyScript()*/],
   build: {
     outDir: "build"
   },
