@@ -10,7 +10,7 @@ import { instantiate } from "./vm/as/vm.ts?exportTable";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
-    async registration => {
+    async (registration: ServiceWorkerRegistration): Promise<void> => {
       // Registration was successful
       console.log(
         "ServiceWorker registration successful with scope: ",
@@ -20,30 +20,28 @@ if ("serviceWorker" in navigator) {
         console.log("Phew everything's working (I think)");
       } else {
         console.log("COOP+COEP failed :C");
-        document.body.textContent = (
-          "Please reload your page - if you see this message after reloading then something's gone wrong and you'll need to do some stuff to try and fix it that I can't be bothered to explain. Have a nice day :D"
-        );
+        document.body.textContent =
+          "Please reload your page - if you see this message after reloading then something's gone wrong and you'll need to do some stuff to try and fix it that I can't be bothered to explain. Have a nice day :D";
       }
       main();
     },
-    function(err) {
+    (err: Error): void => {
       // registration failed :(
       console.log("ServiceWorker registration failed: ", err);
-      document.body.textContent = (
-        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. Of course, the problem could be that you might just be using an old, unupported browser."
-      );
+      document.body.textContent =
+        "Something's gone terribly wrong. If you'd like. open up your browser's dev tools and try to find the problem. Of course, the problem could be that you might just be using an old, unupported browser.";
     }
   );
 } else document.body.textContent = "You're using an unsupported browser :(";
 
-function main() {
+function main(): void {
   /* const memory = new WebAssembly.Memory({
     shared: true,
     initial: 11,
     maximum: 100
   });*/
 
-  document.getElementById("app").innerHTML = `
+  document.getElementById("app")!.innerHTML = `
     <button id="start">green flag</button>
     <button id="stop">stop</button>
     <canvas id="stage"></canvas>
@@ -80,7 +78,7 @@ function main() {
       result.push(byte | 0x80);
     }
   };
- // console.log(encodeSignedLeb128FromInt32(654553455445));
+  // console.log(encodeSignedLeb128FromInt32(654553455445));
   const createSection = (type, content) => {
     let e = [
       type,
@@ -90,7 +88,7 @@ function main() {
     ];
     //console.log(type, content, e);
     return e;
-  }
+  };
   const typeSection = types => createSection(0x01, types);
   const types = {
     i32: 0x7f,
@@ -108,24 +106,27 @@ function main() {
     ];
     //console.log(paramTypes, returnTypes, e)
     return e;
-  }
+  };
   // we shouldn't needimports, here just in case
   // const importSection = imports => createSection(2, imports);
   const createWasmModule = ({ types }) => {
     //return new Uint8Array(
-    let a = [types.length, ...types.map(t => funcType(t.params, t.returns)).flat(1)];
+    let a = [
+      types.length,
+      ...types.map(t => funcType(t.params, t.returns)).flat(1)
+    ];
     //console.log("a", a);
     return [...wasmHeader, ...typeSection(a)];
     //);
   };
   let wasm = createWasmModule({
-      types: [
-        {
-          params: [types.i32, types.i32],
-          returns: []
-        }
-      ]
-    });
+    types: [
+      {
+        params: [types.i32, types.i32],
+        returns: []
+      }
+    ]
+  });
   console.log(wasm);
   let mod = new WebAssembly.Module(new Uint8Array(wasm));
   console.log(mod);
