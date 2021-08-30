@@ -62,12 +62,12 @@ function main(): void {
 */
   //}
   
-  const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0];
-  const encodeSignedLeb128FromInt32 = value => {
+  const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0] as const;
+  const encodeSignedLeb128FromInt32 = (value: number): Array => {
     value |= 0;
-    const result = [];
+    const result: Array<number> = [];
     while (true) {
-      const byte = value & 0x7f;
+      const byte: number = value & 0x7f;
       value >>= 7;
       if (
         (value === 0 && (byte & 0x40) === 0) ||
@@ -79,6 +79,11 @@ function main(): void {
       result.push(byte | 0x80);
     }
   };
+  class Vector extends Array<any> {
+    constructor (array: Iterable<any>) {
+      super([array.length, ...array])
+    }
+  }
   // console.log(encodeSignedLeb128FromInt32(654553455445));
   const createSection = (type, content) => {
     let e = [
@@ -97,7 +102,12 @@ function main(): void {
     f32: 0x7d,
     f64: 0x7c
   };
-  enum types = 
+  enum possibleTypes {
+    i32 = 0x7f,
+    i64 = 0x7e,
+    f32 = 0x7d,
+    f64 = 0x7c
+  }
   const funcType = (paramTypes = [], returnTypes = []) => {
     let e = [
       0x60,
@@ -112,12 +122,8 @@ function main(): void {
   // we shouldn't needimports, here just in case
   // const importSection = imports => createSection(2, imports);
   class WasmUint8Array extends Uint8Array {
-    constructor ({ types }: { types: Array<{params: number, returns: number[]> }) {
-      let a = [
-        types.length,
-        ...types.map(t => funcType(t.params, t.returns)).flat(1)
-      ];
-      //console.log("a", a);
+    constructor ({ types }: { types: Array<{params: Array<possibleTypes>, returns: Array<possibleTypes> }> }) {
+      let a: Vector = (new Vector(types.map(t => funcType(t.params, t.returns)))).flat(1);
       super([...wasmHeader, ...typeSection(a)])
     }
   };
