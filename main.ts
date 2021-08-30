@@ -55,7 +55,7 @@ function main() {
   renderer.start();
 */
   //}
-  
+
   const wasmHeader = [0, 97, 115, 109, 1, 0, 0, 0] as const;
   const encodeSignedLeb128FromInt32 = value => {
     value |= 0;
@@ -76,11 +76,11 @@ function main() {
   class Vector extends Array {
     constructor (array) {
       array ||= [];
-      return super([array.length, ...array]);
+      super([array.length, ...array]);
     }
-    *[Symbol.iterator] () {
+   /* *[Symbol.iterator] () {
       this.forEach(n => yield n);
-    }
+    }*/
   }
   const createSection = (type, content) => {
     let e = [
@@ -102,7 +102,7 @@ function main() {
   class funcType extends Array {
     constructor (paramTypes, returnTypes) {
       console.log(paramTypes, returnTypes)
-      return super([
+      super([
         0x60,
         ...new Vector(paramTypes),
         ...new Vector(returnTypes)
