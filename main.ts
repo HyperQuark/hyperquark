@@ -104,13 +104,14 @@ function main(): void {
   }
   class funcType extends Array<number> {
     constructor (paramTypes: Array<number>, returnTypes: Array<number>) {
+      super();
       let e: Array<number> = [
         0x60,
         ...new Vector<number>(paramTypes),
         ...new Vector<number>(returnTypes)
       ];
+      [].splice.call(this, 0, 0, ...e);
       //console.log(paramTypes, returnTypes, e)
-      super([...e]);
     }
   };
   // we shouldn't needimports, here just in case
