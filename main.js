@@ -130,5 +130,5 @@ function main() {
   console.log(wasm);
   let mod = new WebAssembly.Module(new Uint8Array(wasm));
   console.log(mod);
-  console.log(utf8.deco("hello"))
+  console.log(Buffer.from("hello"))
 }
