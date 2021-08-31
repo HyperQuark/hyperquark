@@ -2,7 +2,6 @@
 
 import "./style.css";
 
-
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
     async registration => {
@@ -57,21 +56,23 @@ function main() {
 */
   //}
 
-const decodeSignedLeb128 = (input) => {
-  let result = 0;
-  let shift = 0;
-  while (true) {
-    const byte = input.shift();
-    result |= (byte & 0x7f) << shift;
-    shift += 7;
-    if ((0x80 & byte) === 0) {
-      if (shift < 32 && (byte & 0x40) !== 0) {
-        return result | (~0 << shift);
+  const sLeb128 = value => {
+    value |= 0;
+    const result = [];
+    while (true) {
+      const byte = value & 0x7f;
+      value >>= 7;
+      if (
+        (value === 0 && (byte & 0x40) === 0) ||
+        (value === -1 && (byte & 0x40) !== 0)
+      ) {
+        result.push(byte);
+        return result;
       }
-      return result;
+      result.push(byte | 0x80);
     }
-  }
-};
+  };
+  window.sl128 = 
   class Vector extends Array {
     constructor(...array) {
       array ||= []; // eslint-disable-line
@@ -83,28 +84,28 @@ const decodeSignedLeb128 = (input) => {
     }
   }
   class StringVector extends Vector {
-    constructor (str) {
+    constructor(str) {
       super(...StringVector.encoder.encode(str));
     }
     static encoder = new TextEncoder();
   }
   class Section extends Array {
-    constructor (type, content) {
-      super(type, ...new Vector(...content))
+    constructor(type, content) {
+      super(type, ...new Vector(...content));
     }
-  };
+  }
   class CustomSection extends Section {
-    constructor (name, info) {
+    constructor(name, info) {
       super(0x00, ...new StringVector(name), ...info);
     }
   }
   class TypeSection extends Section {
-    constructor (types) {
+    constructor(types) {
       super(0x01, types);
     }
   }
   class ImportSection extends Section {
-    constructor (types) {
+    constructor(types) {
       super(0x02, types);
     }
   }
@@ -129,7 +130,10 @@ const decodeSignedLeb128 = (input) => {
     }
     static MagicNumber = [0, 97, 115, 109];
     static Version = [1, 0, 0, 0];
-    static WasmHeader = [...WasmUint8Array.MagicNumber, ...WasmUint8Array.Version];
+    static WasmHeader = [
+      ...WasmUint8Array.MagicNumber,
+      ...WasmUint8Array.Version
+    ];
   }
   let wasm = new WasmUint8Array({
     types: [
