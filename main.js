@@ -94,11 +94,22 @@ function main() {
       super(type, ...new Vector(...content))
     }
   };
-  class TypeSection extends Section {
+  class TypeSection ectrnds Section {
     constructor (types) {
       super(0x01, types);
     }
   }
+  class CustomSection ectrnds Section {
+    constructor (types) {
+      super(0x00, types);
+    }
+  }
+  class TypeSection ectrnds Section {
+    constructor (types) {
+      super(0x01, types);
+    }
+  }
+
   const types = {
     i32: 0x7f,
     i64: 0x7e,
