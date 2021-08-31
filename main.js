@@ -2,7 +2,6 @@
 
 import "./style.css";
 
-import { Buffer } from "buffer";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(
@@ -86,8 +85,9 @@ function main() {
   }
   class StringVector extends Vector {
     constructor (str) {
-      super(...Buffer.from(str, "utf-8"));
+      super(...StringVector.encoder.encode(str));
     }
+    static encoder = new TextEncoder();
   }
   class Section extends Array {
     constructor (type, content) {
