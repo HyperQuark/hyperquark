@@ -55,7 +55,9 @@ function main() {
   renderer.start();
 */
   //}
-
+  
+  // this is for signed ints but it should work the same way for unsigned ints
+  // unsigned version is probably slightly faster but i'm not too bothered about speed
   const sLeb128 = value => {
     value |= 0;
     const result = [];
@@ -72,7 +74,6 @@ function main() {
       result.push(byte | 0x80);
     }
   };
-  window.sl128 = 
   class Vector extends Array {
     constructor(...array) {
       array ||= []; // eslint-disable-line
