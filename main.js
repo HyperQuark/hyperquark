@@ -94,19 +94,19 @@ function main() {
       super(type, ...new Vector(...content))
     }
   };
-  class TypeSection ectrnds Section {
+  class CustomSection extends Section {
+    constructor (name, info) {
+      super(0x00, ...new StringVector(name), ...info);
+    }
+  }
+  class TypeSection extends Section {
     constructor (types) {
       super(0x01, types);
     }
   }
-  class CustomSection ectrnds Section {
+  class ImportSection extends Section {
     constructor (types) {
-      super(0x00, types);
-    }
-  }
-  class TypeSection ectrnds Section {
-    constructor (types) {
-      super(0x01, types);
+      super(0x02, types);
     }
   }
 
