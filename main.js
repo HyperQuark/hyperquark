@@ -57,22 +57,21 @@ function main() {
 */
   //}
 
-  const sLeb128 = value => {
-    value |= 0;
-    const result = [];
-    while (true) {
-      const byte = value & 0x7f;
-      value >>= 7;
-      if (
-        (value === 0 && (byte & 0x40) === 0) ||
-        (value === -1 && (byte & 0x40) !== 0)
-      ) {
-        result.push(byte);
-        return result;
+const decodeSignedLeb128 = (input) => {
+  let result = 0;
+  let shift = 0;
+  while (true) {
+    const byte = input.shift();
+    result |= (byte & 0x7f) << shift;
+    shift += 7;
+    if ((0x80 & byte) === 0) {
+      if (shift < 32 && (byte & 0x40) !== 0) {
+        return result | (~0 << shift);
       }
-      result.push(byte | 0x80);
+      return result;
     }
-  };
+  }
+};
   class Vector extends Array {
     constructor(...array) {
       array ||= []; // eslint-disable-line
