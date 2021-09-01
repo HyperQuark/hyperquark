@@ -106,11 +106,11 @@ function main() {
     }
   }
   class ImportSection extends Section {
-    constructor(types) {
-      super(0x02, types);
+    constructor(...imports) {
+      super(0x02, ...new Vector(imports).flat(1));
     }
   }
-
+  
   const NumTypes = {
     i32: 0x7f,
     i64: 0x7e,
@@ -135,6 +135,9 @@ function main() {
         ? super(0x01, ...sLeb128(min), ...sLeb128(max))
         : super(0x00, ...sLeb128(min));
     }
+  }
+  class Import extends Array {
+    
   }
 
   class WasmUint8Array extends Uint8Array {
