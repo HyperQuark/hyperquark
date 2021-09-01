@@ -111,12 +111,17 @@ function main() {
     }
   }
 
-  const types = {
+  const NumTypes = {
     i32: 0x7f,
     i64: 0x7e,
     f32: 0x7d,
-    f64: 0x7c
+    f64: 0x7c,
+    v128: 0x7b
   };
+  const RefTypes = {
+    funcref: 0x70,
+    externref: 0x6f
+  }
   class FuncType extends Array {
     constructor(paramTypes, returnTypes) {
       super(0x60, ...new Vector(...paramTypes), ...new Vector(...returnTypes));
@@ -139,7 +144,7 @@ function main() {
   let wasm = new WasmUint8Array({
     types: [
       {
-        params: [types.i32, types.i32],
+        params: [NumTypes.i32, NumTypes.i32],
         returns: []
       }
     ]
