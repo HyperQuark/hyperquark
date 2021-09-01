@@ -55,7 +55,7 @@ function main() {
   renderer.start();
 */
   //}
-  
+
   // this is for signed ints but it should work the same way for unsigned ints
   // unsigned version is probably slightly faster but i'm not too bothered about speed
   const sLeb128 = value => {
@@ -121,12 +121,22 @@ function main() {
   const RefTypes = {
     funcref: 0x70,
     externref: 0x6f
-  }
+  };
   class FuncType extends Array {
     constructor(paramTypes, returnTypes) {
       super(0x60, ...new Vector(...paramTypes), ...new Vector(...returnTypes));
     }
   }
+  class MemoryType extends Array {
+    constructor(min, max, shared) {
+      shared
+        ? super(0x03, ...sLeb128(min), ...sLeb128(max), 0x01)
+        : max
+        ? super(0x01, ...sLeb128(min), ...sLeb128(max))
+        : super(0x00, ...sLeb128(min));
+    }
+  }
+
   class WasmUint8Array extends Uint8Array {
     constructor({ types }) {
       let typeSec = new Vector(
