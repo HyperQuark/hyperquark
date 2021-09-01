@@ -29,10 +29,10 @@ export const ImportTags = {
   func: 0,
   table: 1,
   mem: 2,
-  global: 3:
+  global: 3
 }
 export class ImportType extends Array {
-  constructor (module, name) {
-    
+  constructor (module, name, tag, description) {
+    super(...new StringVector(module), ...new StringVector(name), tag, ...description);
   }
 }
