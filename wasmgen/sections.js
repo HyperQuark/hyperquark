@@ -12,7 +12,7 @@ export class CustomSection extends Section {
 }
 export class TypeSection extends Section {
   constructor(types) {
-    super(0x01, types);
+    super(0x01, ...new Vector(types).flat(1));
   }
 }
 export class ImportSection extends Section {

@@ -56,20 +56,6 @@ function main() {
 */
   //}
 
-  class WasmUint8Array extends Uint8Array {
-    constructor({ types }) {
-      let typeSec = new Vector(
-        ...types.map(t => new FuncType(t.params, t.returns))
-      ).flat(1);
-      super([...WasmUint8Array.WasmHeader, ...new TypeSection(typeSec)]);
-    }
-    static MagicNumber = [0, 97, 115, 109];
-    static Version = [1, 0, 0, 0];
-    static WasmHeader = [
-      ...WasmUint8Array.MagicNumber,
-      ...WasmUint8Array.Version
-    ];
-  }
   let wasm = new WasmUint8Array({
     types: [
       {
