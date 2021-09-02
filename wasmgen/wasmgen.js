@@ -12,7 +12,7 @@ class WasmUint8Array extends Uint8Array {
   static MagicNumber = [0, 97, 115, 109];
   static Version = [1, 0, 0, 0];
   static WasmHeader = [
-    ...WasmUint8Array.MagicNumber,
-    ...WasmUint8Array.Version
+    ...this.MagicNumber,
+    ...this.Version
   ];
 }
