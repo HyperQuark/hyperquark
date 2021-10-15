@@ -32,7 +32,16 @@ export const ImportTags = {
   global: 3
 }
 
+/**
+ * Import type
+ */
 export class ImportType extends Array {
+  /**
+   * @param {string} module - the name of the module to import from
+   * @param {string} name - the name of the the item to import
+   * @param tag {ImportTags} tag - the type of import
+   * @param 
+   */
   constructor (module, name, tag, description) {
     super(...new StringVector(module), ...new StringVector(name), tag, ...description);
   }
