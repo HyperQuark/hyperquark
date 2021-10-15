@@ -1,5 +1,10 @@
-// this is for signed ints but it should work the same way for unsigned ints
-// unsigned version is probably slightly faster but i'm not too bothered about speed
+/**
+ * encodes integers in the leb128 format
+ * this is for signed ints but it should work the same way for unsigned ints
+ * unsigned version is probably slightly faster but i'm not too bothered about speed atm
+ * @param {number} value
+ * @return {number[]}
+ */
 export const sLeb128 = value => {
   value |= 0;
   const result = [];
@@ -17,7 +22,13 @@ export const sLeb128 = value => {
   }
 };
 
+/**
+ * Encodes an array as a vector
+ */
 export class Vector extends Array {
+  /**
+   * @param {...any} [array] - the array to encode
+   */
   constructor(...array) {
     array ||= []; // eslint-disable-line
     if (array.length) super(...sLeb128(array.length), ...array);
