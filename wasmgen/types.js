@@ -31,6 +31,7 @@ export const ImportTags = {
   mem: 2,
   global: 3
 }
+
 export class ImportType extends Array {
   constructor (module, name, tag, description) {
     super(...new StringVector(module), ...new StringVector(name), tag, ...description);
