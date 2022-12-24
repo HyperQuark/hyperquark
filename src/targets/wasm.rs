@@ -3,11 +3,10 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection,
-    Instruction, Module, TypeSection, ValType,
+    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module, TypeSection, ValType, TableSection, TableType, Elements, ElementSection, MemorySection, MemoryType, ConstExpr, MemArg,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 enum ThreadStart {
     GreenFlag,
 }
@@ -15,14 +14,18 @@ enum ThreadStart {
 #[derive(Debug, Clone, PartialEq)]
 struct Step {
     opcodes: Vec<BlockOpcodeWithField>,
+    index: u32,
 }
 
 impl Step {
-    fn new(opcodes: Vec<BlockOpcodeWithField>) -> Self {
-        Step { opcodes }
+    fn new(opcodes: Vec<BlockOpcodeWithField>, index: u32) -> Self {
+        Step { opcodes, index }
     }
     fn opcodes(&self) -> &Vec<BlockOpcodeWithField> {
         &self.opcodes
+    }
+    fn index(&self) -> &u32 {
+        &self.index
     }
     fn into_function(&self) -> Function {
         let locals = vec![];
@@ -80,7 +83,7 @@ impl Thread {
     fn steps(&self) -> &Vec<Step> {
         &self.steps
     }
-    fn from_hat(hat: Block, blocks: BTreeMap<String, Block>) -> Self {
+    fn from_hat(hat: Block, blocks: BTreeMap<String, Block>, first_func_index: u32) -> Self {
         let mut ops: Vec<BlockOpcodeWithField> = vec![];
         fn add_block(block: Block, blocks: &BTreeMap<String, Block>, ops: &mut Vec<BlockOpcodeWithField>) {
             match block {
@@ -143,10 +146,10 @@ impl Thread {
                         10 => BlockOpcodeWithField::math_number { NUM: value.parse().unwrap() }, // this is for testing purposes, will change later
                         _ => panic!("bad project json (block array of type ({}, string))", ty),
                     }),
-                    BlockArray::Broadcast(ty, name, id) => match ty {
+                    BlockArray::Broadcast(ty, _name, _id) => match ty {
                         _ => todo!(),
                     },
-                    BlockArray::VariableOrList(ty, name, id, _pos_x, _pos_y) => match ty {
+                    BlockArray::VariableOrList(ty, _name, _id, _pos_x, _pos_y) => match ty {
                         _ => todo!(),
                     },
                 },
@@ -167,7 +170,7 @@ impl Thread {
         } else {
             unreachable!()
         };
-        Self::new(start_type, vec![Step::new(ops)])
+        Self::new(start_type, vec![Step::new(ops, first_func_index)])
     }
 }
 
@@ -192,6 +195,10 @@ mod types {
     pub const F64x2_F64: u32 = 2;
 }
 
+mod tables {
+    pub const STEP_FUNCS: u32 = 0;
+}
+
 impl From<Sb3Project> for WebWasmFile {
     fn from(project: Sb3Project) -> Self {
         let mut module = Module::new();
@@ -201,6 +208,16 @@ impl From<Sb3Project> for WebWasmFile {
         let mut types = TypeSection::new();
         let mut code = CodeSection::new();
         let mut exports = ExportSection::new();
+        let mut tables = TableSection::new();
+        let mut elements = ElementSection::new();
+        let mut memories = MemorySection::new();
+
+        memories.memory(MemoryType {
+            minimum: 1,
+            maximum: None,
+            memory64: false,
+            shared: false,
+        });
 
         types.function([ValType::F64], []);
         types.function([], []);
@@ -233,22 +250,62 @@ impl From<Sb3Project> for WebWasmFile {
         code.function(&fmod_func);
         
         let mut gf_func = Function::new(vec![]);
+        let mut tick_func = Function::new(vec![]);
+        
+        let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
+            (ThreadStart::GreenFlag, vec![]),
+        ]);
+        
+        let mut step_indices: Vec<u32> = vec![];
+        
+        let mut step_func_count = 0u32;
         
         for target in project.targets {
-            for (id, block) in target.blocks.clone().iter().filter(|(_id, b)| match b {
+            for (_id, block) in target.blocks.clone().iter().filter(|(_id, b)| match b {
                 Block::Normal { block_info, .. } => block_info.top_level && matches!(block_info.opcode, BlockOpcode::event_whenflagclicked),
                 Block::Special(_) => false,
             }) {
-                let thread = Thread::from_hat(block.clone(), target.blocks.clone());
-                match thread.start() {
-                    ThreadStart::GreenFlag => {
-                        gf_func.instruction(&Instruction::Call(code.len() + 2));
-                    }
-                }
+                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), step_func_count);
+                let first_index = thread.steps()[0].index;
+                thread_indices.entry(thread.start().clone()).and_modify(|v| v.push(first_index));
                 for step in thread.steps() {
                     let func = step.into_function();
                     functions.function(1);
                     code.function(&func);
+                    step_func_count += 1;
+                    step_indices.push(*step.index());
+                }
+            }
+        }
+        
+        let mut thread_count = 0;
+        for (start_type, indices) in thread_indices {
+            match start_type {
+                ThreadStart::GreenFlag => {
+                    for index in indices {
+                        gf_func.instruction(&Instruction::I32Const(0));
+                        gf_func.instruction(&Instruction::I32Const(index.try_into().expect("step func index out of bounds")));
+                        gf_func.instruction(&Instruction::I32Store(MemArg {
+                            offset: thread_count * 4,
+                            align: 2, // 2 ** 2 = 4 (bytes)
+                            memory_index: 0,
+                        }));
+                        
+                        //tick_func.instruction(&Instruction::F64Const((42+thread_count) as f64));
+                        //tick_func.instruction(&Instruction::Call(funcs::DBG_LOG));
+                        tick_func.instruction(&Instruction::I32Const(0));
+                        tick_func.instruction(&Instruction::I32Load(MemArg {
+                            offset: thread_count * 4,
+                            align: 2, // 2 ** 2 = 4 (bytes)
+                            memory_index: 0,
+                        }));
+                        tick_func.instruction(&Instruction::CallIndirect {
+                            ty: types::NOPARAM_NORESULT,
+                            table: 0,
+                        });
+                        
+                        thread_count += 1;
+                    }
                 }
             }
         }
@@ -257,17 +314,38 @@ impl From<Sb3Project> for WebWasmFile {
         functions.function(types::NOPARAM_NORESULT);
         code.function(&gf_func);
         exports.export("green_flag", ExportKind::Func, code.len() + 1);
+        
+        tick_func.instruction(&Instruction::End);
+        functions.function(types::NOPARAM_NORESULT);
+        code.function(&tick_func);
+        exports.export("tick", ExportKind::Func, code.len() + 1);
 
+        
+        tables.table(TableType {
+            element_type: ValType::FuncRef,
+            minimum: step_indices.len().try_into().expect("step indices length out of bounds"),
+            maximum: Some(step_indices.len().try_into().expect("step indices length out of bounds")),
+        });
+        
+        for i in &mut step_indices {
+            *i += 3;
+        }
+        let step_func_indices = Elements::Functions(&step_indices[..]);
+        elements.active(Some(tables::STEP_FUNCS), &ConstExpr::i32_const(0), ValType::FuncRef, step_func_indices);
+        
+        exports.export("tick_funcs", ExportKind::Table, 0);
+        exports.export("memory", ExportKind::Memory, 0);
+        
         module
             .section(&types)
             .section(&imports)
             .section(&functions)
-            // table
-            // memory
+            .section(&tables)
+            .section(&memories)
             // globals
             .section(&exports)
             // start
-            // elements
+            .section(&elements)
             // datacount
             .section(&code);
             // data
@@ -294,7 +372,9 @@ impl From<Sb3Project> for WebWasmFile {
             process.exit(1);
         }}
         WebAssembly.instantiate(buf, importObject).then(({{ instance }}) => {{
-            instance.exports.green_flag();
+            const {{ green_flag, tick }} = instance.exports;
+            green_flag();
+            tick();
         }}).catch((e) => {{
             console.error('error when instantiating module: ' + e.message);
             process.exit(1);
@@ -309,7 +389,7 @@ mod tests {
     use crate::sb3::tests::test_project_id;
     use std::process::{Command, Stdio};
     
-    #[test]
+    /*#[test]
     fn make_thread() {
         use BlockOpcodeWithField::*;
         let proj: Sb3Project = test_project_id("771449498").try_into().unwrap();
@@ -334,7 +414,7 @@ mod tests {
                 math_number { NUM: 2.0 },
             ])
         ]);
-    }
+    }*/
     
     #[test]
     fn run_wasm() {
