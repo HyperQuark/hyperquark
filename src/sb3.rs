@@ -650,7 +650,8 @@ pub mod tests {
     use super::*;
 
     pub fn test_project_id(id: &str) -> String {
-    println!("https://api.scratch.mit.edu/projects/{:}/", id);
+        use std::time::{SystemTime, UNIX_EPOCH};
+        println!("https://api.scratch.mit.edu/projects/{:}/", id);
         let token_val = serde_json::from_str::<Value>(&reqwest::blocking::get(format!("https://api.scratch.mit.edu/projects/{:}/", id))
             .unwrap()
             .text()
@@ -660,7 +661,7 @@ pub mod tests {
             .as_str()
             .unwrap(); 
         println!("{:}", token);
-        println!("https://projects.scratch.mit.edu/{:}/?token={:}", id, token);
+        println!("https://projects.scratch.mit.edu/{:}/?token={:}&nocache={:}", id, token, SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis());
         let project_resp = reqwest::blocking::get(format!("https://projects.scratch.mit.edu/{:}/?token={:}", id, token))
             .unwrap()
             .text()

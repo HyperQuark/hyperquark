@@ -27,11 +27,11 @@ impl Step {
     fn index(&self) -> &u32 {
         &self.index
     }
-    fn into_function(&self) -> Function {
+    fn into_function(&self, context: &Context) -> Function {
         let locals = vec![];
         let mut func = Function::new(locals);
         for op in self.opcodes() {
-            for instr in instructions(op) {
+            for instr in instructions(op, context) {
                 func.instruction(&instr);
             }
         }
@@ -41,17 +41,32 @@ impl Step {
 }
 
 mod funcs {
-    pub const DBG_ASSERT: u32 = 0;
-    pub const DBG_LOG: u32 = 1;
-    pub const FMOD: u32 = 2;
+    pub const DBG_LOG: u32 = 0;
+    pub const DBG_ASSERT: u32 = 1;
+    pub const LOOKS_SAY: u32 = 2;
+    pub const LOOKS_THINK: u32 = 3;
+    pub const FMOD: u32 = 4;
 }
+const BUILTIN_FUNCS: u32 = 5;
 
-fn instructions(op: &BlockOpcodeWithField) -> Vec<Instruction<'static>> {
+fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction<'static>> {
     use BlockOpcodeWithField::*;
     use Instruction::*;
     match op {
-        looks_think => vec![Call(funcs::DBG_LOG)],
-        looks_say => vec![Call(funcs::DBG_ASSERT)],
+        looks_think => {
+            if context.dbg {
+                vec![Call(funcs::DBG_ASSERT)]
+            } else {
+                vec![I32Const(context.target_index.try_into().expect("target index out of bounds")), Call(funcs::LOOKS_THINK)]
+            }
+        },
+        looks_say => {
+            if context.dbg {
+                vec![Call(funcs::DBG_LOG)]
+            } else {
+                vec![I32Const(context.target_index.try_into().expect("target index out of bounds")), Call(funcs::LOOKS_SAY)]
+            }
+        },
         operator_add => vec![F64Add],
         operator_subtract => vec![F64Sub],
         operator_divide => vec![F64Div],
@@ -193,16 +208,22 @@ mod types {
     pub const NOPARAM_NORESULT: u32 = 1;
     #[allow(non_upper_case_globals)]
     pub const F64x2_F64: u32 = 2;
+    pub const F64I32_NORESULT: u32 = 3;
 }
 
 mod tables {
     pub const STEP_FUNCS: u32 = 0;
 }
 
+struct Context {
+    target_index: u32,
+    dbg: bool,
+}
+
 impl From<Sb3Project> for WebWasmFile {
     fn from(project: Sb3Project) -> Self {
         let mut module = Module::new();
-
+        
         let mut imports = ImportSection::new();
         let mut functions = FunctionSection::new();
         let mut types = TypeSection::new();
@@ -211,20 +232,23 @@ impl From<Sb3Project> for WebWasmFile {
         let mut tables = TableSection::new();
         let mut elements = ElementSection::new();
         let mut memories = MemorySection::new();
-
+        
         memories.memory(MemoryType {
             minimum: 1,
             maximum: None,
             memory64: false,
             shared: false,
         });
-
+        
         types.function([ValType::F64], []);
         types.function([], []);
         types.function([ValType::F64, ValType::F64], [ValType::F64]);
-
+        types.function([ValType::F64, ValType::I32], []);
+        
         imports.import("dbg", "log", EntityType::Function(types::F64_NORESULT));
         imports.import("dbg", "assert", EntityType::Function(types::F64_NORESULT));
+        imports.import("runtime", "looks_say", EntityType::Function(types::F64I32_NORESULT));
+        imports.import("runtime", "looks_think", EntityType::Function(types::F64I32_NORESULT));
         
         functions.function(types::F64x2_F64);
         let mut fmod_func = Function::new(vec![]);
@@ -260,17 +284,18 @@ impl From<Sb3Project> for WebWasmFile {
         
         let mut step_func_count = 0u32;
         
-        for target in project.targets {
-            for (_id, block) in target.blocks.clone().iter().filter(|(_id, b)| match b {
-                Block::Normal { block_info, .. } => block_info.top_level && matches!(block_info.opcode, BlockOpcode::event_whenflagclicked),
-                Block::Special(_) => false,
+        for (target_index, target) in project.targets.iter().enumerate() {
+            for (id, block) in target.blocks.clone().iter().filter(|(_id, b)| match b.block_info() {
+                Some(block_info) => block_info.top_level && matches!(block_info.opcode, BlockOpcode::event_whenflagclicked),
+                None => false,
             }) {
+                let context = Context { target_index: target_index.try_into().unwrap(), dbg: matches!(target.comments.clone().iter().find(|(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id) && comment.text.clone() == String::from("hq-dbg")), Some(_)) };
                 let thread = Thread::from_hat(block.clone(), target.blocks.clone(), step_func_count);
                 let first_index = thread.steps()[0].index;
                 thread_indices.entry(thread.start().clone()).and_modify(|v| v.push(first_index));
                 for step in thread.steps() {
-                    let func = step.into_function();
-                    functions.function(1);
+                    let func = step.into_function(&context);
+                    functions.function(types::NOPARAM_NORESULT);
                     code.function(&func);
                     step_func_count += 1;
                     step_indices.push(*step.index());
@@ -313,13 +338,12 @@ impl From<Sb3Project> for WebWasmFile {
         gf_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
         code.function(&gf_func);
-        exports.export("green_flag", ExportKind::Func, code.len() + 1);
+        exports.export("green_flag", ExportKind::Func, code.len() + 3);
         
         tick_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
         code.function(&tick_func);
-        exports.export("tick", ExportKind::Func, code.len() + 1);
-
+        exports.export("tick", ExportKind::Func, code.len() + 3);
         
         tables.table(TableType {
             element_type: ValType::FuncRef,
@@ -328,12 +352,12 @@ impl From<Sb3Project> for WebWasmFile {
         });
         
         for i in &mut step_indices {
-            *i += 3;
+            *i += BUILTIN_FUNCS;
         }
         let step_func_indices = Elements::Functions(&step_indices[..]);
         elements.active(Some(tables::STEP_FUNCS), &ConstExpr::i32_const(0), ValType::FuncRef, step_func_indices);
         
-        exports.export("tick_funcs", ExportKind::Table, 0);
+        exports.export("step_funcs", ExportKind::Table, 0);
         exports.export("memory", ExportKind::Memory, 0);
         
         module
@@ -349,7 +373,7 @@ impl From<Sb3Project> for WebWasmFile {
             // datacount
             .section(&code);
             // data
-
+        
         let wasm_bytes = module.finish();
         Self { js_string: format!("const assert = require('node:assert').strict;
         let last_output;
@@ -358,10 +382,18 @@ impl From<Sb3Project> for WebWasmFile {
             last_output = f64;
         }};
         const assert_output = f64 => assert.equal(last_output, f64);
+        const targetOutput = (targetIndex, verb, text) => {{
+            let targetName = {:?}[targetIndex];
+            console.log(`${{targetName}} ${{verb}}: ${{text}}`)
+        }};
         const importObject = {{
             dbg: {{
                 log: wasm_output,
                 assert: assert_output,
+            }},
+            runtime: {{
+                looks_say: (text, targetIndex) => targetOutput(targetIndex, 'says', text),
+                looks_think: (text, targetIndex) => targetOutput(targetIndex, 'thinks', text),
             }}
         }};
         const buf = new Uint8Array({:?});
@@ -379,7 +411,7 @@ impl From<Sb3Project> for WebWasmFile {
             console.error('error when instantiating module: ' + e.message);
             process.exit(1);
         }});
-        ", &wasm_bytes)/*String::from("console.log(5)")*/, wasm_bytes }
+        ", project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), &wasm_bytes)/*String::from("console.log(5)")*/, wasm_bytes }
     }
 }
 
