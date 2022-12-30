@@ -388,6 +388,13 @@ pub enum BlockOpcodeWithField {
     sound_volume,
 }
 
+impl BlockOpcodeWithField {
+    pub fn does_request_redraw(&self) -> bool {
+        use BlockOpcodeWithField::*;
+        matches!(self, looks_say | looks_think)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Block {

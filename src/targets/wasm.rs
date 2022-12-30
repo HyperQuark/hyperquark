@@ -27,7 +27,7 @@ impl Step {
     fn index(&self) -> &u32 {
         &self.index
     }
-    fn into_function(&self, context: &Context) -> Function {
+    fn into_function(&self, context: &Context, next_step_index: u32) -> Function {
         let locals = vec![];
         let mut func = Function::new(locals);
         for op in self.opcodes() {
@@ -35,6 +35,9 @@ impl Step {
                 func.instruction(&instr);
             }
         }
+        func.instruction(&Instruction::LocalGet(0));
+        func.instruction(&Instruction::I32Const(next_step_index.try_into().expect("step index out of bounds")));
+        func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
         func.instruction(&Instruction::End);
         func
     }
@@ -52,21 +55,19 @@ const BUILTIN_FUNCS: u32 = 5;
 fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction<'static>> {
     use BlockOpcodeWithField::*;
     use Instruction::*;
-    match op {
-        looks_think => {
+    let mut instructions = match op {
+        looks_think => 
             if context.dbg {
                 vec![Call(funcs::DBG_ASSERT)]
             } else {
                 vec![I32Const(context.target_index.try_into().expect("target index out of bounds")), Call(funcs::LOOKS_THINK)]
-            }
-        },
-        looks_say => {
+            },
+        looks_say =>
             if context.dbg {
                 vec![Call(funcs::DBG_LOG)]
             } else {
                 vec![I32Const(context.target_index.try_into().expect("target index out of bounds")), Call(funcs::LOOKS_SAY)]
-            }
-        },
+            },
         operator_add => vec![F64Add],
         operator_subtract => vec![F64Sub],
         operator_divide => vec![F64Div],
@@ -79,7 +80,11 @@ fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction
         | math_whole_number { NUM }
         | math_positive_number { NUM } => vec![F64Const(NUM.clone())],
         _ => todo!(),
-    }
+    };
+    /*if op.doesRequestRedraw() && !(*op == looks_say && context.dbg) {
+        instructions.append(&mut vec![I32Const(0), I32Const(1), I32Store(MemArg { offset: 0, align: 2, memory_index: 0 })]);
+    }*/
+    instructions
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,12 +103,11 @@ impl Thread {
     fn steps(&self) -> &Vec<Step> {
         &self.steps
     }
-    fn from_hat(hat: Block, blocks: BTreeMap<String, Block>, first_func_index: u32) -> Self {
+    fn from_hat(hat: Block, blocks: BTreeMap<String, Block>, first_func_index: u32, context: &Context) -> Self {
         let mut ops: Vec<BlockOpcodeWithField> = vec![];
         fn add_block(block: Block, blocks: &BTreeMap<String, Block>, ops: &mut Vec<BlockOpcodeWithField>) {
             match block {
                 Block::Normal { block_info, .. } => {
-                    
                     for (_name, input) in block_info.inputs {
                         match input {
                             Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
@@ -185,7 +189,18 @@ impl Thread {
         } else {
             unreachable!()
         };
-        Self::new(start_type, vec![Step::new(ops, first_func_index)])
+        let mut steps: Vec<Step> = vec![];
+        //let mut lastOpRequestedRedraw = false;
+        let mut this_step_ops: Vec<BlockOpcodeWithField> = vec![];
+        for op in ops {
+            this_step_ops.push(op.clone());
+            if op.does_request_redraw() && !(op == BlockOpcodeWithField::looks_say && context.dbg) {
+                let steps_len: u32 = steps.len().try_into().expect("step count out of bounds");
+                steps.push(Step::new(this_step_ops.clone(), first_func_index + steps_len));
+                this_step_ops = vec![];
+            }
+        }
+        Self::new(start_type, steps)
     }
 }
 
@@ -209,6 +224,7 @@ mod types {
     #[allow(non_upper_case_globals)]
     pub const F64x2_F64: u32 = 2;
     pub const F64I32_NORESULT: u32 = 3;
+    pub const I32_NORESULT: u32 = 4;
 }
 
 mod tables {
@@ -219,6 +235,8 @@ struct Context {
     target_index: u32,
     dbg: bool,
 }
+
+const MEM_THREADS_START: u32 = 4;
 
 impl From<Sb3Project> for WebWasmFile {
     fn from(project: Sb3Project) -> Self {
@@ -244,6 +262,7 @@ impl From<Sb3Project> for WebWasmFile {
         types.function([], []);
         types.function([ValType::F64, ValType::F64], [ValType::F64]);
         types.function([ValType::F64, ValType::I32], []);
+        types.function([ValType::I32], []);
         
         imports.import("dbg", "log", EntityType::Function(types::F64_NORESULT));
         imports.import("dbg", "assert", EntityType::Function(types::F64_NORESULT));
@@ -276,13 +295,19 @@ impl From<Sb3Project> for WebWasmFile {
         let mut gf_func = Function::new(vec![]);
         let mut tick_func = Function::new(vec![]);
         
-        let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
+        let mut noop_func = Function::new(vec![]);
+        noop_func.instruction(&Instruction::End);
+        functions.function(types::I32_NORESULT);
+        code.function(&noop_func);
+        
+        /*let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
             (ThreadStart::GreenFlag, vec![]),
-        ]);
+        ]);*/
+        let mut thread_indices: Vec<(ThreadStart, u32)> = vec![];
         
-        let mut step_indices: Vec<u32> = vec![];
+        let mut step_indices: Vec<u32> = vec![0];
         
-        let mut step_func_count = 0u32;
+        let mut step_func_count = 1u32;
         
         for (target_index, target) in project.targets.iter().enumerate() {
             for (id, block) in target.blocks.clone().iter().filter(|(_id, b)| match b.block_info() {
@@ -290,12 +315,13 @@ impl From<Sb3Project> for WebWasmFile {
                 None => false,
             }) {
                 let context = Context { target_index: target_index.try_into().unwrap(), dbg: matches!(target.comments.clone().iter().find(|(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id) && comment.text.clone() == String::from("hq-dbg")), Some(_)) };
-                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), step_func_count);
+                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), step_func_count, &context);
                 let first_index = thread.steps()[0].index;
-                thread_indices.entry(thread.start().clone()).and_modify(|v| v.push(first_index));
-                for step in thread.steps() {
-                    let func = step.into_function(&context);
-                    functions.function(types::NOPARAM_NORESULT);
+                thread_indices.push((thread.start().clone(), first_index));
+                for (i, step) in thread.steps().iter().enumerate() {
+                    let thread_indices_len: u32 = thread_indices.len().try_into().expect("thread indices lenfth out of bounds");
+                    let func = step.into_function(&context, (step.index + 1) * (i < thread.steps.len() - 1) as u32);
+                    functions.function(types::I32_NORESULT);
                     code.function(&func);
                     step_func_count += 1;
                     step_indices.push(*step.index());
@@ -304,35 +330,31 @@ impl From<Sb3Project> for WebWasmFile {
         }
         
         let mut thread_count = 0;
-        for (start_type, indices) in thread_indices {
-            match start_type {
-                ThreadStart::GreenFlag => {
-                    for index in indices {
-                        gf_func.instruction(&Instruction::I32Const(0));
-                        gf_func.instruction(&Instruction::I32Const(index.try_into().expect("step func index out of bounds")));
-                        gf_func.instruction(&Instruction::I32Store(MemArg {
-                            offset: thread_count * 4,
-                            align: 2, // 2 ** 2 = 4 (bytes)
-                            memory_index: 0,
-                        }));
-                        
-                        //tick_func.instruction(&Instruction::F64Const((42+thread_count) as f64));
-                        //tick_func.instruction(&Instruction::Call(funcs::DBG_LOG));
-                        tick_func.instruction(&Instruction::I32Const(0));
-                        tick_func.instruction(&Instruction::I32Load(MemArg {
-                            offset: thread_count * 4,
-                            align: 2, // 2 ** 2 = 4 (bytes)
-                            memory_index: 0,
-                        }));
-                        tick_func.instruction(&Instruction::CallIndirect {
-                            ty: types::NOPARAM_NORESULT,
-                            table: 0,
-                        });
-                        
-                        thread_count += 1;
-                    }
-                }
-            }
+        for (start_type, index) in thread_indices {
+            let mut func = match start_type {
+                ThreadStart::GreenFlag => &mut gf_func,
+            };
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Const(index.try_into().expect("step func index out of bounds")));
+            func.instruction(&Instruction::I32Store(MemArg {
+                offset: (MEM_THREADS_START + thread_count * 4) as u64,
+                align: 2, // 2 ** 2 = 4 (bytes)
+                memory_index: 0,
+            }));
+            
+            tick_func.instruction(&Instruction::I32Const((MEM_THREADS_START + thread_count * 4).try_into().expect("step mem position out of bounds")));
+            tick_func.instruction(&Instruction::I32Const(0));
+            tick_func.instruction(&Instruction::I32Load(MemArg {
+                offset: (MEM_THREADS_START + thread_count * 4) as u64,
+                align: 2, // 2 ** 2 = 4 (bytes)
+                memory_index: 0,
+            }));
+            tick_func.instruction(&Instruction::CallIndirect {
+                ty: types::I32_NORESULT,
+                table: 0,
+            });
+            
+            thread_count += 1;
         }
         
         gf_func.instruction(&Instruction::End);
@@ -383,7 +405,7 @@ impl From<Sb3Project> for WebWasmFile {
         }};
         const assert_output = f64 => assert.equal(last_output, f64);
         const targetOutput = (targetIndex, verb, text) => {{
-            let targetName = {:?}[targetIndex];
+            let targetName = {target_names:?}[targetIndex];
             console.log(`${{targetName}} ${{verb}}: ${{text}}`)
         }};
         const importObject = {{
@@ -396,22 +418,42 @@ impl From<Sb3Project> for WebWasmFile {
                 looks_think: (text, targetIndex) => targetOutput(targetIndex, 'thinks', text),
             }}
         }};
-        const buf = new Uint8Array({:?});
+        const buf = new Uint8Array({buf:?});
         try {{
             assert(WebAssembly.validate(buf));
         }} catch {{
-            console.error('invalid WASM module');
-            process.exit(1);
+            try {{
+                new WebAssembly.Module(buf);
+                console.error('invalid WASM module');
+                process.exit(1);
+            }} catch (e) {{
+                console.error('invalid WASM module: ' + e.message);
+                process.exit(1);
+            }}
         }}
-        WebAssembly.instantiate(buf, importObject).then(({{ instance }}) => {{
-            const {{ green_flag, tick }} = instance.exports;
+        function sleep(ms) {{
+            return new Promise((resolve) => {{
+                setTimeout(resolve, ms);
+            }});
+        }}
+        WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
+            const {{ green_flag, tick, memory }} = instance.exports;
             green_flag();
-            tick();
+            $outertickloop: while (true) {{
+                const startTime = Date.now();
+                $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[0] === 0) {{
+                    tick();
+                    if (!new Uint32Array(memory.buffer).slice(0, {thread_count}).some(x => x > 0)) {{
+                        break $outertickloop;
+                    }}
+                }}
+                await sleep(30 - (Date.now() - startTime));
+            }}
         }}).catch((e) => {{
             console.error('error when instantiating module: ' + e.message);
             process.exit(1);
         }});
-        ", project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), &wasm_bytes)/*String::from("console.log(5)")*/, wasm_bytes }
+        ", target_names=project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), buf=&wasm_bytes, thread_count=thread_count), wasm_bytes }
     }
 }
 
