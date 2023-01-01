@@ -81,9 +81,9 @@ fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction
         | math_positive_number { NUM } => vec![F64Const(NUM.clone())],
         _ => todo!(),
     };
-    /*if op.doesRequestRedraw() && !(*op == looks_say && context.dbg) {
-        instructions.append(&mut vec![I32Const(0), I32Const(1), I32Store(MemArg { offset: 0, align: 2, memory_index: 0 })]);
-    }*/
+    if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
+        instructions.append(&mut vec![I32Const(0), I32Const(1), I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 })]);
+    }
     instructions
 }
 
@@ -295,6 +295,10 @@ impl From<Sb3Project> for WebWasmFile {
         let mut gf_func = Function::new(vec![]);
         let mut tick_func = Function::new(vec![]);
         
+        /*tick_func.instruction(&Instruction::I32Const(0));
+        tick_func.instruction(&Instruction::I32Const(0));
+        tick_func.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));*/
+        
         let mut noop_func = Function::new(vec![]);
         noop_func.instruction(&Instruction::End);
         functions.function(types::I32_NORESULT);
@@ -443,10 +447,11 @@ impl From<Sb3Project> for WebWasmFile {
                 const startTime = Date.now();
                 $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[0] === 0) {{
                     tick();
-                    if (!new Uint32Array(memory.buffer).slice(0, {thread_count}).some(x => x > 0)) {{
+                    if (!new Uint32Array(memory.buffer).slice(1, {thread_count}+1).some(x => x > 0)) {{
                         break $outertickloop;
                     }}
                 }}
+                new Uint8Array(memory.buffer)[0] = 0;
                 await sleep(30 - (Date.now() - startTime));
             }}
         }}).catch((e) => {{
