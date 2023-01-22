@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module, TypeSection, ValType, TableSection, TableType, Elements, ElementSection, MemorySection, MemoryType, ConstExpr, MemArg,
+    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module, TypeSection, ValType, TableSection, TableType, Elements, ElementSection, MemorySection, MemoryType, ConstExpr, MemArg, BlockType,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -29,16 +29,51 @@ impl Step {
     }
     fn into_function(&self, context: &Context, next_step_index: u32) -> Function {
         let locals = vec![];
+        println!("next step is {}", next_step_index);
         let mut func = Function::new(locals);
+        //func.instruction(&Instruction::LocalGet(0));
+        //func.instruction(&Instruction::F64ConvertI32S);
+        //func.instruction(&Instruction::F64ReinterpretI64);
+        //func.instruction(&Instruction::Call(funcs::DBG_LOG));
         for op in self.opcodes() {
             for instr in instructions(op, context) {
                 func.instruction(&instr);
             }
         }
-        func.instruction(&Instruction::LocalGet(0));
-        func.instruction(&Instruction::I32Const(next_step_index.try_into().expect("step index out of bounds")));
-        func.instruction(&Instruction::I32Store(MemArg { offset: 0, align: 2, memory_index: 0 }));
-        func.instruction(&Instruction::End);
+        let thread_indices: u64 = byte_offset::THREADS.try_into().expect("THREAD_INDICES out of bounds (E018)");
+        if next_step_index > 0 {
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Const(next_step_index.try_into().expect("step index out of bounds (E001)")));
+            func.instruction(&Instruction::I32Store(MemArg { offset: thread_indices, align: 2, memory_index: 0 }));
+        } else {
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Const(byte_offset::THREADS));
+            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Const(byte_offset::THREADS + 4));
+            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Load(MemArg { offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E009)"), align: 2, memory_index: 0, }));
+            func.instruction(&Instruction::I32Const(4));
+            func.instruction(&Instruction::I32Mul);
+            func.instruction(&Instruction::I32Const(byte_offset::THREADS));
+            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Sub);
+            func.instruction(&Instruction::I32Const(4));
+            func.instruction(&Instruction::I32Sub);
+            func.instruction(&Instruction::MemoryCopy {
+                src_mem: 0,
+                dst_mem: 0,
+            });
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Load(MemArg { offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E010)"), align: 2, memory_index: 0, }));
+            func.instruction(&Instruction::I32Const(1));
+            func.instruction(&Instruction::I32Sub);
+            func.instruction(&Instruction::I32Store(MemArg { offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E011)"), align: 2, memory_index: 0, }));
+        }
+        //func.instruction(&Instruction::End);
         func
     }
 }
@@ -60,13 +95,13 @@ fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction
             if context.dbg {
                 vec![Call(funcs::DBG_ASSERT)]
             } else {
-                vec![I32Const(context.target_index.try_into().expect("target index out of bounds")), Call(funcs::LOOKS_THINK)]
+                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E002)")), Call(funcs::LOOKS_THINK)]
             },
         looks_say =>
             if context.dbg {
                 vec![Call(funcs::DBG_LOG)]
             } else {
-                vec![I32Const(context.target_index.try_into().expect("target index out of bounds")), Call(funcs::LOOKS_SAY)]
+                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E003)")), Call(funcs::LOOKS_SAY)]
             },
         operator_add => vec![F64Add],
         operator_subtract => vec![F64Sub],
@@ -82,7 +117,7 @@ fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction
         _ => todo!(),
     };
     if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
-        instructions.append(&mut vec![I32Const(0), I32Const(1), I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 })]);
+        instructions.append(&mut vec![I32Const(byte_offset::REDRAW_REQUESTED), I32Const(1), I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 })]);
     }
     instructions
 }
@@ -195,7 +230,7 @@ impl Thread {
         for op in ops {
             this_step_ops.push(op.clone());
             if op.does_request_redraw() && !(op == BlockOpcodeWithField::looks_say && context.dbg) {
-                let steps_len: u32 = steps.len().try_into().expect("step count out of bounds");
+                let steps_len: u32 = steps.len().try_into().expect("step count out of bounds (E004)");
                 steps.push(Step::new(this_step_ops.clone(), first_func_index + steps_len));
                 this_step_ops = vec![];
             }
@@ -225,6 +260,7 @@ mod types {
     pub const F64x2_F64: u32 = 2;
     pub const F64I32_NORESULT: u32 = 3;
     pub const I32_NORESULT: u32 = 4;
+    pub const I32_I32: u32 = 5;
 }
 
 mod tables {
@@ -236,7 +272,11 @@ struct Context {
     dbg: bool,
 }
 
-const MEM_THREADS_START: u32 = 4;
+mod byte_offset {
+    pub const REDRAW_REQUESTED: i32 = 0;
+    pub const THREAD_NUM: i32 = 4;
+    pub const THREADS: i32 = 8;
+}
 
 impl From<Sb3Project> for WebWasmFile {
     fn from(project: Sb3Project) -> Self {
@@ -263,6 +303,7 @@ impl From<Sb3Project> for WebWasmFile {
         types.function([ValType::F64, ValType::F64], [ValType::F64]);
         types.function([ValType::F64, ValType::I32], []);
         types.function([ValType::I32], []);
+        types.function([ValType::I32], [ValType::I32]);
         
         imports.import("dbg", "log", EntityType::Function(types::F64_NORESULT));
         imports.import("dbg", "assert", EntityType::Function(types::F64_NORESULT));
@@ -293,7 +334,7 @@ impl From<Sb3Project> for WebWasmFile {
         code.function(&fmod_func);
         
         let mut gf_func = Function::new(vec![]);
-        let mut tick_func = Function::new(vec![]);
+        let mut tick_func = Function::new(vec![(2, ValType::I32)]);
         
         /*tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Const(0));
@@ -307,7 +348,7 @@ impl From<Sb3Project> for WebWasmFile {
         /*let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
             (ThreadStart::GreenFlag, vec![]),
         ]);*/
-        let mut thread_indices: Vec<(ThreadStart, u32)> = vec![];
+        let mut thread_indices: Vec<(ThreadStart, u32)> = vec![]; // (start type, first step index)
         
         let mut step_indices: Vec<u32> = vec![0];
         
@@ -323,8 +364,9 @@ impl From<Sb3Project> for WebWasmFile {
                 let first_index = thread.steps()[0].index;
                 thread_indices.push((thread.start().clone(), first_index));
                 for (i, step) in thread.steps().iter().enumerate() {
-                    let thread_indices_len: u32 = thread_indices.len().try_into().expect("thread indices lenfth out of bounds");
-                    let func = step.into_function(&context, (step.index + 1) * (i < thread.steps.len() - 1) as u32);
+                    let thread_indices_len: u32 = thread_indices.len().try_into().expect("thread indices length out of bounds (E005)");
+                    let mut func = step.into_function(&context, (step.index + 1) * (i < thread.steps.len() - 1) as u32);
+                    func.instruction(&Instruction::End);
                     functions.function(types::I32_NORESULT);
                     code.function(&func);
                     step_func_count += 1;
@@ -333,33 +375,93 @@ impl From<Sb3Project> for WebWasmFile {
             }
         }
         
+        let mut thread_start_counts: BTreeMap<ThreadStart, u32> = Default::default();
+        
+        macro_rules! func_for_thread_start {
+            ($start_type:ident) => {
+                match $start_type {
+                    ThreadStart::GreenFlag => &mut gf_func,
+                }
+            }
+        }
+        
         let mut thread_count = 0;
         for (start_type, index) in thread_indices {
-            let mut func = match start_type {
-                ThreadStart::GreenFlag => &mut gf_func,
-            };
+            let mut func = func_for_thread_start!(start_type);
             func.instruction(&Instruction::I32Const(0));
-            func.instruction(&Instruction::I32Const(index.try_into().expect("step func index out of bounds")));
+            func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E015)"),
+                align: 2,
+                memory_index: 0,
+            }));
+            func.instruction(&Instruction::I32Const(4));
+            func.instruction(&Instruction::I32Mul);
+            let thread_start_count: i32 = (*thread_start_counts.get(&start_type).unwrap_or(&0)).try_into().expect("start_type count out of bounds (E017)");
+            func.instruction(&Instruction::I32Const(thread_start_count * 4));
+            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::I32Const(index.try_into().expect("step func index out of bounds (E006)")));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (MEM_THREADS_START + thread_count * 4) as u64,
+                offset: (byte_offset::THREADS) as u64,
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
             
-            tick_func.instruction(&Instruction::I32Const((MEM_THREADS_START + thread_count * 4).try_into().expect("step mem position out of bounds")));
-            tick_func.instruction(&Instruction::I32Const(0));
-            tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (MEM_THREADS_START + thread_count * 4) as u64,
-                align: 2, // 2 ** 2 = 4 (bytes)
-                memory_index: 0,
-            }));
-            tick_func.instruction(&Instruction::CallIndirect {
-                ty: types::I32_NORESULT,
-                table: 0,
-            });
+            thread_start_counts.entry(start_type).and_modify(|u| *u += 1).or_insert(1);
             
             thread_count += 1;
         }
+        
+        for (start_type, count) in thread_start_counts {
+            let mut func = func_for_thread_start!(start_type);
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E012)"),
+                align: 2,
+                memory_index: 0,
+            }));
+            func.instruction(&Instruction::I32Const(count.try_into().expect("thread_start count out of bounds (E014)")));
+            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::I32Store(MemArg {
+                offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E016)"),
+                align: 2,
+                memory_index: 0,
+            }));
+        }
+        
+        tick_func.instruction(&Instruction::I32Const(0));
+        tick_func.instruction(&Instruction::I32Load(MemArg {
+            offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E013)"),
+            align: 2,
+            memory_index: 0,
+        }));
+        tick_func.instruction(&Instruction::I32Const(4));
+        tick_func.instruction(&Instruction::I32Mul);
+        tick_func.instruction(&Instruction::LocalSet(1));
+        tick_func.instruction(&Instruction::Loop(BlockType::Empty));
+        
+        tick_func.instruction(&Instruction::LocalGet(0));
+        tick_func.instruction(&Instruction::LocalGet(0));
+        tick_func.instruction(&Instruction::I32Load(MemArg {
+            offset: (byte_offset::THREADS) as u64,
+            align: 2, // 2 ** 2 = 4 (bytes)
+            memory_index: 0,
+        }));
+        tick_func.instruction(&Instruction::CallIndirect {
+            ty: types::I32_NORESULT,
+            table: 0,
+        });
+        
+        tick_func.instruction(&Instruction::LocalGet(0));
+        tick_func.instruction(&Instruction::I32Const(4));
+        tick_func.instruction(&Instruction::I32Add);
+        tick_func.instruction(&Instruction::LocalTee(0));
+        tick_func.instruction(&Instruction::LocalGet(1));
+        tick_func.instruction(&Instruction::I32LeS);
+        tick_func.instruction(&Instruction::BrIf(0));
+        tick_func.instruction(&Instruction::End);
+        
+        
         
         gf_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
@@ -373,8 +475,8 @@ impl From<Sb3Project> for WebWasmFile {
         
         tables.table(TableType {
             element_type: ValType::FuncRef,
-            minimum: step_indices.len().try_into().expect("step indices length out of bounds"),
-            maximum: Some(step_indices.len().try_into().expect("step indices length out of bounds")),
+            minimum: step_indices.len().try_into().expect("step indices length out of bounds (E007)"),
+            maximum: Some(step_indices.len().try_into().expect("step indices length out of bounds (E008)")),
         });
         
         for i in &mut step_indices {
@@ -404,13 +506,13 @@ impl From<Sb3Project> for WebWasmFile {
         Self { js_string: format!("const assert = require('node:assert').strict;
         let last_output;
         const wasm_output = f64 => {{
-            console.log(f64)
+            console.log(f64);
             last_output = f64;
         }};
         const assert_output = f64 => assert.equal(last_output, f64);
         const targetOutput = (targetIndex, verb, text) => {{
             let targetName = {target_names:?}[targetIndex];
-            console.log(`${{targetName}} ${{verb}}: ${{text}}`)
+            console.log(`${{targetName}} ${{verb}}: ${{text}}`);
         }};
         const importObject = {{
             dbg: {{
@@ -420,7 +522,7 @@ impl From<Sb3Project> for WebWasmFile {
             runtime: {{
                 looks_say: (text, targetIndex) => targetOutput(targetIndex, 'says', text),
                 looks_think: (text, targetIndex) => targetOutput(targetIndex, 'thinks', text),
-            }}
+            }},
         }};
         const buf = new Uint8Array({buf:?});
         try {{
@@ -444,21 +546,23 @@ impl From<Sb3Project> for WebWasmFile {
             const {{ green_flag, tick, memory }} = instance.exports;
             green_flag();
             $outertickloop: while (true) {{
+                console.log('outer')
                 const startTime = Date.now();
-                $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[0] === 0) {{
+                $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
+                    console.log('inner')
                     tick();
-                    if (!new Uint32Array(memory.buffer).slice(1, {thread_count}+1).some(x => x > 0)) {{
+                    if (!new Uint32Array(memory.buffer).slice({threads_offset}/4, {threads_offset}/4 + new Uint32Array(memory.buffer)[{thn_offset}/4] + 1).some(x => x > 0)) {{
                         break $outertickloop;
                     }}
                 }}
-                new Uint8Array(memory.buffer)[0] = 0;
+                new Uint8Array(memory.buffer)[{rr_offset}] = 0;
                 await sleep(30 - (Date.now() - startTime));
             }}
         }}).catch((e) => {{
             console.error('error when instantiating module: ' + e.message);
             process.exit(1);
         }});
-        ", target_names=project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), buf=&wasm_bytes, thread_count=thread_count), wasm_bytes }
+        ", target_names=project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
 }
 
