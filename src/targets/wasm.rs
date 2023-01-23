@@ -29,6 +29,7 @@ impl Step {
     }
     fn into_function(&self, context: &Context, next_step_index: u32) -> Function {
         let locals = vec![];
+        #[cfg(test)]
         println!("next step is {}", next_step_index);
         let mut func = Function::new(locals);
         //func.instruction(&Instruction::LocalGet(0));
