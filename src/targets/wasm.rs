@@ -35,7 +35,7 @@ impl Step {
         //func.instruction(&Instruction::LocalGet(0));
         //func.instruction(&Instruction::F64ConvertI32S);
         //func.instruction(&Instruction::F64ReinterpretI64);
-        //func.instruction(&Instruction::Call(funcs::DBG_LOG));
+        //func.instruction(&Instruction::Call(func_indices::DBG_LOG));
         for op in self.opcodes() {
             for instr in instructions(op, context) {
                 func.instruction(&instr);
@@ -79,36 +79,27 @@ impl Step {
     }
 }
 
-mod funcs {
-    pub const DBG_LOG: u32 = 0;
-    pub const DBG_ASSERT: u32 = 1;
-    pub const LOOKS_SAY: u32 = 2;
-    pub const LOOKS_THINK: u32 = 3;
-    pub const FMOD: u32 = 4;
-}
-const BUILTIN_FUNCS: u32 = 5;
-
 fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction<'static>> {
     use BlockOpcodeWithField::*;
     use Instruction::*;
     let mut instructions = match op {
         looks_think => 
             if context.dbg {
-                vec![Call(funcs::DBG_ASSERT)]
+                vec![Call(func_indices::DBG_ASSERT)]
             } else {
-                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E002)")), Call(funcs::LOOKS_THINK)]
+                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E002)")), Call(func_indices::LOOKS_THINK)]
             },
         looks_say =>
             if context.dbg {
-                vec![Call(funcs::DBG_LOG)]
+                vec![Call(func_indices::DBG_LOG)]
             } else {
-                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E003)")), Call(funcs::LOOKS_SAY)]
+                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E003)")), Call(func_indices::LOOKS_SAY)]
             },
         operator_add => vec![F64Add],
         operator_subtract => vec![F64Sub],
         operator_divide => vec![F64Div],
         operator_multiply => vec![F64Mul],
-        operator_mod => vec![Call(funcs::FMOD)],
+        operator_mod => vec![Call(func_indices::FMOD)],
         operator_round => vec![F64Nearest],
         math_number { NUM }
         | math_integer { NUM }
@@ -254,6 +245,15 @@ impl WebWasmFile {
     }
 }
 
+mod func_indices {
+    pub const DBG_LOG: u32 = 0;
+    pub const DBG_ASSERT: u32 = 1;
+    pub const LOOKS_SAY: u32 = 2;
+    pub const LOOKS_THINK: u32 = 3;
+    pub const FMOD: u32 = 4;
+}
+const BUILTIN_FUNCS: u32 = 5;
+
 mod types {
     pub const F64_NORESULT: u32 = 0;
     pub const NOPARAM_NORESULT: u32 = 1;
@@ -264,8 +264,9 @@ mod types {
     pub const I32_I32: u32 = 5;
 }
 
-mod tables {
+mod table_indices {
     pub const STEP_FUNCS: u32 = 0;
+    pub const STRINGS: u32 = 1;
 }
 
 struct Context {
@@ -430,38 +431,39 @@ impl From<Sb3Project> for WebWasmFile {
             }));
         }
         
-        tick_func.instruction(&Instruction::I32Const(0));
-        tick_func.instruction(&Instruction::I32Load(MemArg {
-            offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E013)"),
-            align: 2,
-            memory_index: 0,
-        }));
-        tick_func.instruction(&Instruction::I32Const(4));
-        tick_func.instruction(&Instruction::I32Mul);
-        tick_func.instruction(&Instruction::LocalSet(1));
-        tick_func.instruction(&Instruction::Loop(BlockType::Empty));
-        
-        tick_func.instruction(&Instruction::LocalGet(0));
-        tick_func.instruction(&Instruction::LocalGet(0));
-        tick_func.instruction(&Instruction::I32Load(MemArg {
-            offset: (byte_offset::THREADS) as u64,
-            align: 2, // 2 ** 2 = 4 (bytes)
-            memory_index: 0,
-        }));
-        tick_func.instruction(&Instruction::CallIndirect {
-            ty: types::I32_NORESULT,
-            table: 0,
-        });
-        
-        tick_func.instruction(&Instruction::LocalGet(0));
-        tick_func.instruction(&Instruction::I32Const(4));
-        tick_func.instruction(&Instruction::I32Add);
-        tick_func.instruction(&Instruction::LocalTee(0));
-        tick_func.instruction(&Instruction::LocalGet(1));
-        tick_func.instruction(&Instruction::I32LeS);
-        tick_func.instruction(&Instruction::BrIf(0));
-        tick_func.instruction(&Instruction::End);
-        
+        {
+          tick_func.instruction(&Instruction::I32Const(0));
+          tick_func.instruction(&Instruction::I32Load(MemArg {
+              offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E013)"),
+              align: 2,
+              memory_index: 0,
+          }));
+          tick_func.instruction(&Instruction::I32Const(4));
+          tick_func.instruction(&Instruction::I32Mul);
+          tick_func.instruction(&Instruction::LocalSet(1));
+          tick_func.instruction(&Instruction::Loop(BlockType::Empty));
+          
+          tick_func.instruction(&Instruction::LocalGet(0));
+          tick_func.instruction(&Instruction::LocalGet(0));
+          tick_func.instruction(&Instruction::I32Load(MemArg {
+              offset: (byte_offset::THREADS) as u64,
+              align: 2, // 2 ** 2 = 4 (bytes)
+              memory_index: 0,
+          }));
+          tick_func.instruction(&Instruction::CallIndirect {
+              ty: types::I32_NORESULT,
+              table: table_indices::STEP_FUNCS,
+          });
+          
+          tick_func.instruction(&Instruction::LocalGet(0));
+          tick_func.instruction(&Instruction::I32Const(4));
+          tick_func.instruction(&Instruction::I32Add);
+          tick_func.instruction(&Instruction::LocalTee(0));
+          tick_func.instruction(&Instruction::LocalGet(1));
+          tick_func.instruction(&Instruction::I32LeS);
+          tick_func.instruction(&Instruction::BrIf(0));
+          tick_func.instruction(&Instruction::End);
+        }
         
         
         gf_func.instruction(&Instruction::End);
@@ -480,11 +482,17 @@ impl From<Sb3Project> for WebWasmFile {
             maximum: Some(step_indices.len().try_into().expect("step indices length out of bounds (E008)")),
         });
         
+        tables.table(TableType {
+          element_type: ValType::ExternRef,
+          minimum: 2,
+          maximum: None,
+        });
+        
         for i in &mut step_indices {
             *i += BUILTIN_FUNCS;
         }
         let step_func_indices = Elements::Functions(&step_indices[..]);
-        elements.active(Some(tables::STEP_FUNCS), &ConstExpr::i32_const(0), ValType::FuncRef, step_func_indices);
+        elements.active(Some(table_indices::STEP_FUNCS), &ConstExpr::i32_const(0), ValType::FuncRef, step_func_indices);
         
         exports.export("step_funcs", ExportKind::Table, 0);
         exports.export("memory", ExportKind::Memory, 0);

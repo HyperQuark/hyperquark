@@ -388,10 +388,43 @@ pub enum BlockOpcodeWithField {
     sound_volume,
 }
 
+pub enum BlockType {
+  Text,
+  Number,
+  Boolean,
+  Stack,
+}
+
+pub struct BlockDescriptor {
+  inputs: Vec<BlockType>,
+  output: BlockType,
+}
+
+impl BlockDescriptor {
+  pub fn new(inputs: Vec<BlockType>, output: BlockType) -> Self {
+    Self { inputs, output }
+  }
+  pub fn inputs(&self) -> &Vec<BlockType> {
+    &self.inputs
+  }
+  pub fn output(&self) -> &BlockType {
+    &self.output
+  }
+}
+
 impl BlockOpcodeWithField {
     pub fn does_request_redraw(&self) -> bool {
         use BlockOpcodeWithField::*;
         matches!(self, looks_say | looks_think)
+    }
+    pub fn descriptor(&self) -> BlockDescriptor {
+      use BlockOpcodeWithField::*;
+      use BlockType::*;
+      match self {
+        operator_add | operator_subtract | operator_multiply | operator_divide | operator_mod => BlockDescriptor::new(vec![Number, Number], Number),
+        looks_say | looks_think => BlockDescriptor::new(vec![Text], Stack),
+        _ => todo!(),
+      }
     }
 }
 
