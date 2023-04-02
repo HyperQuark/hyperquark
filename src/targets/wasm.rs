@@ -265,8 +265,9 @@ pub mod func_indices {
     pub const CAST_FLOAT_STRING: u32 = 14;
     pub const CAST_STRING_FLOAT: u32 = 15;
     pub const CAST_STRING_BOOL: u32 = 16;
+    pub const CAST_FLOAT_ANY: u32 = 17; // `any`s have to be i64s and not f64s :(
 }
-pub const BUILTIN_FUNCS: u32 = 17;
+pub const BUILTIN_FUNCS: u32 = 18;
 pub const IMPORTED_FUNCS: u32 = 7;
 
 pub mod types {
@@ -439,7 +440,6 @@ impl From<Sb3Project> for WebWasmFile {
         any2string_func.instruction(&Instruction::End);
         code.function(&any2string_func);
         
-        //todo
         functions.function(types::I32I64_I32F64);
         let mut any2float_func = Function::new(vec![]);
         any2float_func.instruction(&Instruction::LocalGet(0));
@@ -473,7 +473,6 @@ impl From<Sb3Project> for WebWasmFile {
         any2float_func.instruction(&Instruction::End);
         code.function(&any2float_func);
         
-        //todo
         functions.function(types::I32I64_I32I64);
         let mut any2bool_func = Function::new(vec![]);
         any2bool_func.instruction(&Instruction::LocalGet(0));
@@ -549,6 +548,13 @@ impl From<Sb3Project> for WebWasmFile {
         string2bool_func.instruction(&Instruction::End);
         code.function(&string2bool_func);
         
+        functions.function(types::I32F64_I32I64);
+        let mut float2any_func = Function::new(vec![]);
+        float2any_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
+        float2any_func.instruction(&Instruction::LocalGet(1));
+        float2any_func.instruction(&Instruction::I64ReinterpretF64);
+        float2any_func.instruction(&Instruction::End);
+        code.function(&float2any_func);
         
         
         let mut gf_func = Function::new(vec![]);
@@ -728,11 +734,12 @@ impl From<Sb3Project> for WebWasmFile {
         Self { js_string: format!("const assert = require('node:assert').strict;
         let last_output;
         let strings_tbl;
+        conat wasm_val_to_string = (type, value_i64) =>
         const wasm_output = f64 => {{
             console.log(f64);
             last_output = f64;
         }};
-        const assert_output = f64 => assert.equal(last_output, f64);
+        const assert_output = out => assert.equal(last_output, out);
         const targetOutput = (targetIndex, verb, text) => {{
             let targetName = {target_names:?}[targetIndex];
             console.log(`${{targetName}} ${{verb}}: ${{text}}`);
