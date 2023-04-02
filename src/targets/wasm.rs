@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module, TypeSection, ValType, TableSection, TableType, Elements, ElementSection, MemorySection, MemoryType, ConstExpr, MemArg, BlockType,
+    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module, TypeSection, ValType, TableSection, TableType, Elements, ElementSection, MemorySection, MemoryType, ConstExpr, MemArg, BlockType, HeapType, RefType,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -245,36 +245,68 @@ impl WebWasmFile {
     }
 }
 
-mod func_indices {
+pub mod func_indices {
+    /* imported funcs */
     pub const DBG_LOG: u32 = 0;
     pub const DBG_ASSERT: u32 = 1;
     pub const LOOKS_SAY: u32 = 2;
     pub const LOOKS_THINK: u32 = 3;
-    pub const FMOD: u32 = 4;
+    pub const CAST_PRIMITIVE_FLOAT_STRING: u32 = 4; // js functions can only rwturm 1 value so need wrapper functions for casting
+    pub const CAST_PRIMITIVE_STRING_FLOAT: u32 = 5;
+    pub const CAST_PRIMITIVE_STRING_BOOL: u32 = 6;
+    /* wasm funcs */
+    pub const FMOD: u32 = 7;
+    pub const CAST_FLOAT_BOOL: u32 = 8;
+    pub const CAST_BOOL_FLOAT: u32 = 9;
+    pub const CAST_BOOL_STRING: u32 = 10;
+    pub const CAST_ANY_STRING: u32 = 11;
+    pub const CAST_ANY_FLOAT: u32 = 12;
+    pub const CAST_ANY_BOOL: u32 = 13;
+    pub const CAST_FLOAT_STRING: u32 = 14;
+    pub const CAST_STRING_FLOAT: u32 = 15;
+    pub const CAST_STRING_BOOL: u32 = 16;
 }
-const BUILTIN_FUNCS: u32 = 5;
+pub const BUILTIN_FUNCS: u32 = 17;
+pub const IMPORTED_FUNCS: u32 = 7;
 
-mod types {
+pub mod types {
+    #![allow(non_upper_case_globals)]
     pub const F64_NORESULT: u32 = 0;
     pub const NOPARAM_NORESULT: u32 = 1;
-    #[allow(non_upper_case_globals)]
     pub const F64x2_F64: u32 = 2;
     pub const F64I32_NORESULT: u32 = 3;
     pub const I32_NORESULT: u32 = 4;
     pub const I32_I32: u32 = 5;
+    pub const I32_F64: u32 = 6;
+    pub const F64_I32: u32 = 7;
+    pub const F64_EXTERNREF: u32 = 8;
+    pub const EXTERNREF_F64: u32 = 9;
+    pub const EXTERNREF_I32: u32 = 10;
+    pub const I32x2_I32x2: u32 = 11;
+    pub const I32I64_I32F64: u32 = 12;
+    pub const I32F64_I32I64: u32 = 13;
+    pub const NOPARAM_I32I64: u32 = 14;
+    pub const I32I64_I32I64: u32 = 15;
+    pub const NOPARAM_I32F64: u32 = 16;
 }
 
-mod table_indices {
+pub mod table_indices {
     pub const STEP_FUNCS: u32 = 0;
     pub const STRINGS: u32 = 1;
 }
 
-struct Context {
-    target_index: u32,
-    dbg: bool,
+pub mod hq_value_types {
+  pub const FLOAT64: i32 = 0;
+  pub const BOOL64: i32 = 1;
+  pub const EXTERN_STRING_REF64: i32 = 2;
 }
 
-mod byte_offset {
+pub struct Context {
+    pub target_index: u32,
+    pub dbg: bool,
+}
+
+pub mod byte_offset {
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
     pub const THREADS: i32 = 8;
@@ -306,11 +338,25 @@ impl From<Sb3Project> for WebWasmFile {
         types.function([ValType::F64, ValType::I32], []);
         types.function([ValType::I32], []);
         types.function([ValType::I32], [ValType::I32]);
+        types.function([ValType::I32], [ValType::F64]);
+        types.function([ValType::F64], [ValType::I32]);
+        types.function([ValType::F64], [ValType::Ref(RefType::EXTERNREF)]);
+        types.function([ValType::Ref(RefType::EXTERNREF)], [ValType::F64]);
+        types.function([ValType::Ref(RefType::EXTERNREF)], [ValType::I32]);
+        types.function([ValType::I32, ValType::I32], [ValType::I32, ValType::I32]);
+        types.function([ValType::I32, ValType::I64], [ValType::I32, ValType::F64]);
+        types.function([ValType::I32, ValType::F64], [ValType::I32, ValType::I64]);
+        types.function([], [ValType::I32, ValType::I64]);
+        types.function([ValType::I32, ValType::I64], [ValType::I32, ValType::I64]);
+        types.function([], [ValType::I32, ValType::F64]);
         
         imports.import("dbg", "log", EntityType::Function(types::F64_NORESULT));
         imports.import("dbg", "assert", EntityType::Function(types::F64_NORESULT));
         imports.import("runtime", "looks_say", EntityType::Function(types::F64I32_NORESULT));
         imports.import("runtime", "looks_think", EntityType::Function(types::F64I32_NORESULT));
+        imports.import("cast", "floattostring", EntityType::Function(types::F64_EXTERNREF));
+        imports.import("cast", "stringtofloat", EntityType::Function(types::EXTERNREF_F64));
+        imports.import("cast", "stringtobool", EntityType::Function(types::EXTERNREF_I32));
         
         functions.function(types::F64x2_F64);
         let mut fmod_func = Function::new(vec![]);
@@ -334,6 +380,176 @@ impl From<Sb3Project> for WebWasmFile {
         fmod_func.instruction(&Instruction::F64Add); // a - (truncate(a / b)) * b) + (b if a/b < 0 else 0)
         fmod_func.instruction(&Instruction::End);
         code.function(&fmod_func);
+        
+        functions.function(types::I32F64_I32I64);
+        let mut float2bool_func = Function::new(vec![]);
+        float2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
+        float2bool_func.instruction(&Instruction::LocalGet(1));
+        float2bool_func.instruction(&Instruction::F64Const(0.0));
+        float2bool_func.instruction(&Instruction::F64Eq);
+        float2bool_func.instruction(&Instruction::I64ExtendI32S);
+        float2bool_func.instruction(&Instruction::End);
+        code.function(&float2bool_func);
+        
+        functions.function(types::I32I64_I32F64);
+        let mut bool2float_func = Function::new(vec![]);
+        bool2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
+        bool2float_func.instruction(&Instruction::LocalGet(1));
+        bool2float_func.instruction(&Instruction::F64ConvertI64S);
+        bool2float_func.instruction(&Instruction::End);
+        code.function(&bool2float_func);
+        
+        functions.function(types::I32I64_I32I64);
+        let mut bool2string_func = Function::new(vec![]);
+        bool2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
+        bool2string_func.instruction(&Instruction::LocalGet(1));
+        bool2string_func.instruction(&Instruction::End);
+        code.function(&bool2string_func);
+        
+        functions.function(types::I32I64_I32I64);
+        let mut any2string_func = Function::new(vec![]);
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
+        any2string_func.instruction(&Instruction::I32Eq);
+        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::LocalGet(1));
+        any2string_func.instruction(&Instruction::Call(func_indices::CAST_BOOL_STRING));
+        any2string_func.instruction(&Instruction::Else);
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
+        any2string_func.instruction(&Instruction::I32Eq);
+        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::LocalGet(1));
+        any2string_func.instruction(&Instruction::F64ReinterpretI64);
+        any2string_func.instruction(&Instruction::Call(func_indices::CAST_FLOAT_STRING));
+        any2string_func.instruction(&Instruction::Else);
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
+        any2string_func.instruction(&Instruction::I32Eq);
+        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::LocalGet(1));
+        any2string_func.instruction(&Instruction::Else);
+        any2string_func.instruction(&Instruction::Unreachable);
+        any2string_func.instruction(&Instruction::End);
+        any2string_func.instruction(&Instruction::End);
+        any2string_func.instruction(&Instruction::End);
+        any2string_func.instruction(&Instruction::End);
+        code.function(&any2string_func);
+        
+        //todo
+        functions.function(types::I32I64_I32F64);
+        let mut any2float_func = Function::new(vec![]);
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
+        any2float_func.instruction(&Instruction::I32Eq);
+        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32F64)));
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::LocalGet(1));
+        any2float_func.instruction(&Instruction::Call(func_indices::CAST_BOOL_FLOAT));
+        any2float_func.instruction(&Instruction::Else);
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
+        any2float_func.instruction(&Instruction::I32Eq);
+        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32F64)));
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::LocalGet(1));
+        any2float_func.instruction(&Instruction::Call(func_indices::CAST_STRING_FLOAT));
+        any2float_func.instruction(&Instruction::Else);
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
+        any2float_func.instruction(&Instruction::I32Eq);
+        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32F64)));
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::LocalGet(1));
+        any2float_func.instruction(&Instruction::F64ReinterpretI64);
+        any2float_func.instruction(&Instruction::Else);
+        any2float_func.instruction(&Instruction::Unreachable);
+        any2float_func.instruction(&Instruction::End);
+        any2float_func.instruction(&Instruction::End);
+        any2float_func.instruction(&Instruction::End);
+        any2float_func.instruction(&Instruction::End);
+        code.function(&any2float_func);
+        
+        //todo
+        functions.function(types::I32I64_I32I64);
+        let mut any2bool_func = Function::new(vec![]);
+        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
+        any2bool_func.instruction(&Instruction::I32Eq);
+        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
+        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::LocalGet(1));
+        any2bool_func.instruction(&Instruction::Call(func_indices::CAST_STRING_BOOL));
+        any2bool_func.instruction(&Instruction::Else);
+        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
+        any2bool_func.instruction(&Instruction::I32Eq);
+        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
+        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::LocalGet(1));
+        any2bool_func.instruction(&Instruction::F64ReinterpretI64);
+        any2bool_func.instruction(&Instruction::Call(func_indices::CAST_FLOAT_BOOL));
+        any2bool_func.instruction(&Instruction::Else);
+        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
+        any2bool_func.instruction(&Instruction::I32Eq);
+        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
+        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::LocalGet(1));
+        any2bool_func.instruction(&Instruction::Else);
+        any2bool_func.instruction(&Instruction::Unreachable);
+        any2bool_func.instruction(&Instruction::End);
+        any2bool_func.instruction(&Instruction::End);
+        any2bool_func.instruction(&Instruction::End);
+        any2bool_func.instruction(&Instruction::End);
+        code.function(&any2bool_func);
+        
+        functions.function(types::I32F64_I32I64);
+        let mut float2string_func = Function::new(vec![(1, ValType::I32)]);
+        float2string_func.instruction(&Instruction::RefNull(HeapType::Extern));
+        float2string_func.instruction(&Instruction::I32Const(1));
+        float2string_func.instruction(&Instruction::TableGrow(table_indices::STRINGS));
+        float2string_func.instruction(&Instruction::LocalTee(2));
+        float2string_func.instruction(&Instruction::I32Const(-1));
+        float2string_func.instruction(&Instruction::I32Eq);
+        float2string_func.instruction(&Instruction::If(BlockType::Empty));
+        float2string_func.instruction(&Instruction::Unreachable);
+        float2string_func.instruction(&Instruction::End);
+        float2string_func.instruction(&Instruction::LocalGet(2));
+        float2string_func.instruction(&Instruction::LocalGet(1));
+        float2string_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING));
+        float2string_func.instruction(&Instruction::TableSet(table_indices::STRINGS));
+        float2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
+        float2string_func.instruction(&Instruction::LocalGet(2));
+        float2string_func.instruction(&Instruction::I64ExtendI32S);
+        float2string_func.instruction(&Instruction::End);
+        code.function(&float2string_func);
+        
+        functions.function(types::I32I64_I32F64);
+        let mut string2float_func = Function::new(vec![]);
+        string2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
+        string2float_func.instruction(&Instruction::LocalGet(1));
+        string2float_func.instruction(&Instruction::I32WrapI64);
+        string2float_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
+        string2float_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT));
+        string2float_func.instruction(&Instruction::End);
+        code.function(&string2float_func);
+        
+        functions.function(types::I32I64_I32I64);
+        let mut string2bool_func = Function::new(vec![]);
+        string2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
+        string2bool_func.instruction(&Instruction::LocalGet(1));
+        string2bool_func.instruction(&Instruction::I32WrapI64);
+        string2bool_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
+        string2bool_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_STRING_BOOL));
+        string2bool_func.instruction(&Instruction::I64ExtendI32S);
+        string2bool_func.instruction(&Instruction::End);
+        code.function(&string2bool_func);
+        
+        
         
         let mut gf_func = Function::new(vec![]);
         let mut tick_func = Function::new(vec![(2, ValType::I32)]);
@@ -366,7 +582,6 @@ impl From<Sb3Project> for WebWasmFile {
                 let first_index = thread.steps()[0].index;
                 thread_indices.push((thread.start().clone(), first_index));
                 for (i, step) in thread.steps().iter().enumerate() {
-                    let thread_indices_len: u32 = thread_indices.len().try_into().expect("thread indices length out of bounds (E005)");
                     let mut func = step.into_function(&context, (step.index + 1) * (i < thread.steps.len() - 1) as u32);
                     func.instruction(&Instruction::End);
                     functions.function(types::I32_NORESULT);
@@ -387,7 +602,6 @@ impl From<Sb3Project> for WebWasmFile {
             }
         }
         
-        let mut thread_count = 0;
         for (start_type, index) in thread_indices {
             let mut func = func_for_thread_start!(start_type);
             func.instruction(&Instruction::I32Const(0));
@@ -409,8 +623,6 @@ impl From<Sb3Project> for WebWasmFile {
             }));
             
             thread_start_counts.entry(start_type).and_modify(|u| *u += 1).or_insert(1);
-            
-            thread_count += 1;
         }
         
         for (start_type, count) in thread_start_counts {
@@ -469,21 +681,21 @@ impl From<Sb3Project> for WebWasmFile {
         gf_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
         code.function(&gf_func);
-        exports.export("green_flag", ExportKind::Func, code.len() + 3);
+        exports.export("green_flag", ExportKind::Func, code.len() + IMPORTED_FUNCS - 1);
         
         tick_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
         code.function(&tick_func);
-        exports.export("tick", ExportKind::Func, code.len() + 3);
+        exports.export("tick", ExportKind::Func, code.len() + IMPORTED_FUNCS - 1);
         
         tables.table(TableType {
-            element_type: ValType::FuncRef,
+            element_type: RefType::FUNCREF,
             minimum: step_indices.len().try_into().expect("step indices length out of bounds (E007)"),
             maximum: Some(step_indices.len().try_into().expect("step indices length out of bounds (E008)")),
         });
         
         tables.table(TableType {
-          element_type: ValType::ExternRef,
+          element_type: RefType::EXTERNREF,
           minimum: 2,
           maximum: None,
         });
@@ -492,9 +704,10 @@ impl From<Sb3Project> for WebWasmFile {
             *i += BUILTIN_FUNCS;
         }
         let step_func_indices = Elements::Functions(&step_indices[..]);
-        elements.active(Some(table_indices::STEP_FUNCS), &ConstExpr::i32_const(0), ValType::FuncRef, step_func_indices);
+        elements.active(Some(table_indices::STEP_FUNCS), &ConstExpr::i32_const(0), RefType::FUNCREF, step_func_indices);
         
-        exports.export("step_funcs", ExportKind::Table, 0);
+        exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
+        exports.export("strings", ExportKind::Table, table_indices::STRINGS);
         exports.export("memory", ExportKind::Memory, 0);
         
         module
@@ -514,6 +727,7 @@ impl From<Sb3Project> for WebWasmFile {
         let wasm_bytes = module.finish();
         Self { js_string: format!("const assert = require('node:assert').strict;
         let last_output;
+        let strings_tbl;
         const wasm_output = f64 => {{
             console.log(f64);
             last_output = f64;
@@ -531,6 +745,11 @@ impl From<Sb3Project> for WebWasmFile {
             runtime: {{
                 looks_say: (text, targetIndex) => targetOutput(targetIndex, 'says', text),
                 looks_think: (text, targetIndex) => targetOutput(targetIndex, 'thinks', text),
+            }},
+            cast: {{
+              stringtofloat: parseFloat,
+              stringtobool: Boolean,
+              floattostring: Number.prototype.toString,
             }},
         }};
         const buf = new Uint8Array({buf:?});
@@ -552,7 +771,10 @@ impl From<Sb3Project> for WebWasmFile {
             }});
         }}
         WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
-            const {{ green_flag, tick, memory }} = instance.exports;
+            const {{ green_flag, tick, memory, strings }} = instance.exports;
+            strings.set(0, 'false');
+            strings.set(1, 'true');
+            strings_tbl = strings;
             green_flag();
             $outertickloop: while (true) {{
                 console.log('outer')
@@ -613,6 +835,15 @@ mod tests {
         let proj: Sb3Project = test_project_id("771449498").try_into().unwrap();
         let wasm: WebWasmFile = proj.into();
         println!("{}", wasm.js_string());
+        let output2 = Command::new("node")
+            .arg("-e")
+            .arg(format!("fs.writeFileSync('bad.wasm', Buffer.from({buf:?}), 'binary');", buf=wasm.wasm_bytes()))
+            .stdout(Stdio::inherit())
+            .output()
+            .expect("failed to execute process");
+        if !output2.status.success() {
+            panic!("failed to write to bad.wasm");
+        }
         let output = Command::new("node")
             .arg("-e")
             .arg(wasm.js_string())
@@ -622,7 +853,7 @@ mod tests {
         println!("{:}", String::from_utf8(output.stdout).expect("failed to convert stdout from utf8"));
         println!("{:}", String::from_utf8(output.stderr).expect("failed to convert stderr from utf8"));
         if !output.status.success() {
-            panic!();
+            panic!("couldn't run wasm");
         }
     }
 }

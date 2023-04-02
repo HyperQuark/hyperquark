@@ -392,6 +392,11 @@ pub enum BlockType {
   Text,
   Number,
   Boolean,
+  // `Any` could be any one of Text, Boolean or Number
+  // only to be used when the output type is unknown or needs to preserved,
+  // or where values are being passed to js (ie strings) or the type must be preserved (ie variables)
+  Any,
+  // `Stack` is no output (a stack block) or the inpit of a branch (eg in an if/else block)
   Stack,
 }
 
