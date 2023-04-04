@@ -403,33 +403,33 @@ pub enum BlockOpcodeWithField {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BlockType {
-  Text,
-  Number,
-  Boolean,
-  // `Any` could be any one of Text, Boolean or Number
-  // only to be used when the output type is unknown or needs to preserved,
-  // or where values are being passed to js (ie strings) or the type must be preserved (ie variables)
-  Any,
-  // `Stack` is no output (a stack block) or the inpit of a branch (eg in an if/else block)
-  Stack,
+    Text,
+    Number,
+    Boolean,
+    // `Any` could be any one of Text, Boolean or Number
+    // only to be used when the output type is unknown or needs to preserved,
+    // or where values are being passed to js (ie strings) or the type must be preserved (ie variables)
+    Any,
+    // `Stack` is no output (a stack block) or the inpit of a branch (eg in an if/else block)
+    Stack,
 }
 
 #[derive(Debug)]
 pub struct BlockDescriptor {
-  inputs: Vec<BlockType>,
-  output: BlockType,
+    inputs: Vec<BlockType>,
+    output: BlockType,
 }
 
 impl BlockDescriptor {
-  pub fn new(inputs: Vec<BlockType>, output: BlockType) -> Self {
-    Self { inputs, output }
-  }
-  pub fn inputs(&self) -> &Vec<BlockType> {
-    &self.inputs
-  }
-  pub fn output(&self) -> &BlockType {
-    &self.output
-  }
+    pub fn new(inputs: Vec<BlockType>, output: BlockType) -> Self {
+        Self { inputs, output }
+    }
+    pub fn inputs(&self) -> &Vec<BlockType> {
+        &self.inputs
+    }
+    pub fn output(&self) -> &BlockType {
+        &self.output
+    }
 }
 
 impl BlockOpcodeWithField {
@@ -438,15 +438,20 @@ impl BlockOpcodeWithField {
         matches!(self, looks_say | looks_think)
     }
     pub fn descriptor(&self) -> BlockDescriptor {
-      use BlockOpcodeWithField::*;
-      use BlockType::*;
-      match self {
-        operator_add | operator_subtract | operator_multiply | operator_divide | operator_mod => BlockDescriptor::new(vec![Number, Number], Number),
-        operator_round => BlockDescriptor::new(vec![Number], Number),
-        looks_say | looks_think => BlockDescriptor::new(vec![Any], Stack),
-        math_number { .. } | math_integer { .. } | math_angle { .. } | math_whole_number { .. } | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
-        _ => todo!(),
-      }
+        use BlockOpcodeWithField::*;
+        use BlockType::*;
+        match self {
+            operator_add | operator_subtract | operator_multiply | operator_divide
+            | operator_mod => BlockDescriptor::new(vec![Number, Number], Number),
+            operator_round => BlockDescriptor::new(vec![Number], Number),
+            looks_say | looks_think => BlockDescriptor::new(vec![Any], Stack),
+            math_number { .. }
+            | math_integer { .. }
+            | math_angle { .. }
+            | math_whole_number { .. }
+            | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
+            _ => todo!(),
+        }
     }
 }
 
@@ -674,7 +679,6 @@ impl TryFrom<String> for Sb3Project {
     }
 }
 
-
 impl TryFrom<&str> for Sb3Project {
     type Error = &'static str;
 
@@ -714,20 +718,32 @@ pub mod tests {
     pub fn test_project_id(id: &str) -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
         println!("https://api.scratch.mit.edu/projects/{:}/", id);
-        let token_val = serde_json::from_str::<Value>(&reqwest::blocking::get(format!("https://api.scratch.mit.edu/projects/{:}/", id))
-            .unwrap()
-            .text()
-            .unwrap())
-            .unwrap()["project_token"].clone();
-        let token = token_val
-            .as_str()
-            .unwrap(); 
+        let token_val = serde_json::from_str::<Value>(
+            &reqwest::blocking::get(format!("https://api.scratch.mit.edu/projects/{:}/", id))
+                .unwrap()
+                .text()
+                .unwrap(),
+        )
+        .unwrap()["project_token"]
+            .clone();
+        let token = token_val.as_str().unwrap();
         println!("{:}", token);
-        println!("https://projects.scratch.mit.edu/{:}/?token={:}&nocache={:}", id, token, SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis());
-        let project_resp = reqwest::blocking::get(format!("https://projects.scratch.mit.edu/{:}/?token={:}", id, token))
-            .unwrap()
-            .text()
-            .unwrap();
+        println!(
+            "https://projects.scratch.mit.edu/{:}/?token={:}&nocache={:}",
+            id,
+            token,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+        let project_resp = reqwest::blocking::get(format!(
+            "https://projects.scratch.mit.edu/{:}/?token={:}",
+            id, token
+        ))
+        .unwrap()
+        .text()
+        .unwrap();
         //dbg!(&resp);
         project_resp
         //let j: Sb3Project = serde_json::from_str(&resp[..]).unwrap();

@@ -3,16 +3,15 @@ use crate::sb3::{BlockOpcode, BlockOpcodeWithField, Sb3Project};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::iter::zip;
 use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType, ExportKind,
-    ExportSection, Function, FunctionSection, HeapType, ImportSection, Instruction, MemArg,
-    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
+    ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg, MemorySection,
+    MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
 impl Step {
-    fn into_function(&self, context: &ThreadContext, next_step_index: u32) -> Function {
-        let mut locals = vec![ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I64];
+    fn as_function(&self, context: &ThreadContext, next_step_index: u32) -> Function {
+        let locals = vec![ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I64];
         #[cfg(test)]
         println!("next step is {}", next_step_index);
         let mut func = Function::new_with_locals_types(locals);
@@ -135,7 +134,7 @@ fn instructions(op: &BlockOpcodeWithField, context: &ThreadContext) -> Vec<Instr
         | math_integer { NUM }
         | math_angle { NUM }
         | math_whole_number { NUM }
-        | math_positive_number { NUM } => vec![F64Const(NUM.clone())],
+        | math_positive_number { NUM } => vec![F64Const(*NUM)],
         cast_string_num => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
         cast_string_bool => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
         cast_string_any => vec![
@@ -184,10 +183,10 @@ pub struct WebWasmFile {
 }
 
 impl WebWasmFile {
-    fn wasm_bytes(&self) -> &Vec<u8> {
+    pub fn wasm_bytes(&self) -> &Vec<u8> {
         &self.wasm_bytes
     }
-    fn js_string(&self) -> &String {
+    pub fn js_string(&self) -> &String {
         &self.js_string
     }
 }
@@ -327,7 +326,11 @@ impl From<Sb3Project> for WebWasmFile {
         types.function([ValType::I32, ValType::I64], []);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
-        imports.import("dbg", "assert", EntityType::Function(types::I32I64_NORESULT));
+        imports.import(
+            "dbg",
+            "assert",
+            EntityType::Function(types::I32I64_NORESULT),
+        );
         imports.import(
             "runtime",
             "looks_say",
@@ -421,7 +424,9 @@ impl From<Sb3Project> for WebWasmFile {
         )));
         any2string_func.instruction(&Instruction::LocalGet(1));
         any2string_func.instruction(&Instruction::F64ReinterpretI64);
-        any2string_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING));
+        any2string_func.instruction(&Instruction::Call(
+            func_indices::CAST_PRIMITIVE_FLOAT_STRING,
+        ));
         any2string_func.instruction(&Instruction::Else);
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
@@ -574,7 +579,7 @@ impl From<Sb3Project> for WebWasmFile {
                     dbg: matches!(
                         target.comments.clone().iter().find(
                             |(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id)
-                                && comment.text.clone() == String::from("hq-dbg")
+                                && comment.text.clone() == *"hq-dbg"
                         ),
                         Some(_)
                     ),
@@ -588,7 +593,7 @@ impl From<Sb3Project> for WebWasmFile {
                 let first_index = thread.steps()[0].index();
                 thread_indices.push((thread.start().clone(), *first_index));
                 for (i, step) in thread.steps().iter().enumerate() {
-                    let mut func = step.into_function(
+                    let mut func = step.as_function(
                         &context,
                         (step.index() + 1) * (i < thread.steps().len() - 1) as u32,
                     );
@@ -612,7 +617,7 @@ impl From<Sb3Project> for WebWasmFile {
         }
 
         for (start_type, index) in thread_indices {
-            let mut func = func_for_thread_start!(start_type);
+            let func = func_for_thread_start!(start_type);
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
@@ -646,7 +651,7 @@ impl From<Sb3Project> for WebWasmFile {
         }
 
         for (start_type, count) in thread_start_counts {
-            let mut func = func_for_thread_start!(start_type);
+            let func = func_for_thread_start!(start_type);
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Load(MemArg {

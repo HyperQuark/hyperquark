@@ -103,11 +103,11 @@ impl Thread {
                 }
                 Block::Special(a) => match a {
                     BlockArray::NumberOrAngle(ty, value) => ops.push(match ty {
-                        4 => BlockOpcodeWithField::math_number { NUM: value.clone() },
-                        5 => BlockOpcodeWithField::math_positive_number { NUM: value.clone() },
-                        6 => BlockOpcodeWithField::math_whole_number { NUM: value.clone() },
-                        7 => BlockOpcodeWithField::math_integer { NUM: value.clone() },
-                        8 => BlockOpcodeWithField::math_angle { NUM: value.clone() },
+                        4 => BlockOpcodeWithField::math_number { NUM: value },
+                        5 => BlockOpcodeWithField::math_positive_number { NUM: value },
+                        6 => BlockOpcodeWithField::math_whole_number { NUM: value },
+                        7 => BlockOpcodeWithField::math_integer { NUM: value },
+                        8 => BlockOpcodeWithField::math_angle { NUM: value },
                         _ => panic!("bad project json (block array of type ({}, u32))", ty),
                     }),
                     BlockArray::ColorOrString(ty, value) => ops.push(match ty {
@@ -132,9 +132,11 @@ impl Thread {
                         }, // this is for testing purposes, will change later
                         _ => panic!("bad project json (block array of type ({}, string))", ty),
                     }),
+                    #[allow(clippy::match_single_binding)]
                     BlockArray::Broadcast(ty, _name, _id) => match ty {
                         _ => todo!(),
                     },
+                    #[allow(clippy::match_single_binding)]
                     BlockArray::VariableOrList(ty, _name, _id, _pos_x, _pos_y) => match ty {
                         _ => todo!(),
                     },
