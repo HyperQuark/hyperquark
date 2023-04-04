@@ -386,8 +386,22 @@ pub enum BlockOpcodeWithField {
     sound_setvolumeto,
     sound_changevolumeby,
     sound_volume,
+    // these casting functions aren't blocks nor opcodes and they dob't have field but it's easiest to just chuck them in here
+    cast_string_num,
+    cast_string_bool,
+    cast_string_any,
+    cast_bool_num,
+    cast_bool_string,
+    cast_bool_any,
+    cast_num_string,
+    cast_num_bool,
+    cast_num_any,
+    cast_any_string,
+    cast_any_bool,
+    cast_any_num,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BlockType {
   Text,
   Number,
@@ -400,6 +414,7 @@ pub enum BlockType {
   Stack,
 }
 
+#[derive(Debug)]
 pub struct BlockDescriptor {
   inputs: Vec<BlockType>,
   output: BlockType,
@@ -427,7 +442,9 @@ impl BlockOpcodeWithField {
       use BlockType::*;
       match self {
         operator_add | operator_subtract | operator_multiply | operator_divide | operator_mod => BlockDescriptor::new(vec![Number, Number], Number),
-        looks_say | looks_think => BlockDescriptor::new(vec![Text], Stack),
+        operator_round => BlockDescriptor::new(vec![Number], Number),
+        looks_say | looks_think => BlockDescriptor::new(vec![Any], Stack),
+        math_number { .. } | math_integer { .. } | math_angle { .. } | math_whole_number { .. } | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
         _ => todo!(),
       }
     }

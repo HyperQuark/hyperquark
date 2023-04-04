@@ -1,37 +1,21 @@
-use crate::sb3::*;
+use crate::ir::{Step, Thread, ThreadContext, ThreadStart};
+use crate::sb3::{BlockOpcode, BlockOpcodeWithField, Sb3Project};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::iter::zip;
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module, TypeSection, ValType, TableSection, TableType, Elements, ElementSection, MemorySection, MemoryType, ConstExpr, MemArg, BlockType, HeapType, RefType,
+    BlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType, ExportKind,
+    ExportSection, Function, FunctionSection, HeapType, ImportSection, Instruction, MemArg,
+    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
-enum ThreadStart {
-    GreenFlag,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct Step {
-    opcodes: Vec<BlockOpcodeWithField>,
-    index: u32,
-}
-
 impl Step {
-    fn new(opcodes: Vec<BlockOpcodeWithField>, index: u32) -> Self {
-        Step { opcodes, index }
-    }
-    fn opcodes(&self) -> &Vec<BlockOpcodeWithField> {
-        &self.opcodes
-    }
-    fn index(&self) -> &u32 {
-        &self.index
-    }
-    fn into_function(&self, context: &Context, next_step_index: u32) -> Function {
-        let locals = vec![];
+    fn into_function(&self, context: &ThreadContext, next_step_index: u32) -> Function {
+        let mut locals = vec![ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I64];
         #[cfg(test)]
         println!("next step is {}", next_step_index);
-        let mut func = Function::new(locals);
+        let mut func = Function::new_with_locals_types(locals);
         //func.instruction(&Instruction::LocalGet(0));
         //func.instruction(&Instruction::F64ConvertI32S);
         //func.instruction(&Instruction::F64ReinterpretI64);
@@ -41,11 +25,21 @@ impl Step {
                 func.instruction(&instr);
             }
         }
-        let thread_indices: u64 = byte_offset::THREADS.try_into().expect("THREAD_INDICES out of bounds (E018)");
+        let thread_indices: u64 = byte_offset::THREADS
+            .try_into()
+            .expect("THREAD_INDICES out of bounds (E018)");
         if next_step_index > 0 {
             func.instruction(&Instruction::LocalGet(0));
-            func.instruction(&Instruction::I32Const(next_step_index.try_into().expect("step index out of bounds (E001)")));
-            func.instruction(&Instruction::I32Store(MemArg { offset: thread_indices, align: 2, memory_index: 0 }));
+            func.instruction(&Instruction::I32Const(
+                next_step_index
+                    .try_into()
+                    .expect("step index out of bounds (E001)"),
+            ));
+            func.instruction(&Instruction::I32Store(MemArg {
+                offset: thread_indices,
+                align: 2,
+                memory_index: 0,
+            }));
         } else {
             func.instruction(&Instruction::LocalGet(0));
             func.instruction(&Instruction::I32Const(byte_offset::THREADS));
@@ -54,7 +48,13 @@ impl Step {
             func.instruction(&Instruction::I32Const(byte_offset::THREADS + 4));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Const(0));
-            func.instruction(&Instruction::I32Load(MemArg { offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E009)"), align: 2, memory_index: 0, }));
+            func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E009)"),
+                align: 2,
+                memory_index: 0,
+            }));
             func.instruction(&Instruction::I32Const(4));
             func.instruction(&Instruction::I32Mul);
             func.instruction(&Instruction::I32Const(byte_offset::THREADS));
@@ -69,32 +69,62 @@ impl Step {
             });
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Const(0));
-            func.instruction(&Instruction::I32Load(MemArg { offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E010)"), align: 2, memory_index: 0, }));
+            func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E010)"),
+                align: 2,
+                memory_index: 0,
+            }));
             func.instruction(&Instruction::I32Const(1));
             func.instruction(&Instruction::I32Sub);
-            func.instruction(&Instruction::I32Store(MemArg { offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E011)"), align: 2, memory_index: 0, }));
+            func.instruction(&Instruction::I32Store(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E011)"),
+                align: 2,
+                memory_index: 0,
+            }));
         }
         //func.instruction(&Instruction::End);
         func
     }
 }
 
-fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction<'static>> {
+fn instructions(op: &BlockOpcodeWithField, context: &ThreadContext) -> Vec<Instruction<'static>> {
     use BlockOpcodeWithField::*;
     use Instruction::*;
     let mut instructions = match op {
-        looks_think => 
+        looks_think => {
             if context.dbg {
                 vec![Call(func_indices::DBG_ASSERT)]
             } else {
-                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E002)")), Call(func_indices::LOOKS_THINK)]
-            },
-        looks_say =>
+                vec![
+                    I32Const(
+                        context
+                            .target_index
+                            .try_into()
+                            .expect("target index out of bounds (E002)"),
+                    ),
+                    Call(func_indices::LOOKS_THINK),
+                ]
+            }
+        }
+        looks_say => {
             if context.dbg {
                 vec![Call(func_indices::DBG_LOG)]
             } else {
-                vec![I32Const(context.target_index.try_into().expect("target index out of bounds (E003)")), Call(func_indices::LOOKS_SAY)]
-            },
+                vec![
+                    I32Const(
+                        context
+                            .target_index
+                            .try_into()
+                            .expect("target index out of bounds (E003)"),
+                    ),
+                    Call(func_indices::LOOKS_SAY),
+                ]
+            }
+        }
         operator_add => vec![F64Add],
         operator_subtract => vec![F64Sub],
         operator_divide => vec![F64Div],
@@ -106,129 +136,46 @@ fn instructions(op: &BlockOpcodeWithField, context: &Context) -> Vec<Instruction
         | math_angle { NUM }
         | math_whole_number { NUM }
         | math_positive_number { NUM } => vec![F64Const(NUM.clone())],
+        cast_string_num => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
+        cast_string_bool => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
+        cast_string_any => vec![
+            LocalSet(step_func_locals::EXTERNREF),
+            I32Const(hq_value_types::EXTERN_STRING_REF64),
+            LocalGet(step_func_locals::EXTERNREF),
+            Call(func_indices::TABLE_ADD_STRING),
+        ],
+        cast_bool_num => vec![Call(func_indices::CAST_BOOL_FLOAT)],
+        cast_bool_string => vec![Call(func_indices::CAST_BOOL_STRING)],
+        cast_bool_any => vec![
+            LocalSet(step_func_locals::I64),
+            I32Const(hq_value_types::BOOL64),
+            LocalGet(step_func_locals::I64),
+        ],
+        cast_num_string => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
+        cast_num_bool => vec![Call(func_indices::CAST_FLOAT_BOOL)],
+        cast_num_any => vec![
+            LocalSet(step_func_locals::F64),
+            I32Const(hq_value_types::FLOAT64),
+            LocalGet(step_func_locals::F64),
+            I64ReinterpretF64,
+        ],
+        cast_any_string => vec![Call(func_indices::CAST_ANY_STRING)],
+        cast_any_bool => vec![Call(func_indices::CAST_ANY_FLOAT)],
+        cast_any_num => vec![Call(func_indices::CAST_ANY_BOOL)],
         _ => todo!(),
     };
     if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
-        instructions.append(&mut vec![I32Const(byte_offset::REDRAW_REQUESTED), I32Const(1), I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 })]);
+        instructions.append(&mut vec![
+            I32Const(byte_offset::REDRAW_REQUESTED),
+            I32Const(1),
+            I32Store8(MemArg {
+                offset: 0,
+                align: 0,
+                memory_index: 0,
+            }),
+        ]);
     }
     instructions
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct Thread {
-    start: ThreadStart,
-    steps: Vec<Step>,
-}
-
-impl Thread {
-    fn new(start: ThreadStart, steps: Vec<Step>) -> Self {
-        Thread { start, steps }
-    }
-    fn start(&self) -> &ThreadStart {
-        &self.start
-    }
-    fn steps(&self) -> &Vec<Step> {
-        &self.steps
-    }
-    fn from_hat(hat: Block, blocks: BTreeMap<String, Block>, first_func_index: u32, context: &Context) -> Self {
-        let mut ops: Vec<BlockOpcodeWithField> = vec![];
-        fn add_block(block: Block, blocks: &BTreeMap<String, Block>, ops: &mut Vec<BlockOpcodeWithField>) {
-            match block {
-                Block::Normal { block_info, .. } => {
-                    for (_name, input) in block_info.inputs {
-                        match input {
-                            Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
-                                if let Some(block) = maybe_block {
-                                    match block {
-                                        BlockArrayOrId::Id(id) => {
-                                            if let Some(actual_block) = blocks.get(&id) {
-                                                add_block(actual_block.clone(), blocks, ops);
-                                            }
-                                        },
-                                        BlockArrayOrId::Array(arr) => {
-                                            add_block(Block::Special(arr), blocks, ops);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    ops.push(match block_info.opcode {
-                        BlockOpcode::looks_say => BlockOpcodeWithField::looks_say,
-                        BlockOpcode::looks_think => BlockOpcodeWithField::looks_think,
-                        BlockOpcode::operator_add => BlockOpcodeWithField::operator_add,
-                        BlockOpcode::operator_subtract => BlockOpcodeWithField::operator_subtract,
-                        BlockOpcode::operator_multiply => BlockOpcodeWithField::operator_multiply,
-                        BlockOpcode::operator_divide => BlockOpcodeWithField::operator_divide,
-                        BlockOpcode::operator_mod => BlockOpcodeWithField::operator_mod,
-                        BlockOpcode::operator_round => BlockOpcodeWithField::operator_round,
-                        _ => todo!(),
-                    });
-                    
-                    if let Some(next_id) = &block_info.next {
-                        if let Some(next_block) = blocks.get(next_id) {
-                            add_block(next_block.clone(), blocks, ops);
-                        }
-                    }
-                    
-                },
-                Block::Special(a) => match a {
-                    BlockArray::NumberOrAngle(ty, value) => ops.push(match ty {
-                        4 => BlockOpcodeWithField::math_number { NUM: value.clone() },
-                        5 => BlockOpcodeWithField::math_positive_number { NUM: value.clone() },
-                        6 => BlockOpcodeWithField::math_whole_number { NUM: value.clone() },
-                        7 => BlockOpcodeWithField::math_integer { NUM: value.clone() },
-                        8 => BlockOpcodeWithField::math_angle { NUM: value.clone() },
-                        _ => panic!("bad project json (block array of type ({}, u32))", ty),
-                    }),
-                    BlockArray::ColorOrString(ty, value) => ops.push(match ty {
-                        4 => BlockOpcodeWithField::math_number { NUM: value.parse().unwrap() },
-                        5 => BlockOpcodeWithField::math_positive_number { NUM: value.parse().unwrap() },
-                        6 => BlockOpcodeWithField::math_whole_number { NUM: value.parse().unwrap() },
-                        7 => BlockOpcodeWithField::math_integer { NUM: value.parse().unwrap() },
-                        8 => BlockOpcodeWithField::math_angle { NUM: value.parse().unwrap() },
-                        9 => todo!(),
-                        10 => BlockOpcodeWithField::math_number { NUM: value.parse().unwrap() }, // this is for testing purposes, will change later
-                        _ => panic!("bad project json (block array of type ({}, string))", ty),
-                    }),
-                    BlockArray::Broadcast(ty, _name, _id) => match ty {
-                        _ => todo!(),
-                    },
-                    BlockArray::VariableOrList(ty, _name, _id, _pos_x, _pos_y) => match ty {
-                        _ => todo!(),
-                    },
-                },
-            };
-        }
-        if let Block::Normal { block_info, .. } = &hat {
-            if let Some(next_id) = &block_info.next {
-                if let Some(next_block) = blocks.get(next_id) {
-                    add_block(next_block.clone(), &blocks, &mut ops);
-                }
-            }
-        }
-        let start_type = if let Block::Normal { block_info, .. } = &hat {
-            match block_info.opcode {
-                BlockOpcode::event_whenflagclicked => ThreadStart::GreenFlag,
-                _ => todo!(),
-            }
-        } else {
-            unreachable!()
-        };
-        let mut steps: Vec<Step> = vec![];
-        //let mut lastOpRequestedRedraw = false;
-        let mut this_step_ops: Vec<BlockOpcodeWithField> = vec![];
-        for op in ops {
-            this_step_ops.push(op.clone());
-            if op.does_request_redraw() && !(op == BlockOpcodeWithField::looks_say && context.dbg) {
-                let steps_len: u32 = steps.len().try_into().expect("step count out of bounds (E004)");
-                steps.push(Step::new(this_step_ops.clone(), first_func_index + steps_len));
-                this_step_ops = vec![];
-            }
-        }
-        Self::new(start_type, steps)
-    }
 }
 
 pub struct WebWasmFile {
@@ -243,6 +190,13 @@ impl WebWasmFile {
     fn js_string(&self) -> &String {
         &self.js_string
     }
+}
+
+pub mod step_func_locals {
+    pub const MEM_LOCATION: u32 = 0;
+    pub const EXTERNREF: u32 = 1;
+    pub const F64: u32 = 2;
+    pub const I64: u32 = 3;
 }
 
 pub mod func_indices {
@@ -262,12 +216,9 @@ pub mod func_indices {
     pub const CAST_ANY_STRING: u32 = 11;
     pub const CAST_ANY_FLOAT: u32 = 12;
     pub const CAST_ANY_BOOL: u32 = 13;
-    pub const CAST_FLOAT_STRING: u32 = 14;
-    pub const CAST_STRING_FLOAT: u32 = 15;
-    pub const CAST_STRING_BOOL: u32 = 16;
-    pub const CAST_FLOAT_ANY: u32 = 17; // `any`s have to be i64s and not f64s :(
+    pub const TABLE_ADD_STRING: u32 = 14;
 }
-pub const BUILTIN_FUNCS: u32 = 18;
+pub const BUILTIN_FUNCS: u32 = 15;
 pub const IMPORTED_FUNCS: u32 = 7;
 
 pub mod types {
@@ -289,6 +240,19 @@ pub mod types {
     pub const NOPARAM_I32I64: u32 = 14;
     pub const I32I64_I32I64: u32 = 15;
     pub const NOPARAM_I32F64: u32 = 16;
+    pub const F64_I64: u32 = 17;
+    pub const I64_F64: u32 = 18;
+    pub const I64_I64: u32 = 19;
+    pub const I32I64_I64: u32 = 20;
+    pub const I32I64_F64: u32 = 21;
+    pub const F64_I32I64: u32 = 22;
+    pub const NOPARAM_I64: u32 = 23;
+    pub const NOPARAM_F64: u32 = 24;
+    pub const I32I64_EXTERNREF: u32 = 25;
+    pub const NOPARAM_EXTERNREF: u32 = 26;
+    pub const I64_EXTERNREF: u32 = 27;
+    pub const I32I64I32_NORESULT: u32 = 28;
+    pub const I32I64_NORESULT: u32 = 29;
 }
 
 pub mod table_indices {
@@ -297,14 +261,9 @@ pub mod table_indices {
 }
 
 pub mod hq_value_types {
-  pub const FLOAT64: i32 = 0;
-  pub const BOOL64: i32 = 1;
-  pub const EXTERN_STRING_REF64: i32 = 2;
-}
-
-pub struct Context {
-    pub target_index: u32,
-    pub dbg: bool,
+    pub const FLOAT64: i32 = 0;
+    pub const BOOL64: i32 = 1;
+    pub const EXTERN_STRING_REF64: i32 = 2;
 }
 
 pub mod byte_offset {
@@ -316,7 +275,7 @@ pub mod byte_offset {
 impl From<Sb3Project> for WebWasmFile {
     fn from(project: Sb3Project) -> Self {
         let mut module = Module::new();
-        
+
         let mut imports = ImportSection::new();
         let mut functions = FunctionSection::new();
         let mut types = TypeSection::new();
@@ -325,14 +284,14 @@ impl From<Sb3Project> for WebWasmFile {
         let mut tables = TableSection::new();
         let mut elements = ElementSection::new();
         let mut memories = MemorySection::new();
-        
+
         memories.memory(MemoryType {
             minimum: 1,
             maximum: None,
             memory64: false,
             shared: false,
         });
-        
+
         types.function([ValType::F64], []);
         types.function([], []);
         types.function([ValType::F64, ValType::F64], [ValType::F64]);
@@ -350,15 +309,51 @@ impl From<Sb3Project> for WebWasmFile {
         types.function([], [ValType::I32, ValType::I64]);
         types.function([ValType::I32, ValType::I64], [ValType::I32, ValType::I64]);
         types.function([], [ValType::I32, ValType::F64]);
-        
-        imports.import("dbg", "log", EntityType::Function(types::F64_NORESULT));
-        imports.import("dbg", "assert", EntityType::Function(types::F64_NORESULT));
-        imports.import("runtime", "looks_say", EntityType::Function(types::F64I32_NORESULT));
-        imports.import("runtime", "looks_think", EntityType::Function(types::F64I32_NORESULT));
-        imports.import("cast", "floattostring", EntityType::Function(types::F64_EXTERNREF));
-        imports.import("cast", "stringtofloat", EntityType::Function(types::EXTERNREF_F64));
-        imports.import("cast", "stringtobool", EntityType::Function(types::EXTERNREF_I32));
-        
+        types.function([ValType::F64], [ValType::I64]);
+        types.function([ValType::I64], [ValType::F64]);
+        types.function([ValType::I64], [ValType::I64]);
+        types.function([ValType::I32, ValType::I64], [ValType::I64]);
+        types.function([ValType::I32, ValType::I64], [ValType::F64]);
+        types.function([ValType::F64], [ValType::I32, ValType::I64]);
+        types.function([], [ValType::I64]);
+        types.function([], [ValType::F64]);
+        types.function(
+            [ValType::I32, ValType::I64],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
+        types.function([], [ValType::Ref(RefType::EXTERNREF)]);
+        types.function([ValType::I64], [ValType::Ref(RefType::EXTERNREF)]);
+        types.function([ValType::I32, ValType::I64, ValType::I32], []);
+        types.function([ValType::I32, ValType::I64], []);
+
+        imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
+        imports.import("dbg", "assert", EntityType::Function(types::I32I64_NORESULT));
+        imports.import(
+            "runtime",
+            "looks_say",
+            EntityType::Function(types::I32I64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "looks_think",
+            EntityType::Function(types::I32I64I32_NORESULT),
+        );
+        imports.import(
+            "cast",
+            "floattostring",
+            EntityType::Function(types::F64_EXTERNREF),
+        );
+        imports.import(
+            "cast",
+            "stringtofloat",
+            EntityType::Function(types::EXTERNREF_F64),
+        );
+        imports.import(
+            "cast",
+            "stringtobool",
+            EntityType::Function(types::EXTERNREF_I32),
+        );
+
         functions.function(types::F64x2_F64);
         let mut fmod_func = Function::new(vec![]);
         // (a, b) => a - (truncate(a / b)) * b) + (b if a/b < 0 else 0)
@@ -381,57 +376,62 @@ impl From<Sb3Project> for WebWasmFile {
         fmod_func.instruction(&Instruction::F64Add); // a - (truncate(a / b)) * b) + (b if a/b < 0 else 0)
         fmod_func.instruction(&Instruction::End);
         code.function(&fmod_func);
-        
-        functions.function(types::I32F64_I32I64);
+
+        functions.function(types::F64_I64);
         let mut float2bool_func = Function::new(vec![]);
-        float2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
-        float2bool_func.instruction(&Instruction::LocalGet(1));
+        float2bool_func.instruction(&Instruction::LocalGet(0));
+        float2bool_func.instruction(&Instruction::F64Abs);
         float2bool_func.instruction(&Instruction::F64Const(0.0));
         float2bool_func.instruction(&Instruction::F64Eq);
         float2bool_func.instruction(&Instruction::I64ExtendI32S);
         float2bool_func.instruction(&Instruction::End);
         code.function(&float2bool_func);
-        
-        functions.function(types::I32I64_I32F64);
+
+        functions.function(types::I64_F64);
         let mut bool2float_func = Function::new(vec![]);
-        bool2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
-        bool2float_func.instruction(&Instruction::LocalGet(1));
+        bool2float_func.instruction(&Instruction::LocalGet(0));
         bool2float_func.instruction(&Instruction::F64ConvertI64S);
         bool2float_func.instruction(&Instruction::End);
         code.function(&bool2float_func);
-        
-        functions.function(types::I32I64_I32I64);
+
+        functions.function(types::I64_EXTERNREF);
         let mut bool2string_func = Function::new(vec![]);
-        bool2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
-        bool2string_func.instruction(&Instruction::LocalGet(1));
+        bool2string_func.instruction(&Instruction::LocalGet(0));
+        bool2string_func.instruction(&Instruction::I32WrapI64);
+        bool2string_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
         bool2string_func.instruction(&Instruction::End);
         code.function(&bool2string_func);
-        
-        functions.function(types::I32I64_I32I64);
+
+        functions.function(types::I32I64_EXTERNREF);
         let mut any2string_func = Function::new(vec![]);
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2string_func.instruction(&Instruction::I32Eq);
-        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
-        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_EXTERNREF,
+        )));
         any2string_func.instruction(&Instruction::LocalGet(1));
         any2string_func.instruction(&Instruction::Call(func_indices::CAST_BOOL_STRING));
         any2string_func.instruction(&Instruction::Else);
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2string_func.instruction(&Instruction::I32Eq);
-        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
-        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_EXTERNREF,
+        )));
         any2string_func.instruction(&Instruction::LocalGet(1));
         any2string_func.instruction(&Instruction::F64ReinterpretI64);
-        any2string_func.instruction(&Instruction::Call(func_indices::CAST_FLOAT_STRING));
+        any2string_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING));
         any2string_func.instruction(&Instruction::Else);
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2string_func.instruction(&Instruction::I32Eq);
-        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
-        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_EXTERNREF,
+        )));
         any2string_func.instruction(&Instruction::LocalGet(1));
+        any2string_func.instruction(&Instruction::I32WrapI64);
+        any2string_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
         any2string_func.instruction(&Instruction::Else);
         any2string_func.instruction(&Instruction::Unreachable);
         any2string_func.instruction(&Instruction::End);
@@ -439,30 +439,37 @@ impl From<Sb3Project> for WebWasmFile {
         any2string_func.instruction(&Instruction::End);
         any2string_func.instruction(&Instruction::End);
         code.function(&any2string_func);
-        
-        functions.function(types::I32I64_I32F64);
+
+        functions.function(types::I32I64_F64);
         let mut any2float_func = Function::new(vec![]);
         any2float_func.instruction(&Instruction::LocalGet(0));
         any2float_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2float_func.instruction(&Instruction::I32Eq);
-        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32F64)));
-        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_F64,
+        )));
         any2float_func.instruction(&Instruction::LocalGet(1));
         any2float_func.instruction(&Instruction::Call(func_indices::CAST_BOOL_FLOAT));
         any2float_func.instruction(&Instruction::Else);
         any2float_func.instruction(&Instruction::LocalGet(0));
         any2float_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2float_func.instruction(&Instruction::I32Eq);
-        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32F64)));
-        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_F64,
+        )));
         any2float_func.instruction(&Instruction::LocalGet(1));
-        any2float_func.instruction(&Instruction::Call(func_indices::CAST_STRING_FLOAT));
+        any2float_func.instruction(&Instruction::I32WrapI64);
+        any2float_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
+        any2float_func.instruction(&Instruction::Call(
+            func_indices::CAST_PRIMITIVE_STRING_FLOAT,
+        ));
         any2float_func.instruction(&Instruction::Else);
         any2float_func.instruction(&Instruction::LocalGet(0));
         any2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2float_func.instruction(&Instruction::I32Eq);
-        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32F64)));
-        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_F64,
+        )));
         any2float_func.instruction(&Instruction::LocalGet(1));
         any2float_func.instruction(&Instruction::F64ReinterpretI64);
         any2float_func.instruction(&Instruction::Else);
@@ -472,22 +479,27 @@ impl From<Sb3Project> for WebWasmFile {
         any2float_func.instruction(&Instruction::End);
         any2float_func.instruction(&Instruction::End);
         code.function(&any2float_func);
-        
-        functions.function(types::I32I64_I32I64);
+
+        functions.function(types::I32I64_I64);
         let mut any2bool_func = Function::new(vec![]);
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2bool_func.instruction(&Instruction::I32Eq);
-        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
-        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_I64,
+        )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
-        any2bool_func.instruction(&Instruction::Call(func_indices::CAST_STRING_BOOL));
+        any2bool_func.instruction(&Instruction::I32WrapI64);
+        any2bool_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
+        any2bool_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_STRING_BOOL));
+        any2bool_func.instruction(&Instruction::I64ExtendI32S);
         any2bool_func.instruction(&Instruction::Else);
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2bool_func.instruction(&Instruction::I32Eq);
-        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
-        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_I64,
+        )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
         any2bool_func.instruction(&Instruction::F64ReinterpretI64);
         any2bool_func.instruction(&Instruction::Call(func_indices::CAST_FLOAT_BOOL));
@@ -495,8 +507,9 @@ impl From<Sb3Project> for WebWasmFile {
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2bool_func.instruction(&Instruction::I32Eq);
-        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(types::NOPARAM_I32I64)));
-        any2bool_func.instruction(&Instruction::LocalGet(0));
+        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(
+            types::NOPARAM_I64,
+        )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
         any2bool_func.instruction(&Instruction::Else);
         any2bool_func.instruction(&Instruction::Unreachable);
@@ -505,90 +518,80 @@ impl From<Sb3Project> for WebWasmFile {
         any2bool_func.instruction(&Instruction::End);
         any2bool_func.instruction(&Instruction::End);
         code.function(&any2bool_func);
-        
-        functions.function(types::I32F64_I32I64);
-        let mut float2string_func = Function::new(vec![(1, ValType::I32)]);
-        float2string_func.instruction(&Instruction::RefNull(HeapType::Extern));
-        float2string_func.instruction(&Instruction::I32Const(1));
-        float2string_func.instruction(&Instruction::TableGrow(table_indices::STRINGS));
-        float2string_func.instruction(&Instruction::LocalTee(2));
-        float2string_func.instruction(&Instruction::I32Const(-1));
-        float2string_func.instruction(&Instruction::I32Eq);
-        float2string_func.instruction(&Instruction::If(BlockType::Empty));
-        float2string_func.instruction(&Instruction::Unreachable);
-        float2string_func.instruction(&Instruction::End);
-        float2string_func.instruction(&Instruction::LocalGet(2));
-        float2string_func.instruction(&Instruction::LocalGet(1));
-        float2string_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING));
-        float2string_func.instruction(&Instruction::TableSet(table_indices::STRINGS));
-        float2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
-        float2string_func.instruction(&Instruction::LocalGet(2));
-        float2string_func.instruction(&Instruction::I64ExtendI32S);
-        float2string_func.instruction(&Instruction::End);
-        code.function(&float2string_func);
-        
-        functions.function(types::I32I64_I32F64);
-        let mut string2float_func = Function::new(vec![]);
-        string2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
-        string2float_func.instruction(&Instruction::LocalGet(1));
-        string2float_func.instruction(&Instruction::I32WrapI64);
-        string2float_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
-        string2float_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT));
-        string2float_func.instruction(&Instruction::End);
-        code.function(&string2float_func);
-        
-        functions.function(types::I32I64_I32I64);
-        let mut string2bool_func = Function::new(vec![]);
-        string2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
-        string2bool_func.instruction(&Instruction::LocalGet(1));
-        string2bool_func.instruction(&Instruction::I32WrapI64);
-        string2bool_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
-        string2bool_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_STRING_BOOL));
-        string2bool_func.instruction(&Instruction::I64ExtendI32S);
-        string2bool_func.instruction(&Instruction::End);
-        code.function(&string2bool_func);
-        
-        functions.function(types::I32F64_I32I64);
-        let mut float2any_func = Function::new(vec![]);
-        float2any_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
-        float2any_func.instruction(&Instruction::LocalGet(1));
-        float2any_func.instruction(&Instruction::I64ReinterpretF64);
-        float2any_func.instruction(&Instruction::End);
-        code.function(&float2any_func);
-        
-        
+
+        functions.function(types::EXTERNREF_I32);
+        let mut tbl_add_string_func = Function::new(vec![(1, ValType::I32)]);
+        tbl_add_string_func.instruction(&Instruction::LocalGet(0));
+        tbl_add_string_func.instruction(&Instruction::I32Const(1));
+        tbl_add_string_func.instruction(&Instruction::TableGrow(table_indices::STRINGS));
+        tbl_add_string_func.instruction(&Instruction::LocalTee(1));
+        tbl_add_string_func.instruction(&Instruction::I32Const(-1));
+        tbl_add_string_func.instruction(&Instruction::I32Eq);
+        tbl_add_string_func.instruction(&Instruction::If(BlockType::Empty));
+        tbl_add_string_func.instruction(&Instruction::Unreachable);
+        tbl_add_string_func.instruction(&Instruction::End);
+        tbl_add_string_func.instruction(&Instruction::LocalGet(1));
+        tbl_add_string_func.instruction(&Instruction::End);
+        code.function(&tbl_add_string_func);
+
         let mut gf_func = Function::new(vec![]);
         let mut tick_func = Function::new(vec![(2, ValType::I32)]);
-        
+
         /*tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));*/
-        
+
         let mut noop_func = Function::new(vec![]);
         noop_func.instruction(&Instruction::End);
         functions.function(types::I32_NORESULT);
         code.function(&noop_func);
-        
+
         /*let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
             (ThreadStart::GreenFlag, vec![]),
         ]);*/
         let mut thread_indices: Vec<(ThreadStart, u32)> = vec![]; // (start type, first step index)
-        
+
         let mut step_indices: Vec<u32> = vec![0];
-        
+
         let mut step_func_count = 1u32;
-        
+
         for (target_index, target) in project.targets.iter().enumerate() {
-            for (id, block) in target.blocks.clone().iter().filter(|(_id, b)| match b.block_info() {
-                Some(block_info) => block_info.top_level && matches!(block_info.opcode, BlockOpcode::event_whenflagclicked),
-                None => false,
-            }) {
-                let context = Context { target_index: target_index.try_into().unwrap(), dbg: matches!(target.comments.clone().iter().find(|(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id) && comment.text.clone() == String::from("hq-dbg")), Some(_)) };
-                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), step_func_count, &context);
-                let first_index = thread.steps()[0].index;
-                thread_indices.push((thread.start().clone(), first_index));
+            for (id, block) in
+                target
+                    .blocks
+                    .clone()
+                    .iter()
+                    .filter(|(_id, b)| match b.block_info() {
+                        Some(block_info) => {
+                            block_info.top_level
+                                && matches!(block_info.opcode, BlockOpcode::event_whenflagclicked)
+                        }
+                        None => false,
+                    })
+            {
+                let context = ThreadContext {
+                    target_index: target_index.try_into().unwrap(),
+                    dbg: matches!(
+                        target.comments.clone().iter().find(
+                            |(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id)
+                                && comment.text.clone() == String::from("hq-dbg")
+                        ),
+                        Some(_)
+                    ),
+                };
+                let thread = Thread::from_hat(
+                    block.clone(),
+                    target.blocks.clone(),
+                    step_func_count,
+                    &context,
+                );
+                let first_index = thread.steps()[0].index();
+                thread_indices.push((thread.start().clone(), *first_index));
                 for (i, step) in thread.steps().iter().enumerate() {
-                    let mut func = step.into_function(&context, (step.index + 1) * (i < thread.steps.len() - 1) as u32);
+                    let mut func = step.into_function(
+                        &context,
+                        (step.index() + 1) * (i < thread.steps().len() - 1) as u32,
+                    );
                     func.instruction(&Instruction::End);
                     functions.function(types::I32_NORESULT);
                     code.function(&func);
@@ -597,125 +600,162 @@ impl From<Sb3Project> for WebWasmFile {
                 }
             }
         }
-        
+
         let mut thread_start_counts: BTreeMap<ThreadStart, u32> = Default::default();
-        
+
         macro_rules! func_for_thread_start {
             ($start_type:ident) => {
                 match $start_type {
                     ThreadStart::GreenFlag => &mut gf_func,
                 }
-            }
+            };
         }
-        
+
         for (start_type, index) in thread_indices {
             let mut func = func_for_thread_start!(start_type);
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E015)"),
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E015)"),
                 align: 2,
                 memory_index: 0,
             }));
             func.instruction(&Instruction::I32Const(4));
             func.instruction(&Instruction::I32Mul);
-            let thread_start_count: i32 = (*thread_start_counts.get(&start_type).unwrap_or(&0)).try_into().expect("start_type count out of bounds (E017)");
+            let thread_start_count: i32 = (*thread_start_counts.get(&start_type).unwrap_or(&0))
+                .try_into()
+                .expect("start_type count out of bounds (E017)");
             func.instruction(&Instruction::I32Const(thread_start_count * 4));
             func.instruction(&Instruction::I32Add);
-            func.instruction(&Instruction::I32Const(index.try_into().expect("step func index out of bounds (E006)")));
+            func.instruction(&Instruction::I32Const(
+                index
+                    .try_into()
+                    .expect("step func index out of bounds (E006)"),
+            ));
             func.instruction(&Instruction::I32Store(MemArg {
                 offset: (byte_offset::THREADS) as u64,
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
-            
-            thread_start_counts.entry(start_type).and_modify(|u| *u += 1).or_insert(1);
+
+            thread_start_counts
+                .entry(start_type)
+                .and_modify(|u| *u += 1)
+                .or_insert(1);
         }
-        
+
         for (start_type, count) in thread_start_counts {
             let mut func = func_for_thread_start!(start_type);
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E012)"),
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E012)"),
                 align: 2,
                 memory_index: 0,
             }));
-            func.instruction(&Instruction::I32Const(count.try_into().expect("thread_start count out of bounds (E014)")));
+            func.instruction(&Instruction::I32Const(
+                count
+                    .try_into()
+                    .expect("thread_start count out of bounds (E014)"),
+            ));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E016)"),
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E016)"),
                 align: 2,
                 memory_index: 0,
             }));
         }
-        
+
         {
-          tick_func.instruction(&Instruction::I32Const(0));
-          tick_func.instruction(&Instruction::I32Load(MemArg {
-              offset: byte_offset::THREAD_NUM.try_into().expect("THREAD_NUM out of bounds (E013)"),
-              align: 2,
-              memory_index: 0,
-          }));
-          tick_func.instruction(&Instruction::I32Const(4));
-          tick_func.instruction(&Instruction::I32Mul);
-          tick_func.instruction(&Instruction::LocalSet(1));
-          tick_func.instruction(&Instruction::Loop(BlockType::Empty));
-          
-          tick_func.instruction(&Instruction::LocalGet(0));
-          tick_func.instruction(&Instruction::LocalGet(0));
-          tick_func.instruction(&Instruction::I32Load(MemArg {
-              offset: (byte_offset::THREADS) as u64,
-              align: 2, // 2 ** 2 = 4 (bytes)
-              memory_index: 0,
-          }));
-          tick_func.instruction(&Instruction::CallIndirect {
-              ty: types::I32_NORESULT,
-              table: table_indices::STEP_FUNCS,
-          });
-          
-          tick_func.instruction(&Instruction::LocalGet(0));
-          tick_func.instruction(&Instruction::I32Const(4));
-          tick_func.instruction(&Instruction::I32Add);
-          tick_func.instruction(&Instruction::LocalTee(0));
-          tick_func.instruction(&Instruction::LocalGet(1));
-          tick_func.instruction(&Instruction::I32LeS);
-          tick_func.instruction(&Instruction::BrIf(0));
-          tick_func.instruction(&Instruction::End);
+            tick_func.instruction(&Instruction::I32Const(0));
+            tick_func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E013)"),
+                align: 2,
+                memory_index: 0,
+            }));
+            tick_func.instruction(&Instruction::I32Const(4));
+            tick_func.instruction(&Instruction::I32Mul);
+            tick_func.instruction(&Instruction::LocalSet(1));
+            tick_func.instruction(&Instruction::Loop(BlockType::Empty));
+
+            tick_func.instruction(&Instruction::LocalGet(0));
+            tick_func.instruction(&Instruction::LocalGet(0));
+            tick_func.instruction(&Instruction::I32Load(MemArg {
+                offset: (byte_offset::THREADS) as u64,
+                align: 2, // 2 ** 2 = 4 (bytes)
+                memory_index: 0,
+            }));
+            tick_func.instruction(&Instruction::CallIndirect {
+                ty: types::I32_NORESULT,
+                table: table_indices::STEP_FUNCS,
+            });
+
+            tick_func.instruction(&Instruction::LocalGet(0));
+            tick_func.instruction(&Instruction::I32Const(4));
+            tick_func.instruction(&Instruction::I32Add);
+            tick_func.instruction(&Instruction::LocalTee(0));
+            tick_func.instruction(&Instruction::LocalGet(1));
+            tick_func.instruction(&Instruction::I32LeS);
+            tick_func.instruction(&Instruction::BrIf(0));
+            tick_func.instruction(&Instruction::End);
         }
-        
-        
+
         gf_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
         code.function(&gf_func);
-        exports.export("green_flag", ExportKind::Func, code.len() + IMPORTED_FUNCS - 1);
-        
+        exports.export(
+            "green_flag",
+            ExportKind::Func,
+            code.len() + IMPORTED_FUNCS - 1,
+        );
+
         tick_func.instruction(&Instruction::End);
         functions.function(types::NOPARAM_NORESULT);
         code.function(&tick_func);
         exports.export("tick", ExportKind::Func, code.len() + IMPORTED_FUNCS - 1);
-        
+
         tables.table(TableType {
             element_type: RefType::FUNCREF,
-            minimum: step_indices.len().try_into().expect("step indices length out of bounds (E007)"),
-            maximum: Some(step_indices.len().try_into().expect("step indices length out of bounds (E008)")),
+            minimum: step_indices
+                .len()
+                .try_into()
+                .expect("step indices length out of bounds (E007)"),
+            maximum: Some(
+                step_indices
+                    .len()
+                    .try_into()
+                    .expect("step indices length out of bounds (E008)"),
+            ),
         });
-        
+
         tables.table(TableType {
-          element_type: RefType::EXTERNREF,
-          minimum: 2,
-          maximum: None,
+            element_type: RefType::EXTERNREF,
+            minimum: 2,
+            maximum: None,
         });
-        
+
         for i in &mut step_indices {
             *i += BUILTIN_FUNCS;
         }
         let step_func_indices = Elements::Functions(&step_indices[..]);
-        elements.active(Some(table_indices::STEP_FUNCS), &ConstExpr::i32_const(0), RefType::FUNCREF, step_func_indices);
-        
+        elements.active(
+            Some(table_indices::STEP_FUNCS),
+            &ConstExpr::i32_const(0),
+            RefType::FUNCREF,
+            step_func_indices,
+        );
+
         exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
         exports.export("strings", ExportKind::Table, table_indices::STRINGS);
         exports.export("memory", ExportKind::Memory, 0);
-        
+
         module
             .section(&types)
             .section(&imports)
@@ -728,18 +768,19 @@ impl From<Sb3Project> for WebWasmFile {
             .section(&elements)
             // datacount
             .section(&code);
-            // data
-        
+        // data
+
         let wasm_bytes = module.finish();
         Self { js_string: format!("const assert = require('node:assert').strict;
         let last_output;
         let strings_tbl;
-        conat wasm_val_to_string = (type, value_i64) =>
-        const wasm_output = f64 => {{
-            console.log(f64);
-            last_output = f64;
+        const wasm_val_to_js = (type, value_i64) => type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : type === 1 ? Boolean(value_i64) : type === 2 ? strings_tbl.get(Number(value_i64)) : null;
+        const wasm_output = (...args) => {{
+            const val = wasm_val_to_js(...args);
+            console.log(val);
+            last_output = val;
         }};
-        const assert_output = out => assert.equal(last_output, out);
+        const assert_output = (...args) => assert.equal(last_output, wasm_val_to_js(...args));
         const targetOutput = (targetIndex, verb, text) => {{
             let targetName = {target_names:?}[targetIndex];
             console.log(`${{targetName}} ${{verb}}: ${{text}}`);
@@ -750,8 +791,8 @@ impl From<Sb3Project> for WebWasmFile {
                 assert: assert_output,
             }},
             runtime: {{
-                looks_say: (text, targetIndex) => targetOutput(targetIndex, 'says', text),
-                looks_think: (text, targetIndex) => targetOutput(targetIndex, 'thinks', text),
+                looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
+                looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
             }},
             cast: {{
               stringtofloat: parseFloat,
@@ -809,7 +850,7 @@ mod tests {
     use super::*;
     use crate::sb3::tests::test_project_id;
     use std::process::{Command, Stdio};
-    
+
     /*#[test]
     fn make_thread() {
         use BlockOpcodeWithField::*;
@@ -836,7 +877,7 @@ mod tests {
             ])
         ]);
     }*/
-    
+
     #[test]
     fn run_wasm() {
         let proj: Sb3Project = test_project_id("771449498").try_into().unwrap();
@@ -844,7 +885,10 @@ mod tests {
         println!("{}", wasm.js_string());
         let output2 = Command::new("node")
             .arg("-e")
-            .arg(format!("fs.writeFileSync('bad.wasm', Buffer.from({buf:?}), 'binary');", buf=wasm.wasm_bytes()))
+            .arg(format!(
+                "fs.writeFileSync('bad.wasm', Buffer.from({buf:?}), 'binary');",
+                buf = wasm.wasm_bytes()
+            ))
             .stdout(Stdio::inherit())
             .output()
             .expect("failed to execute process");
@@ -857,8 +901,14 @@ mod tests {
             .stdout(Stdio::inherit())
             .output()
             .expect("failed to execute process");
-        println!("{:}", String::from_utf8(output.stdout).expect("failed to convert stdout from utf8"));
-        println!("{:}", String::from_utf8(output.stderr).expect("failed to convert stderr from utf8"));
+        println!(
+            "{:}",
+            String::from_utf8(output.stdout).expect("failed to convert stdout from utf8")
+        );
+        println!(
+            "{:}",
+            String::from_utf8(output.stderr).expect("failed to convert stderr from utf8")
+        );
         if !output.status.success() {
             panic!("couldn't run wasm");
         }

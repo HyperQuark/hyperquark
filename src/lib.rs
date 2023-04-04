@@ -5,5 +5,6 @@
 extern crate alloc;
 extern crate enum_field_getter;
 
+pub mod ir;
 pub mod sb3;
 pub mod targets;
