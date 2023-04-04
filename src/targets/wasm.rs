@@ -265,6 +265,9 @@ pub mod hq_value_types {
     pub const EXTERN_STRING_REF64: i32 = 2;
 }
 
+// the number of bytes that one step takes up in linear memory
+pub const THREAD_BYTE_LEN: i32 = 4;
+
 pub mod byte_offset {
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
@@ -626,12 +629,12 @@ impl From<Sb3Project> for WebWasmFile {
                 align: 2,
                 memory_index: 0,
             }));
-            func.instruction(&Instruction::I32Const(4));
+            func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             func.instruction(&Instruction::I32Mul);
             let thread_start_count: i32 = (*thread_start_counts.get(&start_type).unwrap_or(&0))
                 .try_into()
                 .expect("start_type count out of bounds (E017)");
-            func.instruction(&Instruction::I32Const(thread_start_count * 4));
+            func.instruction(&Instruction::I32Const(thread_start_count * THREAD_BYTE_LEN));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Const(
                 index
@@ -685,7 +688,7 @@ impl From<Sb3Project> for WebWasmFile {
                 align: 2,
                 memory_index: 0,
             }));
-            tick_func.instruction(&Instruction::I32Const(4));
+            tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Mul);
             tick_func.instruction(&Instruction::LocalSet(1));
             tick_func.instruction(&Instruction::Loop(BlockType::Empty));
@@ -703,7 +706,7 @@ impl From<Sb3Project> for WebWasmFile {
             });
 
             tick_func.instruction(&Instruction::LocalGet(0));
-            tick_func.instruction(&Instruction::I32Const(4));
+            tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Add);
             tick_func.instruction(&Instruction::LocalTee(0));
             tick_func.instruction(&Instruction::LocalGet(1));
