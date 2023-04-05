@@ -78,6 +78,7 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
+          target: wasm32-unknown-unknown
 
       - name: Run cargo build
         uses: actions-rs/cargo@v1
