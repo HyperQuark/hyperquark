@@ -84,7 +84,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target=wasm32-unknown-unknown --target-dir=build
+          args: --target=wasm32-unknown-unknown --target-dir=build --release
           
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v4
