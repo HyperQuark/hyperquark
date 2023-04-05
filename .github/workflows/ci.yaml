@@ -81,7 +81,11 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Run cargo build
+        run: mkdir build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target=wasm32-unknown-unknown
+          args: --target=wasm32-unknown-unknown --target-dir=build
+          
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
