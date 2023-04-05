@@ -80,9 +80,6 @@ jobs:
           override: true
           target: wasm32-unknown-unknown
       
-      - name: Create build direvtpry
-        run: mkdir build
-      
       - name: Run cargo build
         uses: actions-rs/cargo@v1
         with:
