@@ -386,7 +386,8 @@ pub enum BlockOpcodeWithField {
     sound_setvolumeto,
     sound_changevolumeby,
     sound_volume,
-    // these casting functions aren't blocks nor opcodes and they dob't have field but it's easiest to just chuck them in here
+    text { TEXT: String },
+    // these casting functions aren't blocks nor opcodes and they don't have fields but it's easiest to just chuck them in here
     cast_string_num,
     cast_string_bool,
     cast_string_any,
@@ -450,6 +451,10 @@ impl BlockOpcodeWithField {
             | math_angle { .. }
             | math_whole_number { .. }
             | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
+            data_variable { .. } => BlockDescriptor::new(vec![], Any),
+            data_setvariableto { .. } => BlockDescriptor::new(vec![Text], Stack),
+            data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
+            text { .. } => BlockDescriptor::new(vec![], Text),
             _ => todo!(),
         }
     }
@@ -497,7 +502,7 @@ pub enum Input {
 #[serde(untagged)]
 pub enum Field {
     Value((Option<VarVal>,)),
-    ValueId(Option<VarVal>, Option<VarVal>),
+    ValueId(Option<VarVal>, Option<String>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -534,6 +539,7 @@ pub struct BlockInfo {
     pub next: Option<String>,
     pub parent: Option<String>,
     pub inputs: BTreeMap<String, Input>,
+    pub fields: BTreeMap<String, Field>,
     pub shadow: bool,
     pub top_level: bool,
     #[serde(default)]
@@ -564,7 +570,7 @@ pub struct Sound {
     pub sample_count: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VarVal {
     Float(f64),
@@ -572,7 +578,7 @@ pub enum VarVal {
     String(String),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VariableInfo {
     CloudVar(String, VarVal, bool),

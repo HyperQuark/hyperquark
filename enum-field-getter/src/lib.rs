@@ -16,22 +16,36 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
         let mut incompatible = HashSet::<String>::new();
         for variant in variants {
             if let Fields::Named(_) = variant.fields {
-            for field in &variant.fields {
-                let ident = field.ident.clone().unwrap().to_string();
-                let field_ty = field.ty.clone();
-                let df = (field_ty.clone(), vec![variant.ident.to_string()]);
-                field_info.entry(ident.clone()).and_modify(|info| {
-                    let (ty, used_variants) = info;
-                    if quote!{#field_ty}.to_string() != quote!{#ty}.to_string() {
-                        emit_warning!(field, "fields must be the same type across all variants - no getter will be emitted for this field");
-                        incompatible.insert(ident.clone());
-                    } else {
-                        used_variants.push(variant.ident.to_string());
-                    }
-                }).or_insert(df);
-            }
+                for field in &variant.fields {
+                    let ident = field.ident.clone().unwrap().to_string();
+                    let field_ty = field.ty.clone();
+                    let df = (field_ty.clone(), vec![variant.ident.to_string()]);
+                    field_info.entry(ident.clone()).and_modify(|info| {
+                        let (ty, used_variants) = info;
+                        if quote!{#field_ty}.to_string() != quote!{#ty}.to_string() {
+                            emit_warning!(field, "fields must be the same type across all variants - no getter will be emitted for this field");
+                            incompatible.insert(ident.clone());
+                        } else {
+                            used_variants.push(variant.ident.to_string());
+                        }
+                    }).or_insert(df);
+                }
             } else if let Fields::Unnamed(_) = variant.fields {
                 emit_warning!(variant, "getters are not emitted for tuple variants");
+                /*for field in &variant.fields {
+                    let ident = field.ident.clone().unwrap().to_string();
+                    let field_ty = field.ty.clone();
+                    let df = (field_ty.clone(), vec![variant.ident.to_string()]);
+                    field_info.entry(ident.clone()).and_modify(|info| {
+                        let (ty, used_variants) = info;
+                        if quote!{#field_ty}.to_string() != quote!{#ty}.to_string() {
+                            emit_warning!(field, "fields must be the same type across all variants - no getter will be emitted for this field");
+                            incompatible.insert(ident.clone());
+                        } else {
+                            used_variants.push(variant.ident.to_string());
+                        }
+                    }).or_insert(df);
+                }*/
             }
         }
         for removeable in incompatible {
