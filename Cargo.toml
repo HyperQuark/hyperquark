@@ -17,3 +17,4 @@ crate-type = ["cdylib", "rlib"]
 
 [profile.release]
 lto = true
+opt-level = "z"
