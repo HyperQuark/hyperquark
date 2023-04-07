@@ -81,7 +81,7 @@ jobs:
           target: wasm32-unknown-unknown
       
       - name: Install wasm-bindgen
-        uses: actions-rs/cargo@1
+        uses: actions-rs/cargo@v1
         with:
           command: install
           args: -f wasm-bindgen-cli
