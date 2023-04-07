@@ -581,7 +581,7 @@ impl From<Sb3Project> for WebWasmFile {
 
         let mut step_func_count = 1u32;
         
-        let vars: Vec<&VariableInfo> = project.targets.iter().map(|target| target.variables.values()).flatten().collect();
+        let vars: Vec<&VariableInfo> = project.targets.iter().flat_map(|target| target.variables.values()).collect();
         
         for (target_index, target) in project.targets.iter().enumerate() {
             for (id, block) in

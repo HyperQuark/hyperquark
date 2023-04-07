@@ -743,15 +743,15 @@ pub mod tests {
                 .unwrap_or_default()
                 .as_millis()
         );
-        let project_resp = reqwest::blocking::get(format!(
+        
+        //dbg!(&resp);
+        reqwest::blocking::get(format!(
             "https://projects.scratch.mit.edu/{:}/?token={:}",
             id, token
         ))
         .unwrap()
         .text()
-        .unwrap();
-        //dbg!(&resp);
-        project_resp
+        .unwrap()
         //let j: Sb3Project = serde_json::from_str(&resp[..]).unwrap();
         //j
     }

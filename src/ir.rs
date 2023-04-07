@@ -19,7 +19,7 @@ pub struct Step<'a> {
 }
 
 impl Step<'_> {
-    pub fn new<'a>(opcodes: Vec<BlockOpcodeWithField>, index: u32, context: ThreadContext<'a>) -> Step<'a> {
+    pub fn new(opcodes: Vec<BlockOpcodeWithField>, index: u32, context: ThreadContext<'_>) -> Step<'_> {
         Step {
             opcodes,
             index,
@@ -51,7 +51,7 @@ pub struct Thread<'a> {
 }
 
 impl Thread<'_> {
-    pub fn new<'a>(start: ThreadStart, steps: Vec<Step<'a>>) -> Thread<'a> {
+    pub fn new(start: ThreadStart, steps: Vec<Step<'_>>) -> Thread<'_> {
         Thread { start, steps }
     }
     pub fn start(&self) -> &ThreadStart {
