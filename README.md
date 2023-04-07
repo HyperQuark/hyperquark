@@ -4,6 +4,16 @@ Compile scratch projects to WASM
 ## Prerequisites
 
 - [Rust](https://rust-lang.org) (v1.65.0 or later)
+- wasm-bindgen-cli (`cargo install -f wasm-bindgen-cli`)
+- wasm-opt (install binaryen using whatever oackage manager you use)
+
+## Building
+
+```bash
+./build.sh
+```
+
+You may need to run `chmod +x build.sh` if it says it doesn't have permission.
 
 ## generared WASM module memory layout
 
