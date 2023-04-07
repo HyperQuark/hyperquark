@@ -80,14 +80,8 @@ jobs:
           override: true
           target: wasm32-unknown-unknown
       
-      - name: Run cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target=wasm32-unknown-unknown --release
-      
-      - name: Move wasm file project root
-        run: mv target/wasm32-unknown-unknown/release/hyperquark.wasm hyperquark.wasm
+      - name: Build
+        run: chmod +x build.sh && ./build.sh
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v4
