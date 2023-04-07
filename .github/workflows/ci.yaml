@@ -80,6 +80,15 @@ jobs:
           override: true
           target: wasm32-unknown-unknown
       
+      - name: Install wasm-bindgen
+        uses: actions-rs/cargo@1
+        with:
+          command: install
+          args: -f wasm-bindgen-cli
+          
+      - name: Install binaryen
+        run: sudo apt-get install binaryen
+      
       - name: Build
         run: chmod +x build.sh && ./build.sh
       
