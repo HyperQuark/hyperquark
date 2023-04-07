@@ -1,5 +1,5 @@
 use crate::ir::{Step, Thread, ThreadContext, ThreadStart};
-use crate::sb3::{BlockOpcode, BlockOpcodeWithField, Sb3Project};
+use crate::sb3::{BlockOpcode, BlockOpcodeWithField, Sb3Project, VariableInfo};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -9,8 +9,8 @@ use wasm_encoder::{
     MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
-impl Step {
-    fn as_function(&self, context: &ThreadContext, next_step_index: u32) -> Function {
+impl Step<'_> {
+    fn as_function(&self, next_step_index: u32, string_consts: &mut Vec<String>) -> Function {
         let locals = vec![ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I64];
         #[cfg(test)]
         println!("next step is {}", next_step_index);
@@ -20,7 +20,7 @@ impl Step {
         //func.instruction(&Instruction::F64ReinterpretI64);
         //func.instruction(&Instruction::Call(func_indices::DBG_LOG));
         for op in self.opcodes() {
-            for instr in instructions(op, context) {
+            for instr in instructions(op, self.context(), string_consts) {
                 func.instruction(&instr);
             }
         }
@@ -90,7 +90,11 @@ impl Step {
     }
 }
 
-fn instructions(op: &BlockOpcodeWithField, context: &ThreadContext) -> Vec<Instruction<'static>> {
+fn instructions(
+    op: &BlockOpcodeWithField,
+    context: &ThreadContext,
+    string_consts: &mut Vec<String>,
+) -> Vec<Instruction<'static>> {
     use BlockOpcodeWithField::*;
     use Instruction::*;
     let mut instructions = match op {
@@ -135,6 +139,17 @@ fn instructions(op: &BlockOpcodeWithField, context: &ThreadContext) -> Vec<Instr
         | math_angle { NUM }
         | math_whole_number { NUM }
         | math_positive_number { NUM } => vec![F64Const(*NUM)],
+        text { TEXT } => {
+            string_consts.push(TEXT.clone());
+            vec![
+                I32Const(
+                    (string_consts.len() - 1)
+                        .try_into()
+                        .expect("string_consts len out of bounds (E022)"),
+                ),
+                TableGet(table_indices::STRINGS),
+            ]
+        }
         cast_string_num => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
         cast_string_bool => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
         cast_string_any => vec![
@@ -161,6 +176,7 @@ fn instructions(op: &BlockOpcodeWithField, context: &ThreadContext) -> Vec<Instr
         cast_any_string => vec![Call(func_indices::CAST_ANY_STRING)],
         cast_any_bool => vec![Call(func_indices::CAST_ANY_FLOAT)],
         cast_any_num => vec![Call(func_indices::CAST_ANY_BOOL)],
+        
         _ => todo!(),
     };
     if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
@@ -561,8 +577,12 @@ impl From<Sb3Project> for WebWasmFile {
 
         let mut step_indices: Vec<u32> = vec![0];
 
-        let mut step_func_count = 1u32;
+        let mut string_consts = vec![String::from("false"), String::from("true")];
 
+        let mut step_func_count = 1u32;
+        
+        let vars: Vec<&VariableInfo> = project.targets.iter().flat_map(|target| target.variables.values()).collect();
+        
         for (target_index, target) in project.targets.iter().enumerate() {
             for (id, block) in
                 target
@@ -586,6 +606,7 @@ impl From<Sb3Project> for WebWasmFile {
                         ),
                         Some(_)
                     ),
+                    vars: &vars,
                 };
                 let thread = Thread::from_hat(
                     block.clone(),
@@ -597,8 +618,8 @@ impl From<Sb3Project> for WebWasmFile {
                 thread_indices.push((thread.start().clone(), *first_index));
                 for (i, step) in thread.steps().iter().enumerate() {
                     let mut func = step.as_function(
-                        &context,
                         (step.index() + 1) * (i < thread.steps().len() - 1) as u32,
+                        &mut string_consts,
                     );
                     func.instruction(&Instruction::End);
                     functions.function(types::I32_NORESULT);
@@ -828,8 +849,9 @@ impl From<Sb3Project> for WebWasmFile {
         }}
         WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
             const {{ green_flag, tick, memory, strings }} = instance.exports;
-            strings.set(0, 'false');
-            strings.set(1, 'true');
+            for (const [i, str] of Object.entries({string_consts:?})) {{
+              strings.set(i, str);
+            }}
             strings_tbl = strings;
             green_flag();
             $outertickloop: while (true) {{

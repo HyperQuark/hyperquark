@@ -1,4 +1,4 @@
-on: [push, pull_request, workflow_dispatch]
+on: [push, workflow_dispatch]
 
 name: CI
 
@@ -64,3 +64,33 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+
+  buildwasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          target: wasm32-unknown-unknown
+      
+      - name: Install wasm-bindgen
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: -f wasm-bindgen-cli
+          
+      - name: Install binaryen
+        run: sudo apt-get install binaryen
+      
+      - name: Build
+        run: chmod +x build.sh && ./build.sh
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
