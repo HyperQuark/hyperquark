@@ -910,7 +910,8 @@ mod tests {
 
     #[test]
     fn run_wasm() {
-        let proj: Sb3Project = test_project_id("771449498").try_into().unwrap();
+        use std::fs;
+        let proj: Sb3Project = fs::read_to_string("./hq-test.project.json").expect("couldn't read hq-test.project.json").try_into().unwrap();
         let wasm: WebWasmFile = proj.into();
         println!("{}", wasm.js_string());
         let output2 = Command::new("node")
