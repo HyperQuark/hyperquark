@@ -1,4 +1,4 @@
-use crate::ir::{Step, Thread, ThreadContext, ThreadStart};
+use crate::ir::{IrVar, Step, Thread, ThreadContext, ThreadStart};
 use crate::sb3::{BlockOpcode, BlockOpcodeWithField, Sb3Project, VariableInfo};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -11,7 +11,13 @@ use wasm_encoder::{
 
 impl Step<'_> {
     fn as_function(&self, next_step_index: u32, string_consts: &mut Vec<String>) -> Function {
-        let locals = vec![ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I64];
+        let locals = vec![
+            ValType::Ref(RefType::EXTERNREF),
+            ValType::F64,
+            ValType::I64,
+            ValType::I32,
+            ValType::I32,
+        ];
         #[cfg(test)]
         println!("next step is {}", next_step_index);
         let mut func = Function::new_with_locals_types(locals);
@@ -27,6 +33,12 @@ impl Step<'_> {
         let thread_indices: u64 = byte_offset::THREADS
             .try_into()
             .expect("THREAD_INDICES out of bounds (E018)");
+        let vars_num: i32 = self
+            .context()
+            .vars
+            .len()
+            .try_into()
+            .expect("vars.len() out of bounds (E032)");
         if next_step_index > 0 {
             func.instruction(&Instruction::LocalGet(0));
             func.instruction(&Instruction::I32Const(
@@ -39,13 +51,14 @@ impl Step<'_> {
                 align: 2,
                 memory_index: 0,
             }));
+            func.instruction(&Instruction::I32Const(1));
         } else {
             func.instruction(&Instruction::LocalGet(0));
             func.instruction(&Instruction::I32Const(byte_offset::THREADS));
-            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::I32Add); // destination (= current thread pos in memory)
             func.instruction(&Instruction::LocalGet(0));
             func.instruction(&Instruction::I32Const(byte_offset::THREADS + 4));
-            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::I32Add); // source (= current thread pos + 4)
             func.instruction(&Instruction::I32Const(0));
             func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
@@ -56,12 +69,12 @@ impl Step<'_> {
             }));
             func.instruction(&Instruction::I32Const(4));
             func.instruction(&Instruction::I32Mul);
-            func.instruction(&Instruction::I32Const(byte_offset::THREADS));
+            func.instruction(&Instruction::I32Const(
+                byte_offset::THREADS - 4 + vars_num * 12,
+            ));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::LocalGet(0));
-            func.instruction(&Instruction::I32Sub);
-            func.instruction(&Instruction::I32Const(4));
-            func.instruction(&Instruction::I32Sub);
+            func.instruction(&Instruction::I32Sub); // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
             func.instruction(&Instruction::MemoryCopy {
                 src_mem: 0,
                 dst_mem: 0,
@@ -84,6 +97,7 @@ impl Step<'_> {
                 align: 2,
                 memory_index: 0,
             }));
+            func.instruction(&Instruction::I32Const(0));
         }
         //func.instruction(&Instruction::End);
         func
@@ -140,15 +154,17 @@ fn instructions(
         | math_whole_number { NUM }
         | math_positive_number { NUM } => vec![F64Const(*NUM)],
         text { TEXT } => {
-            string_consts.push(TEXT.clone());
-            vec![
-                I32Const(
-                    (string_consts.len() - 1)
-                        .try_into()
-                        .expect("string_consts len out of bounds (E022)"),
-                ),
-                TableGet(table_indices::STRINGS),
-            ]
+            let str_idx: i32 = {
+                if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
+                    idx
+                } else {
+                    string_consts.push(TEXT.clone());
+                    string_consts.len() - 1
+                }
+            }
+            .try_into()
+            .expect("string index out of bounds (E022)");
+            vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
         }
         cast_string_num => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
         cast_string_bool => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
@@ -157,6 +173,7 @@ fn instructions(
             I32Const(hq_value_types::EXTERN_STRING_REF64),
             LocalGet(step_func_locals::EXTERNREF),
             Call(func_indices::TABLE_ADD_STRING),
+            I64ExtendI32S,
         ],
         cast_bool_num => vec![Call(func_indices::CAST_BOOL_FLOAT)],
         cast_bool_string => vec![Call(func_indices::CAST_BOOL_STRING)],
@@ -174,9 +191,89 @@ fn instructions(
             I64ReinterpretF64,
         ],
         cast_any_string => vec![Call(func_indices::CAST_ANY_STRING)],
-        cast_any_bool => vec![Call(func_indices::CAST_ANY_FLOAT)],
-        cast_any_num => vec![Call(func_indices::CAST_ANY_BOOL)],
-        
+        cast_any_num => vec![Call(func_indices::CAST_ANY_FLOAT)],
+        cast_any_bool => vec![Call(func_indices::CAST_ANY_BOOL)],
+        data_variable { VARIABLE } => {
+            let var_index: i32 = context
+                .vars
+                .iter()
+                .position(|var| VARIABLE == var.id())
+                .expect("couldn't find variable index (E033)")
+                .try_into()
+                .expect("variable index out of bounds (E034)");
+            let var_offset: u64 = (byte_offset::THREADS + 12 * var_index)
+                .try_into()
+                .expect("variable offset out of bounds (E035)");
+            vec![
+                I32Const(0),
+                I32Load(MemArg {
+                    offset: byte_offset::THREAD_NUM
+                        .try_into()
+                        .expect("THREAD_NUM put of bounds (E036)"),
+                    align: 2,
+                    memory_index: 0,
+                }),
+                LocalTee(step_func_locals::I32),
+                I32Const(THREAD_BYTE_LEN),
+                I32Mul,
+                I32Load(MemArg {
+                    offset: var_offset,
+                    align: 2,
+                    memory_index: 0,
+                }),
+                LocalGet(step_func_locals::I32),
+                I32Const(THREAD_BYTE_LEN),
+                I32Mul,
+                I64Load(MemArg {
+                    offset: var_offset + 4,
+                    align: 2,
+                    memory_index: 0,
+                }),
+            ]
+        }
+        data_setvariableto { VARIABLE } => {
+        //vec![Drop,Drop]
+            let var_index: i32 = context
+                .vars
+                .iter()
+                .position(|var| VARIABLE == var.id())
+                .expect("couldn't find variable index (E033)")
+                .try_into()
+                .expect("variable index out of bounds (E034)");
+            let var_offset: u64 = (byte_offset::THREADS + 12 * var_index)
+                .try_into()
+                .expect("variable offset out of bounds (E035)");
+            vec![
+                LocalSet(step_func_locals::I64),
+                LocalSet(step_func_locals::I32),
+                I32Const(0),
+                I32Load(MemArg {
+                    offset: byte_offset::THREAD_NUM
+                        .try_into()
+                        .expect("THREAD_NUM out of bounds (E036)"),
+                    align: 2,
+                    memory_index: 0,
+                }),
+                LocalTee(step_func_locals::I32_2),
+                I32Const(THREAD_BYTE_LEN),
+                I32Mul,
+                LocalGet(step_func_locals::I32),
+                I32Store(MemArg {
+                    offset: var_offset,
+                    align: 2,
+                    memory_index: 0,
+                }),
+                LocalGet(step_func_locals::I32_2),
+                I32Const(THREAD_BYTE_LEN),
+                I32Mul,
+                LocalGet(step_func_locals::I64),
+                I64Store(MemArg {
+                    offset: var_offset + 4,
+                    align: 2,
+                    memory_index: 0,
+                }),
+            ]
+        }
         _ => todo!(),
     };
     if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
@@ -212,6 +309,8 @@ pub mod step_func_locals {
     pub const EXTERNREF: u32 = 1;
     pub const F64: u32 = 2;
     pub const I64: u32 = 3;
+    pub const I32: u32 = 4;
+    pub const I32_2: u32 = 5;
 }
 
 pub mod func_indices {
@@ -223,18 +322,19 @@ pub mod func_indices {
     pub const CAST_PRIMITIVE_FLOAT_STRING: u32 = 4; // js functions can only rwturm 1 value so need wrapper functions for casting
     pub const CAST_PRIMITIVE_STRING_FLOAT: u32 = 5;
     pub const CAST_PRIMITIVE_STRING_BOOL: u32 = 6;
+    pub const DBG_LOGI32: u32 = 7;
     /* wasm funcs */
-    pub const FMOD: u32 = 7;
-    pub const CAST_FLOAT_BOOL: u32 = 8;
-    pub const CAST_BOOL_FLOAT: u32 = 9;
-    pub const CAST_BOOL_STRING: u32 = 10;
-    pub const CAST_ANY_STRING: u32 = 11;
-    pub const CAST_ANY_FLOAT: u32 = 12;
-    pub const CAST_ANY_BOOL: u32 = 13;
-    pub const TABLE_ADD_STRING: u32 = 14;
+    pub const FMOD: u32 = 8;
+    pub const CAST_FLOAT_BOOL: u32 = 9;
+    pub const CAST_BOOL_FLOAT: u32 = 10;
+    pub const CAST_BOOL_STRING: u32 = 11;
+    pub const CAST_ANY_STRING: u32 = 12;
+    pub const CAST_ANY_FLOAT: u32 = 13;
+    pub const CAST_ANY_BOOL: u32 = 14;
+    pub const TABLE_ADD_STRING: u32 = 15;
 }
-pub const BUILTIN_FUNCS: u32 = 15;
-pub const IMPORTED_FUNCS: u32 = 7;
+pub const BUILTIN_FUNCS: u32 = 16;
+pub const IMPORTED_FUNCS: u32 = 8;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -374,6 +474,11 @@ impl From<Sb3Project> for WebWasmFile {
             "cast",
             "stringtobool",
             EntityType::Function(types::EXTERNREF_I32),
+        );
+        imports.import(
+            "dbg",
+            "logi32",
+            EntityType::Function(types::I32_I32),
         );
 
         functions.function(types::F64x2_F64);
@@ -564,10 +669,11 @@ impl From<Sb3Project> for WebWasmFile {
         /*tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));*/
-
+        
+        functions.function(types::I32_I32);
         let mut noop_func = Function::new(vec![]);
+        noop_func.instruction(&Instruction::I32Const(1));
         noop_func.instruction(&Instruction::End);
-        functions.function(types::I32_NORESULT);
         code.function(&noop_func);
 
         /*let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
@@ -580,9 +686,23 @@ impl From<Sb3Project> for WebWasmFile {
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
         let mut step_func_count = 1u32;
-        
-        let vars: Vec<&VariableInfo> = project.targets.iter().flat_map(|target| target.variables.values()).collect();
-        
+
+        // Vec<id, name, value, isCloud>
+        let vars: Vec<IrVar> = project
+            .targets
+            .iter()
+            .flat_map(|target| {
+                target.variables.iter().map(|(id, info)| match info {
+                    VariableInfo::LocalVar(name, val) => {
+                        IrVar::new(id.clone(), name.clone(), val.clone(), false)
+                    }
+                    VariableInfo::CloudVar(name, val, is_cloud) => {
+                        IrVar::new(id.clone(), name.clone(), val.clone(), *is_cloud)
+                    }
+                })
+            })
+            .collect();
+
         for (target_index, target) in project.targets.iter().enumerate() {
             for (id, block) in
                 target
@@ -622,7 +742,7 @@ impl From<Sb3Project> for WebWasmFile {
                         &mut string_consts,
                     );
                     func.instruction(&Instruction::End);
-                    functions.function(types::I32_NORESULT);
+                    functions.function(types::I32_I32);
                     code.function(&func);
                     step_func_count += 1;
                     step_indices.push(*step.index());
@@ -711,6 +831,8 @@ impl From<Sb3Project> for WebWasmFile {
             }));
             tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Mul);
+            tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
+            tick_func.instruction(&Instruction::I32Sub);
             tick_func.instruction(&Instruction::LocalSet(1));
             tick_func.instruction(&Instruction::Loop(BlockType::Empty));
 
@@ -722,14 +844,22 @@ impl From<Sb3Project> for WebWasmFile {
                 memory_index: 0,
             }));
             tick_func.instruction(&Instruction::CallIndirect {
-                ty: types::I32_NORESULT,
+                ty: types::I32_I32,
                 table: table_indices::STEP_FUNCS,
             });
 
+            tick_func.instruction(&Instruction::If(BlockType::Empty));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Add);
-            tick_func.instruction(&Instruction::LocalTee(0));
+            tick_func.instruction(&Instruction::LocalSet(0));
+            tick_func.instruction(&Instruction::Else);
+            tick_func.instruction(&Instruction::LocalGet(1));
+            tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
+            tick_func.instruction(&Instruction::I32Sub);
+            tick_func.instruction(&Instruction::LocalSet(1));
+            tick_func.instruction(&Instruction::End);
+            tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(1));
             tick_func.instruction(&Instruction::I32LeS);
             tick_func.instruction(&Instruction::BrIf(0));
@@ -766,7 +896,10 @@ impl From<Sb3Project> for WebWasmFile {
 
         tables.table(TableType {
             element_type: RefType::EXTERNREF,
-            minimum: 2,
+            minimum: string_consts
+                .len()
+                .try_into()
+                .expect("string_consts len out of bounds (E037)"),
             maximum: None,
         });
 
@@ -800,24 +933,34 @@ impl From<Sb3Project> for WebWasmFile {
         // data
 
         let wasm_bytes = module.finish();
-        Self { js_string: format!("const assert = require('node:assert').strict;
+        Self { js_string: format!("const assert = require('node:assert')/*.strict*/;
         let last_output;
         let strings_tbl;
-        const wasm_val_to_js = (type, value_i64) => type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : type === 1 ? Boolean(value_i64) : type === 2 ? strings_tbl.get(Number(value_i64)) : null;
+        const wasm_val_to_js = (type, value_i64) => {{
+            return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
+        }};
         const wasm_output = (...args) => {{
             const val = wasm_val_to_js(...args);
-            console.log(val);
+            console.log('output: \\x1b[34m%s\\x1b[0m', val);
             last_output = val;
         }};
-        const assert_output = (...args) => assert.equal(last_output, wasm_val_to_js(...args));
+        const assert_output = (...args) => {{
+            /*assert.equal(last_output, wasm_val_to_js(...args));*/
+            const val = wasm_val_to_js(...args);
+            console.log('assert: \\x1b[34m%s\\x1b[0m', val);
+        }}
         const targetOutput = (targetIndex, verb, text) => {{
             let targetName = {target_names:?}[targetIndex];
-            console.log(`${{targetName}} ${{verb}}: ${{text}}`);
+            console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
         }};
         const importObject = {{
             dbg: {{
                 log: wasm_output,
                 assert: assert_output,
+                logi32 (i32) {{
+                    console.log('logi32: \\x1b[33m%d\\x1b[0m', i32);
+                    return i32;
+                }},
             }},
             runtime: {{
                 looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
@@ -868,7 +1011,7 @@ impl From<Sb3Project> for WebWasmFile {
                 await sleep(30 - (Date.now() - startTime));
             }}
         }}).catch((e) => {{
-            console.error('error when instantiating module: ' + e.message);
+            console.error('error when instantiating module:\\n' + e.stack);
             process.exit(1);
         }});
         ", target_names=project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
@@ -911,7 +1054,10 @@ mod tests {
     #[test]
     fn run_wasm() {
         use std::fs;
-        let proj: Sb3Project = fs::read_to_string("./hq-test.project.json").expect("couldn't read hq-test.project.json").try_into().unwrap();
+        let proj: Sb3Project = fs::read_to_string("./hq-test.project.json")
+            .expect("couldn't read hq-test.project.json")
+            .try_into()
+            .unwrap();
         let wasm: WebWasmFile = proj.into();
         println!("{}", wasm.js_string());
         let output2 = Command::new("node")

@@ -233,7 +233,7 @@ pub enum BlockOpcodeWithField {
     control_start_as_clone,
     data_variable { VARIABLE: String },
     data_setvariableto { VARIABLE: String },
-    data_changevariableby { VARIABLE: String },
+    //data_changevariableby { VARIABLE: String },
     data_hidevariable { VARIABLE: String },
     data_showvariable { VARIABLE: String },
     data_listcontents { LIST: String },
@@ -452,8 +452,8 @@ impl BlockOpcodeWithField {
             | math_whole_number { .. }
             | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
             data_variable { .. } => BlockDescriptor::new(vec![], Any),
-            data_setvariableto { .. } => BlockDescriptor::new(vec![Text], Stack),
-            data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
+            data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
+            //data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
             text { .. } => BlockDescriptor::new(vec![], Text),
             _ => todo!(),
         }
@@ -743,7 +743,7 @@ pub mod tests {
                 .unwrap_or_default()
                 .as_millis()
         );
-        
+
         //dbg!(&resp);
         reqwest::blocking::get(format!(
             "https://projects.scratch.mit.edu/{:}/?token={:}",

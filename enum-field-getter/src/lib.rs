@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
-use quote::{quote, format_ident};
-use syn::{parse_macro_input, Data, DeriveInput, Type, Fields};
-use proc_macro_error::{proc_macro_error, emit_warning};
+use proc_macro_error::{emit_warning, proc_macro_error};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
 use std::collections::{HashMap, HashSet};
 
@@ -55,9 +55,13 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
         let types = field_info.values().map(|v| v.0.clone());
         let field_info_vec = field_info.iter().collect::<Vec<_>>();
         let matches = field_info_vec.iter().map(|(k, v)| {
-            let variants = v.1.clone().iter().map(|v| format_ident!("{}", v)).collect::<Vec<_>>();
+            let variants =
+                v.1.clone()
+                    .iter()
+                    .map(|v| format_ident!("{}", v))
+                    .collect::<Vec<_>>();
             let field = vec![format_ident!("{}", k); variants.len()];
-            quote!{
+            quote! {
                 match self {
                     #(
                         Self::#variants { #field, .. } => Some(#field),

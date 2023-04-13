@@ -1,10 +1,42 @@
 // intermediate representation
 use crate::sb3::{
-    Block, BlockArray, BlockArrayOrId, BlockOpcode, BlockOpcodeWithField, BlockType, Field, Input, VariableInfo,
+    Block, BlockArray, BlockArrayOrId, BlockOpcode, BlockOpcodeWithField, BlockType, Field, Input,
+    VarVal,
 };
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IrVar {
+    id: String,
+    name: String,
+    initial_value: VarVal,
+    is_cloud: bool,
+}
+
+impl IrVar {
+    pub fn new(id: String, name: String, initial_value: VarVal, is_cloud: bool) -> Self {
+        Self {
+            id,
+            name,
+            initial_value,
+            is_cloud,
+        }
+    }
+    pub fn id(&self) -> &String {
+        &self.id
+    }
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+    pub fn initial_value(&self) -> &VarVal {
+        &self.initial_value
+    }
+    pub fn is_cloud(&self) -> &bool {
+        &self.is_cloud
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ThreadStart {
@@ -19,7 +51,11 @@ pub struct Step<'a> {
 }
 
 impl Step<'_> {
-    pub fn new(opcodes: Vec<BlockOpcodeWithField>, index: u32, context: ThreadContext<'_>) -> Step<'_> {
+    pub fn new(
+        opcodes: Vec<BlockOpcodeWithField>,
+        index: u32,
+        context: ThreadContext<'_>,
+    ) -> Step<'_> {
         Step {
             opcodes,
             index,
@@ -41,7 +77,7 @@ impl Step<'_> {
 pub struct ThreadContext<'a> {
     pub target_index: u32,
     pub dbg: bool,
-    pub vars: &'a Vec<&'a VariableInfo>, // hopefully there can't be two variables with the same is in differwnt sprites, otherwise this will break horrendously
+    pub vars: &'a Vec<IrVar>, // hopefully there can't be two variables with the same is in differwnt sprites, otherwise this will break horrendously
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,24 +129,24 @@ impl Thread<'_> {
                         }
                     }
 
-                    ops.push(match block_info.opcode {
-                        BlockOpcode::looks_say => BlockOpcodeWithField::looks_say,
-                        BlockOpcode::looks_think => BlockOpcodeWithField::looks_think,
-                        BlockOpcode::operator_add => BlockOpcodeWithField::operator_add,
-                        BlockOpcode::operator_subtract => BlockOpcodeWithField::operator_subtract,
-                        BlockOpcode::operator_multiply => BlockOpcodeWithField::operator_multiply,
-                        BlockOpcode::operator_divide => BlockOpcodeWithField::operator_divide,
-                        BlockOpcode::operator_mod => BlockOpcodeWithField::operator_mod,
-                        BlockOpcode::operator_round => BlockOpcodeWithField::operator_round,
+                    ops.append(&mut match block_info.opcode {
+                        BlockOpcode::looks_say => vec![BlockOpcodeWithField::looks_say],
+                        BlockOpcode::looks_think => vec![BlockOpcodeWithField::looks_think],
+                        BlockOpcode::operator_add => vec![BlockOpcodeWithField::operator_add],
+                        BlockOpcode::operator_subtract => vec![BlockOpcodeWithField::operator_subtract],
+                        BlockOpcode::operator_multiply => vec![BlockOpcodeWithField::operator_multiply],
+                        BlockOpcode::operator_divide => vec![BlockOpcodeWithField::operator_divide],
+                        BlockOpcode::operator_mod => vec![BlockOpcodeWithField::operator_mod],
+                        BlockOpcode::operator_round => vec![BlockOpcodeWithField::operator_round],
                         BlockOpcode::data_variable => {
                             let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
                                 .expect("invalid project.json - missing field VARIABLE (E023)") else {
                                     panic!("invalid project.json - missing variable id for VARIABLE field (E024)");
                                 };
                             let id = maybe_id.clone().expect("invalid project.json - null variable id for VARIABLE field (E025)");
-                            BlockOpcodeWithField::data_variable {
+                            vec![BlockOpcodeWithField::data_variable {
                               VARIABLE: id,
-                            }
+                            }]
                         },
                         BlockOpcode::data_setvariableto => {
                             let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
@@ -118,9 +154,9 @@ impl Thread<'_> {
                                     panic!("invalid project.json - missing variable id for VARIABLE field (E027)");
                                 };
                             let id = maybe_id.clone().expect("invalid project.json - null variable id for VARIABLE field (E028)");
-                            BlockOpcodeWithField::data_setvariableto {
+                            vec![BlockOpcodeWithField::data_setvariableto {
                               VARIABLE: id,
-                            }
+                            }]
                         },
                         BlockOpcode::data_changevariableby => {
                             let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
@@ -128,11 +164,16 @@ impl Thread<'_> {
                                     panic!("invalid project.json - missing variable id for VARIABLE field (E030)");
                                 };
                             let id = maybe_id.clone().expect("invalid project.json - null variable id for VARIABLE field (E031)");
-                            BlockOpcodeWithField::data_changevariableby {
-                              VARIABLE: id,
-                            }
+                            vec![
+                              BlockOpcodeWithField::data_variable {
+                                VARIABLE: id.clone(),
+                              },
+                              BlockOpcodeWithField::operator_add,
+                              BlockOpcodeWithField::data_setvariableto {
+                                VARIABLE: id,
+                              }
+                            ]
                         },
-                        
                         _ => todo!(),
                     });
 
@@ -168,22 +209,16 @@ impl Thread<'_> {
                             NUM: value.parse().unwrap(),
                         },
                         9 => todo!(),
-                        10 => BlockOpcodeWithField::text {
-                            TEXT: value,
-                        },
+                        10 => BlockOpcodeWithField::text { TEXT: value },
                         _ => panic!("bad project json (block array of type ({}, string))", ty),
                     }),
                     BlockArray::Broadcast(ty, _name, id) => ops.push(match ty {
-                        12 => BlockOpcodeWithField::data_variable {
-                            VARIABLE: id,
-                        },
+                        12 => BlockOpcodeWithField::data_variable { VARIABLE: id },
                         _ => todo!(),
                     }),
                     BlockArray::VariableOrList(ty, _name, id, _pos_x, _pos_y) => {
                         ops.push(match ty {
-                            12 => BlockOpcodeWithField::data_variable {
-                                VARIABLE: id,
-                            },
+                            12 => BlockOpcodeWithField::data_variable { VARIABLE: id },
                             _ => todo!(),
                         })
                     }
