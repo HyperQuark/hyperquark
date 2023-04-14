@@ -285,7 +285,23 @@ fn instructions(
         operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
         operator_length => vec![Call(func_indices::OPERATOR_LENGTH)],
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
-        operator_mathop { OPERATOR: _ } => vec![],
+        operator_mathop { OPERATOR } => match OPERATOR.as_str() {
+            "abs" => vec![F64Abs],
+            "floor" => vec![F64Floor],
+            "ceiling" => vec![F64Ceil],
+            "sqrt" => vec![F64Sqrt],
+            "sin" => vec![Call(func_indices::MATHOP_SIN)],
+            "cos" => vec![Call(func_indices::MATHOP_COS)],
+            "tan" => vec![Call(func_indices::MATHOP_TAN)],
+            "asin" => vec![Call(func_indices::MATHOP_ASIN)],
+            "acos" => vec![Call(func_indices::MATHOP_ACOS)],
+            "atan" => vec![Call(func_indices::MATHOP_ATAN)],
+            "ln" => vec![Call(func_indices::MATHOP_LN)],
+            "log" => vec![Call(func_indices::MATHOP_LOG)],
+            "e ^" => vec![Call(func_indices::MATHOP_POW_E)],
+            "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
+            _ => panic!("invalid OPERATOR field (E041)"),
+        },
         _ => todo!(),
     };
     if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
@@ -341,19 +357,29 @@ pub mod func_indices {
     pub const OPERATOR_LETTEROF: u32 = 11;
     pub const OPERATOR_LENGTH: u32 = 12;
     pub const OPERATOR_CONTAINS: u32 = 13;
+    pub const MATHOP_SIN: u32 = 14;
+    pub const MATHOP_COS: u32 = 15;
+    pub const MATHOP_TAN: u32 = 16;
+    pub const MATHOP_ASIN: u32 = 17;
+    pub const MATHOP_ACOS: u32 = 18;
+    pub const MATHOP_ATAN: u32 = 19;
+    pub const MATHOP_LN: u32 = 20;
+    pub const MATHOP_LOG: u32 = 21;
+    pub const MATHOP_POW_E: u32 = 22;
+    pub const MATHOP_POW10: u32 = 23;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 14;
-    pub const CAST_FLOAT_BOOL: u32 = 15;
-    pub const CAST_BOOL_FLOAT: u32 = 16;
-    pub const CAST_BOOL_STRING: u32 = 17;
-    pub const CAST_ANY_STRING: u32 = 18;
-    pub const CAST_ANY_FLOAT: u32 = 19;
-    pub const CAST_ANY_BOOL: u32 = 20;
-    pub const TABLE_ADD_STRING: u32 = 21;
+    pub const FMOD: u32 = 24;
+    pub const CAST_FLOAT_BOOL: u32 = 25;
+    pub const CAST_BOOL_FLOAT: u32 = 26;
+    pub const CAST_BOOL_STRING: u32 = 27;
+    pub const CAST_ANY_STRING: u32 = 28;
+    pub const CAST_ANY_FLOAT: u32 = 29;
+    pub const CAST_ANY_BOOL: u32 = 30;
+    pub const TABLE_ADD_STRING: u32 = 31;
 }
-pub const BUILTIN_FUNCS: u32 = 22;
-pub const IMPORTED_FUNCS: u32 = 14;
+pub const BUILTIN_FUNCS: u32 = 32;
+pub const IMPORTED_FUNCS: u32 = 24;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -390,6 +416,7 @@ pub mod types {
     pub const I32I64I32I64_I64: u32 = 30;
     pub const F64I32I64_EXTERNREF: u32 = 31;
     pub const I32I64I32I64_EXTERNREF: u32 = 32;
+    pub const F64_F64: u32 = 33;
 }
 
 pub mod table_indices {
@@ -477,6 +504,7 @@ impl From<Sb3Project> for WebWasmFile {
             [ValType::I32, ValType::I64, ValType::I32, ValType::I64],
             [ValType::Ref(RefType::EXTERNREF)],
         );
+        types.function([ValType::F64], [ValType::F64]);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -539,6 +567,52 @@ impl From<Sb3Project> for WebWasmFile {
             "runtime",
             "operator_contains",
             EntityType::Function(types::I32I64I32I64_I64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_sin",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_cos",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_tan",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_asin",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_acos",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_atan",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import("runtime", "mathop_ln", EntityType::Function(types::F64_F64));
+        imports.import(
+            "runtime",
+            "mathop_log",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_pow_e",
+            EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "mathop_pow10",
+            EntityType::Function(types::F64_F64),
         );
 
         functions.function(types::F64x2_F64);
@@ -1031,6 +1105,29 @@ impl From<Sb3Project> for WebWasmFile {
                 operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
                 operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
                 operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().includes(wasm_val_to_js(ty2, val2).toString()),
+                mathop_sin: (n) => parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
+                mathop_cos: (n) => parseFloat(Math.cos((Math.PI * n) / 180).toFixed(10)),
+                mathop_tan: (n) => {{
+                    /* https://github.com/scratchfoundation/scratch-vm/blob/f1f10e0aa856fef6596a622af72b49e2f491f937/src/util/math-util.js#L53-65 */
+                    n = n % 360;
+                    switch (n) {{
+                        case -270:
+                        case 90:
+                            return Infinity;
+                        case -90:
+                        case 270:
+                            return -Infinity;
+                        default:
+                            return parseFloat(Math.tan((Math.PI * n) / 180).toFixed(10));
+                    }}
+                }},
+                mathop_asin: (n) => (Math.asin(n) * 180) / Math.PI,
+                mathop_acos: (n) => (Math.acos(n) * 180) / Math.PI,
+                mathop_atan: (n) => (Math.atan(n) * 180) / Math.PI,
+                mathop_ln: (n) => Math.log(n),
+                mathop_log: (n) => Math.log(n) / Math.LN10,
+                mathop_pow_e: (n) => Math.exp(n),
+                mathop_pow10: (n) => Math.pow(10, n),
             }},
             cast: {{
               stringtofloat: parseFloat,
