@@ -232,7 +232,7 @@ fn instructions(
             ]
         }
         data_setvariableto { VARIABLE } => {
-        //vec![Drop,Drop]
+            //vec![Drop,Drop]
             let var_index: i32 = context
                 .vars
                 .iter()
@@ -475,11 +475,7 @@ impl From<Sb3Project> for WebWasmFile {
             "stringtobool",
             EntityType::Function(types::EXTERNREF_I32),
         );
-        imports.import(
-            "dbg",
-            "logi32",
-            EntityType::Function(types::I32_I32),
-        );
+        imports.import("dbg", "logi32", EntityType::Function(types::I32_I32));
 
         functions.function(types::F64x2_F64);
         let mut fmod_func = Function::new(vec![]);
@@ -669,7 +665,7 @@ impl From<Sb3Project> for WebWasmFile {
         /*tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));*/
-        
+
         functions.function(types::I32_I32);
         let mut noop_func = Function::new(vec![]);
         noop_func.instruction(&Instruction::I32Const(1));
