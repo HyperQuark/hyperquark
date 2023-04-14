@@ -330,7 +330,7 @@ pub enum BlockOpcodeWithField {
     operator_contains,
     operator_mod,
     operator_round,
-    operator_mathop,
+    operator_mathop { OPERATOR: String },
     pen_clear,
     pen_stamp,
     pen_penDown,
@@ -443,8 +443,8 @@ impl BlockOpcodeWithField {
         use BlockType::*;
         match self {
             operator_add | operator_subtract | operator_multiply | operator_divide
-            | operator_mod => BlockDescriptor::new(vec![Number, Number], Number),
-            operator_round => BlockDescriptor::new(vec![Number], Number),
+            | operator_mod | operator_random => BlockDescriptor::new(vec![Number, Number], Number),
+            operator_round | operator_mathop { .. } => BlockDescriptor::new(vec![Number], Number),
             looks_say | looks_think => BlockDescriptor::new(vec![Any], Stack),
             math_number { .. }
             | math_integer { .. }
@@ -455,7 +455,14 @@ impl BlockOpcodeWithField {
             data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
             //data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
             text { .. } => BlockDescriptor::new(vec![], Text),
-            _ => todo!(),
+            operator_lt | operator_gt => BlockDescriptor::new(vec![Number, Number], Boolean),
+            operator_equals | operator_contains => BlockDescriptor::new(vec![Any, Any], Boolean),
+            operator_and | operator_or => BlockDescriptor::new(vec![Boolean, Boolean], Boolean),
+            operator_not => BlockDescriptor::new(vec![Boolean], Boolean),
+            operator_join => BlockDescriptor::new(vec![Any, Any], Text),
+            operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
+            operator_length => BlockDescriptor::new(vec![Any], Number),
+            _ => todo!("{:?}", &self),
         }
     }
 }

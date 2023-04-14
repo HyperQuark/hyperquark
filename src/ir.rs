@@ -138,6 +138,30 @@ impl Thread<'_> {
                         BlockOpcode::operator_divide => vec![BlockOpcodeWithField::operator_divide],
                         BlockOpcode::operator_mod => vec![BlockOpcodeWithField::operator_mod],
                         BlockOpcode::operator_round => vec![BlockOpcodeWithField::operator_round],
+                        BlockOpcode::operator_lt => vec![BlockOpcodeWithField::operator_lt],
+                        BlockOpcode::operator_equals => vec![BlockOpcodeWithField::operator_equals],
+                        BlockOpcode::operator_gt => vec![BlockOpcodeWithField::operator_gt],
+                        BlockOpcode::operator_and => vec![BlockOpcodeWithField::operator_and],
+                        BlockOpcode::operator_or => vec![BlockOpcodeWithField::operator_or],
+                        BlockOpcode::operator_not => vec![BlockOpcodeWithField::operator_not],
+                        BlockOpcode::operator_random => vec![BlockOpcodeWithField::operator_random],
+                        BlockOpcode::operator_join => vec![BlockOpcodeWithField::operator_join],
+                        BlockOpcode::operator_letter_of => vec![BlockOpcodeWithField::operator_letter_of],
+                        BlockOpcode::operator_length => vec![BlockOpcodeWithField::operator_length],
+                        BlockOpcode::operator_contains => vec![BlockOpcodeWithField::operator_contains],
+                        BlockOpcode::operator_mathop => {
+                            let maybe_val = match block_info.fields.get("OPERATOR")
+                                .expect("invalid project.json - missing field OPERATOR (E038)") {
+                                Field::Value((v,)) | Field::ValueId(v, _) => v,
+                            };
+                            let val_varval = maybe_val.clone().expect("invalid project.json - null value for OPERATOR field (E039)");
+                            let VarVal::String(val) = val_varval else {
+                                panic!("invalid project.json - expected OPERATOR field to be string (E040)");
+                            };
+                            vec![BlockOpcodeWithField::operator_mathop {
+                                OPERATOR: val,
+                            }]
+                        },
                         BlockOpcode::data_variable => {
                             let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
                                 .expect("invalid project.json - missing field VARIABLE (E023)") else {
@@ -163,7 +187,7 @@ impl Thread<'_> {
                                 .expect("invalid project.json - missing field VARIABLE (E029)") else {
                                     panic!("invalid project.json - missing variable id for VARIABLE field (E030)");
                                 };
-                            let id = maybe_id.clone().expect("invalid project.json - null variable id for VARIABLE field (E031)");
+                            let id = maybe_id.clone().expect("invalid project.json - null id for VARIABLE field (E031)");
                             vec![
                               BlockOpcodeWithField::data_variable {
                                 VARIABLE: id.clone(),
@@ -253,6 +277,7 @@ impl Thread<'_> {
                 type_stack.push((index, (*op.descriptor().output()).clone()));
             }
         }
+        needs_cast.sort_unstable_by_key(|&(idx, _)| idx);
         for (index, block_type) in needs_cast.iter().rev() {
             use BlockOpcodeWithField::*;
             use BlockType::*;

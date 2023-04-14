@@ -274,6 +274,18 @@ fn instructions(
                 }),
             ]
         }
+        operator_lt => vec![F64Lt, I64ExtendI32S],
+        operator_gt => vec![F64Gt, I64ExtendI32S],
+        operator_and => vec![I64And],
+        operator_or => vec![I64Or],
+        operator_not => vec![I64Eqz, I64ExtendI32S],
+        operator_equals => vec![Call(func_indices::OPERATOR_EQUALS)],
+        operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
+        operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
+        operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
+        operator_length => vec![Call(func_indices::OPERATOR_LENGTH)],
+        operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
+        operator_mathop { OPERATOR: _ } => vec![],
         _ => todo!(),
     };
     if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
@@ -323,18 +335,25 @@ pub mod func_indices {
     pub const CAST_PRIMITIVE_STRING_FLOAT: u32 = 5;
     pub const CAST_PRIMITIVE_STRING_BOOL: u32 = 6;
     pub const DBG_LOGI32: u32 = 7;
+    pub const OPERATOR_EQUALS: u32 = 8;
+    pub const OPERATOR_RANDOM: u32 = 9;
+    pub const OPERATOR_JOIN: u32 = 10;
+    pub const OPERATOR_LETTEROF: u32 = 11;
+    pub const OPERATOR_LENGTH: u32 = 12;
+    pub const OPERATOR_CONTAINS: u32 = 13;
+
     /* wasm funcs */
-    pub const FMOD: u32 = 8;
-    pub const CAST_FLOAT_BOOL: u32 = 9;
-    pub const CAST_BOOL_FLOAT: u32 = 10;
-    pub const CAST_BOOL_STRING: u32 = 11;
-    pub const CAST_ANY_STRING: u32 = 12;
-    pub const CAST_ANY_FLOAT: u32 = 13;
-    pub const CAST_ANY_BOOL: u32 = 14;
-    pub const TABLE_ADD_STRING: u32 = 15;
+    pub const FMOD: u32 = 14;
+    pub const CAST_FLOAT_BOOL: u32 = 15;
+    pub const CAST_BOOL_FLOAT: u32 = 16;
+    pub const CAST_BOOL_STRING: u32 = 17;
+    pub const CAST_ANY_STRING: u32 = 18;
+    pub const CAST_ANY_FLOAT: u32 = 19;
+    pub const CAST_ANY_BOOL: u32 = 20;
+    pub const TABLE_ADD_STRING: u32 = 21;
 }
-pub const BUILTIN_FUNCS: u32 = 16;
-pub const IMPORTED_FUNCS: u32 = 8;
+pub const BUILTIN_FUNCS: u32 = 22;
+pub const IMPORTED_FUNCS: u32 = 14;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -368,6 +387,9 @@ pub mod types {
     pub const I64_EXTERNREF: u32 = 27;
     pub const I32I64I32_NORESULT: u32 = 28;
     pub const I32I64_NORESULT: u32 = 29;
+    pub const I32I64I32I64_I64: u32 = 30;
+    pub const F64I32I64_EXTERNREF: u32 = 31;
+    pub const I32I64I32I64_EXTERNREF: u32 = 32;
 }
 
 pub mod table_indices {
@@ -443,6 +465,18 @@ impl From<Sb3Project> for WebWasmFile {
         types.function([ValType::I64], [ValType::Ref(RefType::EXTERNREF)]);
         types.function([ValType::I32, ValType::I64, ValType::I32], []);
         types.function([ValType::I32, ValType::I64], []);
+        types.function(
+            [ValType::I32, ValType::I64, ValType::I32, ValType::I64],
+            [ValType::I64],
+        );
+        types.function(
+            [ValType::F64, ValType::I32, ValType::I64],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
+        types.function(
+            [ValType::I32, ValType::I64, ValType::I32, ValType::I64],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -476,6 +510,36 @@ impl From<Sb3Project> for WebWasmFile {
             EntityType::Function(types::EXTERNREF_I32),
         );
         imports.import("dbg", "logi32", EntityType::Function(types::I32_I32));
+        imports.import(
+            "runtime",
+            "operator_equals",
+            EntityType::Function(types::I32I64I32I64_I64),
+        );
+        imports.import(
+            "runtime",
+            "operator_random",
+            EntityType::Function(types::F64x2_F64),
+        );
+        imports.import(
+            "runtime",
+            "operator_join",
+            EntityType::Function(types::I32I64I32I64_EXTERNREF),
+        );
+        imports.import(
+            "runtime",
+            "operator_letterof",
+            EntityType::Function(types::F64I32I64_EXTERNREF),
+        );
+        imports.import(
+            "runtime",
+            "operator_length",
+            EntityType::Function(types::I32I64_F64),
+        );
+        imports.import(
+            "runtime",
+            "operator_contains",
+            EntityType::Function(types::I32I64I32I64_I64),
+        );
 
         functions.function(types::F64x2_F64);
         let mut fmod_func = Function::new(vec![]);
@@ -961,6 +1025,12 @@ impl From<Sb3Project> for WebWasmFile {
             runtime: {{
                 looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
                 looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
+                operator_equals: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1) == wasm_val_to_js(ty2, val2),
+                operator_random: (lower, upper) => Math.random() * (upper - lower) + lower,
+                operator_join: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString() + wasm_val_to_js(ty2, val2).toString(),
+                operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
+                operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
+                operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().includes(wasm_val_to_js(ty2, val2).toString()),
             }},
             cast: {{
               stringtofloat: parseFloat,
@@ -1017,7 +1087,6 @@ impl From<Sb3Project> for WebWasmFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sb3::tests::test_project_id;
     use std::process::{Command, Stdio};
 
     /*#[test]
