@@ -1,4 +1,4 @@
-![Discord](https://img.shields.io/discord/1095993821076131950?label=chat&logo=discord)
+[![Discord](https://img.shields.io/discord/1095993821076131950?label=chat&logo=discord)](https://discord.gg/w5C8fdb5EQ)
 
 # HyperQuark
 Compile scratch projects to WASM
