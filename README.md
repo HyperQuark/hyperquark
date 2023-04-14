@@ -1,3 +1,5 @@
+![Discord](https://img.shields.io/discord/1095993821076131950?label=chat&logo=discord)
+
 # HyperQuark
 Compile scratch projects to WASM
 
