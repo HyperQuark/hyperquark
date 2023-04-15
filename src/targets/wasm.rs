@@ -1,5 +1,6 @@
-use crate::ir::{IrVar, Step, Thread, ThreadContext, ThreadStart};
-use crate::sb3::{BlockOpcode, BlockOpcodeWithField, Sb3Project, VariableInfo};
+use crate::ir::{
+    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
+};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -9,7 +10,7 @@ use wasm_encoder::{
     MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
-impl Step<'_> {
+impl Step {
     fn as_function(&self, next_step_index: u32, string_consts: &mut Vec<String>) -> Function {
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
@@ -105,13 +106,14 @@ impl Step<'_> {
 }
 
 fn instructions(
-    op: &BlockOpcodeWithField,
+    op: &IrBlock,
     context: &ThreadContext,
     string_consts: &mut Vec<String>,
 ) -> Vec<Instruction<'static>> {
-    use BlockOpcodeWithField::*;
     use Instruction::*;
-    let mut instructions = match op {
+    use IrBlockType::*;
+    use IrOpcode::*;
+    let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {
                 vec![Call(func_indices::DBG_ASSERT)]
@@ -166,33 +168,6 @@ fn instructions(
             .expect("string index out of bounds (E022)");
             vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
         }
-        cast_string_num => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
-        cast_string_bool => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
-        cast_string_any => vec![
-            LocalSet(step_func_locals::EXTERNREF),
-            I32Const(hq_value_types::EXTERN_STRING_REF64),
-            LocalGet(step_func_locals::EXTERNREF),
-            Call(func_indices::TABLE_ADD_STRING),
-            I64ExtendI32S,
-        ],
-        cast_bool_num => vec![Call(func_indices::CAST_BOOL_FLOAT)],
-        cast_bool_string => vec![Call(func_indices::CAST_BOOL_STRING)],
-        cast_bool_any => vec![
-            LocalSet(step_func_locals::I64),
-            I32Const(hq_value_types::BOOL64),
-            LocalGet(step_func_locals::I64),
-        ],
-        cast_num_string => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
-        cast_num_bool => vec![Call(func_indices::CAST_FLOAT_BOOL)],
-        cast_num_any => vec![
-            LocalSet(step_func_locals::F64),
-            I32Const(hq_value_types::FLOAT64),
-            LocalGet(step_func_locals::F64),
-            I64ReinterpretF64,
-        ],
-        cast_any_string => vec![Call(func_indices::CAST_ANY_STRING)],
-        cast_any_num => vec![Call(func_indices::CAST_ANY_FLOAT)],
-        cast_any_bool => vec![Call(func_indices::CAST_ANY_BOOL)],
         data_variable { VARIABLE } => {
             let var_index: i32 = context
                 .vars
@@ -304,7 +279,37 @@ fn instructions(
         },
         _ => todo!(),
     };
-    if op.does_request_redraw() && !(*op == looks_say && context.dbg) {
+    instructions.append(&mut match (op.actual_output(), op.expected_output()) {
+        (Text, Number) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
+        (Text, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
+        (Text, Any) => vec![
+            LocalSet(step_func_locals::EXTERNREF),
+            I32Const(hq_value_types::EXTERN_STRING_REF64),
+            LocalGet(step_func_locals::EXTERNREF),
+            Call(func_indices::TABLE_ADD_STRING),
+            I64ExtendI32S,
+        ],
+        (Boolean, Number) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
+        (Boolean, Text) => vec![Call(func_indices::CAST_BOOL_STRING)],
+        (Boolean, Any) => vec![
+            LocalSet(step_func_locals::I64),
+            I32Const(hq_value_types::BOOL64),
+            LocalGet(step_func_locals::I64),
+        ],
+        (Number, Text) => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
+        (Number, Boolean) => vec![Call(func_indices::CAST_FLOAT_BOOL)],
+        (Number, Any) => vec![
+            LocalSet(step_func_locals::F64),
+            I32Const(hq_value_types::FLOAT64),
+            LocalGet(step_func_locals::F64),
+            I64ReinterpretF64,
+        ],
+        (Any, Text) => vec![Call(func_indices::CAST_ANY_STRING)],
+        (Any, Number) => vec![Call(func_indices::CAST_ANY_FLOAT)],
+        (Any, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
+        _ => vec![],
+    });
+    if op.does_request_redraw() && !(*op.opcode() == looks_say && context.dbg) {
         instructions.append(&mut vec![
             I32Const(byte_offset::REDRAW_REQUESTED),
             I32Const(1),
@@ -439,8 +444,8 @@ pub mod byte_offset {
     pub const THREADS: i32 = 8;
 }
 
-impl From<Sb3Project> for WebWasmFile {
-    fn from(project: Sb3Project) -> Self {
+impl From<IrProject> for WebWasmFile {
+    fn from(project: IrProject) -> Self {
         let mut module = Module::new();
 
         let mut imports = ImportSection::new();
@@ -819,68 +824,18 @@ impl From<Sb3Project> for WebWasmFile {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let mut step_func_count = 1u32;
-
-        // Vec<id, name, value, isCloud>
-        let vars: Vec<IrVar> = project
-            .targets
-            .iter()
-            .flat_map(|target| {
-                target.variables.iter().map(|(id, info)| match info {
-                    VariableInfo::LocalVar(name, val) => {
-                        IrVar::new(id.clone(), name.clone(), val.clone(), false)
-                    }
-                    VariableInfo::CloudVar(name, val, is_cloud) => {
-                        IrVar::new(id.clone(), name.clone(), val.clone(), *is_cloud)
-                    }
-                })
-            })
-            .collect();
-
-        for (target_index, target) in project.targets.iter().enumerate() {
-            for (id, block) in
-                target
-                    .blocks
-                    .clone()
-                    .iter()
-                    .filter(|(_id, b)| match b.block_info() {
-                        Some(block_info) => {
-                            block_info.top_level
-                                && matches!(block_info.opcode, BlockOpcode::event_whenflagclicked)
-                        }
-                        None => false,
-                    })
-            {
-                let context = ThreadContext {
-                    target_index: target_index.try_into().unwrap(),
-                    dbg: matches!(
-                        target.comments.clone().iter().find(
-                            |(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id)
-                                && comment.text.clone() == *"hq-dbg"
-                        ),
-                        Some(_)
-                    ),
-                    vars: &vars,
-                };
-                let thread = Thread::from_hat(
-                    block.clone(),
-                    target.blocks.clone(),
-                    step_func_count,
-                    &context,
+        for thread in project.threads {
+            let first_index = thread.steps()[0].index();
+            thread_indices.push((thread.start().clone(), *first_index));
+            for (i, step) in thread.steps().iter().enumerate() {
+                let mut func = step.as_function(
+                    (step.index() + 1) * (i < thread.steps().len() - 1) as u32,
+                    &mut string_consts,
                 );
-                let first_index = thread.steps()[0].index();
-                thread_indices.push((thread.start().clone(), *first_index));
-                for (i, step) in thread.steps().iter().enumerate() {
-                    let mut func = step.as_function(
-                        (step.index() + 1) * (i < thread.steps().len() - 1) as u32,
-                        &mut string_consts,
-                    );
-                    func.instruction(&Instruction::End);
-                    functions.function(types::I32_I32);
-                    code.function(&func);
-                    step_func_count += 1;
-                    step_indices.push(*step.index());
-                }
+                func.instruction(&Instruction::End);
+                functions.function(types::I32_I32);
+                code.function(&func);
+                step_indices.push(*step.index());
             }
         }
 
@@ -1177,7 +1132,7 @@ impl From<Sb3Project> for WebWasmFile {
             console.error('error when instantiating module:\\n' + e.stack);
             process.exit(1);
         }});
-        ", target_names=project.targets.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
+        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
 }
 
@@ -1188,10 +1143,10 @@ mod tests {
 
     /*#[test]
     fn make_thread() {
-        use BlockOpcodeWithField::*;
+        use IrOpcode::*;
         let proj: Sb3Project = test_project_id("771449498").try_into().unwrap();
         let thread = Thread::from_hat(proj.targets[0].blocks.iter().filter(|(_id, b)| match b {
-            Block::Normal { block_info, .. } => block_info.opcode == BlockOpcode::event_whenflagclicked,
+            Block::Normal { block_info, .. } => block_info.opcode() == BlockOpcode::event_whenflagclicked,
             Block::Special(_) => false,
         }).next().unwrap().1.clone(), proj.targets[0].blocks.clone());
         assert_eq!(thread.start(), &ThreadStart::GreenFlag);
@@ -1215,12 +1170,14 @@ mod tests {
 
     #[test]
     fn run_wasm() {
+        use crate::sb3::Sb3Project;
         use std::fs;
         let proj: Sb3Project = fs::read_to_string("./hq-test.project.json")
             .expect("couldn't read hq-test.project.json")
             .try_into()
             .unwrap();
-        let wasm: WebWasmFile = proj.into();
+        let ir: IrProject = proj.into();
+        let wasm: WebWasmFile = ir.into();
         println!("{}", wasm.js_string());
         let output2 = Command::new("node")
             .arg("-e")

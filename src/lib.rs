@@ -15,8 +15,10 @@ pub mod targets;
 
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str) -> String {
-    (*targets::wasm::WebWasmFile::from(sb3::Sb3Project::try_from(proj).expect("uh oh"))
-        .js_string()
-        .clone())
+    (*targets::wasm::WebWasmFile::from(ir::IrProject::from(
+        sb3::Sb3Project::try_from(proj).expect("uh oh"),
+    ))
+    .js_string()
+    .clone())
     .to_string()
 }
