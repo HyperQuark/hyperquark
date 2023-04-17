@@ -87,27 +87,48 @@ pub enum IrOpcode {
     control_repeat,
     control_repeat_until,
     control_while,
-    control_for_each { VARIABLE: String },
+    control_for_each {
+        VARIABLE: String,
+    },
     control_forever,
     control_wait,
     control_wait_until,
-    control_if { SUBSTACK: Vec<Step> },
-    control_if_else { SUBSTACK: Vec<Step>, SUBSTACK2: Vec<Step> },
-    control_stop { STOP_OPTION: String },
+    control_if {
+        SUBSTACK: Vec<Step>,
+    },
+    control_if_else {
+        SUBSTACK: Vec<Step>,
+        SUBSTACK2: Vec<Step>,
+    },
+    control_stop {
+        STOP_OPTION: String,
+    },
     control_create_clone_of,
-    control_create_clone_of_menu { CLONE_OPTOON: String },
+    control_create_clone_of_menu {
+        CLONE_OPTOON: String,
+    },
     control_delete_this_clone,
     control_get_counter,
     control_incr_counter,
     control_clear_counter,
     control_all_at_once,
     control_start_as_clone,
-    data_variable { VARIABLE: String },
-    data_setvariableto { VARIABLE: String },
+    data_variable {
+        VARIABLE: String,
+    },
+    data_setvariableto {
+        VARIABLE: String,
+    },
     //data_changevariableby { VARIABLE: String },
-    data_hidevariable { VARIABLE: String },
-    data_showvariable { VARIABLE: String },
-    data_listcontents { LIST: String },
+    data_hidevariable {
+        VARIABLE: String,
+    },
+    data_showvariable {
+        VARIABLE: String,
+    },
+    data_listcontents {
+        LIST: String,
+    },
     data_addtolist,
     data_deleteoflist,
     data_deletealloflist,
@@ -155,11 +176,21 @@ pub enum IrOpcode {
     looks_backdropnumbername,
     looks_costume,
     looks_backdrops,
-    math_angle { NUM: f64 },
-    math_integer { NUM: f64 },
-    math_number { NUM: f64 },
-    math_positive_number { NUM: f64 },
-    math_whole_number { NUM: f64 },
+    math_angle {
+        NUM: f64,
+    },
+    math_integer {
+        NUM: f64,
+    },
+    math_number {
+        NUM: f64,
+    },
+    math_positive_number {
+        NUM: f64,
+    },
+    math_whole_number {
+        NUM: f64,
+    },
     motion_movesteps,
     motion_gotoxy,
     motion_goto,
@@ -201,7 +232,9 @@ pub enum IrOpcode {
     operator_contains,
     operator_mod,
     operator_round,
-    operator_mathop { OPERATOR: String },
+    operator_mathop {
+        OPERATOR: String,
+    },
     pen_clear,
     pen_stamp,
     pen_penDown,
@@ -257,20 +290,22 @@ pub enum IrOpcode {
     sound_setvolumeto,
     sound_changevolumeby,
     sound_volume,
-    text { TEXT: String }, /*
-                           // these casting functions aren't blocks nor opcodes and they don't have fields but it's easiest to just chuck them in here
-                           cast_string_num,
-                           cast_string_bool,
-                           cast_string_any,
-                           cast_bool_num,
-                           cast_bool_string,
-                           cast_bool_any,
-                           cast_num_string,
-                           cast_num_bool,
-                           cast_num_any,
-                           cast_any_string,
-                           cast_any_bool,
-                           cast_any_num,*/
+    text {
+        TEXT: String,
+    }, /*
+       // these casting functions aren't blocks nor opcodes and they don't have fields but it's easiest to just chuck them in here
+       cast_string_num,
+       cast_string_bool,
+       cast_string_any,
+       cast_bool_num,
+       cast_bool_string,
+       cast_bool_any,
+       cast_num_string,
+       cast_num_bool,
+       cast_num_any,
+       cast_any_string,
+       cast_any_bool,
+       cast_any_num,*/
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -371,7 +406,9 @@ impl IrOpcode {
             operator_join => BlockDescriptor::new(vec![Any, Any], Text),
             operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
             operator_length => BlockDescriptor::new(vec![Any], Number),
-            control_if { .. } | control_if_else { .. } => BlockDescriptor::new(vec![Boolean], Stack),
+            control_if { .. } | control_if_else { .. } => {
+                BlockDescriptor::new(vec![Boolean], Stack)
+            }
             _ => todo!("{:?}", &self),
         }
     }
@@ -459,7 +496,12 @@ pub fn steps_from_top_block(
     context: &ThreadContext,
 ) -> Vec<Step> {
     let mut ops: Vec<IrBlock> = vec![];
-    fn add_block(block: Block, blocks: &BTreeMap<String, Block>, ops: &mut Vec<IrBlock>, context: &ThreadContext) {
+    fn add_block(
+        block: Block,
+        blocks: &BTreeMap<String, Block>,
+        ops: &mut Vec<IrBlock>,
+        context: &ThreadContext,
+    ) {
         match block {
             Block::Normal { block_info, .. } => {
                 for (_name, input) in block_info.inputs.clone() {
@@ -628,7 +670,7 @@ pub fn steps_from_top_block(
             ),
         };
     }
-    add_block(top.clone(), &blocks, &mut ops, context);
+    add_block(top, blocks, &mut ops, context);
     let mut type_stack: Vec<(usize, BlockType)> = vec![];
     let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
     for (index, op) in ops.iter().enumerate() {
