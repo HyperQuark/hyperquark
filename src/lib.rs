@@ -1,5 +1,4 @@
 #![cfg_attr(not(test), no_std)]
-#![recursion_limit = "256"]
 
 #[macro_use]
 extern crate alloc;
