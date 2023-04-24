@@ -2,9 +2,9 @@ use crate::ir::{
     BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
 };
 use alloc::collections::BTreeMap;
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::rc::Rc;
 use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType, ExportKind,
     ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg, MemorySection,
@@ -12,7 +12,10 @@ use wasm_encoder::{
 };
 
 impl Step {
-    fn as_function(&self, step_counter Cell<u32>, string_consts: &mut Vec<String>) -> Function {
+    fn as_function<F>(&self, step_counter: F, string_consts: &mut Vec<String>) -> Function
+    where
+        F: FnOnce() -> u32,
+    {
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
             ValType::F64,
@@ -20,6 +23,7 @@ impl Step {
             ValType::I32,
             ValType::I32,
         ];
+        let next_step_index = step_counter();
         #[cfg(test)]
         println!("next step is {}", next_step_index);
         let mut func = Function::new_with_locals_types(locals);
@@ -825,12 +829,22 @@ impl From<IrProject> for WebWasmFile {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
+        let step_index = 0;
+        let next_step_index = || {
+            step_index += 1;
+            step_index
+        };
+
         for thread in project.threads {
-            let first_index = thread.steps()[0].index();
-            thread_indices.push((thread.start().clone(), *first_index));
+            let first_index = next_step_index();
+            thread_indices.push((thread.start().clone(), first_index));
             for (i, step) in thread.steps().iter().enumerate() {
                 let mut func = step.as_function(
-                    (step.index() + 1) * (i < thread.steps().len() - 1) as u32,
+                    if i < thread.steps().len() - 1 {
+                        || 0
+                    } else {
+                        next_step_index
+                    },
                     &mut string_consts,
                 );
                 func.instruction(&Instruction::End);
