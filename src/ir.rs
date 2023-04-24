@@ -5,16 +5,17 @@ use crate::sb3::{
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use alloc::rc::Rc;
 
 pub struct IrProject {
     pub threads: Vec<Thread>,
-    pub vars: Vec<IrVar>,
+    pub vars: Rc<Vec<IrVar>>,
     pub targets: Vec<String>,
 }
 
 impl From<Sb3Project> for IrProject {
     fn from(sb3: Sb3Project) -> IrProject {
-        let vars: Vec<IrVar> = sb3
+        let vars: Rc<Vec<IrVar>> = Rc::new(sb3
             .targets
             .iter()
             .flat_map(|target| {
@@ -27,7 +28,7 @@ impl From<Sb3Project> for IrProject {
                     }
                 })
             })
-            .collect();
+            .collect());
 
         let mut step_func_count = 1u32;
         let mut threads: Vec<Thread> = vec![];
@@ -45,7 +46,7 @@ impl From<Sb3Project> for IrProject {
                         None => false,
                     })
             {
-                let context = ThreadContext {
+                let context = Rc::new(ThreadContext {
                     target_index: target_index.try_into().unwrap(),
                     dbg: matches!(
                         target.comments.clone().iter().find(
@@ -54,8 +55,8 @@ impl From<Sb3Project> for IrProject {
                         ),
                         Some(_)
                     ),
-                    vars: vars.clone(),
-                };
+                    vars: Rc::clone(&vars),
+                });
                 let thread = Thread::from_hat(
                     block.clone(),
                     target.blocks.clone(),
@@ -453,26 +454,21 @@ pub enum ThreadStart {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Step {
     opcodes: Vec<IrBlock>,
-    index: u32,
-    context: ThreadContext,
+    context: Rc<ThreadContext>,
 }
 
 impl Step {
-    pub fn new(opcodes: Vec<IrBlock>, index: u32, context: ThreadContext) -> Step {
+    pub fn new(opcodes: Vec<IrBlock>, context: Rc<ThreadContext>) -> Step {
         Step {
             opcodes,
-            index,
             context,
         }
     }
     pub fn opcodes(&self) -> &Vec<IrBlock> {
         &self.opcodes
     }
-    pub fn index(&self) -> &u32 {
-        &self.index
-    }
-    pub fn context(&self) -> &ThreadContext {
-        &self.context
+    pub fn context(&self) -> Rc<ThreadContext> {
+        Rc::clone(&self.context)
     }
 }
 
@@ -480,7 +476,7 @@ impl Step {
 pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
-    pub vars: Vec<IrVar>, // hopefully there can't be two variables with the same is in differwnt sprites, otherwise this will break horrendously
+    pub vars: Rc<Vec<IrVar>>, // hopefully there can't be two variables with the same is in differwnt sprites, otherwise this will break horrendously
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -493,14 +489,14 @@ pub fn steps_from_top_block(
     top: Block,
     blocks: &BTreeMap<String, Block>,
     first_func_index: u32,
-    context: &ThreadContext,
+    context: Rc<ThreadContext>,
 ) -> Vec<Step> {
     let mut ops: Vec<IrBlock> = vec![];
     fn add_block(
         block: Block,
         blocks: &BTreeMap<String, Block>,
         ops: &mut Vec<IrBlock>,
-        context: &ThreadContext,
+        context: Rc<ThreadContext>,
     ) {
         match block {
             Block::Normal { block_info, .. } => {
@@ -511,11 +507,11 @@ pub fn steps_from_top_block(
                                 match block {
                                     BlockArrayOrId::Id(id) => {
                                         if let Some(actual_block) = blocks.get(&id) {
-                                            add_block(actual_block.clone(), blocks, ops, context);
+                                            add_block(actual_block.clone(), blocks, ops, Rc::clone(&context));
                                         }
                                     }
                                     BlockArrayOrId::Array(arr) => {
-                                        add_block(Block::Special(arr), blocks, ops, context);
+                                        add_block(Block::Special(arr), blocks, ops, Rc::clone(&context));
                                     }
                                 }
                             }
@@ -600,7 +596,7 @@ pub fn steps_from_top_block(
                         };
                         let if_branch = blocks.get(&if_branch_id).expect("control_if SUBSTACK input block doesn't exist (E047)");
                         // the step ids will be changed later, once we know how many steps are in the thread
-                        vec![IrOpcode::control_if { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, 0, context) }]
+                        vec![IrOpcode::control_if { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, 0, Rc::clone(&context)) }]
                     },
                     BlockOpcode::control_if_else => {
                         let BlockArrayOrId::Id(if_branch_id) = match block_info.inputs.get("SUBSTACK").expect("missing input SUBSTACK for if_else block (E048)") {
@@ -616,14 +612,14 @@ pub fn steps_from_top_block(
                         };
                         let else_branch = blocks.get(&else_branch_id).expect("control_if_else SUBSTACK input block doesn't exist (E058)");
                         // the step ids will be changed later, once we know how many steps are in the thread
-                        vec![IrOpcode::control_if_else { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, 0, context), SUBSTACK2: steps_from_top_block(else_branch.clone(), blocks, 0, context) }]
+                        vec![IrOpcode::control_if_else { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, 0, Rc::clone(&context)), SUBSTACK2: steps_from_top_block(else_branch.clone(), blocks, 0, Rc::clone(&context)) }]
                     },
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
 
                 if let Some(next_id) = &block_info.next {
                     if let Some(next_block) = blocks.get(next_id) {
-                        add_block(next_block.clone(), blocks, ops, context);
+                        add_block(next_block.clone(), blocks, ops, Rc::clone(&context));
                     }
                 }
             }
@@ -670,7 +666,7 @@ pub fn steps_from_top_block(
             ),
         };
     }
-    add_block(top, blocks, &mut ops, context);
+    add_block(top, blocks, &mut ops, Rc::clone(&context));
     let mut type_stack: Vec<(usize, BlockType)> = vec![];
     let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
     for (index, op) in ops.iter().enumerate() {
@@ -707,8 +703,7 @@ pub fn steps_from_top_block(
                 .expect("step count out of bounds (E004)");
             steps.push(Step::new(
                 this_step_ops.clone(),
-                first_func_index + steps_len,
-                context.clone(),
+                Rc::clone(&context),
             ));
             this_step_ops = vec![];
         }
@@ -730,12 +725,12 @@ impl Thread {
         hat: Block,
         blocks: BTreeMap<String, Block>,
         first_func_index: u32,
-        context: ThreadContext,
+        context: Rc<ThreadContext>,
     ) -> Thread {
         let steps = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
                 if let Some(next_block) = blocks.get(next_id) {
-                    steps_from_top_block(next_block.clone(), &blocks, first_func_index, &context)
+                    steps_from_top_block(next_block.clone(), &blocks, first_func_index, Rc::clone(&context))
                 } else {
                     unreachable!();
                 }

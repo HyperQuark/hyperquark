@@ -4,6 +4,7 @@ use crate::ir::{
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use alloc::rc::Rc;
 use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType, ExportKind,
     ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg, MemorySection,
@@ -11,7 +12,7 @@ use wasm_encoder::{
 };
 
 impl Step {
-    fn as_function(&self, next_step_index: u32, string_consts: &mut Vec<String>) -> Function {
+    fn as_function(&self, step_counter Cell<u32>, string_consts: &mut Vec<String>) -> Function {
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
             ValType::F64,
@@ -107,7 +108,7 @@ impl Step {
 
 fn instructions(
     op: &IrBlock,
-    context: &ThreadContext,
+    context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
 ) -> Vec<Instruction<'static>> {
     use Instruction::*;
