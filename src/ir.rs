@@ -30,7 +30,6 @@ impl From<Sb3Project> for IrProject {
             })
             .collect());
 
-        let mut step_func_count = 1u32;
         let mut threads: Vec<Thread> = vec![];
         for (target_index, target) in sb3.targets.iter().enumerate() {
             for (id, block) in
@@ -60,11 +59,8 @@ impl From<Sb3Project> for IrProject {
                 let thread = Thread::from_hat(
                     block.clone(),
                     target.blocks.clone(),
-                    step_func_count,
                     context,
                 );
-                step_func_count +=
-                    u32::try_from(thread.steps.len()).expect("steps len out of bounds (E042)");
                 threads.push(thread);
             }
         }
@@ -488,7 +484,6 @@ pub struct Thread {
 pub fn steps_from_top_block(
     top: Block,
     blocks: &BTreeMap<String, Block>,
-    first_func_index: u32,
     context: Rc<ThreadContext>,
 ) -> Vec<Step> {
     let mut ops: Vec<IrBlock> = vec![];
@@ -595,8 +590,7 @@ pub fn steps_from_top_block(
                             panic!("Expected non-array input to SUBSTACK input for control_if (E046)");
                         };
                         let if_branch = blocks.get(&if_branch_id).expect("control_if SUBSTACK input block doesn't exist (E047)");
-                        // the step ids will be changed later, once we know how many steps are in the thread
-                        vec![IrOpcode::control_if { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, 0, Rc::clone(&context)) }]
+                        vec![IrOpcode::control_if { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, Rc::clone(&context)) }]
                     },
                     BlockOpcode::control_if_else => {
                         let BlockArrayOrId::Id(if_branch_id) = match block_info.inputs.get("SUBSTACK").expect("missing input SUBSTACK for if_else block (E048)") {
@@ -611,8 +605,7 @@ pub fn steps_from_top_block(
                             panic!("Expected non-array input to SUBSTACK2 input for control_if_else (E057)");
                         };
                         let else_branch = blocks.get(&else_branch_id).expect("control_if_else SUBSTACK input block doesn't exist (E058)");
-                        // the step ids will be changed later, once we know how many steps are in the thread
-                        vec![IrOpcode::control_if_else { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, 0, Rc::clone(&context)), SUBSTACK2: steps_from_top_block(else_branch.clone(), blocks, 0, Rc::clone(&context)) }]
+                        vec![IrOpcode::control_if_else { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, Rc::clone(&context)), SUBSTACK2: steps_from_top_block(else_branch.clone(), blocks, Rc::clone(&context)) }]
                     },
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
@@ -697,10 +690,6 @@ pub fn steps_from_top_block(
     for op in ops {
         this_step_ops.push(op.clone());
         if op.does_request_redraw() && !(*op.opcode() == IrOpcode::looks_say && context.dbg) {
-            let steps_len: u32 = steps
-                .len()
-                .try_into()
-                .expect("step count out of bounds (E004)");
             steps.push(Step::new(
                 this_step_ops.clone(),
                 Rc::clone(&context),
@@ -724,13 +713,12 @@ impl Thread {
     pub fn from_hat(
         hat: Block,
         blocks: BTreeMap<String, Block>,
-        first_func_index: u32,
         context: Rc<ThreadContext>,
     ) -> Thread {
         let steps = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
                 if let Some(next_block) = blocks.get(next_id) {
-                    steps_from_top_block(next_block.clone(), &blocks, first_func_index, Rc::clone(&context))
+                    steps_from_top_block(next_block.clone(), &blocks, Rc::clone(&context))
                 } else {
                     unreachable!();
                 }

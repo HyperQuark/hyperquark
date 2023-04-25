@@ -5,6 +5,7 @@ use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::cell::Cell;
 use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType, ExportKind,
     ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg, MemorySection,
@@ -12,9 +13,7 @@ use wasm_encoder::{
 };
 
 impl Step {
-    fn as_function<F>(&self, step_counter: F, string_consts: &mut Vec<String>) -> Function
-    where
-        F: FnOnce() -> u32,
+    fn as_function(&self, step_counter: &mut dyn FnMut() -> u32, string_consts: &mut Vec<String>) -> Function
     {
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
@@ -281,6 +280,15 @@ fn instructions(
             "e ^" => vec![Call(func_indices::MATHOP_POW_E)],
             "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
             _ => panic!("invalid OPERATOR field (E041)"),
+        },
+        control_if { SUBSTACK } => {
+            let mut instrs = vec![If(BlockType::Emoty)];
+            instrs.append(SUBSTACK[0].iter().map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            instrs.push(End);
+            instrs
+        },
+        control_if_else { SUBSTACK, SUBSTACK2 } => {
+            todo!();
         },
         _ => todo!(),
     };
@@ -829,28 +837,29 @@ impl From<IrProject> for WebWasmFile {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let step_index = 0;
-        let next_step_index = || {
-            step_index += 1;
-            step_index
+        let step_index = Cell::new(0);
+        let mut next_step_index = || {
+            step_index.set(step_index.get() + 1);
+            step_index.get()
         };
+        let mut zero_func = || 0;
 
         for thread in project.threads {
-            let first_index = next_step_index();
+            let first_index = step_index.get() + 1;
             thread_indices.push((thread.start().clone(), first_index));
             for (i, step) in thread.steps().iter().enumerate() {
                 let mut func = step.as_function(
                     if i < thread.steps().len() - 1 {
-                        || 0
+                        &mut next_step_index
                     } else {
-                        next_step_index
+                        &mut zero_func
                     },
                     &mut string_consts,
                 );
                 func.instruction(&Instruction::End);
                 functions.function(types::I32_I32);
                 code.function(&func);
-                step_indices.push(*step.index());
+                step_indices.push(step_index.get());
             }
         }
 
