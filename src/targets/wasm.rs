@@ -282,13 +282,22 @@ fn instructions(
             _ => panic!("invalid OPERATOR field (E041)"),
         },
         control_if { SUBSTACK } => {
-            let mut instrs = vec![If(BlockType::Emoty)];
-            instrs.append(SUBSTACK[0].iter().map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            dbg!(&SUBSTACK);
+            let mut instrs = vec![If(BlockType::Empty)];
+            instrs.append(&mut SUBSTACK[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
             instrs.push(End);
+            dbg!("control_if", &instrs);
             instrs
+            //vec![Drop]
         },
         control_if_else { SUBSTACK, SUBSTACK2 } => {
-            todo!();
+            let mut instrs = vec![If(BlockType::Empty)];
+            instrs.append(&mut SUBSTACK[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            instrs.push(Else);
+            instrs.append(&mut SUBSTACK2[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            instrs.push(End);
+            instrs
+           // vec![Drop]
         },
         _ => todo!(),
     };
