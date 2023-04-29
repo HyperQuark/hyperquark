@@ -659,6 +659,7 @@ pub fn steps_from_top_block(
             ),
         };
     }
+    //dbg!(&top.block_info());
     add_block(top, blocks, &mut ops, Rc::clone(&context));
     let mut type_stack: Vec<(usize, BlockType)> = vec![];
     let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
@@ -697,6 +698,10 @@ pub fn steps_from_top_block(
             this_step_ops = vec![];
         }
     }
+    steps.push(Step::new(
+        this_step_ops.clone(),
+        Rc::clone(&context),
+    ));
     steps
 }
 

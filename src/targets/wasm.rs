@@ -282,16 +282,14 @@ fn instructions(
             _ => panic!("invalid OPERATOR field (E041)"),
         },
         control_if { SUBSTACK } => {
-            dbg!(&SUBSTACK);
-            let mut instrs = vec![If(BlockType::Empty)];
+            let mut instrs = vec![I32WrapI64, If(BlockType::Empty)];
             instrs.append(&mut SUBSTACK[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
             instrs.push(End);
-            dbg!("control_if", &instrs);
             instrs
             //vec![Drop]
         },
         control_if_else { SUBSTACK, SUBSTACK2 } => {
-            let mut instrs = vec![If(BlockType::Empty)];
+            let mut instrs = vec![I32WrapI64, If(BlockType::Empty)];
             instrs.append(&mut SUBSTACK[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
             instrs.push(Else);
             instrs.append(&mut SUBSTACK2[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
@@ -861,6 +859,7 @@ impl From<IrProject> for WebWasmFile {
                     if i < thread.steps().len() - 1 {
                         &mut next_step_index
                     } else {
+                        dbg!("zero");
                         &mut zero_func
                     },
                     &mut string_consts,
