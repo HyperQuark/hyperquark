@@ -3,9 +3,9 @@ use crate::sb3::{
     Block, BlockArray, BlockArrayOrId, BlockOpcode, Field, Input, Sb3Project, VarVal, VariableInfo,
 };
 use alloc::collections::BTreeMap;
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::rc::Rc;
 
 pub struct IrProject {
     pub threads: Vec<Thread>,
@@ -15,20 +15,21 @@ pub struct IrProject {
 
 impl From<Sb3Project> for IrProject {
     fn from(sb3: Sb3Project) -> IrProject {
-        let vars: Rc<Vec<IrVar>> = Rc::new(sb3
-            .targets
-            .iter()
-            .flat_map(|target| {
-                target.variables.iter().map(|(id, info)| match info {
-                    VariableInfo::LocalVar(name, val) => {
-                        IrVar::new(id.clone(), name.clone(), val.clone(), false)
-                    }
-                    VariableInfo::CloudVar(name, val, is_cloud) => {
-                        IrVar::new(id.clone(), name.clone(), val.clone(), *is_cloud)
-                    }
+        let vars: Rc<Vec<IrVar>> = Rc::new(
+            sb3.targets
+                .iter()
+                .flat_map(|target| {
+                    target.variables.iter().map(|(id, info)| match info {
+                        VariableInfo::LocalVar(name, val) => {
+                            IrVar::new(id.clone(), name.clone(), val.clone(), false)
+                        }
+                        VariableInfo::CloudVar(name, val, is_cloud) => {
+                            IrVar::new(id.clone(), name.clone(), val.clone(), *is_cloud)
+                        }
+                    })
                 })
-            })
-            .collect());
+                .collect(),
+        );
 
         let mut threads: Vec<Thread> = vec![];
         for (target_index, target) in sb3.targets.iter().enumerate() {
@@ -56,11 +57,7 @@ impl From<Sb3Project> for IrProject {
                     ),
                     vars: Rc::clone(&vars),
                 });
-                let thread = Thread::from_hat(
-                    block.clone(),
-                    target.blocks.clone(),
-                    context,
-                );
+                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), context);
                 threads.push(thread);
             }
         }
@@ -455,10 +452,7 @@ pub struct Step {
 
 impl Step {
     pub fn new(opcodes: Vec<IrBlock>, context: Rc<ThreadContext>) -> Step {
-        Step {
-            opcodes,
-            context,
-        }
+        Step { opcodes, context }
     }
     pub fn opcodes(&self) -> &Vec<IrBlock> {
         &self.opcodes
@@ -502,11 +496,21 @@ pub fn steps_from_top_block(
                                 match block {
                                     BlockArrayOrId::Id(id) => {
                                         if let Some(actual_block) = blocks.get(&id) {
-                                            add_block(actual_block.clone(), blocks, ops, Rc::clone(&context));
+                                            add_block(
+                                                actual_block.clone(),
+                                                blocks,
+                                                ops,
+                                                Rc::clone(&context),
+                                            );
                                         }
                                     }
                                     BlockArrayOrId::Array(arr) => {
-                                        add_block(Block::Special(arr), blocks, ops, Rc::clone(&context));
+                                        add_block(
+                                            Block::Special(arr),
+                                            blocks,
+                                            ops,
+                                            Rc::clone(&context),
+                                        );
                                     }
                                 }
                             }
@@ -691,17 +695,11 @@ pub fn steps_from_top_block(
     for op in ops {
         this_step_ops.push(op.clone());
         if op.does_request_redraw() && !(*op.opcode() == IrOpcode::looks_say && context.dbg) {
-            steps.push(Step::new(
-                this_step_ops.clone(),
-                Rc::clone(&context),
-            ));
+            steps.push(Step::new(this_step_ops.clone(), Rc::clone(&context)));
             this_step_ops = vec![];
         }
     }
-    steps.push(Step::new(
-        this_step_ops.clone(),
-        Rc::clone(&context),
-    ));
+    steps.push(Step::new(this_step_ops.clone(), Rc::clone(&context)));
     steps
 }
 

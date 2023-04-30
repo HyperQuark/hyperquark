@@ -13,8 +13,12 @@ use wasm_encoder::{
 };
 
 impl Step {
-    fn as_function(&self, step_counter: &mut dyn FnMut() -> u32, string_consts: &mut Vec<String>) -> Function
-    {
+    fn as_functions(
+        &self,
+        step_counter: Rc<Cell<u32>>,
+        has_next_step: bool,
+        string_consts: &mut Vec<String>,
+    ) -> Vec<(Function, u32)> {
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
             ValType::F64,
@@ -22,9 +26,7 @@ impl Step {
             ValType::I32,
             ValType::I32,
         ];
-        let next_step_index = step_counter();
-        #[cfg(test)]
-        println!("next step is {}", next_step_index);
+        let this_step_index = step_counter.get();
         let mut func = Function::new_with_locals_types(locals);
         //func.instruction(&Instruction::LocalGet(0));
         //func.instruction(&Instruction::F64ConvertI32S);
@@ -44,7 +46,9 @@ impl Step {
             .len()
             .try_into()
             .expect("vars.len() out of bounds (E032)");
-        if next_step_index > 0 {
+        if has_next_step {
+            step_counter.set(step_counter.get() + 1);
+            let next_step_index = step_counter.get();
             func.instruction(&Instruction::LocalGet(0));
             func.instruction(&Instruction::I32Const(
                 next_step_index
@@ -105,7 +109,7 @@ impl Step {
             func.instruction(&Instruction::I32Const(0));
         }
         //func.instruction(&Instruction::End);
-        func
+        vec![(func, this_step_index)]
     }
 }
 
@@ -283,20 +287,41 @@ fn instructions(
         },
         control_if { SUBSTACK } => {
             let mut instrs = vec![I32WrapI64, If(BlockType::Empty)];
-            instrs.append(&mut SUBSTACK[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            instrs.append(
+                &mut SUBSTACK[0]
+                    .opcodes()
+                    .iter()
+                    .flat_map(|o| instructions(o, Rc::clone(&context), string_consts))
+                    .collect(),
+            );
             instrs.push(End);
             instrs
             //vec![Drop]
-        },
-        control_if_else { SUBSTACK, SUBSTACK2 } => {
+        }
+        control_if_else {
+            SUBSTACK,
+            SUBSTACK2,
+        } => {
             let mut instrs = vec![I32WrapI64, If(BlockType::Empty)];
-            instrs.append(&mut SUBSTACK[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            instrs.append(
+                &mut SUBSTACK[0]
+                    .opcodes()
+                    .iter()
+                    .flat_map(|o| instructions(o, Rc::clone(&context), string_consts))
+                    .collect(),
+            );
             instrs.push(Else);
-            instrs.append(&mut SUBSTACK2[0].opcodes().iter().flat_map(|o| instructions(o, Rc::clone(&context), string_consts)).collect());
+            instrs.append(
+                &mut SUBSTACK2[0]
+                    .opcodes()
+                    .iter()
+                    .flat_map(|o| instructions(o, Rc::clone(&context), string_consts))
+                    .collect(),
+            );
             instrs.push(End);
             instrs
-           // vec![Drop]
-        },
+            // vec![Drop]
+        }
         _ => todo!(),
     };
     instructions.append(&mut match (op.actual_output(), op.expected_output()) {
@@ -844,30 +869,24 @@ impl From<IrProject> for WebWasmFile {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let step_index = Cell::new(0);
-        let mut next_step_index = || {
-            step_index.set(step_index.get() + 1);
-            step_index.get()
-        };
-        let mut zero_func = || 0;
+        let step_index = Rc::new(Cell::new(0));
 
         for thread in project.threads {
-            let first_index = step_index.get() + 1;
+            step_index.set(step_index.get() + 1);
+            let first_index = step_index.get();
             thread_indices.push((thread.start().clone(), first_index));
             for (i, step) in thread.steps().iter().enumerate() {
-                let mut func = step.as_function(
-                    if i < thread.steps().len() - 1 {
-                        &mut next_step_index
-                    } else {
-                        dbg!("zero");
-                        &mut zero_func
-                    },
+                let funcs = step.as_functions(
+                    Rc::clone(&step_index),
+                    i < thread.steps().len() - 1,
                     &mut string_consts,
                 );
-                func.instruction(&Instruction::End);
-                functions.function(types::I32_I32);
-                code.function(&func);
-                step_indices.push(step_index.get());
+                for (mut func, idx) in funcs {
+                    func.instruction(&Instruction::End);
+                    functions.function(types::I32_I32);
+                    code.function(&func);
+                    step_indices.push(idx);
+                }
             }
         }
 
