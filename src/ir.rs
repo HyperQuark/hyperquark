@@ -466,7 +466,7 @@ impl Step {
 pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
-    pub vars: Rc<Vec<IrVar>>, // hopefully there can't be two variables with the same is in differwnt sprites, otherwise this will break horrendously
+    pub vars: Rc<Vec<IrVar>>, // hopefully there can't be two variables with the same id in differwnt sprites, otherwise this will break horrendously
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -475,40 +475,45 @@ pub struct Thread {
     steps: Vec<Step>,
 }
 
-pub fn steps_from_top_block(
-    top: Block,
-    blocks: &BTreeMap<String, Block>,
-    context: Rc<ThreadContext>,
-) -> Vec<Step> {
-    let mut ops: Vec<IrBlock> = vec![];
+trait IrBlockVec {
     fn add_block(
+        &mut self,
         block: Block,
         blocks: &BTreeMap<String, Block>,
-        ops: &mut Vec<IrBlock>,
+        context: Rc<ThreadContext>,
+    );
+}
+
+impl IrBlockVec for Vec<IrBlock> {
+    fn add_block(
+        &mut self,
+        block: Block,
+        blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
     ) {
         match block {
             Block::Normal { block_info, .. } => {
-                for (_name, input) in block_info.inputs.clone() {
+                for (name, input) in block_info.inputs.clone() {
+                    if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
+                        continue;
+                    }
                     match input {
                         Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
                             if let Some(block) = maybe_block {
                                 match block {
                                     BlockArrayOrId::Id(id) => {
                                         if let Some(actual_block) = blocks.get(&id) {
-                                            add_block(
+                                            self.add_block(
                                                 actual_block.clone(),
                                                 blocks,
-                                                ops,
                                                 Rc::clone(&context),
                                             );
                                         }
                                     }
                                     BlockArrayOrId::Array(arr) => {
-                                        add_block(
+                                        self.add_block(
                                             Block::Special(arr),
                                             blocks,
-                                            ops,
                                             Rc::clone(&context),
                                         );
                                     }
@@ -518,7 +523,7 @@ pub fn steps_from_top_block(
                     }
                 }
 
-                ops.append(&mut (match block_info.opcode {
+                self.append(&mut (match block_info.opcode {
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
                     BlockOpcode::looks_think => vec![IrOpcode::looks_think],
                     BlockOpcode::operator_add => vec![IrOpcode::operator_add],
@@ -608,19 +613,18 @@ pub fn steps_from_top_block(
                         }.clone().expect("missing input SUBSTACK2 for if_else block (E056)") else {
                             panic!("Expected non-array input to SUBSTACK2 input for control_if_else (E057)");
                         };
-                        let else_branch = blocks.get(&else_branch_id).expect("control_if_else SUBSTACK input block doesn't exist (E058)");
+                        let else_branch = blocks.get(&else_branch_id).expect("control_if_else SUBSTACK2 input block doesn't exist (E058)");
                         vec![IrOpcode::control_if_else { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, Rc::clone(&context)), SUBSTACK2: steps_from_top_block(else_branch.clone(), blocks, Rc::clone(&context)) }]
                     },
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
-
                 if let Some(next_id) = &block_info.next {
                     if let Some(next_block) = blocks.get(next_id) {
-                        add_block(next_block.clone(), blocks, ops, Rc::clone(&context));
+                        self.add_block(next_block.clone(), blocks, Rc::clone(&context));
                     }
                 }
             }
-            Block::Special(a) => ops.push(
+            Block::Special(a) => self.push(
                 match a {
                     BlockArray::NumberOrAngle(ty, value) => match ty {
                         4 => IrOpcode::math_number { NUM: value },
@@ -663,8 +667,15 @@ pub fn steps_from_top_block(
             ),
         };
     }
-    //dbg!(&top.block_info());
-    add_block(top, blocks, &mut ops, Rc::clone(&context));
+}
+
+pub fn steps_from_top_block(
+    top: Block,
+    blocks: &BTreeMap<String, Block>,
+    context: Rc<ThreadContext>,
+) -> Vec<Step> {
+    let mut ops: Vec<IrBlock> = vec![];
+    ops.add_block(top, blocks, Rc::clone(&context));
     let mut type_stack: Vec<(usize, BlockType)> = vec![];
     let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
     for (index, op) in ops.iter().enumerate() {
