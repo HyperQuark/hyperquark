@@ -7,16 +7,15 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::Cell;
 use wasm_encoder::{
-    BlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType, ExportKind,
-    ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg, MemorySection,
-    MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
+    BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType,
+    ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg,
+    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
-
+/*
 impl Step {
     fn as_functions(
         &self,
         step_counter: Rc<Cell<u32>>,
-        has_next_step: bool,
         string_consts: &mut Vec<String>,
     ) -> Vec<(Function, u32)> {
         let locals = vec![
@@ -33,7 +32,8 @@ impl Step {
         //func.instruction(&Instruction::F64ReinterpretI64);
         //func.instruction(&Instruction::Call(func_indices::DBG_LOG));
         for op in self.opcodes() {
-            for instr in instructions(op, self.context(), string_consts) {
+            let (is, fs) = instructions(op, self.context(), string_consts);
+            for instr in is {
                 func.instruction(&instr);
             }
         }
@@ -46,7 +46,7 @@ impl Step {
             .len()
             .try_into()
             .expect("vars.len() out of bounds (E032)");
-        if has_next_step {
+        if self.next.is_some() {
             step_counter.set(step_counter.get() + 1);
             let next_step_index = step_counter.get();
             func.instruction(&Instruction::LocalGet(0));
@@ -117,10 +117,11 @@ fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
-) -> Vec<Instruction<'static>> {
+) -> (Vec<Instruction<'static>>, Vec<(Function, u32)>) {
     use Instruction::*;
     use IrBlockType::*;
     use IrOpcode::*;
+    let mut extra_funcs = vec![];
     let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {
@@ -285,8 +286,8 @@ fn instructions(
             "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
             _ => panic!("invalid OPERATOR field (E041)"),
         },
-        control_if { SUBSTACK } => {
-            let mut instrs = vec![I32WrapI64, If(BlockType::Empty)];
+        control_if { if_true } => {
+            let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
             instrs.append(
                 &mut SUBSTACK[0]
                     .opcodes()
@@ -299,10 +300,10 @@ fn instructions(
             //vec![Drop]
         }
         control_if_else {
-            SUBSTACK,
-            SUBSTACK2,
+            if_true,
+            if_false,
         } => {
-            let mut instrs = vec![I32WrapI64, If(BlockType::Empty)];
+            let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
             instrs.append(
                 &mut SUBSTACK[0]
                     .opcodes()
@@ -365,8 +366,8 @@ fn instructions(
             }),
         ]);
     }
-    instructions
-}
+    (instructions, extra_funcs)
+}*/
 
 pub struct WebWasmFile {
     js_string: String,
@@ -718,7 +719,7 @@ impl From<IrProject> for WebWasmFile {
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2string_func.instruction(&Instruction::I32Eq);
-        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2string_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_EXTERNREF,
         )));
         any2string_func.instruction(&Instruction::LocalGet(1));
@@ -727,7 +728,7 @@ impl From<IrProject> for WebWasmFile {
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2string_func.instruction(&Instruction::I32Eq);
-        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2string_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_EXTERNREF,
         )));
         any2string_func.instruction(&Instruction::LocalGet(1));
@@ -739,7 +740,7 @@ impl From<IrProject> for WebWasmFile {
         any2string_func.instruction(&Instruction::LocalGet(0));
         any2string_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2string_func.instruction(&Instruction::I32Eq);
-        any2string_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2string_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_EXTERNREF,
         )));
         any2string_func.instruction(&Instruction::LocalGet(1));
@@ -758,7 +759,7 @@ impl From<IrProject> for WebWasmFile {
         any2float_func.instruction(&Instruction::LocalGet(0));
         any2float_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2float_func.instruction(&Instruction::I32Eq);
-        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2float_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_F64,
         )));
         any2float_func.instruction(&Instruction::LocalGet(1));
@@ -767,7 +768,7 @@ impl From<IrProject> for WebWasmFile {
         any2float_func.instruction(&Instruction::LocalGet(0));
         any2float_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2float_func.instruction(&Instruction::I32Eq);
-        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2float_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_F64,
         )));
         any2float_func.instruction(&Instruction::LocalGet(1));
@@ -780,7 +781,7 @@ impl From<IrProject> for WebWasmFile {
         any2float_func.instruction(&Instruction::LocalGet(0));
         any2float_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2float_func.instruction(&Instruction::I32Eq);
-        any2float_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2float_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_F64,
         )));
         any2float_func.instruction(&Instruction::LocalGet(1));
@@ -798,7 +799,7 @@ impl From<IrProject> for WebWasmFile {
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2bool_func.instruction(&Instruction::I32Eq);
-        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2bool_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_I64,
         )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
@@ -810,7 +811,7 @@ impl From<IrProject> for WebWasmFile {
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2bool_func.instruction(&Instruction::I32Eq);
-        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2bool_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_I64,
         )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
@@ -820,7 +821,7 @@ impl From<IrProject> for WebWasmFile {
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2bool_func.instruction(&Instruction::I32Eq);
-        any2bool_func.instruction(&Instruction::If(BlockType::FunctionType(
+        any2bool_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
             types::NOPARAM_I64,
         )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
@@ -840,7 +841,7 @@ impl From<IrProject> for WebWasmFile {
         tbl_add_string_func.instruction(&Instruction::LocalTee(1));
         tbl_add_string_func.instruction(&Instruction::I32Const(-1));
         tbl_add_string_func.instruction(&Instruction::I32Eq);
-        tbl_add_string_func.instruction(&Instruction::If(BlockType::Empty));
+        tbl_add_string_func.instruction(&Instruction::If(WasmBlockType::Empty));
         tbl_add_string_func.instruction(&Instruction::Unreachable);
         tbl_add_string_func.instruction(&Instruction::End);
         tbl_add_string_func.instruction(&Instruction::LocalGet(1));
@@ -871,7 +872,7 @@ impl From<IrProject> for WebWasmFile {
 
         let step_index = Rc::new(Cell::new(0));
 
-        for thread in project.threads {
+        /* for thread in project.threads {
             step_index.set(step_index.get() + 1);
             let first_index = step_index.get();
             thread_indices.push((thread.start().clone(), first_index));
@@ -888,7 +889,7 @@ impl From<IrProject> for WebWasmFile {
                     step_indices.push(idx);
                 }
             }
-        }
+        }*/
 
         let mut thread_start_counts: BTreeMap<ThreadStart, u32> = Default::default();
 
@@ -974,7 +975,7 @@ impl From<IrProject> for WebWasmFile {
             tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Sub);
             tick_func.instruction(&Instruction::LocalSet(1));
-            tick_func.instruction(&Instruction::Loop(BlockType::Empty));
+            tick_func.instruction(&Instruction::Loop(WasmBlockType::Empty));
 
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
@@ -988,7 +989,7 @@ impl From<IrProject> for WebWasmFile {
                 table: table_indices::STEP_FUNCS,
             });
 
-            tick_func.instruction(&Instruction::If(BlockType::Empty));
+            tick_func.instruction(&Instruction::If(WasmBlockType::Empty));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Add);

@@ -1,12 +1,14 @@
 // intermediate representation
 use crate::sb3::{
-    Block, BlockArray, BlockArrayOrId, BlockOpcode, Field, Input, Sb3Project, VarVal, VariableInfo,
+    Block, BlockArray, BlockArrayOrId, BlockMap, BlockOpcode, Field, Input, Sb3Project, VarVal,
+    VariableInfo,
 };
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[derive(Debug)]
 pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<Vec<IrVar>>,
@@ -88,11 +90,11 @@ pub enum IrOpcode {
     control_wait,
     control_wait_until,
     control_if {
-        SUBSTACK: Vec<Step>,
+        if_true: Rc<Step>,
     },
     control_if_else {
-        SUBSTACK: Vec<Step>,
-        SUBSTACK2: Vec<Step>,
+        if_true: Rc<Step>,
+        if_false: Rc<Step>,
     },
     control_stop {
         STOP_OPTION: String,
@@ -144,6 +146,14 @@ pub enum IrOpcode {
     event_whenbackdropswitchesto,
     event_whengreaterthan,
     event_whenbroadcastreceived,
+    hq_goto {
+        step: Option<Rc<Step>>,
+        does_yield: bool,
+    },
+    hq_goto_if {
+        step: Option<Rc<Step>>,
+        does_yield: bool,
+    },
     looks_say,
     looks_sayforsecs,
     looks_think,
@@ -326,6 +336,14 @@ impl IrBlock {
         use IrOpcode::*;
         matches!(self.opcode(), looks_say | looks_think)
     }
+    pub fn does_branch(&self) -> bool {
+        use IrOpcode::*;
+        matches!(self.opcode, control_if { .. } | control_if_else { .. })
+    }
+    pub fn is_hat(&self) -> bool {
+        use IrOpcode::*;
+        matches!(self.opcode, event_whenflagclicked)
+    }
     pub fn opcode(&self) -> &IrOpcode {
         &self.opcode
     }
@@ -400,9 +418,10 @@ impl IrOpcode {
             operator_join => BlockDescriptor::new(vec![Any, Any], Text),
             operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
             operator_length => BlockDescriptor::new(vec![Any], Number),
-            control_if { .. } | control_if_else { .. } => {
+            control_if { .. } | control_if_else { .. } | hq_goto_if { .. } => {
                 BlockDescriptor::new(vec![Boolean], Stack)
             }
+            hq_goto { .. } => BlockDescriptor::new(vec![], Stack),
             _ => todo!("{:?}", &self),
         }
     }
@@ -457,6 +476,9 @@ impl Step {
     pub fn opcodes(&self) -> &Vec<IrBlock> {
         &self.opcodes
     }
+    pub fn opcodes_mut(&mut self) -> &mut Vec<IrBlock> {
+        &mut self.opcodes
+    }
     pub fn context(&self) -> Rc<ThreadContext> {
         Rc::clone(&self.context)
     }
@@ -472,7 +494,7 @@ pub struct ThreadContext {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Thread {
     start: ThreadStart,
-    steps: Vec<Step>,
+    first_step: Rc<Step>,
 }
 
 trait IrBlockVec {
@@ -593,36 +615,44 @@ impl IrBlockVec for Vec<IrBlock> {
                         ]
                     },
                     BlockOpcode::control_if => {
+                    /*
                         let BlockArrayOrId::Id(if_branch_id) = match block_info.inputs.get("SUBSTACK").expect("missing input SUBSTACK for if block (E044)") {
                             Input::Shadow(_, _, block) | Input::NoShadow(_, block) => block,
                         }.clone().expect("missing input SUBSTACK for if block (E045)") else {
                             panic!("Expected non-array input to SUBSTACK input for control_if (E046)");
                         };
-                        let if_branch = blocks.get(&if_branch_id).expect("control_if SUBSTACK input block doesn't exist (E047)");
-                        vec![IrOpcode::control_if { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, Rc::clone(&context)) }]
+                        let if_step = Rc::from(step_from_top_block(blocks.get(&if_branch_id).clone(), &blocks, Rc::clone(&context)));
+                        steps.push(Rc::clone(&if_step));
+                        */
+                        vec![IrOpcode::hq_goto_if { step: None, does_yield: false, }, IrOpcode::hq_goto { step: None, does_yield: false, }]
                     },
                     BlockOpcode::control_if_else => {
+                    /*
                         let BlockArrayOrId::Id(if_branch_id) = match block_info.inputs.get("SUBSTACK").expect("missing input SUBSTACK for if_else block (E048)") {
                             Input::Shadow(_, _, block) | Input::NoShadow(_, block) => block,
                         }.clone().expect("missing input SUBSTACK for if_else block (E049)") else {
                             panic!("Expected non-array input to SUBSTACK input for control_if_else (E050)");
                         };
-                        let if_branch = blocks.get(&if_branch_id).expect("control_if_else SUBSTACK input block doesn't exist (E051)");
+                        let if_step = Rc::from(step_from_top_block(blocks.get(&if_branch_id).clone(), &blocks, Rc::clone(&context)));
+                        steps.push(Rc::clone(&if_step));
                         let BlockArrayOrId::Id(else_branch_id) = match block_info.inputs.get("SUBSTACK2").expect("missing input SUBSTACK2 for if_else block (E052)") {
                             Input::Shadow(_, _, block) | Input::NoShadow(_, block) => block,
                         }.clone().expect("missing input SUBSTACK2 for if_else block (E056)") else {
                             panic!("Expected non-array input to SUBSTACK2 input for control_if_else (E057)");
                         };
-                        let else_branch = blocks.get(&else_branch_id).expect("control_if_else SUBSTACK2 input block doesn't exist (E058)");
-                        vec![IrOpcode::control_if_else { SUBSTACK: steps_from_top_block(if_branch.clone(), blocks, Rc::clone(&context)), SUBSTACK2: steps_from_top_block(else_branch.clone(), blocks, Rc::clone(&context)) }]
+                        let else_step = Rc::from(step_from_top_block(blocks.get(&else_branch_id).clone(), &blocks, Rc::clone(&context)));
+                        steps.push(Rc::clone(&else_step));
+                        */
+                        vec![IrOpcode::hq_goto_if { step: None, does_yield: false, }, IrOpcode::hq_goto { step: None, does_yield: false, }]
                     },
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
-                if let Some(next_id) = &block_info.next {
+
+                /*if let Some(next_id) = &block_info.next {
                     if let Some(next_block) = blocks.get(next_id) {
                         self.add_block(next_block.clone(), blocks, Rc::clone(&context));
                     }
-                }
+                }*/
             }
             Block::Special(a) => self.push(
                 match a {
@@ -669,13 +699,29 @@ impl IrBlockVec for Vec<IrBlock> {
     }
 }
 
-pub fn steps_from_top_block(
+pub fn step_from_top_block(
     top: Block,
     blocks: &BTreeMap<String, Block>,
     context: Rc<ThreadContext>,
-) -> Vec<Step> {
+) -> Rc<Step> {
     let mut ops: Vec<IrBlock> = vec![];
-    ops.add_block(top, blocks, Rc::clone(&context));
+    let mut next_block = top.clone();
+    loop {
+        ops.add_block(next_block.clone(), blocks, Rc::clone(&context));
+        assert!(ops.len() > 0);
+        if let Some(last_block) = ops.get(ops.len() - 1) {
+            if last_block.does_request_redraw() || last_block.does_branch() {
+                break;
+            }
+        }
+        if next_block.block_info().unwrap().next.is_none() {
+            break;
+        }
+        next_block = blocks
+            .get(&next_block.block_info().unwrap().next.clone().unwrap())
+            .unwrap()
+            .clone();
+    }
     let mut type_stack: Vec<(usize, BlockType)> = vec![];
     let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
     for (index, op) in ops.iter().enumerate() {
@@ -700,39 +746,112 @@ pub fn steps_from_top_block(
             .expect("ir block doesn't exist (E043)")
             .set_expected_output(ty.clone());
     }
-    let mut steps: Vec<Step> = vec![];
     //let mut lastOpRequestedRedraw = false;
-    let mut this_step_ops: Vec<IrBlock> = vec![];
+    /*let mut this_step_ops: Vec<IrBlock> = vec![];
     for op in ops {
         this_step_ops.push(op.clone());
         if op.does_request_redraw() && !(*op.opcode() == IrOpcode::looks_say && context.dbg) {
             steps.push(Step::new(this_step_ops.clone(), Rc::clone(&context)));
             this_step_ops = vec![];
         }
+    }*/
+    let mut step = Step::new(ops.clone(), Rc::clone(&context));
+    if let Some(ref next_id) = next_block.block_info().unwrap().next {
+        step.opcodes_mut().push(IrBlock::from(IrOpcode::hq_goto {
+            step: Some(Rc::clone(&step_from_top_block(
+                blocks.get(next_id).clone().unwrap().clone(),
+                &blocks,
+                Rc::clone(&context),
+            ))),
+            does_yield: true,
+        }));
     }
-    steps.push(Step::new(this_step_ops.clone(), Rc::clone(&context)));
-    steps
+    Rc::from(step)
 }
-
+/*
+pub fn step_from_top_block(
+    top: Block,
+    blocks: &BTreeMap<String, Block>,
+    context: Rc<ThreadContext>,
+) -> Rc<Step> {
+    let mut last_steps: Vec<Rc<Step>> = vec![];
+    let mut ops: Vec<IrBlock> = vec![];
+    let mut current_block = top;
+    loop {
+        let prev = if let Block::Normal { block_info, .. } = &current_block {
+            if let Some(prev_id) = &block_info.parent {
+                if let Some(&ref prev_block) = blocks.get(prev_id) {
+                    prev_block.clone()
+                } else {
+                    panic!("previous block doesn't exist")
+                }
+            } else {
+                break;
+            }
+        } else {
+            unreachable!();
+        };
+        let mut temp_ops: Vec<IrBlock> = vec![];
+        temp_ops.add_block(current_block, blocks, Rc::clone(&context), &mut steps);
+        assert!(temp_ops.len() > 0);
+        let this_block = temp_ops.get(0).unwrap();
+        dbg!(this_block.opcode(),this_block.does_request_redraw()
+            ,this_block.opcode == IrOpcode::looks_say,context.dbg,
+            this_block.does_branch(),this_block.is_hat());
+        if (this_block.does_request_redraw()
+            && !(this_block.opcode == IrOpcode::looks_say && context.dbg))
+            || this_block.does_branch() || this_block.is_hat()
+        {
+        println!("yield");
+            steps.push(Rc::from(Step::new(
+                ops.clone(),
+                Rc::clone(&context),
+                if let Some(step) = steps.get(steps.len() - 2) {
+                    Some(Rc::clone(step))
+                } else {
+                    None
+                },
+            )));
+            ops.clear();
+            ops = temp_ops;
+        } else {
+        println!("else");
+            ops.append(&mut temp_ops);
+        }
+        current_block = prev;
+    }
+    Rc::clone(steps.get(steps.len() - 1).unwrap())
+}
+*/
 impl Thread {
-    pub fn new(start: ThreadStart, steps: Vec<Step>) -> Thread {
-        Thread { start, steps }
+    pub fn new(start: ThreadStart, first_step: Rc<Step>) -> Thread {
+        Thread {
+            start,
+            first_step: Rc::clone(&first_step),
+        }
     }
     pub fn start(&self) -> &ThreadStart {
         &self.start
     }
-    pub fn steps(&self) -> &Vec<Step> {
-        &self.steps
+    pub fn first_step(&self) -> Rc<Step> {
+        Rc::clone(&self.first_step)
     }
     pub fn from_hat(
         hat: Block,
         blocks: BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
     ) -> Thread {
-        let steps = if let Block::Normal { block_info, .. } = &hat {
+        let first_step = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
                 if let Some(next_block) = blocks.get(next_id) {
-                    steps_from_top_block(next_block.clone(), &blocks, Rc::clone(&context))
+                    step_from_top_block(
+                        blocks
+                            .get(&hat.block_info().unwrap().next.clone().unwrap())
+                            .unwrap()
+                            .clone(),
+                        &blocks,
+                        Rc::clone(&context),
+                    )
                 } else {
                     unreachable!();
                 }
@@ -750,6 +869,23 @@ impl Thread {
         } else {
             unreachable!()
         };
-        Self::new(start_type, steps)
+        Self::new(start_type, first_step)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_ir() {
+        use crate::sb3::Sb3Project;
+        use std::fs;
+        let proj: Sb3Project = fs::read_to_string("./hq-test.project.json")
+            .expect("couldn't read hq-test.project.json")
+            .try_into()
+            .unwrap();
+        let ir: IrProject = proj.into();
+        println!("{:?}", ir);
     }
 }

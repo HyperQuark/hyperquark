@@ -328,6 +328,21 @@ pub enum VariableInfo {
     LocalVar(String, VarVal),
 }
 
+pub trait BlockMap {
+    fn get_bottom_block(&self, id: &String) -> &Block;
+}
+
+impl BlockMap for BTreeMap<String, Block> {
+    fn get_bottom_block(&self, id: &String) -> &Block {
+        let block = self.get(id).unwrap();
+        if let Some(next) = &block.block_info().unwrap().next {
+            self.get_bottom_block(&next)
+        } else {
+            block
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
