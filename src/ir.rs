@@ -1,12 +1,12 @@
 // intermediate representation
 use crate::sb3::{
-    Block, BlockArray, BlockArrayOrId, BlockMap, BlockOpcode, Field, Input, Sb3Project, VarVal,
-    VariableInfo,
+    Block, BlockArray, BlockArrayOrId, BlockOpcode, Field, Input, Sb3Project, VarVal, VariableInfo,
 };
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
+use ordered_float::OrderedFloat;
 
 #[derive(Debug)]
 pub struct IrProject {
@@ -78,7 +78,7 @@ impl From<Sb3Project> for IrProject {
 
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IrOpcode {
     control_repeat,
     control_repeat_until,
@@ -181,19 +181,19 @@ pub enum IrOpcode {
     looks_costume,
     looks_backdrops,
     math_angle {
-        NUM: f64,
+        NUM: OrderedFloat<f64>,
     },
     math_integer {
-        NUM: f64,
+        NUM: OrderedFloat<f64>,
     },
     math_number {
-        NUM: f64,
+        NUM: OrderedFloat<f64>,
     },
     math_positive_number {
-        NUM: f64,
+        NUM: OrderedFloat<f64>,
     },
     math_whole_number {
-        NUM: f64,
+        NUM: OrderedFloat<f64>,
     },
     motion_movesteps,
     motion_gotoxy,
@@ -312,7 +312,7 @@ pub enum IrOpcode {
        cast_any_num,*/
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IrBlock {
     pub opcode: IrOpcode,
     pub actual_output: BlockType,   // the output type the block produces
@@ -358,7 +358,7 @@ impl IrBlock {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BlockType {
     Text,
     Number,
@@ -371,7 +371,7 @@ pub enum BlockType {
     Stack,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct BlockDescriptor {
     inputs: Vec<BlockType>,
     output: BlockType,
@@ -427,7 +427,7 @@ impl IrOpcode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IrVar {
     id: String,
     name: String,
@@ -463,7 +463,7 @@ pub enum ThreadStart {
     GreenFlag,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Step {
     opcodes: Vec<IrBlock>,
     context: Rc<ThreadContext>,
@@ -484,7 +484,7 @@ impl Step {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
@@ -884,7 +884,7 @@ mod tests {
         let proj: Sb3Project = fs::read_to_string("./hq-test.project.json")
             .expect("couldn't read hq-test.project.json")
             .try_into()
-            .unwrap();
+            .expect("invalid project.json");
         let ir: IrProject = proj.into();
         println!("{:?}", ir);
     }

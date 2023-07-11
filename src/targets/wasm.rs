@@ -5,7 +5,7 @@ use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::cell::Cell;
+use indexmap::IndexMap;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType,
     ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg,
@@ -855,41 +855,26 @@ impl From<IrProject> for WebWasmFile {
         tick_func.instruction(&Instruction::I32Const(0));
         tick_func.instruction(&Instruction::I32Store8(MemArg { offset: 0, align: 0, memory_index: 0 }));*/
 
-        functions.function(types::I32_I32);
+        //functions.function(types::I32_I32);
         let mut noop_func = Function::new(vec![]);
         noop_func.instruction(&Instruction::I32Const(1));
         noop_func.instruction(&Instruction::End);
-        code.function(&noop_func);
+        //code.function(&noop_func);
 
         /*let mut thread_indices: BTreeMap<ThreadStart, Vec<u32>> = BTreeMap::from([
             (ThreadStart::GreenFlag, vec![]),
         ]);*/
         let mut thread_indices: Vec<(ThreadStart, u32)> = vec![]; // (start type, first step index)
 
-        let mut step_indices: Vec<u32> = vec![0];
-
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let step_index = Rc::new(Cell::new(0));
+        let mut step_funcs: IndexMap<Option<Rc<Step>>, Function, _> = Default::default();
+        step_funcs.insert(None, noop_func);
 
-        /* for thread in project.threads {
-            step_index.set(step_index.get() + 1);
-            let first_index = step_index.get();
-            thread_indices.push((thread.start().clone(), first_index));
-            for (i, step) in thread.steps().iter().enumerate() {
-                let funcs = step.as_functions(
-                    Rc::clone(&step_index),
-                    i < thread.steps().len() - 1,
-                    &mut string_consts,
-                );
-                for (mut func, idx) in funcs {
-                    func.instruction(&Instruction::End);
-                    functions.function(types::I32_I32);
-                    code.function(&func);
-                    step_indices.push(idx);
-                }
-            }
-        }*/
+        for thread in project.threads {
+            let first_idx = thread.wasm_funcs(&mut step_funcs, &mut string_consts);
+            thread_indices.push((thread.start().clone(), first_idx));
+        }
 
         let mut thread_start_counts: BTreeMap<ThreadStart, u32> = Default::default();
 
@@ -899,6 +884,11 @@ impl From<IrProject> for WebWasmFile {
                     ThreadStart::GreenFlag => &mut gf_func,
                 }
             };
+        }
+
+        for (step, func) in step_funcs {
+            functions.function(types::I32_I32);
+            code.function(&func);
         }
 
         for (start_type, index) in thread_indices {

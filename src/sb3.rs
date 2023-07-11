@@ -5,6 +5,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use enum_field_getter::EnumFieldGetter;
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -20,10 +21,10 @@ pub struct Sb3Project {
 #[serde(rename_all = "camelCase")]
 pub struct Comment {
     pub block_id: Option<String>,
-    pub x: Option<f64>,
-    pub y: Option<f64>,
-    pub width: f64,
-    pub height: f64,
+    pub x: Option<OrderedFloat<f64>>,
+    pub y: Option<OrderedFloat<f64>>,
+    pub width: OrderedFloat<f64>,
+    pub height: OrderedFloat<f64>,
     pub minimized: bool,
     pub text: String,
 }
@@ -221,10 +222,10 @@ pub enum Block {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BlockArray {
-    NumberOrAngle(u32, f64),
+    NumberOrAngle(u32, OrderedFloat<f64>),
     ColorOrString(u32, String),
     Broadcast(u32, String, String), // might also be variable or list if not top level?
-    VariableOrList(u32, String, String, f64, f64),
+    VariableOrList(u32, String, String, OrderedFloat<f64>, OrderedFloat<f64>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -297,9 +298,9 @@ pub struct Costume {
     pub md5ext: String,
     pub data_format: String,
     #[serde(default)]
-    pub bitmap_resolution: f64,
-    pub rotation_center_x: f64,
-    pub rotation_center_y: f64,
+    pub bitmap_resolution: OrderedFloat<f64>,
+    pub rotation_center_x: OrderedFloat<f64>,
+    pub rotation_center_y: OrderedFloat<f64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -309,14 +310,14 @@ pub struct Sound {
     pub name: String,
     pub md5ext: String,
     pub data_format: String,
-    pub rate: f64,
-    pub sample_count: f64,
+    pub rate: OrderedFloat<f64>,
+    pub sample_count: OrderedFloat<f64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum VarVal {
-    Float(f64),
+    Float(OrderedFloat<f64>),
     Bool(bool),
     String(String),
 }
@@ -358,25 +359,25 @@ pub struct Target {
     pub costumes: Vec<Costume>,
     pub sounds: Vec<Sound>,
     pub layer_order: i32,
-    pub volume: f64,
+    pub volume: OrderedFloat<f64>,
     #[serde(default)]
-    pub tempo: f64,
+    pub tempo: OrderedFloat<f64>,
     #[serde(default)]
     pub video_state: Option<String>,
     #[serde(default)]
-    pub video_transparency: f64,
+    pub video_transparency: OrderedFloat<f64>,
     #[serde(default)]
     pub text_to_speech_language: Option<String>,
     #[serde(default)]
     pub visible: bool,
     #[serde(default)]
-    pub x: f64,
+    pub x: OrderedFloat<f64>,
     #[serde(default)]
-    pub y: f64,
+    pub y: OrderedFloat<f64>,
     #[serde(default)]
-    pub size: f64,
+    pub size: OrderedFloat<f64>,
     #[serde(default)]
-    pub direction: f64,
+    pub direction: OrderedFloat<f64>,
     #[serde(default)]
     pub draggable: bool,
     #[serde(default)]
@@ -402,10 +403,10 @@ pub enum Monitor {
         opcode: String,
         params: BTreeMap<String, String>,
         sprite_name: Option<String>,
-        width: f64,
-        height: f64,
-        x: f64,
-        y: f64,
+        width: OrderedFloat<f64>,
+        height: OrderedFloat<f64>,
+        x: OrderedFloat<f64>,
+        y: OrderedFloat<f64>,
         visible: bool,
         value: ListMonitorValue,
     },
@@ -417,13 +418,13 @@ pub enum Monitor {
         params: BTreeMap<String, String>,
         sprite_name: Option<String>,
         value: VarVal,
-        width: f64,
-        height: f64,
-        x: f64,
-        y: f64,
+        width: OrderedFloat<f64>,
+        height: OrderedFloat<f64>,
+        x: OrderedFloat<f64>,
+        y: OrderedFloat<f64>,
         visible: bool,
-        slider_min: f64,
-        slider_max: f64,
+        slider_min: OrderedFloat<f64>,
+        slider_max: OrderedFloat<f64>,
         is_discrete: bool,
     },
 }
