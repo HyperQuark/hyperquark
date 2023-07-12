@@ -289,7 +289,7 @@ fn instructions(
             "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
             _ => panic!("invalid OPERATOR field (E041)"),
         },
-        control_if { if_true } => {
+        control_if { if_true: _ } => {
             unreachable!() /*
                            let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
                            instrs.append(
@@ -303,7 +303,7 @@ fn instructions(
                            instrs
                            //vec![Drop]*/
         }
-        control_if_else { if_true, if_false } => {
+        control_if_else { if_true: _, if_false: _ } => {
             unreachable!();
             /* let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
             instrs.append(
@@ -722,7 +722,7 @@ impl CompileToWasm for Rc<Step> {
                 func.instruction(&instr);
             }
         }
-        let thread_indices: u64 = byte_offset::THREADS
+        let _thread_indices: u64 = byte_offset::THREADS
             .try_into()
             .expect("THREAD_INDICES out of bounds (E018)");
         let vars_num: i32 = self
@@ -782,7 +782,7 @@ impl CompileToWasm for Rc<Step> {
             func.instruction(&Instruction::I32Const(0));
         }
         func.instruction(&Instruction::End);
-        step_funcs.insert(Some(Rc::clone(&self)), func);
+        step_funcs.insert(Some(Rc::clone(self)), func);
         (step_funcs.len() - 1).try_into().expect("step_funcs length out of bounds")
     }
 }
@@ -1308,7 +1308,7 @@ impl From<IrProject> for WebWasmFile {
 
         for (_step, func) in &step_funcs {
             functions.function(types::I32_I32);
-            code.function(&func);
+            code.function(func);
         }
 
         for (start_type, index) in thread_indices {

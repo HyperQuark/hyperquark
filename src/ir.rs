@@ -705,10 +705,10 @@ pub fn step_from_top_block(
     context: Rc<ThreadContext>,
 ) -> Rc<Step> {
     let mut ops: Vec<IrBlock> = vec![];
-    let mut next_block = top.clone();
+    let mut next_block = top;
     loop {
         ops.add_block(next_block.clone(), blocks, Rc::clone(&context));
-        assert!(ops.len() > 0);
+        assert!(!ops.is_empty());
         if let Some(last_block) = ops.last() {
             if (last_block.does_request_redraw() && !(*last_block.opcode() == IrOpcode::looks_say && context.dbg)) || last_block.does_branch() {
                 break;
@@ -759,8 +759,8 @@ pub fn step_from_top_block(
     if let Some(ref next_id) = next_block.block_info().unwrap().next {
         step.opcodes_mut().push(IrBlock::from(IrOpcode::hq_goto {
             step: Some(Rc::clone(&step_from_top_block(
-                blocks.get(next_id).clone().unwrap().clone(),
-                &blocks,
+                blocks.get(next_id).unwrap().clone(),
+                blocks,
                 Rc::clone(&context),
             ))),
             does_yield: true,
