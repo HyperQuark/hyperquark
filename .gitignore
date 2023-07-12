@@ -3,3 +3,4 @@
 bad.wasm
 bad.wat
 /wabt*
+js/hyperquark_bg.wasm
