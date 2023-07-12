@@ -709,8 +709,8 @@ pub fn step_from_top_block(
     loop {
         ops.add_block(next_block.clone(), blocks, Rc::clone(&context));
         assert!(ops.len() > 0);
-        if let Some(last_block) = ops.get(ops.len() - 1) {
-            if last_block.does_request_redraw() || last_block.does_branch() {
+        if let Some(last_block) = ops.last() {
+            if (last_block.does_request_redraw() && !(*last_block.opcode() == IrOpcode::looks_say && context.dbg)) || last_block.does_branch() {
                 break;
             }
         }
@@ -845,10 +845,7 @@ impl Thread {
             if let Some(next_id) = &block_info.next {
                 if let Some(next_block) = blocks.get(next_id) {
                     step_from_top_block(
-                        blocks
-                            .get(&hat.block_info().unwrap().next.clone().unwrap())
-                            .unwrap()
-                            .clone(),
+                        next_block.clone(),
                         &blocks,
                         Rc::clone(&context),
                     )

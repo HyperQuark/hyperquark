@@ -1,10 +1,13 @@
 use crate::ir::{
-    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
+    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, Thread, ThreadContext,
+    ThreadStart,
 };
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::hash::BuildHasherDefault;
+use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType,
@@ -112,16 +115,16 @@ impl Step {
         vec![(func, this_step_index)]
     }
 }
-
+*/
 fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
+    step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
     string_consts: &mut Vec<String>,
-) -> (Vec<Instruction<'static>>, Vec<(Function, u32)>) {
+) -> Vec<Instruction<'static>> {
     use Instruction::*;
     use IrBlockType::*;
     use IrOpcode::*;
-    let mut extra_funcs = vec![];
     let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {
@@ -163,7 +166,7 @@ fn instructions(
         | math_integer { NUM }
         | math_angle { NUM }
         | math_whole_number { NUM }
-        | math_positive_number { NUM } => vec![F64Const(*NUM)],
+        | math_positive_number { NUM } => vec![F64Const(**NUM)], // double deref because &OrderedFloat<f64> -> OrderedFloat<f64> -> f64
         text { TEXT } => {
             let str_idx: i32 = {
                 if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
@@ -287,23 +290,22 @@ fn instructions(
             _ => panic!("invalid OPERATOR field (E041)"),
         },
         control_if { if_true } => {
-            let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
-            instrs.append(
-                &mut SUBSTACK[0]
-                    .opcodes()
-                    .iter()
-                    .flat_map(|o| instructions(o, Rc::clone(&context), string_consts))
-                    .collect(),
-            );
-            instrs.push(End);
-            instrs
-            //vec![Drop]
+            unreachable!() /*
+                           let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
+                           instrs.append(
+                               &mut SUBSTACK[0]
+                                   .opcodes()
+                                   .iter()
+                                   .flat_map(|o| instructions(o, Rc::clone(&context), string_consts))
+                                   .collect(),
+                           );
+                           instrs.push(End);
+                           instrs
+                           //vec![Drop]*/
         }
-        control_if_else {
-            if_true,
-            if_false,
-        } => {
-            let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
+        control_if_else { if_true, if_false } => {
+            unreachable!();
+            /* let mut instrs = vec![I32WrapI64, If(WasmBlockType::Empty)];
             instrs.append(
                 &mut SUBSTACK[0]
                     .opcodes()
@@ -321,7 +323,317 @@ fn instructions(
             );
             instrs.push(End);
             instrs
-            // vec![Drop]
+            // vec![Drop]*/
+        }
+        hq_goto {
+            step,
+            does_yield: true,
+        } => {
+            if let Some(next_step) = step {
+                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+                let thread_indices: u64 = byte_offset::THREADS
+                    .try_into()
+                    .expect("THREAD_INDICES out of bounds (E018)");
+                vec![
+                    LocalGet(0),
+                    I32Const(
+                        next_step_index
+                            .try_into()
+                            .expect("step index out of bounds (E001)"),
+                    ),
+                    I32Store(MemArg {
+                        offset: thread_indices,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    Return,
+                ]
+            } else {
+                let vars_num: i32 = context
+                    .vars
+                    .len()
+                    .try_into()
+                    .expect("vars.len() out of bounds (E032)");
+
+                vec![
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS),
+                    I32Add, // destination (= current thread pos in memory)
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS + 4),
+                    I32Add, // source (= current thread pos + 4)
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E009)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(4),
+                    I32Mul,
+                    I32Const(byte_offset::THREADS - 4 + vars_num * 12),
+                    I32Add,
+                    LocalGet(0),
+                    I32Sub, // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+                    MemoryCopy {
+                        src_mem: 0,
+                        dst_mem: 0,
+                    },
+                    I32Const(0),
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E010)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    I32Sub,
+                    I32Store(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E011)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    Return,
+                ]
+            }
+        }
+        hq_goto {
+            step,
+            does_yield: false,
+        } => {
+            if let Some(next_step) = step {
+                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+                vec![
+                    LocalGet(step_func_locals::MEM_LOCATION),
+                    I32Const(
+                        next_step_index
+                            .try_into()
+                            .expect("step index out of bounds (E001)"),
+                    ),
+                    CallIndirect {
+                        ty: types::I32_I32,
+                        table: table_indices::STEP_FUNCS,
+                    },
+                    Return,
+                ]
+            } else {
+                let vars_num: i32 = context
+                    .vars
+                    .len()
+                    .try_into()
+                    .expect("vars.len() out of bounds (E032)");
+
+                vec![
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS),
+                    I32Add, // destination (= current thread pos in memory)
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS + 4),
+                    I32Add, // source (= current thread pos + 4)
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E009)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(4),
+                    I32Mul,
+                    I32Const(byte_offset::THREADS - 4 + vars_num * 12),
+                    I32Add,
+                    LocalGet(0),
+                    I32Sub, // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+                    MemoryCopy {
+                        src_mem: 0,
+                        dst_mem: 0,
+                    },
+                    I32Const(0),
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E010)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    I32Sub,
+                    I32Store(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E011)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    Return,
+                ]
+            }
+        }
+        hq_goto_if {
+            step,
+            does_yield: true,
+        } => {
+            if let Some(next_step) = step {
+                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+                let thread_indices: u64 = byte_offset::THREADS
+                    .try_into()
+                    .expect("THREAD_INDICES out of bounds (E018)");
+                vec![
+                    If(WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                    LocalGet(0),
+                    I32Const(
+                        next_step_index
+                            .try_into()
+                            .expect("step index out of bounds (E001)"),
+                    ),
+                    I32Store(MemArg {
+                        offset: thread_indices,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    Return,
+                    End,
+                ]
+            } else {
+                let vars_num: i32 = context
+                    .vars
+                    .len()
+                    .try_into()
+                    .expect("vars.len() out of bounds (E032)");
+
+                vec![
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS),
+                    I32Add, // destination (= current thread pos in memory)
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS + 4),
+                    I32Add, // source (= current thread pos + 4)
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E009)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(4),
+                    I32Mul,
+                    I32Const(byte_offset::THREADS - 4 + vars_num * 12),
+                    I32Add,
+                    LocalGet(0),
+                    I32Sub, // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+                    MemoryCopy {
+                        src_mem: 0,
+                        dst_mem: 0,
+                    },
+                    I32Const(0),
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E010)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    I32Sub,
+                    I32Store(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E011)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    Return,
+                ]
+            }
+        }
+        hq_goto_if {
+            step,
+            does_yield: false,
+        } => {
+            if let Some(next_step) = step {
+                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+                vec![
+                    If(WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                    LocalGet(step_func_locals::MEM_LOCATION),
+                    I32Const(
+                        next_step_index
+                            .try_into()
+                            .expect("step index out of bounds (E001)"),
+                    ),
+                    CallIndirect {
+                        ty: types::I32_I32,
+                        table: table_indices::STEP_FUNCS,
+                    },
+                    Return,
+                    End,
+                ]
+            } else {
+                let vars_num: i32 = context
+                    .vars
+                    .len()
+                    .try_into()
+                    .expect("vars.len() out of bounds (E032)");
+
+                vec![
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS),
+                    I32Add, // destination (= current thread pos in memory)
+                    LocalGet(0),
+                    I32Const(byte_offset::THREADS + 4),
+                    I32Add, // source (= current thread pos + 4)
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E009)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(4),
+                    I32Mul,
+                    I32Const(byte_offset::THREADS - 4 + vars_num * 12),
+                    I32Add,
+                    LocalGet(0),
+                    I32Sub, // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+                    MemoryCopy {
+                        src_mem: 0,
+                        dst_mem: 0,
+                    },
+                    I32Const(0),
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E010)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    I32Sub,
+                    I32Store(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .expect("THREAD_NUM out of bounds (E011)"),
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    Return,
+                ]
+            }
         }
         _ => todo!(),
     };
@@ -366,8 +678,114 @@ fn instructions(
             }),
         ]);
     }
-    (instructions, extra_funcs)
-}*/
+    instructions
+}
+
+pub trait CompileToWasm {
+    fn compile_wasm(
+        &self,
+        step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        string_consts: &mut Vec<String>,
+    ) -> u32;
+}
+
+impl CompileToWasm for Thread {
+    fn compile_wasm(
+        &self,
+        step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        string_consts: &mut Vec<String>,
+    ) -> u32 {
+        self.first_step().compile_wasm(step_funcs, string_consts)
+    }
+}
+
+impl CompileToWasm for Rc<Step> {
+    fn compile_wasm(
+        &self,
+        step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        string_consts: &mut Vec<String>,
+    ) -> u32 {
+        if step_funcs.contains_key(&Some(Rc::clone(self))) {
+            return step_funcs.get_index_of(&Some(Rc::clone(self))).unwrap().try_into().expect("IndexMap index out of bounds");
+        }
+        let locals = vec![
+            ValType::Ref(RefType::EXTERNREF),
+            ValType::F64,
+            ValType::I64,
+            ValType::I32,
+            ValType::I32,
+        ];
+        let mut func = Function::new_with_locals_types(locals);
+        for op in self.opcodes() {
+            let instrs = instructions(op, self.context(), step_funcs, string_consts);
+            for instr in instrs {
+                func.instruction(&instr);
+            }
+        }
+        let thread_indices: u64 = byte_offset::THREADS
+            .try_into()
+            .expect("THREAD_INDICES out of bounds (E018)");
+        let vars_num: i32 = self
+            .context()
+            .vars
+            .len()
+            .try_into()
+            .expect("vars.len() out of bounds (E032)");
+        if !matches!(
+            self.opcodes().last().unwrap().opcode(),
+            IrOpcode::hq_goto { .. }
+        ) {
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Const(byte_offset::THREADS));
+            func.instruction(&Instruction::I32Add); // destination (= current thread pos in memory)
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Const(byte_offset::THREADS + 4));
+            func.instruction(&Instruction::I32Add); // source (= current thread pos + 4)
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E009)"),
+                align: 2,
+                memory_index: 0,
+            }));
+            func.instruction(&Instruction::I32Const(4));
+            func.instruction(&Instruction::I32Mul);
+            func.instruction(&Instruction::I32Const(
+                byte_offset::THREADS - 4 + vars_num * 12,
+            ));
+            func.instruction(&Instruction::I32Add);
+            func.instruction(&Instruction::LocalGet(0));
+            func.instruction(&Instruction::I32Sub); // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+            func.instruction(&Instruction::MemoryCopy {
+                src_mem: 0,
+                dst_mem: 0,
+            });
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Const(0));
+            func.instruction(&Instruction::I32Load(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E010)"),
+                align: 2,
+                memory_index: 0,
+            }));
+            func.instruction(&Instruction::I32Const(1));
+            func.instruction(&Instruction::I32Sub);
+            func.instruction(&Instruction::I32Store(MemArg {
+                offset: byte_offset::THREAD_NUM
+                    .try_into()
+                    .expect("THREAD_NUM out of bounds (E011)"),
+                align: 2,
+                memory_index: 0,
+            }));
+            func.instruction(&Instruction::I32Const(0));
+        }
+        func.instruction(&Instruction::End);
+        step_funcs.insert(Some(Rc::clone(&self)), func);
+        (step_funcs.len() - 1).try_into().expect("step_funcs length out of bounds")
+    }
+}
 
 pub struct WebWasmFile {
     js_string: String,
@@ -468,6 +886,7 @@ pub mod types {
     pub const F64I32I64_EXTERNREF: u32 = 31;
     pub const I32I64I32I64_EXTERNREF: u32 = 32;
     pub const F64_F64: u32 = 33;
+    pub const NOPARAM_I32: u32 = 34;
 }
 
 pub mod table_indices {
@@ -556,6 +975,7 @@ impl From<IrProject> for WebWasmFile {
             [ValType::Ref(RefType::EXTERNREF)],
         );
         types.function([ValType::F64], [ValType::F64]);
+        types.function([], [ValType::I32]);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -872,7 +1292,7 @@ impl From<IrProject> for WebWasmFile {
         step_funcs.insert(None, noop_func);
 
         for thread in project.threads {
-            let first_idx = thread.wasm_funcs(&mut step_funcs, &mut string_consts);
+            let first_idx = thread.compile_wasm(&mut step_funcs, &mut string_consts);
             thread_indices.push((thread.start().clone(), first_idx));
         }
 
@@ -886,7 +1306,7 @@ impl From<IrProject> for WebWasmFile {
             };
         }
 
-        for (step, func) in step_funcs {
+        for (_step, func) in &step_funcs {
             functions.function(types::I32_I32);
             code.function(&func);
         }
@@ -1013,15 +1433,15 @@ impl From<IrProject> for WebWasmFile {
 
         tables.table(TableType {
             element_type: RefType::FUNCREF,
-            minimum: step_indices
+            minimum: step_funcs
                 .len()
                 .try_into()
-                .expect("step indices length out of bounds (E007)"),
+                .expect("step_funcs length out of bounds (E007)"),
             maximum: Some(
-                step_indices
+                step_funcs
                     .len()
                     .try_into()
-                    .expect("step indices length out of bounds (E008)"),
+                    .expect("step_funcs length out of bounds (E008)"),
             ),
         });
 
@@ -1034,9 +1454,10 @@ impl From<IrProject> for WebWasmFile {
             maximum: None,
         });
 
-        for i in &mut step_indices {
+        /*for i in &mut step_indices {
             *i += BUILTIN_FUNCS;
-        }
+        }*/
+        let step_indices = (BUILTIN_FUNCS..(u32::try_from(step_funcs.len()).expect("step_funcs length out of bounds") + BUILTIN_FUNCS)).collect::<Vec<_>>();
         let step_func_indices = Elements::Functions(&step_indices[..]);
         elements.active(
             Some(table_indices::STEP_FUNCS),
