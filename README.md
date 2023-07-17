@@ -12,7 +12,7 @@ Compile scratch projects to WASM
 ## Building
 
 ```bash
-./build.sh
+./build.sh # use --dev for a debug build without optimisation
 ```
 
 You may need to run `chmod +x build.sh` if it says it doesn't have permission.

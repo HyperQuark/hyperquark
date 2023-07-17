@@ -1344,7 +1344,26 @@ impl From<IrProject> for WebWasmFile {
         // data
 
         let wasm_bytes = module.finish();
-        Self { js_string: format!("const assert = require('node:assert')/*.strict*/;
+        Self { js_string: format!("
+        let assert;
+        let exit;
+        let browser = false;
+        let output_div;
+        let text_div;
+        if (typeof require === 'undefined') {{
+          browser = true;
+          output_div = document.querySelector('div#hq-output');
+          text_div = txt => Object.assign(document.createElement('div'), {{ textContent: txt }});
+          assert = (bool) => {{
+            if (!bool) {{
+              throw new AssertionError('Assertion failed');
+            }}
+          }}
+          exit = _ => null;
+        }} else {{
+          exit = process.exit;
+          assert = require('node:assert')/*.strict*/;
+        }}
         let last_output;
         let strings_tbl;
         const wasm_val_to_js = (type, value_i64) => {{
@@ -1352,17 +1371,29 @@ impl From<IrProject> for WebWasmFile {
         }};
         const wasm_output = (...args) => {{
             const val = wasm_val_to_js(...args);
-            console.log('output: \\x1b[34m%s\\x1b[0m', val);
+            if (!browser) {{
+              console.log('output: \\x1b[34m%s\\x1b[0m', val);
+            }} else {{
+              output_div.appendChild(text_div('output: ' + String(val)));
+            }}
             last_output = val;
         }};
         const assert_output = (...args) => {{
             /*assert.equal(last_output, wasm_val_to_js(...args));*/
             const val = wasm_val_to_js(...args);
-            console.log('assert: \\x1b[34m%s\\x1b[0m', val);
+            if (!browser) {{
+              console.log('assert: \\x1b[34m%s\\x1b[0m', val);
+            }} else {{
+              output_div.appendChild(text_div('assert: ' + String(val)));
+            }}
         }}
         const targetOutput = (targetIndex, verb, text) => {{
             let targetName = {target_names:?}[targetIndex];
-            console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
+            if (!browser) {{
+              console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
+            }} else {{
+              output_div.appendChild(text_div(`${{targetName}} ${{verb}}: ${{text}}`));
+            }}
         }};
         const importObject = {{
             dbg: {{
@@ -1419,10 +1450,10 @@ impl From<IrProject> for WebWasmFile {
             try {{
                 new WebAssembly.Module(buf);
                 console.error('invalid WASM module');
-                process.exit(1);
+                exit(1);
             }} catch (e) {{
                 console.error('invalid WASM module: ' + e.message);
-                process.exit(1);
+                exit(1);
             }}
         }}
         function sleep(ms) {{
@@ -1452,7 +1483,7 @@ impl From<IrProject> for WebWasmFile {
             }}
         }}).catch((e) => {{
             console.error('error when instantiating module:\\n' + e.stack);
-            process.exit(1);
+            exit(1);
         }});
         ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
