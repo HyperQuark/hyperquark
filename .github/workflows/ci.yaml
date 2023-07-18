@@ -107,4 +107,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           branch: gh-pages
-          creat_branch: true
+          create_branch: true
