@@ -89,6 +89,12 @@ jobs:
       - name: Install binaryen
         run: sudo apt-get install binaryen
       
+      - name: Install node modules
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+        run: npm install
+      
       - name: Build
         run: chmod +x build.sh && ./build.sh -pWV
       
