@@ -1,8 +1,9 @@
-/target
+/target/
 /Cargo.lock
-bad.wasm
-bad.wat
+/bad.wasm
+/bad.wat
 /wabt*
-js
-node_modules
-package-lock.json
+/js/
+/node_modules/
+/package-lock.json
+/playground/dist/

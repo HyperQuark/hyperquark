@@ -17,5 +17,8 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./playground', import.meta.url))
     }
+  },
+  build: {
+    target: 'esnext',
   }
 })

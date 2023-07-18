@@ -1,5 +1,5 @@
 <template>
-  <ProjectPlayer v-if="success === true" :json="json"></ProjectPlayer>
+  <ProjectPlayer v-if="success === true" :json="json" :author="author" :title="title"></ProjectPlayer>
   <template v-else>
     <h1>Project not found</h1>
     This could be because it doesn't exist, or it may be private.
@@ -18,8 +18,12 @@
   const props = defineProps(['id'])
   const success = ref(null);
   const json = ref("");
+  const title = ref("");
+  const author = ref("");
   try {
     const apiRes = await (await fetch(`https://trampoline.turbowarp.org/api/projects/${props.id}/`)).json()//.project_token;
+    title.value = apiRes.title;
+    author.value = apiRes.author.username;
     json.value = await fetch(`https://projects.scratch.mit.edu/${props.id}/?token=${apiRes.project_token}`).then(res => {
       if (!res.ok) {
         throw new Error("response was not OK");

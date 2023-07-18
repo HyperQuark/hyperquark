@@ -1345,146 +1345,149 @@ impl From<IrProject> for WebWasmFile {
 
         let wasm_bytes = module.finish();
         Self { js_string: format!("
-        let assert;
-        let exit;
-        let browser = false;
-        let output_div;
-        let text_div;
-        if (typeof require === 'undefined') {{
-          browser = true;
-          output_div = document.querySelector('div#hq-output');
-          text_div = txt => Object.assign(document.createElement('div'), {{ textContent: txt }});
-          assert = (bool) => {{
-            if (!bool) {{
-              throw new AssertionError('Assertion failed');
-            }}
-          }}
-          exit = _ => null;
-        }} else {{
-          exit = process.exit;
-          assert = require('node:assert')/*.strict*/;
-        }}
-        let last_output;
-        let strings_tbl;
-        const wasm_val_to_js = (type, value_i64) => {{
-            return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
-        }};
-        const wasm_output = (...args) => {{
-            const val = wasm_val_to_js(...args);
-            if (!browser) {{
-              console.log('output: \\x1b[34m%s\\x1b[0m', val);
+        ({{ framerate=30 }} = {{ framerate: 30 }}) => {{
+            let framerate_wait = Math.round(1000 / framerate);
+            let assert;
+            let exit;
+            let browser = false;
+            let output_div;
+            let text_div;
+            if (typeof require === 'undefined') {{
+              browser = true;
+              output_div = document.querySelector('div#hq-output');
+              text_div = txt => Object.assign(document.createElement('div'), {{ textContent: txt }});
+              assert = (bool) => {{
+                if (!bool) {{
+                  throw new AssertionError('Assertion failed');
+                }}
+              }}
+              exit = _ => null;
             }} else {{
-              output_div.appendChild(text_div('output: ' + String(val)));
+              exit = process.exit;
+              assert = require('node:assert')/*.strict*/;
             }}
-            last_output = val;
-        }};
-        const assert_output = (...args) => {{
-            /*assert.equal(last_output, wasm_val_to_js(...args));*/
-            const val = wasm_val_to_js(...args);
-            if (!browser) {{
-              console.log('assert: \\x1b[34m%s\\x1b[0m', val);
-            }} else {{
-              output_div.appendChild(text_div('assert: ' + String(val)));
+            let last_output;
+            let strings_tbl;
+            const wasm_val_to_js = (type, value_i64) => {{
+                return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
+            }};
+            const wasm_output = (...args) => {{
+                const val = wasm_val_to_js(...args);
+                if (!browser) {{
+                  console.log('output: \\x1b[34m%s\\x1b[0m', val);
+                }} else {{
+                  output_div.appendChild(text_div('output: ' + String(val)));
+                }}
+                last_output = val;
+            }};
+            const assert_output = (...args) => {{
+                /*assert.equal(last_output, wasm_val_to_js(...args));*/
+                const val = wasm_val_to_js(...args);
+                if (!browser) {{
+                  console.log('assert: \\x1b[34m%s\\x1b[0m', val);
+                }} else {{
+                  output_div.appendChild(text_div('assert: ' + String(val)));
+                }}
             }}
-        }}
-        const targetOutput = (targetIndex, verb, text) => {{
-            let targetName = {target_names:?}[targetIndex];
-            if (!browser) {{
-              console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
-            }} else {{
-              output_div.appendChild(text_div(`${{targetName}} ${{verb}}: ${{text}}`));
-            }}
-        }};
-        const importObject = {{
-            dbg: {{
-                log: wasm_output,
-                assert: assert_output,
-                logi32 (i32) {{
-                    console.log('logi32: \\x1b[33m%d\\x1b[0m', i32);
-                    return i32;
+            const targetOutput = (targetIndex, verb, text) => {{
+                let targetName = {target_names:?}[targetIndex];
+                if (!browser) {{
+                  console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
+                }} else {{
+                  output_div.appendChild(text_div(`${{targetName}} ${{verb}}: ${{text}}`));
+                }}
+            }};
+            const importObject = {{
+                dbg: {{
+                    log: wasm_output,
+                    assert: assert_output,
+                    logi32 (i32) {{
+                        console.log('logi32: \\x1b[33m%d\\x1b[0m', i32);
+                        return i32;
+                    }},
                 }},
-            }},
-            runtime: {{
-                looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
-                looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
-                operator_equals: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1) == wasm_val_to_js(ty2, val2),
-                operator_random: (lower, upper) => Math.random() * (upper - lower) + lower,
-                operator_join: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString() + wasm_val_to_js(ty2, val2).toString(),
-                operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
-                operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
-                operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().includes(wasm_val_to_js(ty2, val2).toString()),
-                mathop_sin: (n) => parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
-                mathop_cos: (n) => parseFloat(Math.cos((Math.PI * n) / 180).toFixed(10)),
-                mathop_tan: (n) => {{
-                    /* https://github.com/scratchfoundation/scratch-vm/blob/f1f10e0aa856fef6596a622af72b49e2f491f937/src/util/math-util.js#L53-65 */
-                    n = n % 360;
-                    switch (n) {{
-                        case -270:
-                        case 90:
-                            return Infinity;
-                        case -90:
-                        case 270:
-                            return -Infinity;
-                        default:
-                            return parseFloat(Math.tan((Math.PI * n) / 180).toFixed(10));
-                    }}
+                runtime: {{
+                    looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
+                    looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
+                    operator_equals: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1) == wasm_val_to_js(ty2, val2),
+                    operator_random: (lower, upper) => Math.random() * (upper - lower) + lower,
+                    operator_join: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString() + wasm_val_to_js(ty2, val2).toString(),
+                    operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
+                    operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
+                    operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().includes(wasm_val_to_js(ty2, val2).toString()),
+                    mathop_sin: (n) => parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
+                    mathop_cos: (n) => parseFloat(Math.cos((Math.PI * n) / 180).toFixed(10)),
+                    mathop_tan: (n) => {{
+                        /* https://github.com/scratchfoundation/scratch-vm/blob/f1f10e0aa856fef6596a622af72b49e2f491f937/src/util/math-util.js#L53-65 */
+                        n = n % 360;
+                        switch (n) {{
+                            case -270:
+                            case 90:
+                                return Infinity;
+                            case -90:
+                            case 270:
+                                return -Infinity;
+                            default:
+                                return parseFloat(Math.tan((Math.PI * n) / 180).toFixed(10));
+                        }}
+                    }},
+                    mathop_asin: (n) => (Math.asin(n) * 180) / Math.PI,
+                    mathop_acos: (n) => (Math.acos(n) * 180) / Math.PI,
+                    mathop_atan: (n) => (Math.atan(n) * 180) / Math.PI,
+                    mathop_ln: (n) => Math.log(n),
+                    mathop_log: (n) => Math.log(n) / Math.LN10,
+                    mathop_pow_e: (n) => Math.exp(n),
+                    mathop_pow10: (n) => Math.pow(10, n),
                 }},
-                mathop_asin: (n) => (Math.asin(n) * 180) / Math.PI,
-                mathop_acos: (n) => (Math.acos(n) * 180) / Math.PI,
-                mathop_atan: (n) => (Math.atan(n) * 180) / Math.PI,
-                mathop_ln: (n) => Math.log(n),
-                mathop_log: (n) => Math.log(n) / Math.LN10,
-                mathop_pow_e: (n) => Math.exp(n),
-                mathop_pow10: (n) => Math.pow(10, n),
-            }},
-            cast: {{
-              stringtofloat: parseFloat,
-              stringtobool: Boolean,
-              floattostring: Number.prototype.toString,
-            }},
-        }};
-        const buf = new Uint8Array({buf:?});
-        try {{
-            assert(WebAssembly.validate(buf));
-        }} catch {{
+                cast: {{
+                  stringtofloat: parseFloat,
+                  stringtobool: Boolean,
+                  floattostring: Number.prototype.toString,
+                }},
+            }};
+            const buf = new Uint8Array({buf:?});
             try {{
-                new WebAssembly.Module(buf);
-                console.error('invalid WASM module');
-                exit(1);
-            }} catch (e) {{
-                console.error('invalid WASM module: ' + e.message);
-                exit(1);
+                assert(WebAssembly.validate(buf));
+            }} catch {{
+                try {{
+                    new WebAssembly.Module(buf);
+                    console.error('invalid WASM module');
+                    exit(1);
+                }} catch (e) {{
+                    console.error('invalid WASM module: ' + e.message);
+                    exit(1);
+                }}
             }}
-        }}
-        function sleep(ms) {{
-            return new Promise((resolve) => {{
-                setTimeout(resolve, ms);
+            function sleep(ms) {{
+                return new Promise((resolve) => {{
+                    setTimeout(resolve, ms);
+                }});
+            }}
+            WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
+                const {{ green_flag, tick, memory, strings }} = instance.exports;
+                for (const [i, str] of Object.entries({string_consts:?})) {{
+                  strings.set(i, str);
+                }}
+                strings_tbl = strings;
+                green_flag();
+                $outertickloop: while (true) {{
+                    console.log('outer')
+                    const startTime = Date.now();
+                    $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
+                        console.log('inner')
+                        tick();
+                        if (!new Uint32Array(memory.buffer).slice({threads_offset}/4, {threads_offset}/4 + new Uint32Array(memory.buffer)[{thn_offset}/4] + 1).some(x => x > 0)) {{
+                            break $outertickloop;
+                        }}
+                    }}
+                    new Uint8Array(memory.buffer)[{rr_offset}] = 0;
+                    await sleep(framerate_wait - (Date.now() - startTime));
+                }}
+            }}).catch((e) => {{
+                console.error('error when instantiating module:\\n' + e.stack);
+                exit(1);
             }});
         }}
-        WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
-            const {{ green_flag, tick, memory, strings }} = instance.exports;
-            for (const [i, str] of Object.entries({string_consts:?})) {{
-              strings.set(i, str);
-            }}
-            strings_tbl = strings;
-            green_flag();
-            $outertickloop: while (true) {{
-                console.log('outer')
-                const startTime = Date.now();
-                $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
-                    console.log('inner')
-                    tick();
-                    if (!new Uint32Array(memory.buffer).slice({threads_offset}/4, {threads_offset}/4 + new Uint32Array(memory.buffer)[{thn_offset}/4] + 1).some(x => x > 0)) {{
-                        break $outertickloop;
-                    }}
-                }}
-                new Uint8Array(memory.buffer)[{rr_offset}] = 0;
-                await sleep(30 - (Date.now() - startTime));
-            }}
-        }}).catch((e) => {{
-            console.error('error when instantiating module:\\n' + e.stack);
-            exit(1);
-        }});
         ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
 }

@@ -12,10 +12,12 @@ Compile scratch projects to WASM
 ## Building
 
 ```bash
-./build.sh # use --dev for a debug build without optimisation
+./build.sh -pVW # use -dVW for a debug build without optimisation
 ```
 
 You may need to run `chmod +x build.sh` if it says it doesn't have permission.
+
+The build script has additonal configuration options; run `./build.sh -h` for info on these.
 
 ## generared WASM module memory layout
 
@@ -23,7 +25,7 @@ You may need to run `chmod +x build.sh` if it says it doesn't have permission.
 | :-----------: | :------------------------------------------------------------------: | :-------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | redraw_requested |                                 4                                  |    no     | if a redraw has been requested or not                                                                                                                                                                                                                                                                            |
 | thread_num | 4 | no | the number of currently running threads |
-| threads | 4 * thread_num | imdices of the next step funcs of currently running threads |
+| threads | 4 \* thread_num | imdices of the next step funcs of currently running threads |
 | vars | 12 \* number of global & local variables | yes | see [variables](#variables) |
 <!--|    pen        |                       360 \* 480 \* 4 = 691200                       |    yes    | present if pen is used; the pen layer: 4 bytes for each rgba pixel, from left to right, top to bottom                                                                                                                                                                                                              |
 | spriteData    |                      43(?) \* number of sprites                      |    yes    | for each sprite (**not target**), 4 bytes each (1 f32 each) for: x, y, size, direction, costume number, pitch, pan,layer number; plus 1 byte each for: colour effect, ghost effect, mosaic effect, whirl effect, pixelate effect, fisheye effect, brightness effect, volume, visibility, rotation style, draggable |
