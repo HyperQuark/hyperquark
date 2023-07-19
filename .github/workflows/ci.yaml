@@ -101,7 +101,7 @@ jobs:
         run: chmod +x build.sh && ./build.sh -pWV
       
       - name: Move files for gh pages
-        run: mv ./playground/dist dist && mv dist/index.html dist/404.html
+        run: mv ./playground/dist docs && cp docs/index.html docs/404.html
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v4
