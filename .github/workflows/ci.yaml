@@ -108,3 +108,4 @@ jobs:
         with:
           branch: gh-pages
           create_branch: true
+          push_options: '--force'
