@@ -1,6 +1,9 @@
-/target
+/target/
 /Cargo.lock
-bad.wasm
-bad.wat
+/bad.wasm
+/bad.wat
 /wabt*
-js/hyperquark_bg.wasm
+/js/
+/node_modules/
+/package-lock.json
+/playground/dist/

@@ -89,8 +89,25 @@ jobs:
       - name: Install binaryen
         run: sudo apt-get install binaryen
       
+      - name: Install node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20.x"
+          
+      - name: Run npm install
+        run: npm install
+      
       - name: Build
-        run: chmod +x build.sh && ./build.sh
+        run: chmod +x build.sh && ./build.sh -pWV
+      
+      - name: Move files for gh pages
+        run: |
+            [ $GITHUB_REF != "refs/head/main" ] && exit 0
+            mv ./playground/dist docs && cp docs/index.html docs/404.html
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          branch: gh-pages
+          create_branch: true
+          push_options: '--force'
