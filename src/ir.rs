@@ -50,13 +50,15 @@ impl From<Sb3Project> for IrProject {
             {
                 let context = Rc::new(ThreadContext {
                     target_index: target_index.try_into().unwrap(),
-                    dbg: matches!(
-                        target.comments.clone().iter().find(
-                            |(_id, comment)| matches!(comment.block_id.clone(), Some(d) if &d == id)
+                    dbg: target
+                        .comments
+                        .clone()
+                        .iter()
+                        .find(|(_id, comment)| {
+                            matches!(comment.block_id.clone(), Some(d) if &d == id)
                                 && comment.text.clone() == *"hq-dbg"
-                        ),
-                        Some(_)
-                    ),
+                        })
+                        .is_some(),
                     vars: Rc::clone(&vars),
                 });
                 let thread = Thread::from_hat(block.clone(), target.blocks.clone(), context);
