@@ -1,11 +1,17 @@
 <template>
   <h1>{{ props.title || 'untitled' }}</h1>
   <span>by {{ props.author || 'unknown' }}</span>
-  <br>
-  <br>
-  <button @click="start({ framerate: 30 })">green flag</button> <button>stop</button>
-  <canvas width="480" height="360"></canvas>
-  <div id="hq-output">Project output:<br></div>
+  <details v-if="error">
+    <summary>An error occured whilst trying to load the project.</summary>
+    {{ error }}
+  </details>
+  <template v-else>
+    <br>
+    <br>
+    <button @click="start({ framerate: 30 })">green flag</button> <button>stop</button>
+    <canvas width="480" height="360"></canvas>
+    <div id="hq-output">Project output:<br></div>
+  </template>
 </template>
 
 <script setup>
@@ -13,14 +19,21 @@
   import { ref, nextTick } from 'vue';
   
   const props = defineProps(['json', 'title', 'author', 'assets']);
+  let error = ref(null);
   let wasm;
   let start;
   try {
     wasm = sb3_to_wasm(JSON.stringify(props.json));
+    start = eval(wasm);
+    if (!typeof start === 'function') {
+      throw start;
+    }
   } catch (e) {
-    wasm = e;
+    error.value = e.toString();
+    if (e.stack) {
+      error.value += '\n' + e.stack;
+    }
   }
-  start = eval(wasm);
   console.log(start);
 </script>
 

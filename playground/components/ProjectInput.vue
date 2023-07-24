@@ -1,25 +1,33 @@
 <template>
-  <span class=".inline-block">Enter a project id: <span class="projinput inline-block" tabindex=0 @focus="()=>numInput.focus()">https://scratch.mit.edu/projects/<input type="number" min="1" placeholder="771449498" ref="numInput" v-model="projId"></span><button @click="handleNumInput">Go!</button></span> <span class="inline-block">or upload a project: <input type="file" ref="fileInput" @input="handleFileInput"></span>
+   <details v-if="error">
+    <summary>An error occured</summary>
+    {{error}}
+  </details>
+  <template v-else>
+    <span class=".inline-block">Enter a project id: <span class="projinput inline-block" tabindex=0 @focus="()=>numInput.focus()">https://scratch.mit.edu/projects/<input type="number" min="1" placeholder="771449498" ref="numInput" v-model="projId"></span><button @click="handleNumInput">Go!</button></span> <span class="inline-block">or upload a project: <ProjectFileInput @error="err"></ProjectFileInput></span>
+  </template>
 </template>
 
 <script setup>
   import { ref } from "vue";
   import { useRouter } from 'vue-router';
+  import ProjectFileInput from './ProjectFileInput.vue'
   
   const router = useRouter();
   const projId = ref("");
   const numInput = ref(null);
   const fileInput = ref(null);
+  const error = ref(null);
   
   function handleNumInput() {
     if (!/^\d+$/.test(projId.value)) {
       return alert("invalid project id");
     }
-    router.push({ name: 'projectPlayerId', params: { id: projId.value }})
+    router.push({ name: 'projectIdPlayer', params: { id: projId.value }})
   }
   
-  function handleFileInput() {
-    alert("not implemented yet");
+  function err(e) {
+    error.value = e;
   }
 </script>
 
