@@ -1,6 +1,23 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { h, ref } from 'vue';
+import Loading from '../components/Loading.vue';
 
-const view = (name) => () => import(`../views/${name}.vue`);
+let componentCache = Object.setPrototypeOf({}, null);
+
+const view = (name) => ({
+  setup() {
+    let component = componentCache[name];
+    const loading = ref(!Boolean(component));
+    if (loading.value) {
+      import(`../views/${name}.vue`).then((c) => {
+        loading.value = false;
+        component = c.default;
+        componentCache[name] = component;
+      });
+    }
+    return () => loading.value ? h(Loading) : h(component);
+  }
+});
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

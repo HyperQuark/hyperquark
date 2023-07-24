@@ -4,13 +4,12 @@ import { RouterLink, RouterView } from 'vue-router'
 
 <template>
   <div class="wrapper">
-      <nav>
-        <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-        <a href="https://github.com/hyperquark/">Github</a>
-      </nav>
-    </div>
-
+    <nav>
+      <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark</RouterLink>
+      <RouterLink to="/about">About</RouterLink>
+      <a href="https://github.com/hyperquark/">Github</a>
+    </nav>
+  </div>
   <RouterView />
 </template>
 
