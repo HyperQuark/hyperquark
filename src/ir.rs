@@ -403,7 +403,8 @@ impl IrOpcode {
             operator_join => BlockDescriptor::new(vec![Any, Any], Text),
             operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
             operator_length => BlockDescriptor::new(vec![Any], Number),
-            hq_goto { .. } | hq_goto_if { .. } => BlockDescriptor::new(vec![], Stack),
+            hq_goto { .. } => BlockDescriptor::new(vec![], Stack),
+            hq_goto_if { .. } => BlockDescriptor::new(vec![Boolean], Stack),
             _ => todo!("{:?}", &self),
         }
     }
@@ -696,6 +697,11 @@ pub fn step_from_top_block(
             type_stack.push((index, (*op.opcode().descriptor().output()).clone()));
         }
     }
+    assert!(
+      type_stack.is_empty(),
+      "type stack too big (expected 0 items at end of step, got {})",
+      type_stack.len()
+    );
     for (index, ty) in expected_outputs {
         ops.get_mut(index)
             .expect("ir block doesn't exist (E043)")
