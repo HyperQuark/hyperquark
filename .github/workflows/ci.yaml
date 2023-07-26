@@ -66,7 +66,8 @@ jobs:
           args: --all -- --check
 
   buildwasm:
-    name: Build WASM
+    name: Build WASM & website
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -101,9 +102,7 @@ jobs:
         run: chmod +x build.sh && ./build.sh -pWV
       
       - name: Move files for gh pages
-        run: |
-            [ $GITHUB_REF != "refs/head/main" ] && exit 0
-            mv ./playground/dist docs && cp docs/index.html docs/404.html
+        run: mv ./playground/dist docs && cp docs/index.html docs/404.html
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v4
