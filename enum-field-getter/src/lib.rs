@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro_error::{emit_warning, proc_macro_error};
+use proc_macro_error::{emit_warning, proc_macro_error, abort_call_site};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
@@ -55,7 +55,9 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
             tuple_field_info.remove(&tuple_removeable);
         }
         let getters = field_info.keys().map(|k| format_ident!("{}", k));
+        let getters_mut = field_info.keys().map(|k| format_ident!("{}_mut", k));
         let types = field_info.values().map(|v| v.0.clone());
+        let types_mut = types.clone();
         let field_info_vec = field_info.iter().collect::<Vec<_>>();
         let matches = field_info_vec.iter().map(|(k, v)| {
             let variants =
@@ -73,8 +75,11 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
                 }
             }
         });
+        let matches_mut = matches.clone();
         let tuple_getters = tuple_field_info.keys().map(|k| format_ident!("get_{}", k));
+        let tuple_getters_mut = tuple_field_info.keys().map(|k| format_ident!("get_{}_mut", k));
         let tuple_types = tuple_field_info.values().map(|v| v.0.clone());
+        let tuple_types_mut = tuple_types.clone();
         let tuple_field_info_vec = tuple_field_info.iter().collect::<Vec<_>>();
         let tuple_matches = tuple_field_info_vec.iter().map(|(k, v)| {
             let variants =
@@ -94,6 +99,7 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
                 }
             }
         });
+        let tuple_matches_mut = tuple_matches.clone();
         quote! {
             impl #name {
                 #(
@@ -106,10 +112,20 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
                     #tuple_matches
                 }
                 )*
+                #(
+                pub fn #getters_mut (&mut self) -> Option<&mut #types_mut> {
+                    #matches_mut
+                }
+                )*
+                #(
+                pub fn #tuple_getters_mut (&mut self) -> Option<&mut #tuple_types_mut> {
+                    #tuple_matches_mut
+                }
+                )*
             }
         }
         .into()
     } else {
-        panic!("macro can only be used on enums");
+        abort_call_site!("macro can only be used on enums");
     }
 }
