@@ -647,7 +647,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     },
                     BlockOpcode::control_if => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
-                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, block_info.next.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: Some(step_from_top_block(block_info.next.clone().unwrap(), None, blocks, Rc::clone(&context))), does_yield: false, }]
+                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, block_info.next.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some(step_from_top_block(block_info.next.clone().unwrap(), None, blocks, Rc::clone(&context))) } else { None }, does_yield: false, }]
                     }
                     BlockOpcode::control_if_else => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
