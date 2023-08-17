@@ -489,6 +489,7 @@ trait IrBlockVec {
         block_id: String,
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
+        last_nexts: Vec<String>,
     );
     fn add_block_arr(&mut self, block_arr: &BlockArray);
 }
@@ -548,6 +549,7 @@ impl IrBlockVec for Vec<IrBlock> {
         block_id: String,
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
+        last_nexts: Vec<String>,
     ) {
         let block = blocks.get(&block_id).unwrap();
         match block {
@@ -566,6 +568,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                         id.clone(),
                                         blocks,
                                         Rc::clone(&context),
+                                        last_nexts.clone(), // this probably isn't needed bc inputs donpt have a next? passing an empty vec would save some memory and overhead
                                     );
                                 }
                                 BlockArrayOrId::Array(arr) => {
@@ -647,12 +650,20 @@ impl IrBlockVec for Vec<IrBlock> {
                     },
                     BlockOpcode::control_if => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
-                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, block_info.next.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some(step_from_top_block(block_info.next.clone().unwrap(), None, blocks, Rc::clone(&context))) } else { None }, does_yield: false, }]
+                        let mut new_nexts = last_nexts.clone();
+                        if let Some(ref next) = block_info.next {
+                            new_nexts.push(next.clone());
+                        }
+                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, new_nexts, blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some(step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context))) } else { None }, does_yield: false, }]
                     }
                     BlockOpcode::control_if_else => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
                         let substack2_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK2").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK2 input") };
-                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, block_info.next.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: Some(step_from_top_block(substack2_id, block_info.next.clone(), blocks, Rc::clone(&context))), does_yield: false, }]
+                        let mut new_nexts = last_nexts.clone();
+                        if let Some(ref next) = block_info.next {
+                            new_nexts.push(next.clone());
+                        }
+                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: Some(step_from_top_block(substack2_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }]
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
@@ -664,7 +675,7 @@ impl IrBlockVec for Vec<IrBlock> {
 
 pub fn step_from_top_block(
     top_id: String,
-    last_next: Option<String>,
+    mut last_nexts: Vec<String>,
     blocks: &BTreeMap<String, Block>,
     context: Rc<ThreadContext>,
 ) -> Rc<Step> {
@@ -672,9 +683,9 @@ pub fn step_from_top_block(
     let mut next_block = blocks.get(&top_id).unwrap();
     let mut next_id = Some(top_id);
     loop {
-        ops.add_block(next_id.clone().unwrap(), blocks, Rc::clone(&context));
+        ops.add_block(next_id.clone().unwrap(), blocks, Rc::clone(&context), last_nexts.clone());
         if next_block.block_info().unwrap().next.is_none() {
-            next_id = last_next.clone();
+            next_id = last_nexts.pop();
         } else {
             next_id = next_block.block_info().unwrap().next.clone();
         }
@@ -728,7 +739,7 @@ pub fn step_from_top_block(
         IrBlock::from(IrOpcode::hq_goto {
             step: Some(Rc::clone(&step_from_top_block(
                 id.clone(),
-                if last_next != Some(id.clone()) { last_next.clone() } else { None },
+                last_nexts,
                 blocks,
                 Rc::clone(&context),
             ))),
@@ -763,7 +774,7 @@ impl Thread {
     ) -> Thread {
         let first_step = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
-                step_from_top_block(next_id.clone(), None, &blocks, Rc::clone(&context))
+                step_from_top_block(next_id.clone(), vec![], &blocks, Rc::clone(&context))
             } else {
                 unreachable!();
             }
