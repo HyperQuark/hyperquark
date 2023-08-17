@@ -1,7 +1,6 @@
 // intermediate representation
 use crate::sb3::{
-    Block, BlockArray, BlockArrayOrId, BlockOpcode, Field, Input, Sb3Project, VarVal,
-    VariableInfo,
+    Block, BlockArray, BlockArrayOrId, BlockOpcode, Field, Input, Sb3Project, VarVal, VariableInfo,
 };
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
@@ -51,18 +50,13 @@ impl From<Sb3Project> for IrProject {
             {
                 let context = Rc::new(ThreadContext {
                     target_index: target_index.try_into().unwrap(),
-                    dbg: target
-                        .comments
-                        .clone()
-                        .iter()
-                        .any(|(_id, comment)| {
-                            matches!(comment.block_id.clone(), Some(d) if &d == id)
-                                && comment.text.clone() == *"hq-dbg"
-                        }),
+                    dbg: target.comments.clone().iter().any(|(_id, comment)| {
+                        matches!(comment.block_id.clone(), Some(d) if &d == id)
+                            && comment.text.clone() == *"hq-dbg"
+                    }),
                     vars: Rc::clone(&vars),
                 });
-                let thread =
-                    Thread::from_hat(block.clone(), target.blocks.clone(), context);
+                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), context);
                 threads.push(thread);
             }
         }
@@ -659,7 +653,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_if_else => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
                         let substack2_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK2").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK2 input") };
-                        let mut new_nexts = last_nexts.clone();
+                        let mut new_nexts = last_nexts;
                         if let Some(ref next) = block_info.next {
                             new_nexts.push(next.clone());
                         }
@@ -683,7 +677,12 @@ pub fn step_from_top_block(
     let mut next_block = blocks.get(&top_id).unwrap();
     let mut next_id = Some(top_id);
     loop {
-        ops.add_block(next_id.clone().unwrap(), blocks, Rc::clone(&context), last_nexts.clone());
+        ops.add_block(
+            next_id.clone().unwrap(),
+            blocks,
+            Rc::clone(&context),
+            last_nexts.clone(),
+        );
         if next_block.block_info().unwrap().next.is_none() {
             next_id = last_nexts.pop();
         } else {
@@ -691,7 +690,7 @@ pub fn step_from_top_block(
         }
         assert!(!ops.is_empty());
         if matches!(ops.last().unwrap().opcode(), IrOpcode::hq_goto { .. }) {
-          next_id = None;
+            next_id = None;
         }
         if next_id.is_none() {
             break;
@@ -735,22 +734,23 @@ pub fn step_from_top_block(
             .set_expected_output(ty.clone());
     }
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
-    step.opcodes_mut().push(if let Some(ref id) = next_id.clone() {
-        IrBlock::from(IrOpcode::hq_goto {
-            step: Some(Rc::clone(&step_from_top_block(
-                id.clone(),
-                last_nexts,
-                blocks,
-                Rc::clone(&context),
-            ))),
-            does_yield: true,
-        })
-    } else {
-        IrBlock::from(IrOpcode::hq_goto {
-            step: None,
-            does_yield: false,
-        })
-    });
+    step.opcodes_mut()
+        .push(if let Some(ref id) = next_id {
+            IrBlock::from(IrOpcode::hq_goto {
+                step: Some(Rc::clone(&step_from_top_block(
+                    id.clone(),
+                    last_nexts,
+                    blocks,
+                    Rc::clone(&context),
+                ))),
+                does_yield: true,
+            })
+        } else {
+            IrBlock::from(IrOpcode::hq_goto {
+                step: None,
+                does_yield: false,
+            })
+        });
     Rc::from(step)
 }
 
