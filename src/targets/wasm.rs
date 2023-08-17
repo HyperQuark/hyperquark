@@ -187,6 +187,7 @@ fn instructions(
             "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
             _ => panic!("invalid OPERATOR field (E041)"),
         },
+        hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto {
             step,
             does_yield: true,
@@ -350,7 +351,8 @@ fn instructions(
                     .try_into()
                     .expect("THREAD_INDICES out of bounds (E018)");
                 vec![
-                    If(WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                    I32WrapI64,
+                    If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
                     LocalGet(0),
                     I32Const(
                         next_step_index
@@ -374,6 +376,8 @@ fn instructions(
                     .expect("vars.len() out of bounds (E032)");
 
                 vec![
+                    I32WrapI64,
+                    If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
                     LocalGet(0),
                     I32Const(byte_offset::THREADS),
                     I32Add, // destination (= current thread pos in memory)
@@ -418,6 +422,7 @@ fn instructions(
                     }),
                     I32Const(0),
                     Return,
+                    End,
                 ]
             }
         }
@@ -428,7 +433,8 @@ fn instructions(
             if let Some(next_step) = step {
                 let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
                 vec![
-                    If(WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                    I32WrapI64,
+                    If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
                     LocalGet(step_func_locals::MEM_LOCATION),
                     I32Const(
                         next_step_index
@@ -450,6 +456,8 @@ fn instructions(
                     .expect("vars.len() out of bounds (E032)");
 
                 vec![
+                    I32WrapI64,
+                    If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
                     LocalGet(0),
                     I32Const(byte_offset::THREADS),
                     I32Add, // destination (= current thread pos in memory)
@@ -494,6 +502,7 @@ fn instructions(
                     }),
                     I32Const(0),
                     Return,
+                    End,
                 ]
             }
         }
@@ -587,65 +596,6 @@ impl CompileToWasm for Rc<Step> {
             for instr in instrs {
                 func.instruction(&instr);
             }
-        }
-        let _thread_indices: u64 = byte_offset::THREADS
-            .try_into()
-            .expect("THREAD_INDICES out of bounds (E018)");
-        let vars_num: i32 = self
-            .context()
-            .vars
-            .len()
-            .try_into()
-            .expect("vars.len() out of bounds (E032)");
-        if !matches!(
-            self.opcodes().last().unwrap().opcode(),
-            IrOpcode::hq_goto { .. }
-        ) {
-            func.instruction(&Instruction::LocalGet(0));
-            func.instruction(&Instruction::I32Const(byte_offset::THREADS));
-            func.instruction(&Instruction::I32Add); // destination (= current thread pos in memory)
-            func.instruction(&Instruction::LocalGet(0));
-            func.instruction(&Instruction::I32Const(byte_offset::THREADS + 4));
-            func.instruction(&Instruction::I32Add); // source (= current thread pos + 4)
-            func.instruction(&Instruction::I32Const(0));
-            func.instruction(&Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .expect("THREAD_NUM out of bounds (E009)"),
-                align: 2,
-                memory_index: 0,
-            }));
-            func.instruction(&Instruction::I32Const(4));
-            func.instruction(&Instruction::I32Mul);
-            func.instruction(&Instruction::I32Const(
-                byte_offset::THREADS - 4 + vars_num * 12,
-            ));
-            func.instruction(&Instruction::I32Add);
-            func.instruction(&Instruction::LocalGet(0));
-            func.instruction(&Instruction::I32Sub); // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
-            func.instruction(&Instruction::MemoryCopy {
-                src_mem: 0,
-                dst_mem: 0,
-            });
-            func.instruction(&Instruction::I32Const(0));
-            func.instruction(&Instruction::I32Const(0));
-            func.instruction(&Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .expect("THREAD_NUM out of bounds (E010)"),
-                align: 2,
-                memory_index: 0,
-            }));
-            func.instruction(&Instruction::I32Const(1));
-            func.instruction(&Instruction::I32Sub);
-            func.instruction(&Instruction::I32Store(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .expect("THREAD_NUM out of bounds (E011)"),
-                align: 2,
-                memory_index: 0,
-            }));
-            func.instruction(&Instruction::I32Const(0));
         }
         func.instruction(&Instruction::End);
         step_funcs.insert(Some(Rc::clone(self)), func);
@@ -1522,7 +1472,7 @@ mod tests {
         }
         let output = Command::new("node")
             .arg("-e")
-            .arg(wasm.js_string())
+            .arg(format!("({})()", wasm.js_string()))
             .stdout(Stdio::inherit())
             .output()
             .expect("failed to execute process");

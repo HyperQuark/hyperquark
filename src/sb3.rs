@@ -219,6 +219,29 @@ pub enum Block {
     Special(BlockArray),
 }
 
+/*impl Block {
+  pub fn fixup_nexts(&mut self, blocks: &mut BTreeMap<String, Block>, final_next: Option<String>) {
+    use BlockOpcode::*;
+    let Some(bi) = self.block_info() else {
+      return;
+    };
+    if matches!(bi.opcode, control_if | control_if_else |  control_forever | control_repeat | control_repeat_until | control_while | control_for_each) {
+      for (name, input) in &bi.inputs {
+        if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
+          if let BlockArrayOrId::Id(input_id) = input.get_1().unwrap().clone().unwrap() {
+            blocks.bottom_block_mut(&input_id).fixup_nexts(blocks, bi.next.clone());//.block_info_mut().unwrap().next = next;
+          }
+        }
+      }
+    }
+    if bi.next.is_none() {
+      self.block_info_mut().unwrap().next = final_next;
+    } else {
+      blocks.get_mut(&bi.next.clone().unwrap()).unwrap().fixup_nexts(blocks, final_next);
+    }
+  }
+}*/
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BlockArray {
@@ -235,14 +258,14 @@ pub enum BlockArrayOrId {
     Array(BlockArray),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Input {
     Shadow(u32, Option<BlockArrayOrId>, Option<BlockArrayOrId>),
     NoShadow(u32, Option<BlockArrayOrId>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Field {
     Value((Option<VarVal>,)),
@@ -328,21 +351,21 @@ pub enum VariableInfo {
     CloudVar(String, VarVal, bool),
     LocalVar(String, VarVal),
 }
-
+/*
 pub trait BlockMap {
-    fn get_bottom_block(&self, id: &str) -> &Block;
+    fn bottom_block<'a>(&'a self, id: &'a str) -> String;
 }
 
 impl BlockMap for BTreeMap<String, Block> {
-    fn get_bottom_block(&self, id: &str) -> &Block {
+    fn bottom_block<'a>(&'a self, id: &'a str) -> String {
         let block = self.get(id).unwrap();
         if let Some(next) = &block.block_info().unwrap().next {
-            self.get_bottom_block(next)
+            self.bottom_block(next)
         } else {
-            block
+            id.to_string()
         }
     }
-}
+}*/
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -451,7 +474,20 @@ impl TryFrom<&str> for Sb3Project {
         use serde_json::error::Category;
         let sb3: Result<Self, serde_json::Error> = serde_json::from_str(string);
         match sb3 {
-            Ok(proj) => Ok(proj),
+            Ok(proj) => Ok(proj), /*{
+            for target in &mut proj.targets {
+            for (id, _block) in target.blocks.iter().filter(|(_id, block)| block.block_info().is_some() && block.block_info().unwrap().parent.is_none()) {
+            target.blocks = target.blocks.fixup_nexts(id.to_string(), None);
+            }
+            //target.blocks.fixup_nexts();
+            // for (_id, block) in &mut target.blocks {
+            //   if block.block_info().is_some() && block.block_info().unwrap().parent.is_none() {
+            //     block.fixup_nexts(&mut target.blocks, None);
+            //   }
+            // }
+            }
+            Ok(proj)
+            },*/
             Err(err) => Err(match err.classify() {
                 Category::Syntax => "Invalid JSON syntax",
                 Category::Data => "Invalid project.json",
