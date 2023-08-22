@@ -18,8 +18,9 @@ use wasm_encoder::{
 fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
-    step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+    step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
     string_consts: &mut Vec<String>,
+    steps: &BTreeMap<String, Step>,
 ) -> Vec<Instruction<'static>> {
     use Instruction::*;
     use IrBlockType::*;
@@ -192,8 +193,9 @@ fn instructions(
             step,
             does_yield: true,
         } => {
-            if let Some(next_step) = step {
-                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+            if let Some(next_step_id) = step {
+                let next_step = steps.get(next_step_id).unwrap();
+                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 let thread_indices: u64 = byte_offset::THREADS
                     .try_into()
                     .expect("THREAD_INDICES out of bounds (E018)");
@@ -271,8 +273,9 @@ fn instructions(
             step,
             does_yield: false,
         } => {
-            if let Some(next_step) = step {
-                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+            if let Some(next_step_id) = step {
+                let next_step = steps.get(next_step_id).unwrap();
+                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 vec![
                     LocalGet(step_func_locals::MEM_LOCATION),
                     I32Const(
@@ -345,8 +348,9 @@ fn instructions(
             step,
             does_yield: true,
         } => {
-            if let Some(next_step) = step {
-                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+            if let Some(next_step_id) = step {
+                let next_step = steps.get(next_step_id).unwrap();
+                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 let thread_indices: u64 = byte_offset::THREADS
                     .try_into()
                     .expect("THREAD_INDICES out of bounds (E018)");
@@ -430,8 +434,9 @@ fn instructions(
             step,
             does_yield: false,
         } => {
-            if let Some(next_step) = step {
-                let next_step_index = next_step.compile_wasm(step_funcs, string_consts);
+            if let Some(next_step_id) = step {
+                let next_step = steps.get(next_step_id).unwrap();
+                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 vec![
                     I32WrapI64,
                     If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
@@ -555,30 +560,33 @@ fn instructions(
 pub trait CompileToWasm {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
         string_consts: &mut Vec<String>,
+        steps: &BTreeMap<String, Step>,
     ) -> u32;
 }
 
 impl CompileToWasm for Thread {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
         string_consts: &mut Vec<String>,
+        steps: &BTreeMap<String, Step>,
     ) -> u32 {
-        self.first_step().compile_wasm(step_funcs, string_consts)
+        (self.first_step(), steps.get(self.first_step()).unwrap()).compile_wasm(step_funcs, string_consts, steps)
     }
 }
 
-impl CompileToWasm for Rc<Step> {
+impl CompileToWasm for (&String, &Step) {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<Rc<Step>>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
         string_consts: &mut Vec<String>,
+        steps: &BTreeMap<String, Step>,
     ) -> u32 {
-        if step_funcs.contains_key(&Some(Rc::clone(self))) {
+        if step_funcs.contains_key(&Some(self.0.clone())) {
             return step_funcs
-                .get_index_of(&Some(Rc::clone(self)))
+                .get_index_of(&Some(self.0.clone()))
                 .unwrap()
                 .try_into()
                 .expect("IndexMap index out of bounds");
@@ -591,14 +599,14 @@ impl CompileToWasm for Rc<Step> {
             ValType::I32,
         ];
         let mut func = Function::new_with_locals_types(locals);
-        for op in self.opcodes() {
-            let instrs = instructions(op, self.context(), step_funcs, string_consts);
+        for op in self.1.opcodes() {
+            let instrs = instructions(op, self.1.context(), step_funcs, string_consts, steps);
             for instr in instrs {
                 func.instruction(&instr);
             }
         }
         func.instruction(&Instruction::End);
-        step_funcs.insert(Some(Rc::clone(self)), func);
+        step_funcs.insert(Some(self.0.clone()), func);
         (step_funcs.len() - 1)
             .try_into()
             .expect("step_funcs length out of bounds")
@@ -1097,11 +1105,11 @@ impl From<IrProject> for WebWasmFile {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let mut step_funcs: IndexMap<Option<Rc<Step>>, Function, _> = Default::default();
+        let mut step_funcs: IndexMap<Option<String>, Function, _> = Default::default();
         step_funcs.insert(None, noop_func);
 
         for thread in project.threads {
-            let first_idx = thread.compile_wasm(&mut step_funcs, &mut string_consts);
+            let first_idx = thread.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
             thread_indices.push((thread.start().clone(), first_idx));
         }
 
