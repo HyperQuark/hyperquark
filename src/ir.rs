@@ -33,7 +33,7 @@ impl From<Sb3Project> for IrProject {
                 })
                 .collect(),
         );
-        
+
         let mut steps: BTreeMap<String, Step> = Default::default();
         let mut threads: Vec<Thread> = vec![];
         for (target_index, target) in sb3.targets.iter().enumerate() {
@@ -58,7 +58,8 @@ impl From<Sb3Project> for IrProject {
                     }),
                     vars: Rc::clone(&vars),
                 });
-                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), context, &mut steps);
+                let thread =
+                    Thread::from_hat(block.clone(), target.blocks.clone(), context, &mut steps);
                 threads.push(thread);
             }
         }
@@ -769,10 +770,7 @@ pub fn step_from_top_block<'a>(
 
 impl Thread {
     pub fn new(start: ThreadStart, first_step: String) -> Thread {
-        Thread {
-            start,
-            first_step,
-        }
+        Thread { start, first_step }
     }
     pub fn start(&self) -> &ThreadStart {
         &self.start
@@ -788,7 +786,16 @@ impl Thread {
     ) -> Thread {
         let (first_step_id, _first_step) = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
-                (next_id.clone(), step_from_top_block(next_id.clone(), vec![], &blocks, Rc::clone(&context), steps))
+                (
+                    next_id.clone(),
+                    step_from_top_block(
+                        next_id.clone(),
+                        vec![],
+                        &blocks,
+                        Rc::clone(&context),
+                        steps,
+                    ),
+                )
             } else {
                 unreachable!();
             }

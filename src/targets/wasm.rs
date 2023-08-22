@@ -195,7 +195,8 @@ fn instructions(
         } => {
             if let Some(next_step_id) = step {
                 let next_step = steps.get(next_step_id).unwrap();
-                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
+                let next_step_index =
+                    (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 let thread_indices: u64 = byte_offset::THREADS
                     .try_into()
                     .expect("THREAD_INDICES out of bounds (E018)");
@@ -275,7 +276,8 @@ fn instructions(
         } => {
             if let Some(next_step_id) = step {
                 let next_step = steps.get(next_step_id).unwrap();
-                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
+                let next_step_index =
+                    (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 vec![
                     LocalGet(step_func_locals::MEM_LOCATION),
                     I32Const(
@@ -350,7 +352,8 @@ fn instructions(
         } => {
             if let Some(next_step_id) = step {
                 let next_step = steps.get(next_step_id).unwrap();
-                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
+                let next_step_index =
+                    (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 let thread_indices: u64 = byte_offset::THREADS
                     .try_into()
                     .expect("THREAD_INDICES out of bounds (E018)");
@@ -436,7 +439,8 @@ fn instructions(
         } => {
             if let Some(next_step_id) = step {
                 let next_step = steps.get(next_step_id).unwrap();
-                let next_step_index = (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
+                let next_step_index =
+                    (next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
                 vec![
                     I32WrapI64,
                     If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
@@ -573,7 +577,11 @@ impl CompileToWasm for Thread {
         string_consts: &mut Vec<String>,
         steps: &BTreeMap<String, Step>,
     ) -> u32 {
-        (self.first_step(), steps.get(self.first_step()).unwrap()).compile_wasm(step_funcs, string_consts, steps)
+        (self.first_step(), steps.get(self.first_step()).unwrap()).compile_wasm(
+            step_funcs,
+            string_consts,
+            steps,
+        )
     }
 }
 
@@ -1109,7 +1117,8 @@ impl From<IrProject> for WebWasmFile {
         step_funcs.insert(None, noop_func);
 
         for thread in project.threads {
-            let first_idx = thread.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
+            let first_idx =
+                thread.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
             thread_indices.push((thread.start().clone(), first_idx));
         }
 
