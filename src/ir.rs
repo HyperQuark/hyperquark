@@ -659,6 +659,8 @@ impl IrBlockVec for Vec<IrBlock> {
                         }
                         vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: Some(step_from_top_block(substack2_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }]
                     }
+                    BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
+                    BlockOpcode::control_repeat_until => vec![IrOpcode::hq_drop(1)],
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
             }
