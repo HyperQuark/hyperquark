@@ -689,13 +689,38 @@ impl IrBlockVec for Vec<IrBlock> {
                         }
                         step_from_top_block(block_info.next.clone().unwrap(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
                         step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps);
-                        let opcodes = vec![
-                            IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false },
-                            IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false },
-                        ];
-                        steps.insert(block_id.clone(), Step::new(opcodes.clone().into_iter().map(IrBlock::from).collect::<Vec<_>>(), Rc::clone(&context)));
+                        let mut opcodes = vec![];
+                        for (name, input) in &block_info.inputs {
+                            if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
+                                continue;
+                            }
+                            match input {
+                                Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
+                                    let Some(block) = maybe_block else { panic!("block doest exist"); };
+                                    match block {
+                                        BlockArrayOrId::Id(id) => {
+                                            opcodes.add_block(
+                                                id.clone(),
+                                                blocks,
+                                                Rc::clone(&context),
+                                                vec![],
+                                                steps,
+                                            );
+                                        }
+                                        BlockArrayOrId::Array(arr) => {
+                                            opcodes.add_block_arr(arr);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        opcodes.append(&mut vec![
+                            IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false }.into(),
+                            IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                        ]);
+                        steps.insert(block_id.clone(), Step::new(opcodes.clone(), Rc::clone(&context)));
                         //step_from_top_block(block_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        opcodes
+                        opcodes.into_iter().map(|block| block.opcode().clone()).collect::<Vec<_>>()
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
