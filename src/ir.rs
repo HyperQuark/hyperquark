@@ -671,7 +671,22 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![IrOpcode::hq_goto_if { step: Some(substack_id), does_yield: false, }, IrOpcode::hq_goto { step: Some(substack2_id), does_yield: false, }]
                     }
                     BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
-                    BlockOpcode::control_repeat_until => vec![IrOpcode::hq_drop(1)],
+                    BlockOpcode::control_repeat_until => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
+                        step_from_top_block(block_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
+                        if !steps.contains_key(&substack_id) {
+                            step_from_top_block(substack_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
+                            steps.get_mut(&substack_id).unwrap().opcodes_mut().append(&mut vec![
+                                IrOpcode::hq_goto_if { step: Some(block_id.clone()), does_yield: false },
+                                IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false },
+                            ].into_iter().map(IrBlock::from).collect());
+                        }
+                        vec![
+                            IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false },
+                            IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false },
+                        ]
+                    }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
             }
