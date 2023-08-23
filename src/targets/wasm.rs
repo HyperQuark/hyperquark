@@ -1,5 +1,5 @@
 use crate::ir::{
-    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, Thread, ThreadContext,
+    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext,
     ThreadStart,
 };
 use alloc::collections::BTreeMap;
@@ -453,21 +453,6 @@ pub trait CompileToWasm {
         string_consts: &mut Vec<String>,
         steps: &IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> u32;
-}
-
-impl CompileToWasm for Thread {
-    fn compile_wasm(
-        &self,
-        step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
-        string_consts: &mut Vec<String>,
-        steps: &IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
-    ) -> u32 {
-        (self.first_step(), steps.get(self.first_step()).unwrap()).compile_wasm(
-            step_funcs,
-            string_consts,
-            steps,
-        )
-    }
 }
 
 impl CompileToWasm for (&String, &Step) {
@@ -1007,7 +992,7 @@ impl From<IrProject> for WebWasmFile {
 
         for thread in project.threads {
             let first_idx =
-                thread.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
+                project.steps.get_index_of(thread.first_step()).unwrap().try_into().expect("step index out of bounds");
             thread_indices.push((thread.start().clone(), first_idx));
         }
 
