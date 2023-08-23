@@ -987,6 +987,8 @@ impl From<IrProject> for WebWasmFile {
         step_funcs.insert(None, noop_func);
         
         for step in &project.steps {
+            // make sure to skip the 0th (noop) step because we've added the noop step function 3 lines above
+            if step.0 == "" { continue };
             step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
         }
 
