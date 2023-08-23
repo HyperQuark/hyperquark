@@ -6,6 +6,9 @@ use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::hash::BuildHasherDefault;
+use hashers::fnv::FNV1aHasher64;
+use indexmap::IndexMap;
 use ordered_float::OrderedFloat;
 
 #[derive(Debug)]
@@ -13,7 +16,7 @@ pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<Vec<IrVar>>,
     pub targets: Vec<String>,
-    pub steps: BTreeMap<String, Step>,
+    pub steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
 }
 
 impl From<Sb3Project> for IrProject {
@@ -34,7 +37,10 @@ impl From<Sb3Project> for IrProject {
                 .collect(),
         );
 
-        let mut steps: BTreeMap<String, Step> = Default::default();
+        let mut steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>> = Default::default();
+        // insert a noop step so that these step indices match up with the step function indices in the generated wasm
+        // (step function 0 is a noop)
+        steps.insert("".into(), Step::new(vec![], Rc::new(ThreadContext { target_index: u32::MAX, dbg: false, vars: Rc::new(vec![])})));
         let mut threads: Vec<Thread> = vec![];
         for (target_index, target) in sb3.targets.iter().enumerate() {
             for (id, block) in
@@ -488,7 +494,7 @@ trait IrBlockVec {
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
         last_nexts: Vec<String>,
-        steps: &mut BTreeMap<String, Step>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     );
     fn add_block_arr(&mut self, block_arr: &BlockArray);
 }
@@ -549,7 +555,7 @@ impl IrBlockVec for Vec<IrBlock> {
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
         last_nexts: Vec<String>,
-        steps: &mut BTreeMap<String, Step>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     ) {
         let block = blocks.get(&block_id).unwrap();
         match block {
@@ -673,19 +679,23 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
-                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        step_from_top_block(block_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        if !steps.contains_key(&substack_id) {
-                            step_from_top_block(substack_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
-                            steps.get_mut(&substack_id).unwrap().opcodes_mut().append(&mut vec![
+                        let looper_id = block_id.clone() + &mut block_id.clone();
+                        if !steps.contains_key(&looper_id) {
+                            let looper_opcodes = vec![
                                 IrOpcode::hq_goto_if { step: Some(block_id.clone()), does_yield: false },
                                 IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false },
-                            ].into_iter().map(IrBlock::from).collect());
+                            ].into_iter().map(IrBlock::from).collect::<Vec<_>>();
+                            steps.insert(looper_id.clone(), Step::new(looper_opcodes, Rc::clone(&context)));
                         }
-                        vec![
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
+                        step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps);
+                        let opcodes = vec![
                             IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false },
                             IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false },
-                        ]
+                        ];
+                        steps.insert(block_id.clone(), Step::new(opcodes.clone().into_iter().map(IrBlock::from).collect::<Vec<_>>(), Rc::clone(&context)));
+                        //step_from_top_block(block_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
+                        opcodes
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
@@ -700,7 +710,7 @@ pub fn step_from_top_block<'a>(
     mut last_nexts: Vec<String>,
     blocks: &BTreeMap<String, Block>,
     context: Rc<ThreadContext>,
-    steps: &'a mut BTreeMap<String, Step>,
+    steps: &'a mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
 ) -> &'a Step {
     if steps.contains_key(&top_id) {
         return steps.get(&top_id).unwrap();
@@ -727,8 +737,14 @@ pub fn step_from_top_block<'a>(
         }
         if next_id.is_none() {
             break;
+        } else if let Some(block) = blocks.get(&next_id.clone().unwrap()) {
+            next_block = block;
+        } else if steps.contains_key(&next_id.clone().unwrap()) {
+            ops.push(IrOpcode::hq_goto { step: Some(next_id.clone().unwrap()), does_yield: false }.into());
+            next_id = None;
+            break;
         } else {
-            next_block = blocks.get(&next_id.clone().unwrap()).unwrap();
+            panic!("invalid next_id");
         }
         let Some(last_block) = ops.last() else { unreachable!() };
         if last_block.does_request_redraw()
@@ -797,7 +813,7 @@ impl Thread {
         hat: Block,
         blocks: BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
-        steps: &mut BTreeMap<String, Step>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> Thread {
         let (first_step_id, _first_step) = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
