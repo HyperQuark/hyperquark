@@ -508,9 +508,42 @@ trait IrBlockVec {
         steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     );
     fn add_block_arr(&mut self, block_arr: &BlockArray);
+    fn add_inputs(
+        &mut self,
+        inputs: &BTreeMap<String, Input>,
+        blocks: &BTreeMap<String, Block>,
+        context: Rc<ThreadContext>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    );
 }
 
 impl IrBlockVec for Vec<IrBlock> {
+    fn add_inputs(
+        &mut self,
+        inputs: &BTreeMap<String, Input>,
+        blocks: &BTreeMap<String, Block>,
+        context: Rc<ThreadContext>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    ) {
+        for (name, input) in inputs {
+            if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
+                continue;
+            }
+            match input {
+                Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
+                    let Some(block) = maybe_block else { panic!("block doest exist"); };
+                    match block {
+                        BlockArrayOrId::Id(id) => {
+                            self.add_block(id.clone(), blocks, Rc::clone(&context), vec![], steps);
+                        }
+                        BlockArrayOrId::Array(arr) => {
+                            self.add_block_arr(arr);
+                        }
+                    }
+                }
+            }
+        }
+    }
     fn add_block_arr(&mut self, block_arr: &BlockArray) {
         self.push(
             match block_arr {
@@ -572,30 +605,7 @@ impl IrBlockVec for Vec<IrBlock> {
         match block {
             Block::Normal { block_info, .. } => {
                 //println!("{}: {:?}", &block_id, &block_info.opcode);
-                for (name, input) in &block_info.inputs {
-                    if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
-                        continue;
-                    }
-                    match input {
-                        Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
-                            let Some(block) = maybe_block else { panic!("block doest exist"); };
-                            match block {
-                                BlockArrayOrId::Id(id) => {
-                                    self.add_block(
-                                        id.clone(),
-                                        blocks,
-                                        Rc::clone(&context),
-                                        last_nexts.clone(), // this probably isn't needed bc inputs donpt have a next? passing an empty vec would save some memory and overhead
-                                        steps,
-                                    );
-                                }
-                                BlockArrayOrId::Array(arr) => {
-                                    self.add_block_arr(arr);
-                                }
-                            }
-                        }
-                    }
-                }
+                self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
 
                 self.append(&mut (match block_info.opcode {
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
@@ -701,30 +711,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         step_from_top_block(block_info.next.clone().unwrap(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
                         step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps);
                         let mut opcodes = vec![];
-                        for (name, input) in &block_info.inputs {
-                            if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
-                                continue;
-                            }
-                            match input {
-                                Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
-                                    let Some(block) = maybe_block else { panic!("block doest exist"); };
-                                    match block {
-                                        BlockArrayOrId::Id(id) => {
-                                            opcodes.add_block(
-                                                id.clone(),
-                                                blocks,
-                                                Rc::clone(&context),
-                                                vec![],
-                                                steps,
-                                            );
-                                        }
-                                        BlockArrayOrId::Array(arr) => {
-                                            opcodes.add_block_arr(arr);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
                         opcodes.append(&mut vec![
                             IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false }.into(),
                             IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
