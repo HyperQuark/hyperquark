@@ -816,8 +816,9 @@ pub fn step_from_top_block<'a>(
     }
     assert!(
         type_stack.is_empty(),
-        "type stack too big (expected 0 items at end of step, got {})",
-        type_stack.len()
+        "type stack too big (expected 0 items at end of step, got {} ({:?}))",
+        type_stack.len(),
+        &type_stack,
     );
     for (index, ty) in expected_outputs {
         ops.get_mut(index)
