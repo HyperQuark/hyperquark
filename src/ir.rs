@@ -515,9 +515,42 @@ trait IrBlockVec {
         context: Rc<ThreadContext>,
         steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     );
+    fn fixup_types(&mut self);
 }
 
 impl IrBlockVec for Vec<IrBlock> {
+    fn fixup_types(&mut self) {
+        let mut type_stack: Vec<(usize, BlockType)> = vec![];
+        let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
+        for (index, op) in self.iter().enumerate() {
+            assert!(
+                type_stack.len() >= op.opcode().descriptor().inputs().len(),
+                "type stack not big enough (expected >={} items, got {}) (E019)",
+                op.opcode().descriptor().inputs().len(),
+                type_stack.len()
+            );
+            for block_type in op.opcode().descriptor().inputs().iter().rev() {
+                let top_type = type_stack
+                    .pop()
+                    .expect("couldn't pop from type stack (E020)");
+                expected_outputs.push((top_type.0, block_type.clone()))
+            }
+            if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
+                type_stack.push((index, (*op.opcode().descriptor().output()).clone()));
+            }
+        }
+        assert!(
+            type_stack.is_empty(),
+            "type stack too big (expected 0 items at end of step, got {} ({:?}))",
+            type_stack.len(),
+            &type_stack,
+        );
+        for (index, ty) in expected_outputs {
+            self.get_mut(index)
+                .expect("ir block doesn't exist (E043)")
+                .set_expected_output(ty.clone());
+        }
+    }
     fn add_inputs(
         &mut self,
         inputs: &BTreeMap<String, Input>,
@@ -782,36 +815,7 @@ pub fn step_from_top_block<'a>(
             break;
         }
     }
-    let mut type_stack: Vec<(usize, BlockType)> = vec![];
-    let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
-    for (index, op) in ops.iter().enumerate() {
-        assert!(
-            type_stack.len() >= op.opcode().descriptor().inputs().len(),
-            "type stack not big enough (expected >={} items, got {}) (E019)",
-            op.opcode().descriptor().inputs().len(),
-            type_stack.len()
-        );
-        for block_type in op.opcode().descriptor().inputs().iter().rev() {
-            let top_type = type_stack
-                .pop()
-                .expect("couldn't pop from type stack (E020)");
-            expected_outputs.push((top_type.0, block_type.clone()))
-        }
-        if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
-            type_stack.push((index, (*op.opcode().descriptor().output()).clone()));
-        }
-    }
-    assert!(
-        type_stack.is_empty(),
-        "type stack too big (expected 0 items at end of step, got {} ({:?}))",
-        type_stack.len(),
-        &type_stack,
-    );
-    for (index, ty) in expected_outputs {
-        ops.get_mut(index)
-            .expect("ir block doesn't exist (E043)")
-            .set_expected_output(ty.clone());
-    }
+    ops.fixup_types();
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
     step.opcodes_mut().push(if let Some(ref id) = next_id {
         step_from_top_block(id.clone(), last_nexts, blocks, Rc::clone(&context), steps);
