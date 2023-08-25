@@ -1193,7 +1193,7 @@ impl From<IrProject> for WebWasmFile {
 
         let wasm_bytes = module.finish();
         Self { js_string: format!("
-        ({{ framerate=30 }} = {{ framerate: 30 }}) => {{
+        ({{ framerate=30 }} = {{ framerate: 30 }}) => new Promise((resolve, reject) => {{
             let framerate_wait = Math.round(1000 / framerate);
             let assert;
             let exit;
@@ -1299,10 +1299,10 @@ impl From<IrProject> for WebWasmFile {
             }} catch {{
                 try {{
                     new WebAssembly.Module(buf);
-                    console.error('invalid WASM module');
+                    reject('invalid WASM module');
                     exit(1);
                 }} catch (e) {{
-                    console.error('invalid WASM module: ' + e.message);
+                    reject('invalid WASM module: ' + e.message);
                     exit(1);
                 }}
             }}
@@ -1317,6 +1317,7 @@ impl From<IrProject> for WebWasmFile {
                   strings.set(i, str);
                 }}
                 strings_tbl = strings;
+                resolve({{ strings, green_flag, tick, memory }});
                 green_flag();
                 $outertickloop: while (true) {{
                     console.log('outer')
@@ -1332,10 +1333,10 @@ impl From<IrProject> for WebWasmFile {
                     await sleep(framerate_wait - (Date.now() - startTime));
                 }}
             }}).catch((e) => {{
-                console.error('error when instantiating module:\\n' + e.stack);
+                reject('error when instantiating module:\\n' + e.stack);
                 exit(1);
             }});
-        }}
+        }})
         ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
 }
@@ -1355,22 +1356,11 @@ mod tests {
             .unwrap();
         let ir: IrProject = proj.into();
         let wasm: WebWasmFile = ir.into();
-        println!("{}", wasm.js_string());
-        let output2 = Command::new("node")
-            .arg("-e")
-            .arg(format!(
-                "fs.writeFileSync('bad.wasm', Buffer.from({buf:?}), 'binary');",
-                buf = wasm.wasm_bytes()
-            ))
-            .stdout(Stdio::inherit())
-            .output()
-            .expect("failed to execute process");
-        if !output2.status.success() {
-            panic!("failed to write to bad.wasm");
-        }
+        fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
+        fs::write("./bad.js", wasm.js_string()).expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
-            .arg(format!("({})()", wasm.js_string()))
+            .arg(format!("({})().catch(console.error)", wasm.js_string()))
             .stdout(Stdio::inherit())
             .output()
             .expect("failed to execute process");
