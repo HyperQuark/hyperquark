@@ -37,10 +37,21 @@ impl From<Sb3Project> for IrProject {
                 .collect(),
         );
 
-        let mut steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>> = Default::default();
+        let mut steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>> =
+            Default::default();
         // insert a noop step so that these step indices match up with the step function indices in the generated wasm
         // (step function 0 is a noop)
-        steps.insert("".into(), Step::new(vec![], Rc::new(ThreadContext { target_index: u32::MAX, dbg: false, vars: Rc::new(vec![])})));
+        steps.insert(
+            "".into(),
+            Step::new(
+                vec![],
+                Rc::new(ThreadContext {
+                    target_index: u32::MAX,
+                    dbg: false,
+                    vars: Rc::new(vec![]),
+                }),
+            ),
+        );
         let mut threads: Vec<Thread> = vec![];
         for (target_index, target) in sb3.targets.iter().enumerate() {
             for (id, block) in
@@ -765,7 +776,13 @@ pub fn step_from_top_block<'a>(
         } else if let Some(block) = blocks.get(&next_id.clone().unwrap()) {
             next_block = block;
         } else if steps.contains_key(&next_id.clone().unwrap()) {
-            ops.push(IrOpcode::hq_goto { step: Some(next_id.clone().unwrap()), does_yield: false }.into());
+            ops.push(
+                IrOpcode::hq_goto {
+                    step: Some(next_id.clone().unwrap()),
+                    does_yield: false,
+                }
+                .into(),
+            );
             next_id = None;
             break;
         } else {

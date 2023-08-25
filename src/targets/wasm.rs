@@ -1,6 +1,5 @@
 use crate::ir::{
-    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext,
-    ThreadStart,
+    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
 };
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
@@ -985,16 +984,22 @@ impl From<IrProject> for WebWasmFile {
 
         let mut step_funcs: IndexMap<Option<String>, Function, _> = Default::default();
         step_funcs.insert(None, noop_func);
-        
+
         for step in &project.steps {
             // make sure to skip the 0th (noop) step because we've added the noop step function 3 lines above
-            if step.0 == "" { continue };
+            if step.0 == "" {
+                continue;
+            };
             step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
         }
 
         for thread in project.threads {
-            let first_idx =
-                project.steps.get_index_of(thread.first_step()).unwrap().try_into().expect("step index out of bounds");
+            let first_idx = project
+                .steps
+                .get_index_of(thread.first_step())
+                .unwrap()
+                .try_into()
+                .expect("step index out of bounds");
             thread_indices.push((thread.start().clone(), first_idx));
         }
 
