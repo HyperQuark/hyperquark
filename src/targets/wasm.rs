@@ -95,7 +95,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM put of bounds (E036)"),
+                        .expect("THREAD_NUM out of bounds (E036)"),
                     align: 2,
                     memory_index: 0,
                 }),
