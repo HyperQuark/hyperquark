@@ -1357,7 +1357,7 @@ mod tests {
         let ir: IrProject = proj.into();
         let wasm: WebWasmFile = ir.into();
         fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
-        fs::write("./bad.js", wasm.js_string()).expect("failed to write to bad.js");
+        fs::write("./bad.mjs", format!("export default {};", wasm.js_string())).expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
             .arg(format!("({})().catch(console.error)", wasm.js_string()))
