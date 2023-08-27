@@ -420,7 +420,7 @@ impl IrOpcode {
             operator_join => BlockDescriptor::new(vec![Any, Any], Text),
             operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
             operator_length => BlockDescriptor::new(vec![Any], Number),
-            hq_goto { .. } => BlockDescriptor::new(vec![], Stack),
+            hq_goto { .. } | sensing_resettimer => BlockDescriptor::new(vec![], Stack),
             hq_goto_if { .. } => BlockDescriptor::new(vec![Boolean], Stack),
             hq_drop(n) => BlockDescriptor::new(vec![Any; *n], Stack),
             _ => todo!("{:?}", &self),
@@ -641,6 +641,7 @@ impl IrBlockVec for Vec<IrBlock> {
 
                 self.append(&mut (match block_info.opcode {
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                    BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_resettimer],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
                     BlockOpcode::looks_think => vec![IrOpcode::looks_think],
                     BlockOpcode::operator_add => vec![IrOpcode::operator_add],

@@ -187,6 +187,7 @@ fn instructions(
             _ => panic!("invalid OPERATOR field (E041)"),
         },
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
+        sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
             let vars_num: i32 = context
@@ -536,19 +537,20 @@ pub mod func_indices {
     pub const MATHOP_POW_E: u32 = 22;
     pub const MATHOP_POW10: u32 = 23;
     pub const SENSING_TIMER: u32 = 24;
+    pub const SENSING_RESETTIMER: u32 = 24;
 
     /* wasm funcs */
     pub const FMOD: u32 = 25;
-    pub const CAST_FLOAT_BOOL: u32 = 26;
-    pub const CAST_BOOL_FLOAT: u32 = 27;
-    pub const CAST_BOOL_STRING: u32 = 28;
-    pub const CAST_ANY_STRING: u32 = 29;
-    pub const CAST_ANY_FLOAT: u32 = 30;
-    pub const CAST_ANY_BOOL: u32 = 31;
-    pub const TABLE_ADD_STRING: u32 = 32;
+    pub const CAST_FLOAT_BOOL: u32 = 27;
+    pub const CAST_BOOL_FLOAT: u32 = 28;
+    pub const CAST_BOOL_STRING: u32 = 29;
+    pub const CAST_ANY_STRING: u32 = 30;
+    pub const CAST_ANY_FLOAT: u32 = 31;
+    pub const CAST_ANY_BOOL: u32 = 32;
+    pub const TABLE_ADD_STRING: u32 = 33;
 }
-pub const BUILTIN_FUNCS: u32 = 33;
-pub const IMPORTED_FUNCS: u32 = 25;
+pub const BUILTIN_FUNCS: u32 = 34;
+pub const IMPORTED_FUNCS: u32 = 26;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -789,6 +791,11 @@ impl From<IrProject> for WebWasmFile {
             "runtime",
             "sensing_timer",
             EntityType::Function(types::NOPARAM_F64),
+        );
+        imports.import(
+            "runtime",
+            "sensing_resettimer",
+            EntityType::Function(types::NOPARAM_NORESULT),
         );
 
         functions.function(types::F64x2_F64);
@@ -1290,6 +1297,7 @@ impl From<IrProject> for WebWasmFile {
                     mathop_pow_e: (n) => Math.exp(n),
                     mathop_pow10: (n) => Math.pow(10, n),
                     sensing_timer: () => (Date.now() - start_time) / 1000,
+                    sensing_resettimer: () => start_time = Date.now(),
                 }},
                 cast: {{
                   stringtofloat: parseFloat,
