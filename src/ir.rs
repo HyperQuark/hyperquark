@@ -387,7 +387,8 @@ impl IrOpcode {
             | math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
-            | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
+            | math_positive_number { .. }
+            | sensing_timer => BlockDescriptor::new(vec![], Number),
             data_variable { .. } => BlockDescriptor::new(vec![], Any),
             data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
             //data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
@@ -574,6 +575,7 @@ impl IrBlockVec for Vec<IrBlock> {
                 }
 
                 self.append(&mut (match block_info.opcode {
+                    BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
                     BlockOpcode::looks_think => vec![IrOpcode::looks_think],
                     BlockOpcode::operator_add => vec![IrOpcode::operator_add],
@@ -657,7 +659,37 @@ impl IrBlockVec for Vec<IrBlock> {
                         if let Some(ref next) = block_info.next {
                             new_nexts.push(next.clone());
                         }
+<<<<<<< Updated upstream
                         vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: Some(step_from_top_block(substack2_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }]
+=======
+                        step_from_top_block(substack_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps);
+                        step_from_top_block(substack2_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps);
+                        vec![IrOpcode::hq_goto_if { step: Some(substack_id), does_yield: false, }, IrOpcode::hq_goto { step: Some(substack2_id), does_yield: false, }]
+                    }
+                    BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
+                    BlockOpcode::control_repeat_until => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
+                        let condition_opcodes = vec![
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: true }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: true }.into(),
+                            ];
+                        let looper_id = block_id.clone() + &mut block_id.clone();
+                        if !steps.contains_key(&looper_id) {
+                            let mut looper_opcodes = vec![];
+                            looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
+                            looper_opcodes.append(&mut condition_opcodes.clone());
+                            looper_opcodes.fixup_types();
+                            steps.insert(looper_id.clone(), Step::new(looper_opcodes, Rc::clone(&context)));
+                        }
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps);
+                        step_from_top_block(substack_id, vec![looper_id], blocks, Rc::clone(&context), steps);
+                        let mut opcodes = vec![];
+                        opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
+                        opcodes.append(&mut condition_opcodes.clone());
+                        opcodes.fixup_types();
+                        steps.insert(block_id.clone(), Step::new(opcodes.clone(), Rc::clone(&context)));
+                        condition_opcodes.into_iter().map(|block| block.opcode().clone()).collect::<_>()
+>>>>>>> Stashed changes
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
