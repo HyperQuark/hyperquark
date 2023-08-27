@@ -1303,21 +1303,9 @@ impl From<IrProject> for WebWasmFile {
             }} catch {{
                 try {{
                     new WebAssembly.Module(buf);
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-                    console.error('invalid WASM module');
-=======
-                    reject('invalid WASM module');
->>>>>>> 151c0889f347e326af68543b01441b88e048438d
-                    exit(1);
-                }} catch (e) {{
-                    reject('invalid WASM module: ' + e.message);
-                    exit(1);
-=======
                     return reject('invalid WASM module');
                 }} catch (e) {{
                     return reject('invalid WASM module: ' + e.message);
->>>>>>> Stashed changes
                 }}
             }}
             function sleep(ms) {{
@@ -1331,7 +1319,7 @@ impl From<IrProject> for WebWasmFile {
                   strings.set(i, str);
                 }}
                 strings_tbl = strings;
-                resolve({{ strings, green_flag, tick, memory }});
+                /*resolve({{ strings, green_flag, tick, memory }})*/;
                 green_flag();
                 startTime = Date.now();
                 $outertickloop: while (true) {{
