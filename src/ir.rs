@@ -408,7 +408,8 @@ impl IrOpcode {
             | math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
-            | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
+            | math_positive_number { .. }
+            | sensing_timer => BlockDescriptor::new(vec![], Number),
             data_variable { .. } => BlockDescriptor::new(vec![], Any),
             data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
             text { .. } => BlockDescriptor::new(vec![], Text),
@@ -639,6 +640,7 @@ impl IrBlockVec for Vec<IrBlock> {
                 self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
 
                 self.append(&mut (match block_info.opcode {
+                    BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
                     BlockOpcode::looks_think => vec![IrOpcode::looks_think],
                     BlockOpcode::operator_add => vec![IrOpcode::operator_add],
@@ -732,8 +734,8 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
                         let condition_opcodes = vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: true }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: true }.into(),
                             ];
                         let looper_id = block_id.clone() + &mut block_id.clone();
                         if !steps.contains_key(&looper_id) {

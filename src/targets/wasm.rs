@@ -186,6 +186,7 @@ fn instructions(
             "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
             _ => panic!("invalid OPERATOR field (E041)"),
         },
+        sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
             let vars_num: i32 = context
@@ -534,19 +535,20 @@ pub mod func_indices {
     pub const MATHOP_LOG: u32 = 21;
     pub const MATHOP_POW_E: u32 = 22;
     pub const MATHOP_POW10: u32 = 23;
+    pub const SENSING_TIMER: u32 = 24;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 24;
-    pub const CAST_FLOAT_BOOL: u32 = 25;
-    pub const CAST_BOOL_FLOAT: u32 = 26;
-    pub const CAST_BOOL_STRING: u32 = 27;
-    pub const CAST_ANY_STRING: u32 = 28;
-    pub const CAST_ANY_FLOAT: u32 = 29;
-    pub const CAST_ANY_BOOL: u32 = 30;
-    pub const TABLE_ADD_STRING: u32 = 31;
+    pub const FMOD: u32 = 25;
+    pub const CAST_FLOAT_BOOL: u32 = 26;
+    pub const CAST_BOOL_FLOAT: u32 = 27;
+    pub const CAST_BOOL_STRING: u32 = 28;
+    pub const CAST_ANY_STRING: u32 = 29;
+    pub const CAST_ANY_FLOAT: u32 = 30;
+    pub const CAST_ANY_BOOL: u32 = 31;
+    pub const TABLE_ADD_STRING: u32 = 32;
 }
-pub const BUILTIN_FUNCS: u32 = 32;
-pub const IMPORTED_FUNCS: u32 = 24;
+pub const BUILTIN_FUNCS: u32 = 33;
+pub const IMPORTED_FUNCS: u32 = 25;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -782,6 +784,11 @@ impl From<IrProject> for WebWasmFile {
             "runtime",
             "mathop_pow10",
             EntityType::Function(types::F64_F64),
+        );
+        imports.import(
+            "runtime",
+            "sensing_timer",
+            EntityType::Function(types::NOPARAM_F64),
         );
 
         functions.function(types::F64x2_F64);
@@ -1240,6 +1247,7 @@ impl From<IrProject> for WebWasmFile {
                   output_div.appendChild(text_div(`${{targetName}} ${{verb}}: ${{text}}`));
                 }}
             }};
+            let start_time = 0;
             const importObject = {{
                 dbg: {{
                     log: wasm_output,
@@ -1281,6 +1289,7 @@ impl From<IrProject> for WebWasmFile {
                     mathop_log: (n) => Math.log(n) / Math.LN10,
                     mathop_pow_e: (n) => Math.exp(n),
                     mathop_pow10: (n) => Math.pow(10, n),
+                    sensing_timer: () => (Date.now() - startTime) / 1000,
                 }},
                 cast: {{
                   stringtofloat: parseFloat,
@@ -1294,11 +1303,9 @@ impl From<IrProject> for WebWasmFile {
             }} catch {{
                 try {{
                     new WebAssembly.Module(buf);
-                    reject('invalid WASM module');
-                    exit(1);
+                    return reject('invalid WASM module');
                 }} catch (e) {{
-                    reject('invalid WASM module: ' + e.message);
-                    exit(1);
+                    return reject('invalid WASM module: ' + e.message);
                 }}
             }}
             function sleep(ms) {{
@@ -1314,22 +1321,25 @@ impl From<IrProject> for WebWasmFile {
                 strings_tbl = strings;
                 resolve({{ strings, green_flag, tick, memory }});
                 green_flag();
+                startTime = Date.now();
                 $outertickloop: while (true) {{
-                    console.log('outer')
-                    const startTime = Date.now();
-                    $innertickloop: while (Date.now() - startTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
-                        console.log('inner')
+                    /*console.log('outer')*/
+                    const thisTickStartTime = Date.now();
+                    $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
+                        /*console.log('inner')*/
                         tick();
                         if (!new Uint32Array(memory.buffer).slice({threads_offset}/4, {threads_offset}/4 + new Uint32Array(memory.buffer)[{thn_offset}/4] + 1).some(x => x > 0)) {{
                             break $outertickloop;
                         }}
                     }}
                     new Uint8Array(memory.buffer)[{rr_offset}] = 0;
-                    await sleep(framerate_wait - (Date.now() - startTime));
+                    if (framerate_wait > 0) {{
+                        await sleep(Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)));
+                    }}
                 }}
             }}).catch((e) => {{
                 reject('error when instantiating module:\\n' + e.stack);
-                exit(1);
+                /*exit(1);*/
             }});
         }})
         ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
@@ -1356,7 +1366,7 @@ mod tests {
             .expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
-            .arg(format!("({})().catch(console.error)", wasm.js_string()))
+            .arg(format!("({})().catch(e => {{ console.error(e); process.exit(1) }})", wasm.js_string()))
             .stdout(Stdio::inherit())
             .output()
             .expect("failed to execute process");

@@ -1,6 +1,7 @@
 <template>
   <h1>{{ props.title || 'untitled' }}</h1>
   <span>by {{ props.author || 'unknown' }}</span>
+  <input type="checkbox" name="turbo" :value="turbo"> <label for="turbo">turbo mode</label>
   <details v-if="error">
     <summary>An error occured whilst trying to load the project.</summary>
     {{ error }}
@@ -8,7 +9,7 @@
   <template v-else>
     <br>
     <br>
-    <button @click="start({ framerate: 30 })">green flag</button> <button>stop</button>
+    <button @click="greenFlag">green flag</button> <button>stop</button>
     <canvas width="480" height="360"></canvas>
     <div id="hq-output">Project output:<br></div>
   </template>
@@ -20,6 +21,7 @@
   
   const props = defineProps(['json', 'title', 'author', 'assets']);
   let error = ref(null);
+  let turbo = ref(false);
   let wasm;
   let start;
   try {
@@ -35,6 +37,14 @@
     }
   }
   console.log(start);
+  function greenFlag() {
+    start({ framerate: turbo ? Infinity : 30 }).then(_=>alert('done')).catch(e => {
+      error.value = e.toString();
+      if (e.stack) {
+        error.value += '\n' + e.stack;
+      }
+    });
+  }
 </script>
 
 <style scoped>
