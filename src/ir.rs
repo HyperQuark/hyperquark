@@ -734,8 +734,8 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
                         let condition_opcodes = vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: true }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: true }.into(),
                             ];
                         let looper_id = block_id.clone() + &mut block_id.clone();
                         if !steps.contains_key(&looper_id) {
