@@ -1,7 +1,7 @@
 /target/
 /Cargo.lock
 /bad.wasm
-/bad.js
+/bad.mjs
 /bad.wat
 /wabt*
 /js/
