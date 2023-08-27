@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro_error::{emit_warning, proc_macro_error, abort_call_site};
+use proc_macro_error::{abort_call_site, emit_warning, proc_macro_error};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
@@ -77,7 +77,9 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
         });
         let matches_mut = matches.clone();
         let tuple_getters = tuple_field_info.keys().map(|k| format_ident!("get_{}", k));
-        let tuple_getters_mut = tuple_field_info.keys().map(|k| format_ident!("get_{}_mut", k));
+        let tuple_getters_mut = tuple_field_info
+            .keys()
+            .map(|k| format_ident!("get_{}_mut", k));
         let tuple_types = tuple_field_info.values().map(|v| v.0.clone());
         let tuple_types_mut = tuple_types.clone();
         let tuple_field_info_vec = tuple_field_info.iter().collect::<Vec<_>>();
