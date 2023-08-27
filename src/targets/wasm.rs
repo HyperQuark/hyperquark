@@ -1289,7 +1289,7 @@ impl From<IrProject> for WebWasmFile {
                     mathop_log: (n) => Math.log(n) / Math.LN10,
                     mathop_pow_e: (n) => Math.exp(n),
                     mathop_pow10: (n) => Math.pow(10, n),
-                    sensing_timer: () => (Date.now() - startTime) / 1000,
+                    sensing_timer: () => (Date.now() - start_time) / 1000,
                 }},
                 cast: {{
                   stringtofloat: parseFloat,
