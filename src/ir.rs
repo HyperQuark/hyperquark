@@ -411,7 +411,6 @@ impl IrOpcode {
             | math_positive_number { .. } => BlockDescriptor::new(vec![], Number),
             data_variable { .. } => BlockDescriptor::new(vec![], Any),
             data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
-            //data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
             text { .. } => BlockDescriptor::new(vec![], Text),
             operator_lt | operator_gt => BlockDescriptor::new(vec![Number, Number], Boolean),
             operator_equals | operator_contains => BlockDescriptor::new(vec![Any, Any], Boolean),
@@ -489,7 +488,7 @@ impl Step {
 pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
-    pub vars: Rc<Vec<IrVar>>, // hopefully there can't be two variables with the same id in differwnt sprites, otherwise this will break horrendously
+    pub vars: Rc<Vec<IrVar>>, // todo: fix variable id collisions between targets
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -637,7 +636,6 @@ impl IrBlockVec for Vec<IrBlock> {
         let block = blocks.get(&block_id).unwrap();
         match block {
             Block::Normal { block_info, .. } => {
-                //println!("{}: {:?}", &block_id, &block_info.opcode);
                 self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
 
                 self.append(&mut (match block_info.opcode {
@@ -733,32 +731,26 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
+                        let condition_opcodes = vec![
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
+                            ];
                         let looper_id = block_id.clone() + &mut block_id.clone();
                         if !steps.contains_key(&looper_id) {
                             let mut looper_opcodes = vec![];
                             looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
-                            looper_opcodes.append(&mut vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
-                            ]);
+                            looper_opcodes.append(&mut condition_opcodes.clone());
                             looper_opcodes.fixup_types();
                             steps.insert(looper_id.clone(), Step::new(looper_opcodes, Rc::clone(&context)));
                         }
-                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps);
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps);
+                        step_from_top_block(substack_id, vec![looper_id], blocks, Rc::clone(&context), steps);
                         let mut opcodes = vec![];
                         opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
-                        opcodes.append(&mut vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
-                            ]);
+                        opcodes.append(&mut condition_opcodes.clone());
                         opcodes.fixup_types();
                         steps.insert(block_id.clone(), Step::new(opcodes.clone(), Rc::clone(&context)));
-                        //step_from_top_block(block_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
-                            ]
+                        condition_opcodes.into_iter().map(|block| block.opcode().clone()).collect::<_>()
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());

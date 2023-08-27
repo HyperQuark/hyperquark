@@ -17,7 +17,6 @@ use wasm_encoder::{
 fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
-    _step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
     string_consts: &mut Vec<String>,
     steps: &IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
 ) -> Vec<Instruction<'static>> {
@@ -248,7 +247,6 @@ fn instructions(
         } => {
             let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            //(next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
             let thread_indices: u64 = byte_offset::THREADS
                 .try_into()
                 .expect("THREAD_INDICES out of bounds (E018)");
@@ -274,7 +272,6 @@ fn instructions(
         } => {
             let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            //(next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
             vec![
                 LocalGet(step_func_locals::MEM_LOCATION),
                 I32Const(
@@ -298,7 +295,7 @@ fn instructions(
 
             vec![
                 I32WrapI64,
-                If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                If(WasmBlockType::Empty),
                 LocalGet(0),
                 I32Const(byte_offset::THREADS),
                 I32Add, // destination (= current thread pos in memory)
@@ -352,13 +349,12 @@ fn instructions(
         } => {
             let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            //(next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
             let thread_indices: u64 = byte_offset::THREADS
                 .try_into()
                 .expect("THREAD_INDICES out of bounds (E018)");
             vec![
                 I32WrapI64,
-                If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                If(WasmBlockType::Empty),
                 LocalGet(0),
                 I32Const(
                     next_step_index
@@ -381,10 +377,9 @@ fn instructions(
         } => {
             let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            //(next_step_id, next_step).compile_wasm(step_funcs, string_consts, steps);
             vec![
                 I32WrapI64,
-                If(WasmBlockType::Empty), //WasmBlockType::FunctionType(types::NOPARAM_I32)),
+                If(WasmBlockType::Empty),
                 LocalGet(step_func_locals::MEM_LOCATION),
                 I32Const(
                     next_step_index
@@ -477,7 +472,7 @@ impl CompileToWasm for (&String, &Step) {
         ];
         let mut func = Function::new_with_locals_types(locals);
         for op in self.1.opcodes() {
-            let instrs = instructions(op, self.1.context(), step_funcs, string_consts, steps);
+            let instrs = instructions(op, self.1.context(), string_consts, steps);
             for instr in instrs {
                 func.instruction(&instr);
             }
@@ -519,7 +514,7 @@ pub mod func_indices {
     pub const DBG_ASSERT: u32 = 1;
     pub const LOOKS_SAY: u32 = 2;
     pub const LOOKS_THINK: u32 = 3;
-    pub const CAST_PRIMITIVE_FLOAT_STRING: u32 = 4; // js functions can only rwturm 1 value so need wrapper functions for casting
+    pub const CAST_PRIMITIVE_FLOAT_STRING: u32 = 4; // js functions can only return 1 value so need wrapper functions for casting
     pub const CAST_PRIMITIVE_STRING_FLOAT: u32 = 5;
     pub const CAST_PRIMITIVE_STRING_BOOL: u32 = 6;
     pub const DBG_LOGI32: u32 = 7;
@@ -987,7 +982,7 @@ impl From<IrProject> for WebWasmFile {
 
         for step in &project.steps {
             // make sure to skip the 0th (noop) step because we've added the noop step function 3 lines above
-            if step.0 == "" {
+            if step.0.is_empty() {
                 continue;
             };
             step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
@@ -1357,7 +1352,8 @@ mod tests {
         let ir: IrProject = proj.into();
         let wasm: WebWasmFile = ir.into();
         fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
-        fs::write("./bad.mjs", format!("export default {};", wasm.js_string())).expect("failed to write to bad.js");
+        fs::write("./bad.mjs", format!("export default {};", wasm.js_string()))
+            .expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
             .arg(format!("({})().catch(console.error)", wasm.js_string()))
