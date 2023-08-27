@@ -6,6 +6,9 @@ use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::hash::BuildHasherDefault;
+use hashers::fnv::FNV1aHasher64;
+use indexmap::IndexMap;
 use ordered_float::OrderedFloat;
 
 #[derive(Debug)]
@@ -13,6 +16,7 @@ pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<Vec<IrVar>>,
     pub targets: Vec<String>,
+    pub steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
 }
 
 impl From<Sb3Project> for IrProject {
@@ -33,6 +37,21 @@ impl From<Sb3Project> for IrProject {
                 .collect(),
         );
 
+        let mut steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>> =
+            Default::default();
+        // insert a noop step so that these step indices match up with the step function indices in the generated wasm
+        // (step function 0 is a noop)
+        steps.insert(
+            "".into(),
+            Step::new(
+                vec![],
+                Rc::new(ThreadContext {
+                    target_index: u32::MAX,
+                    dbg: false,
+                    vars: Rc::new(vec![]),
+                }),
+            ),
+        );
         let mut threads: Vec<Thread> = vec![];
         for (target_index, target) in sb3.targets.iter().enumerate() {
             for (id, block) in
@@ -56,7 +75,8 @@ impl From<Sb3Project> for IrProject {
                     }),
                     vars: Rc::clone(&vars),
                 });
-                let thread = Thread::from_hat(block.clone(), target.blocks.clone(), context);
+                let thread =
+                    Thread::from_hat(block.clone(), target.blocks.clone(), context, &mut steps);
                 threads.push(thread);
             }
         }
@@ -69,6 +89,7 @@ impl From<Sb3Project> for IrProject {
             vars,
             threads,
             targets,
+            steps,
         }
     }
 }
@@ -137,11 +158,11 @@ pub enum IrOpcode {
     event_whenbroadcastreceived,
     hq_drop(usize),
     hq_goto {
-        step: Option<Rc<Step>>,
+        step: Option<String>,
         does_yield: bool,
     },
     hq_goto_if {
-        step: Option<Rc<Step>>,
+        step: Option<String>,
         does_yield: bool,
     },
     looks_say,
@@ -391,7 +412,6 @@ impl IrOpcode {
             | sensing_timer => BlockDescriptor::new(vec![], Number),
             data_variable { .. } => BlockDescriptor::new(vec![], Any),
             data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
-            //data_changevariableby { .. } => BlockDescriptor::new(vec![Number], Stack),
             text { .. } => BlockDescriptor::new(vec![], Text),
             operator_lt | operator_gt => BlockDescriptor::new(vec![Number, Number], Boolean),
             operator_equals | operator_contains => BlockDescriptor::new(vec![Any, Any], Boolean),
@@ -469,13 +489,13 @@ impl Step {
 pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
-    pub vars: Rc<Vec<IrVar>>, // hopefully there can't be two variables with the same id in differwnt sprites, otherwise this will break horrendously
+    pub vars: Rc<Vec<IrVar>>, // todo: fix variable id collisions between targets
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Thread {
     start: ThreadStart,
-    first_step: Rc<Step>,
+    first_step: String,
 }
 
 trait IrBlockVec {
@@ -485,11 +505,78 @@ trait IrBlockVec {
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
         last_nexts: Vec<String>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     );
     fn add_block_arr(&mut self, block_arr: &BlockArray);
+    fn add_inputs(
+        &mut self,
+        inputs: &BTreeMap<String, Input>,
+        blocks: &BTreeMap<String, Block>,
+        context: Rc<ThreadContext>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    );
+    fn fixup_types(&mut self);
 }
 
 impl IrBlockVec for Vec<IrBlock> {
+    fn fixup_types(&mut self) {
+        let mut type_stack: Vec<(usize, BlockType)> = vec![];
+        let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
+        for (index, op) in self.iter().enumerate() {
+            assert!(
+                type_stack.len() >= op.opcode().descriptor().inputs().len(),
+                "type stack not big enough (expected >={} items, got {}) (E019)",
+                op.opcode().descriptor().inputs().len(),
+                type_stack.len()
+            );
+            for block_type in op.opcode().descriptor().inputs().iter().rev() {
+                let top_type = type_stack
+                    .pop()
+                    .expect("couldn't pop from type stack (E020)");
+                expected_outputs.push((top_type.0, block_type.clone()))
+            }
+            if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
+                type_stack.push((index, (*op.opcode().descriptor().output()).clone()));
+            }
+        }
+        assert!(
+            type_stack.is_empty(),
+            "type stack too big (expected 0 items at end of step, got {} ({:?}))",
+            type_stack.len(),
+            &type_stack,
+        );
+        for (index, ty) in expected_outputs {
+            self.get_mut(index)
+                .expect("ir block doesn't exist (E043)")
+                .set_expected_output(ty.clone());
+        }
+    }
+    fn add_inputs(
+        &mut self,
+        inputs: &BTreeMap<String, Input>,
+        blocks: &BTreeMap<String, Block>,
+        context: Rc<ThreadContext>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    ) {
+        for (name, input) in inputs {
+            if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
+                continue;
+            }
+            match input {
+                Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
+                    let Some(block) = maybe_block else { panic!("block doest exist"); };
+                    match block {
+                        BlockArrayOrId::Id(id) => {
+                            self.add_block(id.clone(), blocks, Rc::clone(&context), vec![], steps);
+                        }
+                        BlockArrayOrId::Array(arr) => {
+                            self.add_block_arr(arr);
+                        }
+                    }
+                }
+            }
+        }
+    }
     fn add_block_arr(&mut self, block_arr: &BlockArray) {
         self.push(
             match block_arr {
@@ -545,34 +632,12 @@ impl IrBlockVec for Vec<IrBlock> {
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
         last_nexts: Vec<String>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     ) {
         let block = blocks.get(&block_id).unwrap();
         match block {
             Block::Normal { block_info, .. } => {
-                //println!("{}: {:?}", &block_id, &block_info.opcode);
-                for (name, input) in &block_info.inputs {
-                    if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
-                        continue;
-                    }
-                    match input {
-                        Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
-                            let Some(block) = maybe_block else { panic!("block doest exist"); };
-                            match block {
-                                BlockArrayOrId::Id(id) => {
-                                    self.add_block(
-                                        id.clone(),
-                                        blocks,
-                                        Rc::clone(&context),
-                                        last_nexts.clone(), // this probably isn't needed bc inputs donpt have a next? passing an empty vec would save some memory and overhead
-                                    );
-                                }
-                                BlockArrayOrId::Array(arr) => {
-                                    self.add_block_arr(arr);
-                                }
-                            }
-                        }
-                    }
-                }
+                self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
 
                 self.append(&mut (match block_info.opcode {
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
@@ -650,7 +715,9 @@ impl IrBlockVec for Vec<IrBlock> {
                         if let Some(ref next) = block_info.next {
                             new_nexts.push(next.clone());
                         }
-                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, new_nexts, blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some(step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context))) } else { None }, does_yield: false, }]
+                        step_from_top_block(substack_id.clone(), new_nexts, blocks, Rc::clone(&context), steps);
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps);
+                        vec![IrOpcode::hq_goto_if { step: Some(substack_id), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some(block_info.next.clone().unwrap()) } else { None }, does_yield: false, }]
                     }
                     BlockOpcode::control_if_else => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
@@ -659,9 +726,6 @@ impl IrBlockVec for Vec<IrBlock> {
                         if let Some(ref next) = block_info.next {
                             new_nexts.push(next.clone());
                         }
-<<<<<<< Updated upstream
-                        vec![IrOpcode::hq_goto_if { step: Some(step_from_top_block(substack_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }, IrOpcode::hq_goto { step: Some(step_from_top_block(substack2_id, new_nexts.clone(), blocks, Rc::clone(&context))), does_yield: false, }]
-=======
                         step_from_top_block(substack_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps);
                         step_from_top_block(substack2_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps);
                         vec![IrOpcode::hq_goto_if { step: Some(substack_id), does_yield: false, }, IrOpcode::hq_goto { step: Some(substack2_id), does_yield: false, }]
@@ -670,8 +734,8 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
                         let condition_opcodes = vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: true }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: true }.into(),
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
                             ];
                         let looper_id = block_id.clone() + &mut block_id.clone();
                         if !steps.contains_key(&looper_id) {
@@ -689,7 +753,6 @@ impl IrBlockVec for Vec<IrBlock> {
                         opcodes.fixup_types();
                         steps.insert(block_id.clone(), Step::new(opcodes.clone(), Rc::clone(&context)));
                         condition_opcodes.into_iter().map(|block| block.opcode().clone()).collect::<_>()
->>>>>>> Stashed changes
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
@@ -699,21 +762,26 @@ impl IrBlockVec for Vec<IrBlock> {
     }
 }
 
-pub fn step_from_top_block(
+pub fn step_from_top_block<'a>(
     top_id: String,
     mut last_nexts: Vec<String>,
     blocks: &BTreeMap<String, Block>,
     context: Rc<ThreadContext>,
-) -> Rc<Step> {
+    steps: &'a mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+) -> &'a Step {
+    if steps.contains_key(&top_id) {
+        return steps.get(&top_id).unwrap();
+    }
     let mut ops: Vec<IrBlock> = vec![];
     let mut next_block = blocks.get(&top_id).unwrap();
-    let mut next_id = Some(top_id);
+    let mut next_id = Some(top_id.clone());
     loop {
         ops.add_block(
             next_id.clone().unwrap(),
             blocks,
             Rc::clone(&context),
             last_nexts.clone(),
+            steps,
         );
         if next_block.block_info().unwrap().next.is_none() {
             next_id = last_nexts.pop();
@@ -726,8 +794,20 @@ pub fn step_from_top_block(
         }
         if next_id.is_none() {
             break;
+        } else if let Some(block) = blocks.get(&next_id.clone().unwrap()) {
+            next_block = block;
+        } else if steps.contains_key(&next_id.clone().unwrap()) {
+            ops.push(
+                IrOpcode::hq_goto {
+                    step: Some(next_id.clone().unwrap()),
+                    does_yield: false,
+                }
+                .into(),
+            );
+            next_id = None;
+            break;
         } else {
-            next_block = blocks.get(&next_id.clone().unwrap()).unwrap();
+            panic!("invalid next_id");
         }
         let Some(last_block) = ops.last() else { unreachable!() };
         if last_block.does_request_redraw()
@@ -736,77 +816,52 @@ pub fn step_from_top_block(
             break;
         }
     }
-    let mut type_stack: Vec<(usize, BlockType)> = vec![];
-    let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
-    for (index, op) in ops.iter().enumerate() {
-        assert!(
-            type_stack.len() >= op.opcode().descriptor().inputs().len(),
-            "type stack not big enough (expected >={} items, got {}) (E019)",
-            op.opcode().descriptor().inputs().len(),
-            type_stack.len()
-        );
-        for block_type in op.opcode().descriptor().inputs().iter().rev() {
-            let top_type = type_stack
-                .pop()
-                .expect("couldn't pop from type stack (E020)");
-            expected_outputs.push((top_type.0, block_type.clone()))
-        }
-        if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
-            type_stack.push((index, (*op.opcode().descriptor().output()).clone()));
-        }
-    }
-    assert!(
-        type_stack.is_empty(),
-        "type stack too big (expected 0 items at end of step, got {})",
-        type_stack.len()
-    );
-    for (index, ty) in expected_outputs {
-        ops.get_mut(index)
-            .expect("ir block doesn't exist (E043)")
-            .set_expected_output(ty.clone());
-    }
+    ops.fixup_types();
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
-    step.opcodes_mut()
-        .push(if let Some(ref id) = next_id {
-            IrBlock::from(IrOpcode::hq_goto {
-                step: Some(Rc::clone(&step_from_top_block(
-                    id.clone(),
-                    last_nexts,
-                    blocks,
-                    Rc::clone(&context),
-                ))),
-                does_yield: true,
-            })
-        } else {
-            IrBlock::from(IrOpcode::hq_goto {
-                step: None,
-                does_yield: false,
-            })
-        });
-    Rc::from(step)
+    step.opcodes_mut().push(if let Some(ref id) = next_id {
+        step_from_top_block(id.clone(), last_nexts, blocks, Rc::clone(&context), steps);
+        IrBlock::from(IrOpcode::hq_goto {
+            step: Some(id.clone()),
+            does_yield: true,
+        })
+    } else {
+        IrBlock::from(IrOpcode::hq_goto {
+            step: None,
+            does_yield: false,
+        })
+    });
+    steps.insert(top_id.clone(), step);
+    steps.get(&top_id).unwrap()
 }
 
 impl Thread {
-    pub fn new(start: ThreadStart, first_step: Rc<Step>) -> Thread {
-        Thread {
-            start,
-            first_step: Rc::clone(&first_step),
-        }
+    pub fn new(start: ThreadStart, first_step: String) -> Thread {
+        Thread { start, first_step }
     }
     pub fn start(&self) -> &ThreadStart {
         &self.start
     }
-    pub fn first_step(&self) -> Rc<Step> {
-        Rc::clone(&self.first_step)
+    pub fn first_step(&self) -> &String {
+        &self.first_step
     }
     pub fn from_hat(
         hat: Block,
         blocks: BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
+        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> Thread {
-        let first_step = if let Block::Normal { block_info, .. } = &hat {
+        let (first_step_id, _first_step) = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
-                step_from_top_block(next_id.clone(), vec![], &blocks, Rc::clone(&context))
+                (
+                    next_id.clone(),
+                    step_from_top_block(
+                        next_id.clone(),
+                        vec![],
+                        &blocks,
+                        Rc::clone(&context),
+                        steps,
+                    ),
+                )
             } else {
                 unreachable!();
             }
@@ -821,7 +876,7 @@ impl Thread {
         } else {
             unreachable!()
         };
-        Self::new(start_type, first_step)
+        Self::new(start_type, first_step_id)
     }
 }
 
