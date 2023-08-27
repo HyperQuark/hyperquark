@@ -1321,7 +1321,7 @@ impl From<IrProject> for WebWasmFile {
                 strings_tbl = strings;
                 /*resolve({{ strings, green_flag, tick, memory }})*/;
                 green_flag();
-                startTime = Date.now();
+                start_time = Date.now();
                 $outertickloop: while (true) {{
                     /*console.log('outer')*/
                     const thisTickStartTime = Date.now();
