@@ -738,8 +738,8 @@ impl IrBlockVec for Vec<IrBlock> {
                             let mut looper_opcodes = vec![];
                             looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
                             looper_opcodes.append(&mut vec![
-                                IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false }.into(),
-                                IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
                             ]);
                             looper_opcodes.fixup_types();
                             steps.insert(looper_id.clone(), Step::new(looper_opcodes, Rc::clone(&context)));
@@ -749,16 +749,16 @@ impl IrBlockVec for Vec<IrBlock> {
                         let mut opcodes = vec![];
                         opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
                         opcodes.append(&mut vec![
-                            IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false }.into(),
-                            IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
-                        ]);
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
+                            ]);
                         opcodes.fixup_types();
                         steps.insert(block_id.clone(), Step::new(opcodes.clone(), Rc::clone(&context)));
                         //step_from_top_block(block_id.clone(), last_nexts.clone(), blocks, Rc::clone(&context), steps);
                         vec![
-                            IrOpcode::hq_goto_if { step: Some(substack_id.clone()), does_yield: false },
-                            IrOpcode::hq_goto { step: Some(block_info.next.clone().unwrap()), does_yield: false },
-                        ]
+                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: false }.into(),
+                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: false }.into(),
+                            ]
                     }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
