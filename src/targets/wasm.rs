@@ -276,15 +276,7 @@ fn instructions(
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             vec![
                 LocalGet(step_func_locals::MEM_LOCATION),
-                I32Const(
-                    next_step_index
-                        .try_into()
-                        .expect("step index out of bounds (E001)"),
-                ),
-                CallIndirect {
-                    ty: types::I32_I32,
-                    table: table_indices::STEP_FUNCS,
-                },
+                Call(BUILTIN_FUNCS + u32::try_from(next_step_index).expect("next_step_index out of bounds")),
                 Return,
             ]
         }
@@ -383,15 +375,7 @@ fn instructions(
                 I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(step_func_locals::MEM_LOCATION),
-                I32Const(
-                    next_step_index
-                        .try_into()
-                        .expect("step index out of bounds (E001)"),
-                ),
-                CallIndirect {
-                    ty: types::I32_I32,
-                    table: table_indices::STEP_FUNCS,
-                },
+                Call(BUILTIN_FUNCS + u32::try_from(next_step_index).expect("next_step_index out of bounds")),
                 Return,
                 End,
             ]
