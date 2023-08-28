@@ -1305,6 +1305,11 @@ impl From<IrProject> for WebWasmFile {
                     setTimeout(resolve, ms);
                 }});
             }}
+            function waitAnimationFrame() {{
+                return new Promise((resolve) => {{
+                    requestAnimationFrame(resolve);
+                }});
+            }}
             WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
                 const {{ green_flag, tick, memory, strings }} = instance.exports;
                 for (const [i, str] of Object.entries({string_consts:?})) {{
@@ -1327,6 +1332,8 @@ impl From<IrProject> for WebWasmFile {
                     new Uint8Array(memory.buffer)[{rr_offset}] = 0;
                     if (framerate_wait > 0) {{
                         await sleep(Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)));
+                    }} else {{
+                        await waitAnimationFrame();
                     }}
                 }}
             }}).catch((e) => {{
