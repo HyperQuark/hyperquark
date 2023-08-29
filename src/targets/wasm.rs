@@ -1210,7 +1210,7 @@ impl From<IrProject> for WebWasmFile {
         let wasm_bytes = module.finish();
         Self { js_string: format!("
         ({{ framerate=30 }} = {{ framerate: 30 }}) => new Promise((resolve, reject) => {{
-            let framerate_wait = Math.round(1000 / framerate);
+            const framerate_wait = Math.round(1000 / framerate);
             let assert;
             let exit;
             let browser = false;
