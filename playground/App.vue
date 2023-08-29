@@ -32,7 +32,7 @@ nav {
   }
   width: 100%;
   font-size: 12px;
-  text-align: left;
+  text-align: center;
   margin-bottom: 1rem;
 }
 
