@@ -51,6 +51,6 @@
   canvas {
     border: 1px solid black;
     background: white;
-    width: calc((100vw - 1rem) * 0.95);
+    max-width: calc((100vw - 1rem) * 0.95);
   }
 </style>
