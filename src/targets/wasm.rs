@@ -6,7 +6,6 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasherDefault;
-use core::mem::transmute;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use wasm_encoder::{
@@ -73,7 +72,7 @@ fn instructions(
                 instructions(&IrBlock::from(text { TEXT: format!("{}", NUM) }), Rc::clone(&context), string_consts, steps)
             } else if expected_output == Any {
                 actual_output = Any;
-                vec![I32Const(hq_value_types::FLOAT64), I64Const(unsafe { transmute::<f64, i64>(**NUM) })]
+                vec![I32Const(hq_value_types::FLOAT64), I64Const((**NUM).to_bits() as i64)]
             } else {
                 vec![F64Const(**NUM)] // double deref because &OrderedFloat<f64> -> OrderedFloat<f64> -> f64
             }
