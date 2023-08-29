@@ -6,6 +6,7 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasherDefault;
+use core::mem::transmute;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use wasm_encoder::{
@@ -23,6 +24,8 @@ fn instructions(
     use Instruction::*;
     use IrBlockType::*;
     use IrOpcode::*;
+    let expected_output = op.expected_output().clone();
+    let mut actual_output = op.actual_output().clone();
     let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {
@@ -64,19 +67,39 @@ fn instructions(
         | math_integer { NUM }
         | math_angle { NUM }
         | math_whole_number { NUM }
-        | math_positive_number { NUM } => vec![F64Const(**NUM)], // double deref because &OrderedFloat<f64> -> OrderedFloat<f64> -> f64
+        | math_positive_number { NUM } => {
+            if expected_output == Text {
+                actual_output = Text;
+                instructions(&IrBlock::from(text { TEXT: format!("{}", NUM) }), Rc::clone(&context), string_consts, steps)
+            } else if expected_output == Any {
+                actual_output = Any;
+                vec![I32Const(hq_value_types::FLOAT64), I64Const(unsafe { transmute::<f64, i64>(**NUM) })]
+            } else {
+                vec![F64Const(**NUM)] // double deref because &OrderedFloat<f64> -> OrderedFloat<f64> -> f64
+            }
+        }
         text { TEXT } => {
-            let str_idx: i32 = {
-                if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
-                    idx
+            if expected_output == Number {
+                actual_output = Number;
+                vec![F64Const(TEXT.parse().unwrap_or(f64::NAN))]
+            } else {
+                let str_idx: i32 = {
+                    if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
+                        idx
+                    } else {
+                        string_consts.push(TEXT.clone());
+                        string_consts.len() - 1
+                    }
+                }
+                .try_into()
+                .expect("string index out of bounds (E022)");
+                if expected_output == Any {
+                    actual_output = Any;
+                    vec![I32Const(hq_value_types::EXTERN_STRING_REF64), I64Const(str_idx.into())]
                 } else {
-                    string_consts.push(TEXT.clone());
-                    string_consts.len() - 1
+                    vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
                 }
             }
-            .try_into()
-            .expect("string index out of bounds (E022)");
-            vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
         }
         data_variable { VARIABLE } => {
             let var_index: i32 = context
@@ -382,7 +405,7 @@ fn instructions(
         }
         _ => todo!(),
     };
-    instructions.append(&mut match (op.actual_output(), op.expected_output()) {
+    instructions.append(&mut match (actual_output, expected_output) {
         (Text, Number) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
         (Text, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
         (Text, Any) => vec![
