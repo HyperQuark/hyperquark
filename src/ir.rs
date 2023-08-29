@@ -16,7 +16,7 @@ pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<Vec<IrVar>>,
     pub targets: Vec<String>,
-    pub steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    pub steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
 }
 
 impl From<Sb3Project> for IrProject {
@@ -37,12 +37,12 @@ impl From<Sb3Project> for IrProject {
                 .collect(),
         );
 
-        let mut steps: IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>> =
+        let mut steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>> =
             Default::default();
         // insert a noop step so that these step indices match up with the step function indices in the generated wasm
         // (step function 0 is a noop)
         steps.insert(
-            "".into(),
+            ("".into(), "".into()),
             Step::new(
                 vec![],
                 Rc::new(ThreadContext {
@@ -76,7 +76,7 @@ impl From<Sb3Project> for IrProject {
                     vars: Rc::clone(&vars),
                 });
                 let thread =
-                    Thread::from_hat(block.clone(), target.blocks.clone(), context, &mut steps);
+                    Thread::from_hat(block.clone(), target.blocks.clone(), context, &mut steps, target.name.clone());
                 threads.push(thread);
             }
         }
@@ -158,11 +158,11 @@ pub enum IrOpcode {
     event_whenbroadcastreceived,
     hq_drop(usize),
     hq_goto {
-        step: Option<String>,
+        step: Option<(String, String)>,
         does_yield: bool,
     },
     hq_goto_if {
-        step: Option<String>,
+        step: Option<(String, String)>,
         does_yield: bool,
     },
     looks_say,
@@ -496,6 +496,7 @@ pub struct ThreadContext {
 pub struct Thread {
     start: ThreadStart,
     first_step: String,
+    target_id: String,
 }
 
 trait IrBlockVec {
@@ -505,7 +506,8 @@ trait IrBlockVec {
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
         last_nexts: Vec<String>,
-        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        target_id: String,
     );
     fn add_block_arr(&mut self, block_arr: &BlockArray);
     fn add_inputs(
@@ -513,7 +515,8 @@ trait IrBlockVec {
         inputs: &BTreeMap<String, Input>,
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
-        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        target_id: String,
     );
     fn fixup_types(&mut self);
 }
@@ -556,7 +559,8 @@ impl IrBlockVec for Vec<IrBlock> {
         inputs: &BTreeMap<String, Input>,
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
-        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        target_id: String,
     ) {
         for (name, input) in inputs {
             if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
@@ -567,7 +571,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     let Some(block) = maybe_block else { panic!("block doest exist"); };
                     match block {
                         BlockArrayOrId::Id(id) => {
-                            self.add_block(id.clone(), blocks, Rc::clone(&context), vec![], steps);
+                            self.add_block(id.clone(), blocks, Rc::clone(&context), vec![], steps, target_id.clone());
                         }
                         BlockArrayOrId::Array(arr) => {
                             self.add_block_arr(arr);
@@ -632,12 +636,13 @@ impl IrBlockVec for Vec<IrBlock> {
         blocks: &BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
         last_nexts: Vec<String>,
-        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        target_id: String,
     ) {
         let block = blocks.get(&block_id).unwrap();
         match block {
             Block::Normal { block_info, .. } => {
-                self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
+                self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
 
                 self.append(&mut (match block_info.opcode {
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
@@ -716,9 +721,9 @@ impl IrBlockVec for Vec<IrBlock> {
                         if let Some(ref next) = block_info.next {
                             new_nexts.push(next.clone());
                         }
-                        step_from_top_block(substack_id.clone(), new_nexts, blocks, Rc::clone(&context), steps);
-                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps);
-                        vec![IrOpcode::hq_goto_if { step: Some(substack_id), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some(block_info.next.clone().unwrap()) } else { None }, does_yield: false, }]
+                        step_from_top_block(substack_id.clone(), new_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+                        vec![IrOpcode::hq_goto_if { step: Some((target_id.clone(), substack_id)), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some((target_id.clone(), block_info.next.clone().unwrap())) } else { None }, does_yield: false, }]
                     }
                     BlockOpcode::control_if_else => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
@@ -727,32 +732,32 @@ impl IrBlockVec for Vec<IrBlock> {
                         if let Some(ref next) = block_info.next {
                             new_nexts.push(next.clone());
                         }
-                        step_from_top_block(substack_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        step_from_top_block(substack2_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps);
-                        vec![IrOpcode::hq_goto_if { step: Some(substack_id), does_yield: false, }, IrOpcode::hq_goto { step: Some(substack2_id), does_yield: false, }]
+                        step_from_top_block(substack_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps, target_id.clone());
+                        step_from_top_block(substack2_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps, target_id.clone());
+                        vec![IrOpcode::hq_goto_if { step: Some((target_id.clone(), substack_id)), does_yield: false, }, IrOpcode::hq_goto { step: Some((target_id.clone(), substack2_id)), does_yield: false, }]
                     }
                     BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
                         let condition_opcodes = vec![
-                                IrOpcode::hq_goto_if { step: Some(block_info.next.clone().unwrap()), does_yield: true }.into(),
-                                IrOpcode::hq_goto { step: Some(substack_id.clone()), does_yield: true }.into(),
+                                IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true }.into(),
+                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
                             ];
                         let looper_id = block_id.clone() + &mut block_id.clone();
-                        if !steps.contains_key(&looper_id) {
+                        if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
                             let mut looper_opcodes = vec![];
-                            looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
+                            looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                             looper_opcodes.append(&mut condition_opcodes.clone());
                             looper_opcodes.fixup_types();
-                            steps.insert(looper_id.clone(), Step::new(looper_opcodes, Rc::clone(&context)));
+                            steps.insert((target_id.clone(), looper_id.clone()), Step::new(looper_opcodes, Rc::clone(&context)));
                         }
-                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps);
-                        step_from_top_block(substack_id, vec![looper_id], blocks, Rc::clone(&context), steps);
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+                        step_from_top_block(substack_id, vec![looper_id], blocks, Rc::clone(&context), steps, target_id.clone());
                         let mut opcodes = vec![];
-                        opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps);
+                        opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                         opcodes.append(&mut condition_opcodes.clone());
                         opcodes.fixup_types();
-                        steps.insert(block_id.clone(), Step::new(opcodes.clone(), Rc::clone(&context)));
+                        steps.insert((target_id.clone(), block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
                         condition_opcodes.into_iter().map(|block| block.opcode().clone()).collect::<_>()
                     }
                     _ => todo!(),
@@ -768,10 +773,11 @@ pub fn step_from_top_block<'a>(
     mut last_nexts: Vec<String>,
     blocks: &BTreeMap<String, Block>,
     context: Rc<ThreadContext>,
-    steps: &'a mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    steps: &'a mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+    target_id: String,
 ) -> &'a Step {
-    if steps.contains_key(&top_id) {
-        return steps.get(&top_id).unwrap();
+    if steps.contains_key(&(target_id.clone(), top_id.clone())) {
+        return steps.get(&(target_id.clone(), top_id.clone())).unwrap();
     }
     let mut ops: Vec<IrBlock> = vec![];
     let mut next_block = blocks.get(&top_id).unwrap();
@@ -783,6 +789,7 @@ pub fn step_from_top_block<'a>(
             Rc::clone(&context),
             last_nexts.clone(),
             steps,
+            target_id.clone(),
         );
         if next_block.block_info().unwrap().next.is_none() {
             next_id = last_nexts.pop();
@@ -797,10 +804,10 @@ pub fn step_from_top_block<'a>(
             break;
         } else if let Some(block) = blocks.get(&next_id.clone().unwrap()) {
             next_block = block;
-        } else if steps.contains_key(&next_id.clone().unwrap()) {
+        } else if steps.contains_key(&(target_id.clone(), next_id.clone().unwrap())) {
             ops.push(
                 IrOpcode::hq_goto {
-                    step: Some(next_id.clone().unwrap()),
+                    step: Some((target_id.clone(), next_id.clone().unwrap())),
                     does_yield: false,
                 }
                 .into(),
@@ -820,9 +827,9 @@ pub fn step_from_top_block<'a>(
     ops.fixup_types();
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
     step.opcodes_mut().push(if let Some(ref id) = next_id {
-        step_from_top_block(id.clone(), last_nexts, blocks, Rc::clone(&context), steps);
+        step_from_top_block(id.clone(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
         IrBlock::from(IrOpcode::hq_goto {
-            step: Some(id.clone()),
+            step: Some((target_id.clone(), id.clone())),
             does_yield: true,
         })
     } else {
@@ -831,13 +838,13 @@ pub fn step_from_top_block<'a>(
             does_yield: false,
         })
     });
-    steps.insert(top_id.clone(), step);
-    steps.get(&top_id).unwrap()
+    steps.insert((target_id.clone(), top_id.clone()), step);
+    steps.get(&(target_id, top_id)).unwrap()
 }
 
 impl Thread {
-    pub fn new(start: ThreadStart, first_step: String) -> Thread {
-        Thread { start, first_step }
+    pub fn new(start: ThreadStart, first_step: String, target_id: String) -> Thread {
+        Thread { start, first_step, target_id }
     }
     pub fn start(&self) -> &ThreadStart {
         &self.start
@@ -845,11 +852,15 @@ impl Thread {
     pub fn first_step(&self) -> &String {
         &self.first_step
     }
+    pub fn target_id(&self) -> &String {
+        &self.target_id
+    }
     pub fn from_hat(
         hat: Block,
         blocks: BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
-        steps: &mut IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        target_id: String,
     ) -> Thread {
         let (first_step_id, _first_step) = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
@@ -861,6 +872,7 @@ impl Thread {
                         &blocks,
                         Rc::clone(&context),
                         steps,
+                        target_id.clone(),
                     ),
                 )
             } else {
@@ -877,7 +889,7 @@ impl Thread {
         } else {
             unreachable!()
         };
-        Self::new(start_type, first_step_id)
+        Self::new(start_type, first_step_id, target_id)
     }
 }
 

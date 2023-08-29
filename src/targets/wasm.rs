@@ -19,7 +19,7 @@ fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
-    steps: &IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+    steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
 ) -> Vec<Instruction<'static>> {
     use Instruction::*;
     use IrBlockType::*;
@@ -452,18 +452,18 @@ fn instructions(
 pub trait CompileToWasm {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<Option<(String, String)>, Function, BuildHasherDefault<FNV1aHasher64>>,
         string_consts: &mut Vec<String>,
-        steps: &IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> u32;
 }
 
-impl CompileToWasm for (&String, &Step) {
+impl CompileToWasm for (&(String, String), &Step) {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<String>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<Option<(String, String)>, Function, BuildHasherDefault<FNV1aHasher64>>,
         string_consts: &mut Vec<String>,
-        steps: &IndexMap<String, Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> u32 {
         if step_funcs.contains_key(&Some(self.0.clone())) {
             return step_funcs
@@ -998,12 +998,12 @@ impl From<IrProject> for WebWasmFile {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let mut step_funcs: IndexMap<Option<String>, Function, _> = Default::default();
+        let mut step_funcs: IndexMap<Option<(String, String)>, Function, _> = Default::default();
         step_funcs.insert(None, noop_func);
 
         for step in &project.steps {
             // make sure to skip the 0th (noop) step because we've added the noop step function 3 lines above
-            if step.0.is_empty() {
+            if step.0 == &("".into(), "".into()) {
                 continue;
             };
             step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
@@ -1012,7 +1012,7 @@ impl From<IrProject> for WebWasmFile {
         for thread in project.threads {
             let first_idx = project
                 .steps
-                .get_index_of(thread.first_step())
+                .get_index_of(&(thread.target_id().clone(), thread.first_step().clone()))
                 .unwrap()
                 .try_into()
                 .expect("step index out of bounds");
