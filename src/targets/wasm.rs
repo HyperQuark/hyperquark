@@ -543,10 +543,10 @@ pub mod func_indices {
     pub const MATHOP_POW_E: u32 = 22;
     pub const MATHOP_POW10: u32 = 23;
     pub const SENSING_TIMER: u32 = 24;
-    pub const SENSING_RESETTIMER: u32 = 24;
+    pub const SENSING_RESETTIMER: u32 = 25;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 25;
+    pub const FMOD: u32 = 26;
     pub const CAST_FLOAT_BOOL: u32 = 27;
     pub const CAST_BOOL_FLOAT: u32 = 28;
     pub const CAST_BOOL_STRING: u32 = 29;
