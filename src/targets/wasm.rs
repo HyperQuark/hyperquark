@@ -1102,6 +1102,10 @@ impl From<IrProject> for WebWasmFile {
                 align: 2,
                 memory_index: 0,
             }));
+            tick_func.instruction(&Instruction::LocalTee(1));
+            tick_func.instruction(&Instruction::I32Eqz);
+            tick_func.instruction(&Instruction::BrIf(0));
+            tick_func.instruction(&Instruction::LocalGet(1));
             tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
             tick_func.instruction(&Instruction::I32Mul);
             tick_func.instruction(&Instruction::I32Const(THREAD_BYTE_LEN));
@@ -1347,7 +1351,7 @@ impl From<IrProject> for WebWasmFile {
                     $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
                         /*console.log('inner')*/
                         tick();
-                        if (!new Uint32Array(memory.buffer).slice({threads_offset}/4, {threads_offset}/4 + new Uint32Array(memory.buffer)[{thn_offset}/4] + 1).some(x => x > 0)) {{
+                        if (new Uint32Array(memory.buffer)[{thn_offset}/4] === 0) {{
                             break $outertickloop;
                         }}
                     }}
@@ -1363,7 +1367,7 @@ impl From<IrProject> for WebWasmFile {
                 /*exit(1);*/
             }});
         }})
-        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
+        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
 }
 
