@@ -108,7 +108,7 @@ fn instructions(
                 .expect("couldn't find variable index (E033)")
                 .try_into()
                 .expect("variable index out of bounds (E034)");
-            let var_offset: u64 = (byte_offset::THREADS + 12 * var_index)
+            let var_offset: u64 = (12 * var_index)
                 .try_into()
                 .expect("variable offset out of bounds (E035)");
             vec![
@@ -146,7 +146,7 @@ fn instructions(
                 .expect("couldn't find variable index (E033)")
                 .try_into()
                 .expect("variable index out of bounds (E034)");
-            let var_offset: u64 = (byte_offset::THREADS + 12 * var_index)
+            let var_offset: u64 = (12 * var_index)
                 .try_into()
                 .expect("variable offset out of bounds (E035)");
             vec![
@@ -217,13 +217,13 @@ fn instructions(
                 .len()
                 .try_into()
                 .expect("vars.len() out of bounds (E032)");
-
+            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
             vec![
-                LocalGet(0),
-                I32Const(byte_offset::THREADS),
+                /*LocalGet(0),
+                I32Const(threads_offset),
                 I32Add, // destination (= current thread pos in memory)
                 LocalGet(0),
-                I32Const(byte_offset::THREADS + 4),
+                I32Const(threads_offset + 4),
                 I32Add, // source (= current thread pos + 4)
                 I32Const(0),
                 I32Load(MemArg {
@@ -260,7 +260,7 @@ fn instructions(
                         .expect("THREAD_NUM out of bounds (E011)"),
                     align: 2,
                     memory_index: 0,
-                }),
+                }),*/
                 I32Const(0),
                 Return,
             ]
@@ -271,9 +271,7 @@ fn instructions(
         } => {
             let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = byte_offset::THREADS
-                .try_into()
-                .expect("THREAD_INDICES out of bounds (E018)");
+            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_indices length out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(
@@ -310,7 +308,7 @@ fn instructions(
                 .expect("vars.len() out of bounds (E032)");
 
             vec![
-                I32WrapI64,
+                /*I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(0),
                 I32Const(byte_offset::THREADS),
@@ -354,7 +352,7 @@ fn instructions(
                     align: 2,
                     memory_index: 0,
                 }),
-                I32Const(0),
+                I32Const(0),*/
                 Return,
                 End,
             ]
@@ -365,9 +363,7 @@ fn instructions(
         } => {
             let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = byte_offset::THREADS
-                .try_into()
-                .expect("THREAD_INDICES out of bounds (E018)");
+            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_indices length out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -614,7 +610,7 @@ pub const THREAD_BYTE_LEN: i32 = 4;
 pub mod byte_offset {
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
-    pub const THREADS: i32 = 8;
+    pub const VARS: i32 = 8;
 }
 
 impl From<IrProject> for WebWasmFile {
@@ -987,7 +983,7 @@ impl From<IrProject> for WebWasmFile {
         code.function(&tbl_add_string_func);
 
         let mut gf_func = Function::new(vec![]);
-        let mut tick_func = Function::new(vec![(2, ValType::I32)]);
+        let mut tick_func = Function::new(vec![(3, ValType::I32)]);
 
         let mut noop_func = Function::new(vec![]);
         noop_func.instruction(&Instruction::I32Const(1));
@@ -1056,7 +1052,7 @@ impl From<IrProject> for WebWasmFile {
                     .expect("step func index out of bounds (E006)"),
             ));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (byte_offset::THREADS) as u64,
+                offset: (byte_offset::VARS as usize + 12 * project.vars.len()).try_into().expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
@@ -1112,10 +1108,12 @@ impl From<IrProject> for WebWasmFile {
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (byte_offset::THREADS) as u64,
+                offset: (byte_offset::VARS as usize + 12 * project.vars.len()).try_into().expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
+            tick_func.instruction(&Instruction::LocalTee(2));
+            tick_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
             tick_func.instruction(&Instruction::CallIndirect {
                 ty: types::I32_I32,
                 table: table_indices::STEP_FUNCS,
@@ -1363,7 +1361,7 @@ impl From<IrProject> for WebWasmFile {
                 /*exit(1);*/
             }});
         }})
-        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::THREADS, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
+        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, threads_offset=byte_offset::VARS as usize + 12 * project.vars.len(), thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
     }
 }
 
