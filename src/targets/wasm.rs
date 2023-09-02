@@ -1270,12 +1270,19 @@ impl From<IrProject> for WebWasmFile {
                 runtime: {{
                     looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
                     looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
-                    operator_equals: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1) == wasm_val_to_js(ty2, val2),
+                    operator_equals: (ty1, val1, ty2, val2) => {{
+                        if (ty1 === ty2 && val1 === val2) return true;
+                        let j1 = wasm_val_to_js(ty1, val1);
+                        let j2 = wasm_val_to_js(ty2, val2);
+                        if (typeof j1 === 'string') j1 = j1.toLowerCase();
+                        if (typeof j2 === 'string') j2 = j2.toLowerCase();
+                        return j1 == j2;
+                    }},
                     operator_random: (lower, upper) => Math.random() * (upper - lower) + lower,
                     operator_join: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString() + wasm_val_to_js(ty2, val2).toString(),
                     operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
                     operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
-                    operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().includes(wasm_val_to_js(ty2, val2).toString()),
+                    operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().toLowerCase().includes(wasm_val_to_js(ty2, val2).toString().toLowerCase()),
                     mathop_sin: (n) => parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
                     mathop_cos: (n) => parseFloat(Math.cos((Math.PI * n) / 180).toFixed(10)),
                     mathop_tan: (n) => {{
