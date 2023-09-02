@@ -10,6 +10,7 @@ use core::hash::BuildHasherDefault;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use ordered_float::OrderedFloat;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct IrProject {
@@ -743,7 +744,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true }.into(),
                                 IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
                             ];
-                        let looper_id = block_id.clone() + &mut block_id.clone();
+                        let looper_id = Uuid::new_v4().to_string();//block_id.clone() + &mut block_id.clone();
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
                             let mut looper_opcodes = vec![];
                             looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
