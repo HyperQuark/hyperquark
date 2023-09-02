@@ -108,29 +108,17 @@ fn instructions(
                 .expect("couldn't find variable index (E033)")
                 .try_into()
                 .expect("variable index out of bounds (E034)");
-            let var_offset: u64 = (12 * var_index)
+            let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
                 .expect("variable offset out of bounds (E035)");
             vec![
                 I32Const(0),
                 I32Load(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .expect("THREAD_NUM out of bounds (E036)"),
-                    align: 2,
-                    memory_index: 0,
-                }),
-                LocalTee(step_func_locals::I32),
-                I32Const(THREAD_BYTE_LEN),
-                I32Mul,
-                I32Load(MemArg {
                     offset: var_offset,
                     align: 2,
                     memory_index: 0,
                 }),
-                LocalGet(step_func_locals::I32),
-                I32Const(THREAD_BYTE_LEN),
-                I32Mul,
+                I32Const(0),
                 I64Load(MemArg {
                     offset: var_offset + 4,
                     align: 2,
@@ -146,32 +134,20 @@ fn instructions(
                 .expect("couldn't find variable index (E033)")
                 .try_into()
                 .expect("variable index out of bounds (E034)");
-            let var_offset: u64 = (12 * var_index)
+            let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
                 .expect("variable offset out of bounds (E035)");
             vec![
                 LocalSet(step_func_locals::I64),
                 LocalSet(step_func_locals::I32),
                 I32Const(0),
-                I32Load(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .expect("THREAD_NUM out of bounds (E036)"),
-                    align: 2,
-                    memory_index: 0,
-                }),
-                LocalTee(step_func_locals::I32_2),
-                I32Const(THREAD_BYTE_LEN),
-                I32Mul,
                 LocalGet(step_func_locals::I32),
                 I32Store(MemArg {
                     offset: var_offset,
                     align: 2,
                     memory_index: 0,
                 }),
-                LocalGet(step_func_locals::I32_2),
-                I32Const(THREAD_BYTE_LEN),
-                I32Mul,
+                I32Const(0),
                 LocalGet(step_func_locals::I64),
                 I64Store(MemArg {
                     offset: var_offset + 4,
@@ -219,7 +195,7 @@ fn instructions(
                 .expect("vars.len() out of bounds (E032)");
             let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
             vec![
-                /*LocalGet(0),
+                LocalGet(0),
                 I32Const(threads_offset),
                 I32Add, // destination (= current thread pos in memory)
                 LocalGet(0),
@@ -235,10 +211,8 @@ fn instructions(
                 }),
                 I32Const(4),
                 I32Mul,
-                I32Const(byte_offset::THREADS - 4 + vars_num * 12),
-                I32Add,
                 LocalGet(0),
-                I32Sub, // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+                I32Sub, // length (threadnum * 4 - current thread pos)
                 MemoryCopy {
                     src_mem: 0,
                     dst_mem: 0,
@@ -260,7 +234,7 @@ fn instructions(
                         .expect("THREAD_NUM out of bounds (E011)"),
                     align: 2,
                     memory_index: 0,
-                }),*/
+                }),
                 I32Const(0),
                 Return,
             ]
@@ -306,15 +280,15 @@ fn instructions(
                 .len()
                 .try_into()
                 .expect("vars.len() out of bounds (E032)");
-
+            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
             vec![
-                /*I32WrapI64,
+                I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(0),
-                I32Const(byte_offset::THREADS),
+                I32Const(threads_offset),
                 I32Add, // destination (= current thread pos in memory)
                 LocalGet(0),
-                I32Const(byte_offset::THREADS + 4),
+                I32Const(threads_offset + 4),
                 I32Add, // source (= current thread pos + 4)
                 I32Const(0),
                 I32Load(MemArg {
@@ -326,10 +300,8 @@ fn instructions(
                 }),
                 I32Const(4),
                 I32Mul,
-                I32Const(byte_offset::THREADS - 4 + vars_num * 12),
-                I32Add,
                 LocalGet(0),
-                I32Sub, // length (threadnum * 4 + THREADS offset - 4 + number of variables - current thread pos)
+                I32Sub, // length (threadnum * 4 - current thread pos)
                 MemoryCopy {
                     src_mem: 0,
                     dst_mem: 0,
@@ -352,7 +324,7 @@ fn instructions(
                     align: 2,
                     memory_index: 0,
                 }),
-                I32Const(0),*/
+                I32Const(0),
                 Return,
                 End,
             ]
@@ -983,7 +955,7 @@ impl From<IrProject> for WebWasmFile {
         code.function(&tbl_add_string_func);
 
         let mut gf_func = Function::new(vec![]);
-        let mut tick_func = Function::new(vec![(3, ValType::I32)]);
+        let mut tick_func = Function::new(vec![(2, ValType::I32)]);
 
         let mut noop_func = Function::new(vec![]);
         noop_func.instruction(&Instruction::I32Const(1));
@@ -1116,8 +1088,6 @@ impl From<IrProject> for WebWasmFile {
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
-            tick_func.instruction(&Instruction::LocalTee(2));
-            tick_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
             tick_func.instruction(&Instruction::CallIndirect {
                 ty: types::I32_I32,
                 table: table_indices::STEP_FUNCS,
@@ -1335,12 +1305,12 @@ impl From<IrProject> for WebWasmFile {
                 }});
             }}
             WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
-                const {{ green_flag, tick, memory, strings }} = instance.exports;
+                const {{ green_flag, tick, memory, strings, step_funcs }} = instance.exports;
                 for (const [i, str] of Object.entries({string_consts:?})) {{
                   strings.set(i, str);
                 }}
                 strings_tbl = strings;
-                /*resolve({{ strings, green_flag, tick, memory }})*/;
+                /*resolve({{ strings, green_flag, step_funcs, tick, memory }})*/;
                 green_flag();
                 start_time = Date.now();
                 $outertickloop: while (true) {{
