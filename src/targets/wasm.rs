@@ -188,11 +188,6 @@ fn instructions(
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
-            let vars_num: i32 = context
-                .vars
-                .len()
-                .try_into()
-                .expect("vars.len() out of bounds (E032)");
             let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
             vec![
                 LocalGet(0),
@@ -243,7 +238,6 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: true,
         } => {
-            let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_indices length out of bounds");
             vec![
@@ -266,7 +260,6 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: false,
         } => {
-            let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             vec![
                 LocalGet(step_func_locals::MEM_LOCATION),
@@ -275,11 +268,6 @@ fn instructions(
             ]
         }
         hq_goto_if { step: None, .. } => {
-            let vars_num: i32 = context
-                .vars
-                .len()
-                .try_into()
-                .expect("vars.len() out of bounds (E032)");
             let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
             vec![
                 I32WrapI64,
@@ -333,7 +321,6 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: true,
         } => {
-            let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_indices length out of bounds");
             vec![
@@ -359,7 +346,6 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: false,
         } => {
-            let _next_step = steps.get(next_step_id).unwrap();
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             vec![
                 I32WrapI64,

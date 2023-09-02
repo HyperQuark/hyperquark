@@ -723,7 +723,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         }
                         step_from_top_block(substack_id.clone(), new_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
                         step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
-                        vec![IrOpcode::hq_goto_if { step: Some((target_id.clone(), substack_id)), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some((target_id.clone(), block_info.next.clone().unwrap())) } else { None }, does_yield: false, }]
+                        vec![IrOpcode::hq_goto_if { step: Some((target_id.clone(), substack_id)), does_yield: false, }, IrOpcode::hq_goto { step: if block_info.next.is_some() { Some((target_id, block_info.next.clone().unwrap())) } else { None }, does_yield: false, }]
                     }
                     BlockOpcode::control_if_else => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
@@ -734,7 +734,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         }
                         step_from_top_block(substack_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps, target_id.clone());
                         step_from_top_block(substack2_id.clone(), new_nexts.clone(), blocks, Rc::clone(&context), steps, target_id.clone());
-                        vec![IrOpcode::hq_goto_if { step: Some((target_id.clone(), substack_id)), does_yield: false, }, IrOpcode::hq_goto { step: Some((target_id.clone(), substack2_id)), does_yield: false, }]
+                        vec![IrOpcode::hq_goto_if { step: Some((target_id.clone(), substack_id)), does_yield: false, }, IrOpcode::hq_goto { step: Some((target_id, substack2_id)), does_yield: false, }]
                     }
                     BlockOpcode::control_repeat => vec![IrOpcode::hq_drop(1)],
                     BlockOpcode::control_repeat_until => {
@@ -757,7 +757,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                         opcodes.append(&mut condition_opcodes.clone());
                         opcodes.fixup_types();
-                        steps.insert((target_id.clone(), block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
+                        steps.insert((target_id, block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
                         condition_opcodes.into_iter().map(|block| block.opcode().clone()).collect::<_>()
                     }
                     _ => todo!(),
@@ -777,7 +777,7 @@ pub fn step_from_top_block<'a>(
     target_id: String,
 ) -> &'a Step {
     if steps.contains_key(&(target_id.clone(), top_id.clone())) {
-        return steps.get(&(target_id.clone(), top_id.clone())).unwrap();
+        return steps.get(&(target_id, top_id)).unwrap();
     }
     let mut ops: Vec<IrBlock> = vec![];
     let mut next_block = blocks.get(&top_id).unwrap();
