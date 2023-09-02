@@ -76,8 +76,13 @@ impl From<Sb3Project> for IrProject {
                     }),
                     vars: Rc::clone(&vars),
                 });
-                let thread =
-                    Thread::from_hat(block.clone(), target.blocks.clone(), context, &mut steps, target.name.clone());
+                let thread = Thread::from_hat(
+                    block.clone(),
+                    target.blocks.clone(),
+                    context,
+                    &mut steps,
+                    target.name.clone(),
+                );
                 threads.push(thread);
             }
         }
@@ -572,7 +577,14 @@ impl IrBlockVec for Vec<IrBlock> {
                     let Some(block) = maybe_block else { panic!("block doest exist"); };
                     match block {
                         BlockArrayOrId::Id(id) => {
-                            self.add_block(id.clone(), blocks, Rc::clone(&context), vec![], steps, target_id.clone());
+                            self.add_block(
+                                id.clone(),
+                                blocks,
+                                Rc::clone(&context),
+                                vec![],
+                                steps,
+                                target_id.clone(),
+                            );
                         }
                         BlockArrayOrId::Array(arr) => {
                             self.add_block_arr(arr);
@@ -643,7 +655,13 @@ impl IrBlockVec for Vec<IrBlock> {
         let block = blocks.get(&block_id).unwrap();
         match block {
             Block::Normal { block_info, .. } => {
-                self.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
+                self.add_inputs(
+                    &block_info.inputs,
+                    blocks,
+                    Rc::clone(&context),
+                    steps,
+                    target_id.clone(),
+                );
 
                 self.append(&mut (match block_info.opcode {
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
@@ -828,7 +846,14 @@ pub fn step_from_top_block<'a>(
     ops.fixup_types();
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
     step.opcodes_mut().push(if let Some(ref id) = next_id {
-        step_from_top_block(id.clone(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+        step_from_top_block(
+            id.clone(),
+            last_nexts,
+            blocks,
+            Rc::clone(&context),
+            steps,
+            target_id.clone(),
+        );
         IrBlock::from(IrOpcode::hq_goto {
             step: Some((target_id.clone(), id.clone())),
             does_yield: true,
@@ -845,7 +870,11 @@ pub fn step_from_top_block<'a>(
 
 impl Thread {
     pub fn new(start: ThreadStart, first_step: String, target_id: String) -> Thread {
-        Thread { start, first_step, target_id }
+        Thread {
+            start,
+            first_step,
+            target_id,
+        }
     }
     pub fn start(&self) -> &ThreadStart {
         &self.start

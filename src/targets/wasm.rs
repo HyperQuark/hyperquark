@@ -69,10 +69,20 @@ fn instructions(
         | math_positive_number { NUM } => {
             if expected_output == Text {
                 actual_output = Text;
-                instructions(&IrBlock::from(text { TEXT: format!("{}", NUM) }), Rc::clone(&context), string_consts, steps)
+                instructions(
+                    &IrBlock::from(text {
+                        TEXT: format!("{}", NUM),
+                    }),
+                    Rc::clone(&context),
+                    string_consts,
+                    steps,
+                )
             } else if expected_output == Any {
                 actual_output = Any;
-                vec![I32Const(hq_value_types::FLOAT64), I64Const((**NUM).to_bits() as i64)]
+                vec![
+                    I32Const(hq_value_types::FLOAT64),
+                    I64Const((**NUM).to_bits() as i64),
+                ]
             } else {
                 vec![F64Const(**NUM)] // double deref because &OrderedFloat<f64> -> OrderedFloat<f64> -> f64
             }
@@ -94,7 +104,10 @@ fn instructions(
                 .expect("string index out of bounds (E022)");
                 if expected_output == Any {
                     actual_output = Any;
-                    vec![I32Const(hq_value_types::EXTERN_STRING_REF64), I64Const(str_idx.into())]
+                    vec![
+                        I32Const(hq_value_types::EXTERN_STRING_REF64),
+                        I64Const(str_idx.into()),
+                    ]
                 } else {
                     vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
                 }
@@ -188,7 +201,9 @@ fn instructions(
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
-            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
+            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len())
+                .try_into()
+                .expect("thread_offset out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(threads_offset),
@@ -239,7 +254,9 @@ fn instructions(
             does_yield: true,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_indices length out of bounds");
+            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len())
+                .try_into()
+                .expect("thread_indices length out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(
@@ -263,12 +280,17 @@ fn instructions(
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             vec![
                 LocalGet(step_func_locals::MEM_LOCATION),
-                Call(BUILTIN_FUNCS + u32::try_from(next_step_index).expect("next_step_index out of bounds")),
+                Call(
+                    BUILTIN_FUNCS
+                        + u32::try_from(next_step_index).expect("next_step_index out of bounds"),
+                ),
                 Return,
             ]
         }
         hq_goto_if { step: None, .. } => {
-            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_offset out of bounds");
+            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len())
+                .try_into()
+                .expect("thread_offset out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -322,7 +344,9 @@ fn instructions(
             does_yield: true,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len()).try_into().expect("thread_indices length out of bounds");
+            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len())
+                .try_into()
+                .expect("thread_indices length out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -351,7 +375,10 @@ fn instructions(
                 I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(step_func_locals::MEM_LOCATION),
-                Call(BUILTIN_FUNCS + u32::try_from(next_step_index).expect("next_step_index out of bounds")),
+                Call(
+                    BUILTIN_FUNCS
+                        + u32::try_from(next_step_index).expect("next_step_index out of bounds"),
+                ),
                 Return,
                 End,
             ]
@@ -405,7 +432,11 @@ fn instructions(
 pub trait CompileToWasm {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<(String, String)>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<
+            Option<(String, String)>,
+            Function,
+            BuildHasherDefault<FNV1aHasher64>,
+        >,
         string_consts: &mut Vec<String>,
         steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> u32;
@@ -414,7 +445,11 @@ pub trait CompileToWasm {
 impl CompileToWasm for (&(String, String), &Step) {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<Option<(String, String)>, Function, BuildHasherDefault<FNV1aHasher64>>,
+        step_funcs: &mut IndexMap<
+            Option<(String, String)>,
+            Function,
+            BuildHasherDefault<FNV1aHasher64>,
+        >,
         string_consts: &mut Vec<String>,
         steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     ) -> u32 {
@@ -1010,7 +1045,9 @@ impl From<IrProject> for WebWasmFile {
                     .expect("step func index out of bounds (E006)"),
             ));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.len()).try_into().expect("i32.store offset out of bounds"),
+                offset: (byte_offset::VARS as usize + 12 * project.vars.len())
+                    .try_into()
+                    .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
@@ -1070,7 +1107,9 @@ impl From<IrProject> for WebWasmFile {
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.len()).try_into().expect("i32.store offset out of bounds"),
+                offset: (byte_offset::VARS as usize + 12 * project.vars.len())
+                    .try_into()
+                    .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
@@ -1345,7 +1384,10 @@ mod tests {
             .expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
-            .arg(format!("({})().catch(e => {{ console.error(e); process.exit(1) }})", wasm.js_string()))
+            .arg(format!(
+                "({})().catch(e => {{ console.error(e); process.exit(1) }})",
+                wasm.js_string()
+            ))
             .stdout(Stdio::inherit())
             .output()
             .expect("failed to execute process");
