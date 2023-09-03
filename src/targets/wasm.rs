@@ -23,8 +23,8 @@ fn instructions(
     use Instruction::*;
     use IrBlockType::*;
     use IrOpcode::*;
-    let expected_output = op.expected_output().clone();
-    let mut actual_output = op.actual_output().clone();
+    let expected_output = *op.expected_output();
+    let mut actual_output = *op.actual_output();
     let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {

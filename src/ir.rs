@@ -331,8 +331,8 @@ impl From<IrOpcode> for IrBlock {
         let output = descriptor.output();
         Self {
             opcode,
-            actual_output: output.clone(),
-            expected_output: output.clone(),
+            actual_output: *output,
+            expected_output: *output,
         }
     }
 }
@@ -545,10 +545,10 @@ impl IrBlockVec for Vec<IrBlock> {
                 let top_type = type_stack
                     .pop()
                     .expect("couldn't pop from type stack (E020)");
-                expected_outputs.push((top_type.0, block_type.clone()))
+                expected_outputs.push((top_type.0, *block_type))
             }
             if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
-                type_stack.push((index, (*op.opcode().descriptor().output()).clone()));
+                type_stack.push((index, (*op.opcode().descriptor().output())));
             }
         }
         assert!(
@@ -560,7 +560,7 @@ impl IrBlockVec for Vec<IrBlock> {
         for (index, ty) in expected_outputs {
             self.get_mut(index)
                 .expect("ir block doesn't exist (E043)")
-                .set_expected_output(ty.clone());
+                .set_expected_output(ty);
         }
     }
     fn add_inputs(
@@ -785,7 +785,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         step_from_top_block(substack_id.clone(), vec![looper_id.clone()], blocks, Rc::clone(&context), steps, target_id.clone());
                         let mut opcodes = vec![];
                         opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                        opcodes.append(&mut condition_opcodes.clone());
+                        opcodes.append(&mut condition_opcodes);
                         opcodes.fixup_types();
                         steps.insert((target_id.clone(), block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
                         vec![
@@ -795,7 +795,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::math_number { NUM: 0.0.into() },
                             IrOpcode::operator_equals,
                             IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true },
-                            IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: false },
+                            IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
                         ]
                     }
                     BlockOpcode::control_repeat_until => {
@@ -816,12 +816,12 @@ impl IrBlockVec for Vec<IrBlock> {
                         step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps, target_id.clone());
                         let mut opcodes = vec![];
                         opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                        opcodes.append(&mut condition_opcodes.clone());
+                        opcodes.append(&mut condition_opcodes);
                         opcodes.fixup_types();
                         steps.insert((target_id.clone(), block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
                         vec![
                                 IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true },
-                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: false },
+                                IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
                             ]
                     }
                     _ => todo!(),
