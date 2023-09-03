@@ -760,7 +760,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     }
                     BlockOpcode::control_repeat => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
-                        let condition_opcodes = vec![
+                        let mut condition_opcodes = vec![
                                 IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true }.into(),
                                 IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
                             ];
@@ -800,7 +800,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     }
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
-                        let condition_opcodes = vec![
+                        let mut condition_opcodes = vec![
                                 IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true }.into(),
                                 IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
                             ];
