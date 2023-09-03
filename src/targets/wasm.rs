@@ -116,6 +116,7 @@ fn instructions(
         data_variable { VARIABLE } => {
             let var_index: i32 = context
                 .vars
+                .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
                 .expect("couldn't find variable index (E033)")
@@ -142,6 +143,7 @@ fn instructions(
         data_setvariableto { VARIABLE } => {
             let var_index: i32 = context
                 .vars
+                .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
                 .expect("couldn't find variable index (E033)")
@@ -201,9 +203,10 @@ fn instructions(
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
-            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len())
-                .try_into()
-                .expect("thread_offset out of bounds");
+            let threads_offset: i32 = (byte_offset::VARS as usize
+                + 12 * context.vars.borrow().len())
+            .try_into()
+            .expect("thread_offset out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(threads_offset),
@@ -254,9 +257,10 @@ fn instructions(
             does_yield: true,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len())
-                .try_into()
-                .expect("thread_indices length out of bounds");
+            let thread_indices: u64 = (byte_offset::VARS as usize
+                + 12 * context.vars.borrow().len())
+            .try_into()
+            .expect("thread_indices length out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(
@@ -288,9 +292,10 @@ fn instructions(
             ]
         }
         hq_goto_if { step: None, .. } => {
-            let threads_offset: i32 = (byte_offset::VARS as usize + 12 * context.vars.len())
-                .try_into()
-                .expect("thread_offset out of bounds");
+            let threads_offset: i32 = (byte_offset::VARS as usize
+                + 12 * context.vars.borrow().len())
+            .try_into()
+            .expect("thread_offset out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -344,9 +349,10 @@ fn instructions(
             does_yield: true,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = (byte_offset::VARS as usize + 12 * context.vars.len())
-                .try_into()
-                .expect("thread_indices length out of bounds");
+            let thread_indices: u64 = (byte_offset::VARS as usize
+                + 12 * context.vars.borrow().len())
+            .try_into()
+            .expect("thread_indices length out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -1045,7 +1051,7 @@ impl From<IrProject> for WebWasmFile {
                     .expect("step func index out of bounds (E006)"),
             ));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.len())
+                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len())
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1107,7 +1113,7 @@ impl From<IrProject> for WebWasmFile {
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.len())
+                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len())
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
