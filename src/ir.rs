@@ -773,8 +773,8 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::operator_subtract.into(),
                                 IrOpcode::data_setvariableto { VARIABLE: looper_id.clone() }.into(),
                                 IrOpcode::data_variable { VARIABLE: looper_id.clone() }.into(),
-                                IrOpcode::math_number { NUM: 0.0.into() }.into(),
-                                IrOpcode::operator_equals.into(),
+                                IrOpcode::math_number { NUM: 1.0.into() }.into(),
+                                IrOpcode::operator_lt.into(),
                             ];
                             //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                             looper_opcodes.append(&mut condition_opcodes.clone());
@@ -792,8 +792,8 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::operator_round,
                             IrOpcode::data_setvariableto { VARIABLE: looper_id.clone() },
                             IrOpcode::data_variable { VARIABLE: looper_id },
-                            IrOpcode::math_number { NUM: 0.0.into() },
-                            IrOpcode::operator_equals,
+                            IrOpcode::math_number { NUM: 1.0.into() },
+                            IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true },
                             IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
                         ]
