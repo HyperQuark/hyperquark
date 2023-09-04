@@ -133,6 +133,9 @@ pub enum IrOpcode {
     data_setvariableto {
         VARIABLE: String,
     },
+    data_teevariable {
+        VARIABLE: String,
+    },
     data_hidevariable {
         VARIABLE: String,
     },
@@ -432,6 +435,7 @@ impl IrOpcode {
             hq_goto_if { .. } => BlockDescriptor::new(vec![Boolean], Stack),
             hq_drop(n) => BlockDescriptor::new(vec![Any; *n], Stack),
             hq_cast(ty) => BlockDescriptor::new(vec![*ty], *ty),
+            data_teevariable { .. } => BlockDescriptor::new(vec![Any], Any),
             _ => todo!("{:?}", &self),
         }
     }
@@ -771,8 +775,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::data_variable { VARIABLE: looper_id.clone() }.into(),
                                 IrOpcode::math_number { NUM: 1.0.into() }.into(),
                                 IrOpcode::operator_subtract.into(),
-                                IrOpcode::data_setvariableto { VARIABLE: looper_id.clone() }.into(),
-                                IrOpcode::data_variable { VARIABLE: looper_id.clone() }.into(),
+                                IrOpcode::data_teevariable { VARIABLE: looper_id.clone() }.into(),
                                 IrOpcode::math_number { NUM: 1.0.into() }.into(),
                                 IrOpcode::operator_lt.into(),
                             ];
@@ -790,8 +793,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         steps.insert((target_id.clone(), block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
                         vec![
                             IrOpcode::operator_round,
-                            IrOpcode::data_setvariableto { VARIABLE: looper_id.clone() },
-                            IrOpcode::data_variable { VARIABLE: looper_id },
+                            IrOpcode::data_teevariable { VARIABLE: looper_id },
                             IrOpcode::math_number { NUM: 1.0.into() },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true },

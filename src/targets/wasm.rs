@@ -171,6 +171,39 @@ fn instructions(
                 }),
             ]
         }
+        data_teevariable { VARIABLE } => {
+            let var_index: i32 = context
+                .vars
+                .borrow()
+                .iter()
+                .position(|var| VARIABLE == var.id())
+                .expect("couldn't find variable index (E033)")
+                .try_into()
+                .expect("variable index out of bounds (E034)");
+            let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
+                .try_into()
+                .expect("variable offset out of bounds (E035)");
+            vec![
+                LocalSet(step_func_locals::I64),
+                LocalSet(step_func_locals::I32),
+                I32Const(0),
+                LocalGet(step_func_locals::I32),
+                I32Store(MemArg {
+                    offset: var_offset,
+                    align: 2,
+                    memory_index: 0,
+                }),
+                I32Const(0),
+                LocalGet(step_func_locals::I64),
+                I64Store(MemArg {
+                    offset: var_offset + 4,
+                    align: 2,
+                    memory_index: 0,
+                }),
+                LocalGet(step_func_locals::I32),
+                LocalGet(step_func_locals::I64),
+            ]
+        }
         operator_lt => vec![F64Lt, I64ExtendI32S],
         operator_gt => vec![F64Gt, I64ExtendI32S],
         operator_and => vec![I64And],
