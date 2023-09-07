@@ -5,7 +5,6 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use enum_field_getter::EnumFieldGetter;
-use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,10 +20,10 @@ pub struct Sb3Project {
 #[serde(rename_all = "camelCase")]
 pub struct Comment {
     pub block_id: Option<String>,
-    pub x: Option<OrderedFloat<f64>>,
-    pub y: Option<OrderedFloat<f64>>,
-    pub width: OrderedFloat<f64>,
-    pub height: OrderedFloat<f64>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub width: f64,
+    pub height: f64,
     pub minimized: bool,
     pub text: String,
 }
@@ -219,36 +218,13 @@ pub enum Block {
     Special(BlockArray),
 }
 
-/*impl Block {
-  pub fn fixup_nexts(&mut self, blocks: &mut BTreeMap<String, Block>, final_next: Option<String>) {
-    use BlockOpcode::*;
-    let Some(bi) = self.block_info() else {
-      return;
-    };
-    if matches!(bi.opcode, control_if | control_if_else |  control_forever | control_repeat | control_repeat_until | control_while | control_for_each) {
-      for (name, input) in &bi.inputs {
-        if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
-          if let BlockArrayOrId::Id(input_id) = input.get_1().unwrap().clone().unwrap() {
-            blocks.bottom_block_mut(&input_id).fixup_nexts(blocks, bi.next.clone());//.block_info_mut().unwrap().next = next;
-          }
-        }
-      }
-    }
-    if bi.next.is_none() {
-      self.block_info_mut().unwrap().next = final_next;
-    } else {
-      blocks.get_mut(&bi.next.clone().unwrap()).unwrap().fixup_nexts(blocks, final_next);
-    }
-  }
-}*/
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BlockArray {
-    NumberOrAngle(u32, OrderedFloat<f64>),
+    NumberOrAngle(u32, f64),
     ColorOrString(u32, String),
     Broadcast(u32, String, String), // might also be variable or list if not top level?
-    VariableOrList(u32, String, String, OrderedFloat<f64>, OrderedFloat<f64>),
+    VariableOrList(u32, String, String, f64, f64),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -321,9 +297,9 @@ pub struct Costume {
     pub md5ext: String,
     pub data_format: String,
     #[serde(default)]
-    pub bitmap_resolution: OrderedFloat<f64>,
-    pub rotation_center_x: OrderedFloat<f64>,
-    pub rotation_center_y: OrderedFloat<f64>,
+    pub bitmap_resolution: f64,
+    pub rotation_center_x: f64,
+    pub rotation_center_y: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -333,14 +309,14 @@ pub struct Sound {
     pub name: String,
     pub md5ext: String,
     pub data_format: String,
-    pub rate: OrderedFloat<f64>,
-    pub sample_count: OrderedFloat<f64>,
+    pub rate: f64,
+    pub sample_count: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VarVal {
-    Float(OrderedFloat<f64>),
+    Float(f64),
     Bool(bool),
     String(String),
 }
@@ -351,21 +327,6 @@ pub enum VariableInfo {
     CloudVar(String, VarVal, bool),
     LocalVar(String, VarVal),
 }
-/*
-pub trait BlockMap {
-    fn bottom_block<'a>(&'a self, id: &'a str) -> String;
-}
-
-impl BlockMap for BTreeMap<String, Block> {
-    fn bottom_block<'a>(&'a self, id: &'a str) -> String {
-        let block = self.get(id).unwrap();
-        if let Some(next) = &block.block_info().unwrap().next {
-            self.bottom_block(next)
-        } else {
-            id.to_string()
-        }
-    }
-}*/
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -382,25 +343,25 @@ pub struct Target {
     pub costumes: Vec<Costume>,
     pub sounds: Vec<Sound>,
     pub layer_order: i32,
-    pub volume: OrderedFloat<f64>,
+    pub volume: f64,
     #[serde(default)]
-    pub tempo: OrderedFloat<f64>,
+    pub tempo: f64,
     #[serde(default)]
     pub video_state: Option<String>,
     #[serde(default)]
-    pub video_transparency: OrderedFloat<f64>,
+    pub video_transparency: f64,
     #[serde(default)]
     pub text_to_speech_language: Option<String>,
     #[serde(default)]
     pub visible: bool,
     #[serde(default)]
-    pub x: OrderedFloat<f64>,
+    pub x: f64,
     #[serde(default)]
-    pub y: OrderedFloat<f64>,
+    pub y: f64,
     #[serde(default)]
-    pub size: OrderedFloat<f64>,
+    pub size: f64,
     #[serde(default)]
-    pub direction: OrderedFloat<f64>,
+    pub direction: f64,
     #[serde(default)]
     pub draggable: bool,
     #[serde(default)]
@@ -426,10 +387,10 @@ pub enum Monitor {
         opcode: String,
         params: BTreeMap<String, String>,
         sprite_name: Option<String>,
-        width: OrderedFloat<f64>,
-        height: OrderedFloat<f64>,
-        x: OrderedFloat<f64>,
-        y: OrderedFloat<f64>,
+        width: f64,
+        height: f64,
+        x: f64,
+        y: f64,
         visible: bool,
         value: ListMonitorValue,
     },
@@ -441,13 +402,13 @@ pub enum Monitor {
         params: BTreeMap<String, String>,
         sprite_name: Option<String>,
         value: VarVal,
-        width: OrderedFloat<f64>,
-        height: OrderedFloat<f64>,
-        x: OrderedFloat<f64>,
-        y: OrderedFloat<f64>,
+        width: f64,
+        height: f64,
+        x: f64,
+        y: f64,
         visible: bool,
-        slider_min: OrderedFloat<f64>,
-        slider_max: OrderedFloat<f64>,
+        slider_min: f64,
+        slider_max: f64,
         is_discrete: bool,
     },
 }
@@ -474,20 +435,7 @@ impl TryFrom<&str> for Sb3Project {
         use serde_json::error::Category;
         let sb3: Result<Self, serde_json::Error> = serde_json::from_str(string);
         match sb3 {
-            Ok(proj) => Ok(proj), /*{
-            for target in &mut proj.targets {
-            for (id, _block) in target.blocks.iter().filter(|(_id, block)| block.block_info().is_some() && block.block_info().unwrap().parent.is_none()) {
-            target.blocks = target.blocks.fixup_nexts(id.to_string(), None);
-            }
-            //target.blocks.fixup_nexts();
-            // for (_id, block) in &mut target.blocks {
-            //   if block.block_info().is_some() && block.block_info().unwrap().parent.is_none() {
-            //     block.fixup_nexts(&mut target.blocks, None);
-            //   }
-            // }
-            }
-            Ok(proj)
-            },*/
+            Ok(proj) => Ok(proj),
             Err(err) => Err(match err.classify() {
                 Category::Syntax => "Invalid JSON syntax",
                 Category::Data => "Invalid project.json",
@@ -495,21 +443,6 @@ impl TryFrom<&str> for Sb3Project {
             }),
         }
     }
-    /*fn try_from(string: &str) -> Result<Self, Self::Error> {
-        use serde_json::error::Category;
-        let v: Result<Self, serde_json::Error> = serde_json::from_str(string);
-        let val = match v {
-            Ok(proj) => Ok(proj),
-            Err(err) => Err(match err.classify() {
-                Category::Syntax => "Invalid JSON syntax",
-                Category::Data => "Invalid project.json",
-                _ => "Failed to deserialize json",
-            })
-        }?
-        for target in val.targets {
-
-        }
-    }*/
 }
 
 #[cfg(test)]

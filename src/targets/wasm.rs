@@ -81,10 +81,10 @@ fn instructions(
                 actual_output = Any;
                 vec![
                     I32Const(hq_value_types::FLOAT64),
-                    I64Const((**NUM).to_bits() as i64),
+                    I64Const((*NUM).to_bits() as i64),
                 ]
             } else {
-                vec![F64Const(**NUM)] // double deref because &OrderedFloat<f64> -> OrderedFloat<f64> -> f64
+                vec![F64Const(*NUM)]
             }
         }
         text { TEXT } => {

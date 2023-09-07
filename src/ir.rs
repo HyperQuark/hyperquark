@@ -10,7 +10,6 @@ use core::cell::RefCell;
 use core::hash::BuildHasherDefault;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
-use ordered_float::OrderedFloat;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -103,7 +102,7 @@ impl From<Sb3Project> for IrProject {
 
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
-#[derive(Debug, Clone, PartialEq, Eq /*Hash*/)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrOpcode {
     control_repeat,
     control_repeat_until,
@@ -203,19 +202,19 @@ pub enum IrOpcode {
     looks_costume,
     looks_backdrops,
     math_angle {
-        NUM: OrderedFloat<f64>,
+        NUM: f64,
     },
     math_integer {
-        NUM: OrderedFloat<f64>,
+        NUM: f64,
     },
     math_number {
-        NUM: OrderedFloat<f64>,
+        NUM: f64,
     },
     math_positive_number {
-        NUM: OrderedFloat<f64>,
+        NUM: f64,
     },
     math_whole_number {
-        NUM: OrderedFloat<f64>,
+        NUM: f64,
     },
     motion_movesteps,
     motion_gotoxy,
@@ -321,7 +320,7 @@ pub enum IrOpcode {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq /*Hash*/)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IrBlock {
     pub opcode: IrOpcode,
     pub actual_output: BlockType,   // the output type the block produces
@@ -371,7 +370,7 @@ impl IrBlock {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq /*Hash*/)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BlockType {
     Text,
     Number,
@@ -384,7 +383,7 @@ pub enum BlockType {
     Stack,
 }
 
-#[derive(Debug, PartialEq, Eq /*Hash*/)]
+#[derive(Debug, PartialEq)]
 pub struct BlockDescriptor {
     inputs: Vec<BlockType>,
     output: BlockType,
@@ -441,7 +440,7 @@ impl IrOpcode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq /*Hash*/)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IrVar {
     id: String,
     name: String,
@@ -477,7 +476,7 @@ pub enum ThreadStart {
     GreenFlag,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq /*Hash*/)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Step {
     opcodes: Vec<IrBlock>,
     context: Rc<ThreadContext>,
@@ -498,7 +497,7 @@ impl Step {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq /*Hash*/)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
@@ -581,7 +580,9 @@ impl IrBlockVec for Vec<IrBlock> {
             }
             match input {
                 Input::Shadow(_, maybe_block, _) | Input::NoShadow(_, maybe_block) => {
-                    let Some(block) = maybe_block else { panic!("block doest exist"); };
+                    let Some(block) = maybe_block else {
+                        panic!("block doest exist");
+                    };
                     match block {
                         BlockArrayOrId::Id(id) => {
                             self.add_block(
@@ -769,14 +770,14 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
                             ];
                         let looper_id = Uuid::new_v4().to_string();
-                        context.vars.borrow_mut().push(IrVar::new(looper_id.clone(), looper_id.clone(), VarVal::Float(0.0.into()), false));
+                        context.vars.borrow_mut().push(IrVar::new(looper_id.clone(), looper_id.clone(), VarVal::Float(0.0), false));
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
                             let mut looper_opcodes = vec![
                                 IrOpcode::data_variable { VARIABLE: looper_id.clone() }.into(),
-                                IrOpcode::math_number { NUM: 1.0.into() }.into(),
+                                IrOpcode::math_number { NUM: 1.0 }.into(),
                                 IrOpcode::operator_subtract.into(),
                                 IrOpcode::data_teevariable { VARIABLE: looper_id.clone() }.into(),
-                                IrOpcode::math_number { NUM: 1.0.into() }.into(),
+                                IrOpcode::math_number { NUM: 1.0 }.into(),
                                 IrOpcode::operator_lt.into(),
                             ];
                             //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
@@ -794,7 +795,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![
                             IrOpcode::operator_round,
                             IrOpcode::data_teevariable { VARIABLE: looper_id },
-                            IrOpcode::math_number { NUM: 1.0.into() },
+                            IrOpcode::math_number { NUM: 1.0 },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true },
                             IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
@@ -883,7 +884,9 @@ pub fn step_from_top_block<'a>(
         } else {
             panic!("invalid next_id");
         }
-        let Some(last_block) = ops.last() else { unreachable!() };
+        let Some(last_block) = ops.last() else {
+            unreachable!()
+        };
         if last_block.does_request_redraw()
             && !(*last_block.opcode() == IrOpcode::looks_say && context.dbg)
         {
