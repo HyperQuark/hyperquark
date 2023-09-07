@@ -1,7 +1,7 @@
 <template>
   <h1>{{ props.title || 'untitled' }}</h1>
   <span>by {{ props.author || 'unknown' }}</span>
-  <input type="checkbox" name="turbo" :value="turbo"> <label for="turbo">turbo mode</label>
+  <input type="checkbox" id="turbo" :value="turbo"> <label for="turbo">turbo mode</label>
   <details v-if="error">
     <summary>An error occured whilst trying to load the project.</summary>
     {{ error }}
