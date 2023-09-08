@@ -1244,7 +1244,7 @@ impl From<IrProject> for WebWasmFile {
 
         let wasm_bytes = module.finish();
         Self { js_string: format!("
-        ({{ framerate=30 }} = {{ framerate: 30 }}) => new Promise((resolve, reject) => {{
+        ({{ framerate=30, renderer }} = {{ framerate: 30 }}) => new Promise((resolve, reject) => {{
             const framerate_wait = Math.round(1000 / framerate);
             let assert;
             let exit;
@@ -1385,6 +1385,7 @@ impl From<IrProject> for WebWasmFile {
                 green_flag();
                 start_time = Date.now();
                 $outertickloop: while (true) {{
+                    renderer.draw();
                     /*console.log('outer')*/
                     const thisTickStartTime = Date.now();
                     $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{

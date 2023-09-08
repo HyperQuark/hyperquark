@@ -10,20 +10,26 @@
     <br>
     <br>
     <button @click="greenFlag">green flag</button> <button>stop</button>
-    <canvas width="480" height="360"></canvas>
+    <canvas width="480" height="360" ref="canvas"></canvas>
     <div id="hq-output">Project output:<br></div>
   </template>
 </template>
 
 <script setup>
   import { sb3_to_wasm } from '@/../js/hyperquark.js';
-  import { ref, nextTick } from 'vue';
+  import RenderWebGL from 'scratch-render';
+  import { ref, onMounted } from 'vue';
   
   const props = defineProps(['json', 'title', 'author', 'assets']);
   let error = ref(null);
   let turbo = ref(false);
+  let canvas = ref(null);
+  let renderer;
   let wasm;
   let start;
+  onMounted(() => {
+    renderer = new RenderWebGL(canvas.value);
+  });
   try {
     wasm = sb3_to_wasm(JSON.stringify(props.json));
     start = eval(wasm);
@@ -38,7 +44,7 @@
   }
   console.log(start);
   function greenFlag() {
-    start({ framerate: turbo ? Infinity : 30 }).then(_=>alert('done')).catch(e => {
+    start({ framerate: turbo ? Infinity : 30, renderer }).then(_=>alert('done')).catch(e => {
       error.value = e.toString();
       if (e.stack) {
         error.value += '\n' + e.stack;
