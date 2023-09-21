@@ -17,9 +17,10 @@
 
 <script setup>
   import { sb3_to_wasm } from '@/../js/hyperquark.js';
-  import RenderWebGL from 'scratch-render';
+  //import Renderer from 'scratch-render';
+  const Renderer = window.ScratchRender;
   import { ref, onMounted } from 'vue';
-  
+  //console.log(Renderer)
   const props = defineProps(['json', 'title', 'author', 'assets']);
   let error = ref(null);
   let turbo = ref(false);
@@ -28,7 +29,7 @@
   let wasm;
   let start;
   onMounted(() => {
-    renderer = new RenderWebGL(canvas.value);
+    renderer = new Renderer(canvas.value);
   });
   try {
     wasm = sb3_to_wasm(JSON.stringify(props.json));

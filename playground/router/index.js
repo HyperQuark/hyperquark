@@ -39,6 +39,11 @@ const router = createRouter({
       component: view('ProjectFileView'),
     },
     {
+      path: '/projects/test',
+      name: 'testProjectPlayer',
+      component: view('TestProject'),
+    },
+    {
       path: '/about',
       name: 'about',
       component: view('AboutView'),
