@@ -273,7 +273,6 @@ pub enum IrOpcode {
     pen_changePenShadeBy,
     pen_setPenHueToNumber,
     pen_changePenHueBy,
-    pen_menu_colorParam,
     procedures_definition,
     procedures_call,
     procedures_prototype,
@@ -430,11 +429,26 @@ impl IrOpcode {
             operator_join => BlockDescriptor::new(vec![Any, Any], Text),
             operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
             operator_length => BlockDescriptor::new(vec![Any], Number),
-            hq_goto { .. } | sensing_resettimer => BlockDescriptor::new(vec![], Stack),
+            hq_goto { .. }
+            | sensing_resettimer
+            | pen_clear
+            | pen_stamp
+            | pen_penDown
+            | pen_penUp => BlockDescriptor::new(vec![], Stack),
             hq_goto_if { .. } => BlockDescriptor::new(vec![Boolean], Stack),
             hq_drop(n) => BlockDescriptor::new(vec![Any; *n], Stack),
             hq_cast(ty) => BlockDescriptor::new(vec![*ty], *ty),
             data_teevariable { .. } => BlockDescriptor::new(vec![Any], Any),
+            pen_setPenColorToColor
+            | pen_changePenSizeBy
+            | pen_setPenSizeTo
+            | pen_setPenShadeToNumber
+            | pen_changePenShadeBy
+            | pen_setPenHueToNumber
+            | pen_changePenHueBy => BlockDescriptor::new(vec![Number], Stack),
+            pen_changePenColorParamBy | pen_setPenColorParamTo => {
+                BlockDescriptor::new(vec![Text, Number], Stack)
+            }
             _ => todo!("{:?}", &self),
         }
     }
@@ -706,6 +720,30 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                     BlockOpcode::operator_length => vec![IrOpcode::operator_length],
                     BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
+                    BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
+                    BlockOpcode::pen_stamp => vec![IrOpcode::pen_stamp],
+                    BlockOpcode::pen_penDown => vec![IrOpcode::pen_penDown],
+                    BlockOpcode::pen_penUp => vec![IrOpcode::pen_penUp],
+                    BlockOpcode::pen_setPenColorToColor => vec![IrOpcode::pen_setPenColorToColor],
+                    BlockOpcode::pen_changePenColorParamBy => vec![IrOpcode::pen_changePenColorParamBy],
+                    BlockOpcode::pen_setPenColorParamTo => vec![IrOpcode::pen_setPenColorParamTo],
+                    BlockOpcode::pen_changePenSizeBy => vec![IrOpcode::pen_changePenSizeBy],
+                    BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setPenSizeTo],
+                    BlockOpcode::pen_setPenShadeToNumber => vec![IrOpcode::pen_setPenShadeToNumber],
+                    BlockOpcode::pen_changePenShadeBy => vec![IrOpcode::pen_changePenShadeBy],
+                    BlockOpcode::pen_setPenHueToNumber => vec![IrOpcode::pen_setPenHueToNumber],
+                    BlockOpcode::pen_changePenHueBy => vec![IrOpcode::pen_changePenHueBy],
+                    BlockOpcode::pen_menu_colorParam => {
+                        let maybe_val = match block_info.fields.get("colorParam")
+                            .expect("invalid project.json - missing field colorParam") {
+                            Field::Value((v,)) | Field::ValueId(v, _) => v,
+                        };
+                        let val_varval = maybe_val.clone().expect("invalid project.json - null value for OPERATOR field (E039)");
+                        let VarVal::String(val) = val_varval else {
+                            panic!("invalid project.json - expected colorParam field to be string");
+                        };
+                        vec![IrOpcode::text { TEXT: val }]
+                    },
                     BlockOpcode::operator_mathop => {
                         let maybe_val = match block_info.fields.get("OPERATOR")
                             .expect("invalid project.json - missing field OPERATOR (E038)") {

@@ -234,6 +234,99 @@ fn instructions(
         },
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
+        pen_clear => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CLEAR),
+        ],
+        pen_stamp => todo!(),
+        pen_penDown => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_DOWN),
+        ],
+        pen_penUp => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_UP),
+        ],
+        pen_setPenColorToColor => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETCOLOR),
+        ],
+        pen_changePenColorParamBy => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CHANGECOLORPARAM),
+        ],
+        pen_setPenColorParamTo => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETCOLORPARAM),
+        ],
+        pen_changePenSizeBy => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CHANGESIZE),
+        ],
+        pen_setPenSizeTo => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETSIZE),
+        ],
+        pen_setPenShadeToNumber => todo!(),
+        pen_changePenShadeBy => todo!(),
+        pen_setPenHueToNumber => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETHUE),
+        ],
+        pen_changePenHueBy => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CHANGEHUE),
+        ],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
@@ -572,19 +665,29 @@ pub mod func_indices {
     pub const MATHOP_POW10: u32 = 23;
     pub const SENSING_TIMER: u32 = 24;
     pub const SENSING_RESETTIMER: u32 = 25;
+    pub const PEN_CLEAR: u32 = 26;
+    pub const PEN_DOWN: u32 = 27;
+    pub const PEN_UP: u32 = 28;
+    pub const PEN_SETCOLOR: u32 = 29;
+    pub const PEN_CHANGECOLORPARAM: u32 = 30;
+    pub const PEN_SETCOLORPARAM: u32 = 31;
+    pub const PEN_CHANGESIZE: u32 = 32;
+    pub const PEN_SETSIZE: u32 = 33;
+    pub const PEN_SETHUE: u32 = 34;
+    pub const PEN_CHANGEHUE: u32 = 35;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 26;
-    pub const CAST_FLOAT_BOOL: u32 = 27;
-    pub const CAST_BOOL_FLOAT: u32 = 28;
-    pub const CAST_BOOL_STRING: u32 = 29;
-    pub const CAST_ANY_STRING: u32 = 30;
-    pub const CAST_ANY_FLOAT: u32 = 31;
-    pub const CAST_ANY_BOOL: u32 = 32;
-    pub const TABLE_ADD_STRING: u32 = 33;
+    pub const FMOD: u32 = 36;
+    pub const CAST_FLOAT_BOOL: u32 = 37;
+    pub const CAST_BOOL_FLOAT: u32 = 38;
+    pub const CAST_BOOL_STRING: u32 = 39;
+    pub const CAST_ANY_STRING: u32 = 40;
+    pub const CAST_ANY_FLOAT: u32 = 41;
+    pub const CAST_ANY_BOOL: u32 = 42;
+    pub const TABLE_ADD_STRING: u32 = 43;
 }
-pub const BUILTIN_FUNCS: u32 = 34;
-pub const IMPORTED_FUNCS: u32 = 26;
+pub const BUILTIN_FUNCS: u32 = 44;
+pub const IMPORTED_FUNCS: u32 = 36;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -623,6 +726,8 @@ pub mod types {
     pub const I32I64I32I64_EXTERNREF: u32 = 32;
     pub const F64_F64: u32 = 33;
     pub const NOPARAM_I32: u32 = 34;
+    pub const I32x2_NORESULT: u32 = 35;
+    pub const EXTERNREFF64I32_NORESULT: u32 = 36;
 }
 
 pub mod table_indices {
@@ -712,6 +817,11 @@ impl From<IrProject> for WebWasmFile {
         );
         types.function([ValType::F64], [ValType::F64]);
         types.function([], [ValType::I32]);
+        types.function([ValType::I32, ValType::I32], []);
+        types.function(
+            [ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I32],
+            [],
+        );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -830,6 +940,56 @@ impl From<IrProject> for WebWasmFile {
             "runtime",
             "sensing_resettimer",
             EntityType::Function(types::NOPARAM_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_clear",
+            EntityType::Function(types::I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_down",
+            EntityType::Function(types::I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_up",
+            EntityType::Function(types::I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_setcolor",
+            EntityType::Function(types::I32x2_NORESULT), // todo: decide how to pass around colours - numbers (i32 or i64?) or strings? needs a new type or shares an integer type (needs generic monomorphisation)
+        );
+        imports.import(
+            "runtime",
+            "pen_changecolorparam",
+            EntityType::Function(types::EXTERNREFF64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_setcolorparam",
+            EntityType::Function(types::EXTERNREFF64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_changesize",
+            EntityType::Function(types::F64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_setsize",
+            EntityType::Function(types::F64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_changehue",
+            EntityType::Function(types::F64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_sethue",
+            EntityType::Function(types::F64I32_NORESULT),
         );
 
         functions.function(types::F64x2_F64);
