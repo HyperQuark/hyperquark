@@ -16,26 +16,25 @@
 </template>
 
 <script setup>
-  import { sb3_to_wasm } from '@/../js/hyperquark.js';
-  //import Renderer from 'scratch-render';
-  const Renderer = window.ScratchRender;
+  import { sb3_to_wasm, WasmProject } from '@/../js/hyperquark.js';
+  import runProject from '@/lib/project-runner.js';
   import { ref, onMounted } from 'vue';
-  //console.log(Renderer)
+  const Renderer = window.ScratchRender;
   const props = defineProps(['json', 'title', 'author', 'assets']);
   let error = ref(null);
   let turbo = ref(false);
   let canvas = ref(null);
   let renderer;
-  let wasm;
+  let wasmProject;
   let start;
   onMounted(() => {
     renderer = new Renderer(canvas.value);
   });
   try {
-    wasm = sb3_to_wasm(JSON.stringify(props.json));
-    start = eval(wasm);
-    if (!typeof start === 'function') {
-      throw start;
+    wasmProject = sb3_to_wasm(JSON.stringify(props.json));
+    console.log(wasmProject)
+    if (!wasmProject instanceof WasmProject) {
+      throw new Error("unknown error occurred when compiling project");
     }
   } catch (e) {
     error.value = e.toString();
@@ -43,9 +42,8 @@
       error.value += '\n' + e.stack;
     }
   }
-  console.log(start);
   function greenFlag() {
-    start({ framerate: turbo ? Infinity : 30, renderer }).then(_=>alert('done')).catch(e => {
+    runProject({ framerate: turbo ? Infinity : 30, renderer, ...wasmProject }).then(_=>alert('done')).catch(e => {
       error.value = e.toString();
       if (e.stack) {
         error.value += '\n' + e.stack;

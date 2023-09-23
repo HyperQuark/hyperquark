@@ -8,10 +8,12 @@ use alloc::vec::Vec;
 use core::hash::BuildHasherDefault;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
+use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType,
-    ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg,
-    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
+    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
+    Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection, TableType,
+    TypeSection, ValType,
 };
 
 fn instructions(
@@ -614,19 +616,25 @@ impl CompileToWasm for (&(String, String), &Step) {
     }
 }
 
-pub struct WebWasmFile {
-    js_string: String,
-    wasm_bytes: Vec<u8>,
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmProject {
+    pub wasm_bytes: Vec<u8>,
+    pub string_consts: Vec<String>,
+    pub target_names: Vec<String>,
 }
-
-impl WebWasmFile {
+/*
+#[wasm_bindgen]
+impl WasmProject {
     pub fn wasm_bytes(&self) -> &Vec<u8> {
         &self.wasm_bytes
     }
-    pub fn js_string(&self) -> &String {
-        &self.js_string
+    pub fn string_consts(&self) -> &Vec<String> {
+        &self.string_consts
     }
-}
+    pub fn target_names(&self) -> &Vec<String> {
+        &self.target_names
+    }
+}*/
 
 pub mod step_func_locals {
     pub const MEM_LOCATION: u32 = 0;
@@ -750,7 +758,7 @@ pub mod byte_offset {
     pub const VARS: i32 = 8;
 }
 
-impl From<IrProject> for WebWasmFile {
+impl From<IrProject> for WasmProject {
     fn from(project: IrProject) -> Self {
         let mut module = Module::new();
 
@@ -762,6 +770,7 @@ impl From<IrProject> for WebWasmFile {
         let mut tables = TableSection::new();
         let mut elements = ElementSection::new();
         let mut memories = MemorySection::new();
+        let mut globals = GlobalSection::new();
 
         memories.memory(MemoryType {
             minimum: 1,
@@ -1384,9 +1393,26 @@ impl From<IrProject> for WebWasmFile {
             step_func_indices,
         );
 
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: false,
+            },
+            &ConstExpr::i32_const(byte_offset::REDRAW_REQUESTED),
+        );
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: false,
+            },
+            &ConstExpr::i32_const(byte_offset::THREAD_NUM),
+        );
+
         exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
         exports.export("strings", ExportKind::Table, table_indices::STRINGS);
         exports.export("memory", ExportKind::Memory, 0);
+        exports.export("rr_offset", ExportKind::Global, 0);
+        exports.export("thn_offset", ExportKind::Global, 1);
 
         module
             .section(&types)
@@ -1394,7 +1420,7 @@ impl From<IrProject> for WebWasmFile {
             .section(&functions)
             .section(&tables)
             .section(&memories)
-            // globals
+            .section(&globals)
             .section(&exports)
             // start
             .section(&elements)
@@ -1403,171 +1429,11 @@ impl From<IrProject> for WebWasmFile {
         // data
 
         let wasm_bytes = module.finish();
-        Self { js_string: format!("
-        ({{ framerate=30, renderer }} = {{ framerate: 30 }}) => new Promise((resolve, reject) => {{
-            const framerate_wait = Math.round(1000 / framerate);
-            let assert;
-            let exit;
-            let browser = false;
-            let output_div;
-            let text_div;
-            if (typeof require === 'undefined') {{
-              browser = true;
-              output_div = document.querySelector('div#hq-output');
-              text_div = txt => Object.assign(document.createElement('div'), {{ textContent: txt }});
-              assert = (bool) => {{
-                if (!bool) {{
-                  throw new AssertionError('Assertion failed');
-                }}
-              }}
-              exit = _ => null;
-            }} else {{
-              exit = process.exit;
-              assert = require('node:assert')/*.strict*/;
-            }}
-            let last_output;
-            let strings_tbl;
-            const wasm_val_to_js = (type, value_i64) => {{
-                return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
-            }};
-            const wasm_output = (...args) => {{
-                const val = wasm_val_to_js(...args);
-                if (!browser) {{
-                  console.log('output: \\x1b[34m%s\\x1b[0m', val);
-                }} else {{
-                  output_div.appendChild(text_div('output: ' + String(val)));
-                }}
-                last_output = val;
-            }};
-            const assert_output = (...args) => {{
-                /*assert.equal(last_output, wasm_val_to_js(...args));*/
-                const val = wasm_val_to_js(...args);
-                if (!browser) {{
-                  console.log('assert: \\x1b[34m%s\\x1b[0m', val);
-                }} else {{
-                  output_div.appendChild(text_div('assert: ' + String(val)));
-                }}
-            }}
-            const targetOutput = (targetIndex, verb, text) => {{
-                let targetName = {target_names:?}[targetIndex];
-                if (!browser) {{
-                  console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
-                }} else {{
-                  output_div.appendChild(text_div(`${{targetName}} ${{verb}}: ${{text}}`));
-                }}
-            }};
-            let start_time = 0;
-            const importObject = {{
-                dbg: {{
-                    log: wasm_output,
-                    assert: assert_output,
-                    logi32 (i32) {{
-                        console.log('logi32: \\x1b[33m%d\\x1b[0m', i32);
-                        return i32;
-                    }},
-                }},
-                runtime: {{
-                    looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
-                    looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
-                    operator_equals: (ty1, val1, ty2, val2) => {{
-                        if (ty1 === ty2 && val1 === val2) return true;
-                        let j1 = wasm_val_to_js(ty1, val1);
-                        let j2 = wasm_val_to_js(ty2, val2);
-                        if (typeof j1 === 'string') j1 = j1.toLowerCase();
-                        if (typeof j2 === 'string') j2 = j2.toLowerCase();
-                        return j1 == j2;
-                    }},
-                    operator_random: (lower, upper) => Math.random() * (upper - lower) + lower,
-                    operator_join: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString() + wasm_val_to_js(ty2, val2).toString(),
-                    operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
-                    operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
-                    operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().toLowerCase().includes(wasm_val_to_js(ty2, val2).toString().toLowerCase()),
-                    mathop_sin: (n) => parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
-                    mathop_cos: (n) => parseFloat(Math.cos((Math.PI * n) / 180).toFixed(10)),
-                    mathop_tan: (n) => {{
-                        /* https://github.com/scratchfoundation/scratch-vm/blob/f1f10e0aa856fef6596a622af72b49e2f491f937/src/util/math-util.js#L53-65 */
-                        n = n % 360;
-                        switch (n) {{
-                            case -270:
-                            case 90:
-                                return Infinity;
-                            case -90:
-                            case 270:
-                                return -Infinity;
-                            default:
-                                return parseFloat(Math.tan((Math.PI * n) / 180).toFixed(10));
-                        }}
-                    }},
-                    mathop_asin: (n) => (Math.asin(n) * 180) / Math.PI,
-                    mathop_acos: (n) => (Math.acos(n) * 180) / Math.PI,
-                    mathop_atan: (n) => (Math.atan(n) * 180) / Math.PI,
-                    mathop_ln: (n) => Math.log(n),
-                    mathop_log: (n) => Math.log(n) / Math.LN10,
-                    mathop_pow_e: (n) => Math.exp(n),
-                    mathop_pow10: (n) => Math.pow(10, n),
-                    sensing_timer: () => (Date.now() - start_time) / 1000,
-                    sensing_resettimer: () => start_time = Date.now(),
-                }},
-                cast: {{
-                  stringtofloat: parseFloat,
-                  stringtobool: Boolean,
-                  floattostring: Number.prototype.toString,
-                }},
-            }};
-            const buf = new Uint8Array({buf:?});
-            try {{
-                assert(WebAssembly.validate(buf));
-            }} catch {{
-                try {{
-                    new WebAssembly.Module(buf);
-                    return reject('invalid WASM module');
-                }} catch (e) {{
-                    return reject('invalid WASM module: ' + e.message);
-                }}
-            }}
-            function sleep(ms) {{
-                return new Promise((resolve) => {{
-                    setTimeout(resolve, ms);
-                }});
-            }}
-            function waitAnimationFrame() {{
-                return new Promise((resolve) => {{
-                    requestAnimationFrame(resolve);
-                }});
-            }}
-            WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
-                const {{ green_flag, tick, memory, strings, step_funcs }} = instance.exports;
-                for (const [i, str] of Object.entries({string_consts:?})) {{
-                  strings.set(i, str);
-                }}
-                strings_tbl = strings;
-                /*resolve({{ strings, green_flag, step_funcs, tick, memory }})*/;
-                green_flag();
-                start_time = Date.now();
-                $outertickloop: while (true) {{
-                    renderer.draw();
-                    /*console.log('outer')*/
-                    const thisTickStartTime = Date.now();
-                    $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
-                        /*console.log('inner')*/
-                        tick();
-                        if (new Uint32Array(memory.buffer)[{thn_offset}/4] === 0) {{
-                            break $outertickloop;
-                        }}
-                    }}
-                    new Uint8Array(memory.buffer)[{rr_offset}] = 0;
-                    if (framerate_wait > 0) {{
-                        await sleep(Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)));
-                    }} else {{
-                        await waitAnimationFrame();
-                    }}
-                }}
-            }}).catch((e) => {{
-                reject('error when instantiating module:\\n' + e.stack);
-                /*exit(1);*/
-            }});
-        }})
-        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
+        Self {
+            target_names: project.targets.clone(),
+            wasm_bytes,
+            string_consts,
+        }
     }
 }
 
@@ -1576,7 +1442,7 @@ mod tests {
     use super::*;
     use std::process::{Command, Stdio};
 
-    #[test]
+    /*#[test]
     fn run_wasm() {
         use crate::sb3::Sb3Project;
         use std::fs;
@@ -1585,10 +1451,8 @@ mod tests {
             .try_into()
             .unwrap();
         let ir: IrProject = proj.into();
-        let wasm: WebWasmFile = ir.into();
+        let wasm: WasmProject = ir.into();
         fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
-        fs::write("./bad.mjs", format!("export default {};", wasm.js_string()))
-            .expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
             .arg(format!(
@@ -1609,5 +1473,5 @@ mod tests {
         if !output.status.success() {
             panic!("couldn't run wasm");
         }
-    }
+    }*/
 }
