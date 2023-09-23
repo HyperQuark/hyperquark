@@ -32,7 +32,6 @@
   });
   try {
     wasmProject = sb3_to_wasm(JSON.stringify(props.json));
-    console.log(wasmProject)
     if (!wasmProject instanceof WasmProject) {
       throw new Error("unknown error occurred when compiling project");
     }
@@ -43,7 +42,13 @@
     }
   }
   function greenFlag() {
-    runProject({ framerate: turbo ? Infinity : 30, renderer, ...wasmProject }).then(_=>alert('done')).catch(e => {
+    runProject({
+      framerate: turbo ? Infinity : 30,
+      renderer,
+      wasm_bytes: wasmProject.wasm_bytes,
+      string_consts: wasmProject.stringConsts,
+      target_names: wasmProject.target_names,
+    }).then(_=>alert('done')).catch(e => {
       error.value = e.toString();
       if (e.stack) {
         error.value += '\n' + e.stack;

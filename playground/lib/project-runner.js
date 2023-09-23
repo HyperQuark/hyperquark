@@ -1,4 +1,5 @@
 export default ({ framerate=30, renderer, wasm_bytes, target_names, string_consts } = { framerate: 30 }) => new Promise((resolve, reject) => {
+    console.log(wasm_bytes,string_consts,target_names)
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
     let exit;

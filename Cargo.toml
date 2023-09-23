@@ -8,13 +8,16 @@ serde = { version = "1.0", default-features = false, features = ["derive", "allo
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 enum-field-getter = { path = "enum-field-getter" }
 wasm-encoder = "0.25.0"
-wasm-bindgen = "0.2.87"
+wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen.git" }
 indexmap = { version = "2.0.0", default-features = false }
 hashers = "1.0.1"
 uuid = { version = "1.4.1", default-features = false, features = ["v4", "js"] }
 
-[dev-dependencies]
-reqwest = { version = "0.11", features = ["blocking"] }
+[patch.crates-io]
+wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen.git" }
+
+#[dev-dependencies]
+#reqwest = { version = "0.11", features = ["blocking"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
