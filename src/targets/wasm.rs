@@ -237,12 +237,6 @@ fn instructions(
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
         pen_clear => vec![
-            I32Const(
-                context
-                    .target_index
-                    .try_into()
-                    .expect("target index out of bounds (E003)"),
-            ),
             Call(func_indices::PEN_CLEAR),
         ],
         pen_stamp => todo!(),
@@ -953,7 +947,7 @@ impl From<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "pen_clear",
-            EntityType::Function(types::I32_NORESULT),
+            EntityType::Function(types::NOPARAM_NORESULT),
         );
         imports.import(
             "runtime",

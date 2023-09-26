@@ -46,7 +46,7 @@
       framerate: turbo ? Infinity : 30,
       renderer,
       wasm_bytes: wasmProject.wasm_bytes,
-      string_consts: wasmProject.stringConsts,
+      string_consts: wasmProject.string_consts,
       target_names: wasmProject.target_names,
     }).then(_=>alert('done')).catch(e => {
       error.value = e.toString();

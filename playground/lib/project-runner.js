@@ -1,11 +1,11 @@
 export default ({ framerate=30, renderer, wasm_bytes, target_names, string_consts } = { framerate: 30 }) => new Promise((resolve, reject) => {
-    console.log(wasm_bytes,string_consts,target_names)
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
     let exit;
     let browser = false;
     let output_div;
     let text_div;
+    const pen_skin = renderer.createPenSkin();
     if (typeof require === 'undefined') {
       browser = true;
       output_div = document.querySelector('div#hq-output');
@@ -20,6 +20,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
       exit = process.exit;
       assert = require('node:assert')/*.strict*/;
     }
+    browser=!browser
     let last_output;
     let strings_tbl;
     const wasm_val_to_js = (type, value_i64) => {
@@ -102,6 +103,16 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             mathop_pow10: (n) => Math.pow(10, n),
             sensing_timer: () => (Date.now() - start_time) / 1000,
             sensing_resettimer: () => start_time = Date.now(),
+            pen_clear: () => renderer.penClear(pen_skin),
+            pen_down: () => renderer.penPoint(pen_skin, { diameter: 100, color4f: [0.8, 0.8, 0.4, 0.5] }, 0, 0),
+            pen_up: () => null,
+            pen_setcolor: () => null,
+            pen_changecolorparam: () => null,
+            pen_setcolorparam: () => null,
+            pen_changesize: () => null,
+            pen_setsize: () => null,
+            pen_changehue: () => null,
+            pen_sethue: () => null,
         },
         cast: {
           stringtofloat: parseFloat,
@@ -139,9 +150,10 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         /*resolve({ strings, green_flag, step_funcs, tick, memory })*/;
         green_flag();
         start_time = Date.now();
+        console.log('green_flag()')
         $outertickloop: while (true) {
             renderer.draw();
-            /*console.log('outer')*/
+            console.log('outer')
             const thisTickStartTime = Date.now();
             $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[rr_offset] === 0) {
                 /*console.log('inner')*/
