@@ -5,6 +5,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     let browser = false;
     let output_div;
     let text_div;
+    //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
     const pen_skin = renderer.createPenSkin();
     if (typeof require === 'undefined') {
       browser = true;
@@ -20,9 +21,9 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
       exit = process.exit;
       assert = require('node:assert')/*.strict*/;
     }
-    browser=!browser
     let last_output;
     let strings_tbl;
+    const renderBubble = renderer.createTextSkin('say', '', false);
     const wasm_val_to_js = (type, value_i64) => {
         return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
     };
@@ -49,7 +50,8 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         if (!browser) {
           console.log(`\x1b[1;32m${targetName} ${verb}:\x1b[0m \x1b[35m${text}\x1b[0m`);
         } else {
-          output_div.appendChild(text_div(`${targetName} ${verb}: ${text}`));
+          //output_div.appendChild(text_div(`${targetName} ${verb}: ${text}`));
+          renderer.updateTextSkin(renderBubble, verb, text, false)
         }
     };
     let start_time = 0;
@@ -120,12 +122,12 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
           floattostring: Number.prototype.toString,
         },
     };
-    const buf = new Uint8Array(wasm_bytes);
+    //const buf = new Uint8Array(wasm_bytes);
     try {
-        assert(WebAssembly.validate(buf));
+        assert(WebAssembly.validate(wasm_bytes));
     } catch {
         try {
-            new WebAssembly.Module(buf);
+            new WebAssembly.Module(wasm_bytes);
             return reject('invalid WASM module');
         } catch (e) {
             return reject('invalid WASM module: ' + e.message);
@@ -141,7 +143,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             requestAnimationFrame(resolve);
         });
     }
-    WebAssembly.instantiate(buf, importObject).then(async ({ instance }) => {
+    WebAssembly.instantiate(wasm_bytes, importObject).then(async ({ instance }) => {
         const { green_flag, tick, memory, strings, step_funcs, rr_offset, thn_offset } = instance.exports;
         for (const [i, str] of Object.entries(string_consts)) {
           strings.set(i, str);
@@ -152,13 +154,14 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         start_time = Date.now();
         console.log('green_flag()')
         $outertickloop: while (true) {
+           // console.log(new Uint32Array(memory.buffer)[thn_offset.value / 4])
             renderer.draw();
-            console.log('outer')
+            // console.log('outer')
             const thisTickStartTime = Date.now();
-            $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[rr_offset] === 0) {
-                /*console.log('inner')*/
+            $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[rr_offset.value] === 0) {
+                //console.log('inner')
                 tick();
-                if (new Uint32Array(memory.buffer)[thn_offset/4] === 0) {
+                if (new Uint32Array(memory.buffer)[thn_offset.value / 4] === 0) {
                     break $outertickloop;
                 }
             }
