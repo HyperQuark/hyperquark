@@ -1,7 +1,8 @@
 function createSkin(renderer, type, layer, ...params) {
-    let drawable = renderer.createDrawable(layer);
+    let drawable = renderer.createDrawable(layer.toString());
     let skin = renderer[`create${type}Skin`](...params);
     renderer.updateDrawableSkinId(drawable, skin);
+    return skin;
 }
 export default ({ framerate=30, renderer, wasm_bytes, target_names, string_consts } = { framerate: 30 }) => new Promise((resolve, reject) => {
     const framerate_wait = Math.round(1000 / framerate);
@@ -11,11 +12,9 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     let output_div;
     let text_div;
     window.renderer=renderer;
+    renderer.setLayerGroupOrdering(['background', 'video', 'pen', 'sprite']);
     //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
-    //const pen_drawable = renderer.createDrawable(0);
-    const pen_skin = createSkin(renderer, 'Pen', 0);
-
-    //renderer._drawList.push(pen_skin);
+    const pen_skin = createSkin(renderer, 'Pen', 'pen');
     if (typeof require === 'undefined') {
       browser = true;
       output_div = document.querySelector('div#hq-output');
@@ -32,7 +31,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     }
     let last_output;
     let strings_tbl;
-    const renderBubble = createSkin(renderer, 'Text', 'say', '', false);
+    const renderBubble = createSkin(renderer, 'Text', 'sprite', 'say', '', false);
     const wasm_val_to_js = (type, value_i64) => {
         return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
     };
