@@ -14,6 +14,12 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     window.renderer=renderer;
     renderer.setLayerGroupOrdering(['background', 'video', 'pen', 'sprite']);
     //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
+    let sprite_info = Array.from({ length: target_names.length }, _ => ({
+      x: 0,
+      y: 0,
+      pen_color: [0, 0, 0, 0.5],
+      pen_size: 1,
+    }));
     const pen_skin = createSkin(renderer, 'Pen', 'pen');
     if (typeof require === 'undefined') {
       browser = true;
@@ -114,13 +120,13 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             sensing_timer: () => (Date.now() - start_time) / 1000,
             sensing_resettimer: () => start_time = Date.now(),
             pen_clear: () => renderer.penClear(pen_skin),
-            pen_down: () => renderer.penPoint(pen_skin, { diameter: 100, color4f: [0.8, 0.8, 0.4, 0.5] }, 0, 0),
+            pen_down: (i) => renderer.penPoint(pen_skin, { diameter: sprite_info[i].pen_size * 2, color4f: sprite_info[i].pen_color }, 0, 0),
             pen_up: () => null,
             pen_setcolor: () => null,
             pen_changecolorparam: () => null,
             pen_setcolorparam: () => null,
             pen_changesize: () => null,
-            pen_setsize: () => null,
+            pen_setsize: (s, i) => sprite_info[i].pen_size = s,
             pen_changehue: () => null,
             pen_sethue: () => null,
         },
