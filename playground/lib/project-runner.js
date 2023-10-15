@@ -4,6 +4,64 @@ function createSkin(renderer, type, layer, ...params) {
     renderer.updateDrawableSkinId(drawable, skin);
     return skin;
 }
+
+// from https://github.com/scratchfoundation/scratch-vm/blob/352b20b5c3f67e44179a0f8043f260b92dd7c392/src/util/color.js#L103
+function hsvToRgb (hsv) {
+        let h = hsv.h % 360;
+        if (h < 0) h += 360;
+        const s = Math.max(0, Math.min(hsv.s, 1));
+        const v = Math.max(0, Math.min(hsv.v, 1));
+
+        const i = Math.floor(h / 60);
+        const f = (h / 60) - i;
+        const p = v * (1 - s);
+        const q = v * (1 - (s * f));
+        const t = v * (1 - (s * (1 - f)));
+
+        let r;
+        let g;
+        let b;
+
+        switch (i) {
+        default:
+        case 0:
+            r = v;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = v;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = v;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = v;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = v;
+            break;
+        case 5:
+            r = v;
+            g = p;
+            b = q;
+            break;
+        }
+
+        return {
+            r: Math.floor(r * 255),
+            g: Math.floor(g * 255),
+            b: Math.floor(b * 255)
+        };
+    }
 export default ({ framerate=30, renderer, wasm_bytes, target_names, string_consts } = { framerate: 30 }) => new Promise((resolve, reject) => {
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
@@ -17,8 +75,14 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     let sprite_info = Array.from({ length: target_names.length }, _ => ({
       x: 0,
       y: 0,
-      pen_color: [0, 0, 0, 0.5],
-      pen_size: 1,
+      pen: {
+        color: 66.66,
+        saturation: 100,
+        brightness: 100,
+        transparency: 0,
+        color4f: [0, 0, 1, 1],
+        size: 1,
+      }
     }));
     const pen_skin = createSkin(renderer, 'Pen', 'pen');
     if (typeof require === 'undefined') {
@@ -68,6 +132,18 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
           renderer.updateTextSkin(renderBubble, verb, text, false)
         }
     };
+    function updatePenColor(i) {
+      const rgb = hsvToRgb({
+            h: sprite_info[i].pen.color * 360 / 100,
+            s: sprite_info[i].pen.saturation / 100,
+            v: sprite_info[i].pen.brightness / 100
+        });
+        sprite_info[i].pen.color4f[0] = rgb.r / 255.0;
+        sprite_info[i].pen.color4f[1] = rgb.g / 255.0;
+        sprite_info[i].pen.color4f[2] = rgb.b / 255.0;
+        sprite_info[i].pen.color4f[3] = 1 - sprite_info[i].pen.transparency / 100;
+   
+    }
     let start_time = 0;
     const importObject = {
         dbg: {
@@ -124,7 +200,23 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             pen_up: () => null,
             pen_setcolor: () => null,
             pen_changecolorparam: () => null,
-            pen_setcolorparam: () => null,
+            pen_setcolorparam: (param, val, i) => {
+              switch (param) {
+                case 'color':
+                  sprite_info[i].pen.color = val;
+                  break;
+                case 'saturation':
+                  sprite_info[i].pen.saturation = val;
+                  break;
+                case 'brightness':
+                  sprite_info[i].pen.brightness = val;
+                  break;
+                case 'transparency':
+                  sprite_info[i].pen.transparency = val;
+                  break;
+              }
+              updatePenColor(i);
+            },
             pen_changesize: () => null,
             pen_setsize: (s, i) => sprite_info[i].pen_size = s,
             pen_changehue: () => null,
