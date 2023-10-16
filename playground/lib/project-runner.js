@@ -62,6 +62,7 @@ function hsvToRgb (hsv) {
             b: Math.floor(b * 255)
         };
     }
+// @ts-ignore
 export default ({ framerate=30, renderer, wasm_bytes, target_names, string_consts } = { framerate: 30 }) => new Promise((resolve, reject) => {
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
@@ -69,6 +70,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     let browser = false;
     let output_div;
     let text_div;
+    // @ts-ignore
     window.renderer=renderer;
     renderer.setLayerGroupOrdering(['background', 'video', 'pen', 'sprite']);
     //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
@@ -254,10 +256,12 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
     WebAssembly.instantiate(wasm_bytes, importObject).then(async ({ instance }) => {
         const { green_flag, tick, memory, strings, step_funcs, rr_offset, thn_offset } = instance.exports;
         for (const [i, str] of Object.entries(string_consts)) {
+          // @ts-ignore
           strings.set(i, str);
         }
         strings_tbl = strings;
         /*resolve({ strings, green_flag, step_funcs, tick, memory })*/;
+        // @ts-ignore
         green_flag();
         start_time = Date.now();
         console.log('green_flag()')
@@ -266,13 +270,17 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             renderer.draw();
             // console.log('outer')
             const thisTickStartTime = Date.now();
+            // @ts-ignore
             $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[rr_offset.value] === 0) {
                 //console.log('inner')
+                // @ts-ignore
                 tick();
+                // @ts-ignore
                 if (new Uint32Array(memory.buffer)[thn_offset.value / 4] === 0) {
                     break $outertickloop;
                 }
             }
+            // @ts-ignore
             new Uint8Array(memory.buffer)[rr_offset] = 0;
             if (framerate_wait > 0) {
                 await sleep(Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)));
