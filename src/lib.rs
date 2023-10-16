@@ -4,8 +4,6 @@
 extern crate alloc;
 extern crate enum_field_getter;
 
-use alloc::string::{String, ToString};
-
 use wasm_bindgen::prelude::*;
 
 pub mod ir;
