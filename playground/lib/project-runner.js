@@ -133,7 +133,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         }
     };
     function updatePenColor(i) {
-      const rgb = hsvToRgb({
+        const rgb = hsvToRgb({
             h: sprite_info[i].pen.color * 360 / 100,
             s: sprite_info[i].pen.saturation / 100,
             v: sprite_info[i].pen.brightness / 100
@@ -142,7 +142,6 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         sprite_info[i].pen.color4f[1] = rgb.g / 255.0;
         sprite_info[i].pen.color4f[2] = rgb.b / 255.0;
         sprite_info[i].pen.color4f[3] = 1 - sprite_info[i].pen.transparency / 100;
-   
     }
     let start_time = 0;
     const importObject = {
@@ -196,7 +195,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             sensing_timer: () => (Date.now() - start_time) / 1000,
             sensing_resettimer: () => start_time = Date.now(),
             pen_clear: () => renderer.penClear(pen_skin),
-            pen_down: (i) => renderer.penPoint(pen_skin, { diameter: sprite_info[i].pen_size * 2, color4f: sprite_info[i].pen_color }, 0, 0),
+            pen_down: (i) => renderer.penPoint(pen_skin, { diameter: sprite_info[i].pen.size * 2, color4f: sprite_info[i].pen.color4f }, 0, 0),
             pen_up: () => null,
             pen_setcolor: () => null,
             pen_changecolorparam: () => null,
@@ -204,6 +203,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
               switch (param) {
                 case 'color':
                   sprite_info[i].pen.color = val;
+                  console.log(sprite_info[i].pen.color)
                   break;
                 case 'saturation':
                   sprite_info[i].pen.saturation = val;
@@ -214,11 +214,13 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
                 case 'transparency':
                   sprite_info[i].pen.transparency = val;
                   break;
+                default:
+                  console.warn(`can\'t update invalid color param ${param}`)
               }
               updatePenColor(i);
             },
             pen_changesize: () => null,
-            pen_setsize: (s, i) => sprite_info[i].pen_size = s,
+            pen_setsize: (s, i) => sprite_info[i].pen.size = s,
             pen_changehue: () => null,
             pen_sethue: () => null,
         },
