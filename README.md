@@ -26,6 +26,7 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 | redraw_requested |                                 4                                  |    no     | if a redraw has been requested or not                                                                                                                                                                                                                                                                            |
 | thread_num | 4 | no | the number of currently running threads |
 | vars | 12 \* number of global & local variables | yes | see [variables](#variables) |
+| sprite_info | 48 \* number of sprites (i.e. target num -1) | yes | see [sprite info](#sprite-info)
 | threads | 4 \* thread_num | no | imdices of the next step funcs of currently running threads |
 <!--|    pen        |                       360 \* 480 \* 4 = 691200                       |    yes    | present if pen is used; the pen layer: 4 bytes for each rgba pixel, from left to right, top to bottom                                                                                                                                                                                                              |
 | spriteData    |                      43(?) \* number of sprites                      |    yes    | for each sprite (**not target**), 4 bytes each (1 f32 each) for: x, y, size, direction, costume number, pitch, pan,layer number; plus 1 byte each for: colour effect, ghost effect, mosaic effect, whirl effect, pixelate effect, fisheye effect, brightness effect, volume, visibility, rotation style, draggable |
@@ -34,6 +35,20 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 -->
 <!--| cloneVars     | 300 \* 12 \* max amount of local variables in any one sprite |    yes    | if clones can be present, local variables for those clones                                                                                                                                                                                                                                                         |
 -->
+### Sprite info
+
+| byte | type | name | description |
+| :--: | :--: | :--: | :---------: |
+| 0-7  | f64  |  x   | x pos       |
+| 8-15  | f64 |  y   | y pos       |
+| 16-19 | f32 | pen_color | hue of pen (0-100) |
+| 20-23 | f32 | pen_saturation | saturation of pen (0-100) |
+| 24-27 | f32 | pen_brightness | value of pen (0-100) |
+| 28-31 | f32 | pen_transparency | transparency of pen (0-100) |
+| 32-35 | i8(x4) | pen_color4f | rgba color of pen |
+| 36-43 | f64 | pen_size | pen radius |
+| 44-47 | ?   | padding | padding |
+
 ### Variables
 
 | byte | description                          |
@@ -41,7 +56,7 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 | 0-3  | identifies the [type](#variable-types) of the variable  |
 | 4-11 | identifies the value of the variable |
 
-### Variable types
+#### Variable types
 
 | value |            type           | variable value type | value description                                                         |
 | :---: | :-----------------------: | :-----------------: | :-----------------------------------------------------------------------: |

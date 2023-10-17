@@ -126,6 +126,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         }
     }
     const targetOutput = (targetIndex, verb, text) => {
+      console.log('a',targetIndex,verb,text)
         let targetName = target_names[targetIndex];
         if (!browser) {
           console.log(`\x1b[1;32m${targetName} ${verb}:\x1b[0m \x1b[35m${text}\x1b[0m`);
@@ -146,6 +147,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         sprite_info[i].pen.color4f[3] = 1 - sprite_info[i].pen.transparency / 100;
     }
     let start_time = 0;
+    let sprite_info_offset = 0;
     const importObject = {
         dbg: {
             log: wasm_output,
@@ -156,8 +158,8 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
             },
         },
         runtime: {
-            looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
-            looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
+            looks_say: (ty, val, targetIndex) => {console.log('a');targetOutput(targetIndex, 'say', wasm_val_to_js(ty, val))},
+            looks_think: (ty, val, targetIndex) => {console.log('b');targetOutput(targetIndex, 'think', wasm_val_to_js(ty, val))},
             operator_equals: (ty1, val1, ty2, val2) => {
                 if (ty1 === ty2 && val1 === val2) return true;
                 let j1 = wasm_val_to_js(ty1, val1);
@@ -205,7 +207,6 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
               switch (param) {
                 case 'color':
                   sprite_info[i].pen.color = val;
-                  console.log(sprite_info[i].pen.color)
                   break;
                 case 'saturation':
                   sprite_info[i].pen.saturation = val;
@@ -254,12 +255,15 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         });
     }
     WebAssembly.instantiate(wasm_bytes, importObject).then(async ({ instance }) => {
-        const { green_flag, tick, memory, strings, step_funcs, rr_offset, thn_offset } = instance.exports;
+        const { green_flag, tick, memory, strings, step_funcs, vars_num, rr_offset, thn_offset } = instance.exports;
         for (const [i, str] of Object.entries(string_consts)) {
           // @ts-ignore
           strings.set(i, str);
         }
         strings_tbl = strings;
+        window.memory=memory;
+        // @ts-ignore
+        sprite_info_offset = vars_num.value * 12 + thn_offset + 4;
         /*resolve({ strings, green_flag, step_funcs, tick, memory })*/;
         // @ts-ignore
         green_flag();

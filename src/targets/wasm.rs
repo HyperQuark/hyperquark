@@ -1247,7 +1247,7 @@ impl From<IrProject> for WasmProject {
                     .expect("step func index out of bounds (E006)"),
             ));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len())
+                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len() + 48 * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1309,7 +1309,7 @@ impl From<IrProject> for WasmProject {
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len())
+                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len()  + 48 * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1401,12 +1401,20 @@ impl From<IrProject> for WasmProject {
             },
             &ConstExpr::i32_const(byte_offset::THREAD_NUM),
         );
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: false,
+            },
+            &ConstExpr::i32_const(project.vars.borrow().len().try_into().expect("vars length out of bounds")),
+        );
 
         exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
         exports.export("strings", ExportKind::Table, table_indices::STRINGS);
         exports.export("memory", ExportKind::Memory, 0);
         exports.export("rr_offset", ExportKind::Global, 0);
         exports.export("thn_offset", ExportKind::Global, 1);
+        exports.export("vars_num", ExportKind::Global, 2);
 
         module
             .section(&types)
