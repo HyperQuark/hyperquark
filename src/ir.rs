@@ -50,6 +50,7 @@ impl From<Sb3Project> for IrProject {
                     target_index: u32::MAX,
                     dbg: false,
                     vars: Rc::new(RefCell::new(vec![])),
+                    target_num: sb3.targets.len(),
                 }),
             ),
         );
@@ -75,6 +76,7 @@ impl From<Sb3Project> for IrProject {
                             && comment.text.clone() == *"hq-dbg"
                     }),
                     vars: Rc::clone(&vars),
+                    target_num: sb3.targets.len()
                 });
                 let thread = Thread::from_hat(
                     block.clone(),
@@ -516,6 +518,7 @@ pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
     pub vars: Rc<RefCell<Vec<IrVar>>>, // todo: fix variable id collisions between targets
+    pub target_num: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
