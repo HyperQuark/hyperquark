@@ -687,8 +687,9 @@ pub mod func_indices {
     pub const CAST_ANY_FLOAT: u32 = 41;
     pub const CAST_ANY_BOOL: u32 = 42;
     pub const TABLE_ADD_STRING: u32 = 43;
+    pub const SPRITE_UPDATE_PEN_COLOR: 44;
 }
-pub const BUILTIN_FUNCS: u32 = 44;
+pub const BUILTIN_FUNCS: u32 = 45;
 pub const IMPORTED_FUNCS: u32 = 36;
 
 pub mod types {
@@ -1176,6 +1177,15 @@ impl From<IrProject> for WasmProject {
         tbl_add_string_func.instruction(&Instruction::LocalGet(1));
         tbl_add_string_func.instruction(&Instruction::End);
         code.function(&tbl_add_string_func);
+        
+        function.function(types::I32_NORESULT);
+        let mut sprite_update_pen_color_func = Function::new(vec![(1, ValType::I32), (3, ValType::f64)]);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(48));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const((byte_offset::VARS as usize + project.vars.borrow().len() * 12 + 16).try_into().unwrap()));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        code.function(&sprite_update_pen_color_func);
 
         let mut gf_func = Function::new(vec![]);
         let mut tick_func = Function::new(vec![(2, ValType::I32)]);
