@@ -285,7 +285,7 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
                 }
             }
             // @ts-ignore
-            new Uint8Array(memory.buffer)[rr_offset] = 0;
+            new Uint8Array(memory.buffer)[rr_offset.value] = 0;
             if (framerate_wait > 0) {
                 await sleep(Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)));
             } else {
