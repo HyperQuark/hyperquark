@@ -255,11 +255,12 @@ export default ({ framerate=30, renderer, wasm_bytes, target_names, string_const
         });
     }
     WebAssembly.instantiate(wasm_bytes, importObject).then(async ({ instance }) => {
-        const { green_flag, tick, memory, strings, step_funcs, vars_num, rr_offset, thn_offset } = instance.exports;
+        const { green_flag, tick, memory, strings, step_funcs, vars_num, rr_offset, thn_offset, upc } = instance.exports;
         for (const [i, str] of Object.entries(string_consts)) {
           // @ts-ignore
           strings.set(i, str);
         }
+        updatePenColor = upc;
         strings_tbl = strings;
         window.memory=memory;
         // @ts-ignore

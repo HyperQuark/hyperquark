@@ -687,7 +687,7 @@ pub mod func_indices {
     pub const CAST_ANY_FLOAT: u32 = 41;
     pub const CAST_ANY_BOOL: u32 = 42;
     pub const TABLE_ADD_STRING: u32 = 43;
-    pub const SPRITE_UPDATE_PEN_COLOR: 44;
+    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 44;
 }
 pub const BUILTIN_FUNCS: u32 = 45;
 pub const IMPORTED_FUNCS: u32 = 36;
@@ -1178,12 +1178,222 @@ impl From<IrProject> for WasmProject {
         tbl_add_string_func.instruction(&Instruction::End);
         code.function(&tbl_add_string_func);
         
-        function.function(types::I32_NORESULT);
-        let mut sprite_update_pen_color_func = Function::new(vec![(1, ValType::I32), (3, ValType::f64)]);
-        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        // hsv->rgb based off of https://stackoverflow.com/a/14733008
+        functions.function(types::I32_NORESULT);
+        let mut sprite_update_pen_color_func = Function::new(vec![(12, ValType::I32)]);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0)); // sprite index - this is target index - 1, assuming that the stage is target 0, which could be an issue if we don't confirm this
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(48));
         sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32Const((byte_offset::VARS as usize + project.vars.borrow().len() * 12 + 16).try_into().unwrap()));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Add);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalTee(1)); // position in memory of hue
+        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
+            offset: 0,
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(2)); // hue
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
+            offset: 8,
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(3)); // saturation ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
+            offset: 16,
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(4)); // value ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
+            offset: 24,
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S); // transparency ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub); // alpha ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
+            offset: 27,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Load8S(MemArg {
+            offset: 27,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
+            offset: 32,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
+            offset: 33,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
+            offset: 34,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(2));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(43));
+        sprite_update_pen_color_func.instruction(&Instruction::I32DivU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(5)); // 'region'
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(2));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(43));
+        sprite_update_pen_color_func.instruction(&Instruction::I32RemU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(6)); // 'remainder'
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(6));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(4));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(7)); // 'p'
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(6));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(4));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(8)); // 'q'
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(6));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(4));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(9)); // 't'
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(9));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(1));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(8));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(2));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(9));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(3));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(8));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(4));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(9));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(8));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(10));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
+            offset: 24,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(11));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
+            offset: 25,
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(12));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
+            offset: 26,
+            align: 0,
+            memory_index: 0,
+        }));
         sprite_update_pen_color_func.instruction(&Instruction::End);
         code.function(&sprite_update_pen_color_func);
 
@@ -1425,6 +1635,7 @@ impl From<IrProject> for WasmProject {
         exports.export("rr_offset", ExportKind::Global, 0);
         exports.export("thn_offset", ExportKind::Global, 1);
         exports.export("vars_num", ExportKind::Global, 2);
+        exports.export("upc", ExportKind::Func, 44);
 
         module
             .section(&types)
