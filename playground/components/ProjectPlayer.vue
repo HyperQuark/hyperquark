@@ -6,13 +6,13 @@
     <summary>An error occured whilst trying to load the project.</summary>
     {{ error }}
   </details>
-  <template v-else>
+  <!--<template v-else>-->
     <br>
     <br>
     <button @click="greenFlag">green flag</button> <button>stop</button>
     <canvas width="480" height="360" ref="canvas"></canvas>
     <div id="hq-output">Project output:<br></div>
-  </template>
+  <!--</template>-->
 </template>
 
 <script setup>

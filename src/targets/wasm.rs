@@ -1181,61 +1181,63 @@ impl From<IrProject> for WasmProject {
         // hsv->rgb based off of https://stackoverflow.com/a/14733008
         functions.function(types::I32_NORESULT);
         let mut sprite_update_pen_color_func = Function::new(vec![(12, ValType::I32)]);
-        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0)); // sprite index - this is target index - 1, assuming that the stage is target 0, which could be an issue if we don't confirm this
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0)); // sprite index - this is (target index - 1), assuming that the stage is target 0, which could be an issue if we don't confirm this
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(48));
         sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32Const((byte_offset::VARS as usize + project.vars.borrow().len() * 12 + 16).try_into().unwrap()));
         sprite_update_pen_color_func.instruction(&Instruction::I32Add);
         sprite_update_pen_color_func.instruction(&Instruction::LocalTee(1)); // position in memory of hue
-        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
             offset: 0,
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
-        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(2)); // hue
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: 4,
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(3)); // saturation ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
             offset: 8,
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
-        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S);
-        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(3)); // saturation ∈ [0, 256)
-        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
-            offset: 16,
-            align: 2,
-            memory_index: 0,
-        }));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
-        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(4)); // value ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Load(MemArg {
-            offset: 24,
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: 12,
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Const(2.56));
-        sprite_update_pen_color_func.instruction(&Instruction::F64Mul);
-        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF64S); // transparency ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S); // transparency ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
         sprite_update_pen_color_func.instruction(&Instruction::I32Sub); // alpha ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 27,
+            offset: 19,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::I32Load8S(MemArg {
-            offset: 27,
+            offset: 19,
             align: 0,
             memory_index: 0,
         }));
@@ -1249,21 +1251,21 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 32,
+            offset: 16,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 33,
+            offset: 17,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 34,
+            offset: 18,
             align: 0,
             memory_index: 0,
         }));
@@ -1376,21 +1378,21 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(10));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
-            offset: 24,
+            offset: 16,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(11));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
-            offset: 25,
+            offset: 17,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(12));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
-            offset: 26,
+            offset: 18,
             align: 0,
             memory_index: 0,
         }));
@@ -1635,7 +1637,7 @@ impl From<IrProject> for WasmProject {
         exports.export("rr_offset", ExportKind::Global, 0);
         exports.export("thn_offset", ExportKind::Global, 1);
         exports.export("vars_num", ExportKind::Global, 2);
-        exports.export("upc", ExportKind::Func, 44);
+        exports.export("upc", ExportKind::Func, func_indices::SPRITE_UPDATE_PEN_COLOR);
 
         module
             .section(&types)
