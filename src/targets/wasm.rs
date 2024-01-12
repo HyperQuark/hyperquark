@@ -325,7 +325,7 @@ fn instructions(
         hq_goto { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + SPRITE_INFO_LEN * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
                 .try_into()
                 .expect("thread_offset out of bounds");
             vec![
@@ -380,7 +380,7 @@ fn instructions(
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             let threads_offset: u64 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + SPRITE_INFO_LEN * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
                 .try_into()
                 .expect("threads_offset length out of bounds");
             vec![
@@ -416,7 +416,7 @@ fn instructions(
         hq_goto_if { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + SPRITE_INFO_LEN * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
                 .try_into()
                 .expect("thread_offset out of bounds");
             vec![
@@ -474,7 +474,7 @@ fn instructions(
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             let threads_offset: u64 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + SPRITE_INFO_LEN * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
                 .try_into()
                 .expect("threads_offset length out of bounds");
             vec![
@@ -1203,15 +1203,15 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(SPRITE_INFO_LEN));
         sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(
-            (byte_offset::VARS as usize + project.vars.borrow().len() * 12 + 16)
+            (byte_offset::VARS as usize + project.vars.borrow().len() * 12)
                 .try_into()
                 .unwrap(),
         ));
         sprite_update_pen_color_func.instruction(&Instruction::I32Add);
-        sprite_update_pen_color_func.instruction(&Instruction::LocalTee(1)); // position in memory of hue
+        sprite_update_pen_color_func.instruction(&Instruction::LocalTee(1)); // position in memory of sprite info
         sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: 0,
+            offset: u64::try_from(sprite_info_offsets::PEN_COLOR).unwrap(),
             align: 2,
             memory_index: 0,
         }));
@@ -1222,7 +1222,7 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(2)); // hue
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: 4,
+            offset: u64::try_from(sprite_info_offsets::PEN_SATURATION).unwrap(),
             align: 2,
             memory_index: 0,
         }));
@@ -1233,7 +1233,7 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(3)); // saturation ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: 8,
+            offset: u64::try_from(sprite_info_offsets::PEN_VALUE).unwrap(),
             align: 2,
             memory_index: 0,
         }));
@@ -1243,30 +1243,29 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(4)); // value ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(100.0));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: 12,
+            offset: u64::try_from(sprite_info_offsets::PEN_TRANSPARENCY).unwrap(),
             align: 2,
             memory_index: 0,
-        }));
-        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
-        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
-        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S); // transparency ∈ [0, 256)
-        sprite_update_pen_color_func.instruction(&Instruction::I32Sub); // alpha ∈ [0, 256)
-        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 19,
+        })); // transparency ∈ [0, 100]
+        sprite_update_pen_color_func.instruction(&Instruction::F32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(100.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div); // alpha ∈ [0, 1]
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Load8S(MemArg {
-            offset: 19,
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
             align: 0,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.01));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Lt);
         sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
         sprite_update_pen_color_func.instruction(&Instruction::Return); // if alpha is 0, return (it is already set to 0 so it doesn't matter what r, g & b are)
         sprite_update_pen_color_func.instruction(&Instruction::End);
@@ -1274,23 +1273,23 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
         sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 16,
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 17,
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
-            offset: 18,
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
             align: 0,
             memory_index: 0,
         }));
@@ -1344,7 +1343,6 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
-        sprite_update_pen_color_func.instruction(&Instruction::Return);
         sprite_update_pen_color_func.instruction(&Instruction::End);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(1));
@@ -1356,7 +1354,6 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(7));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
-        sprite_update_pen_color_func.instruction(&Instruction::Return);
         sprite_update_pen_color_func.instruction(&Instruction::End);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(2));
@@ -1368,7 +1365,6 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(9));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
-        sprite_update_pen_color_func.instruction(&Instruction::Return);
         sprite_update_pen_color_func.instruction(&Instruction::End);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(3));
@@ -1380,7 +1376,6 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
-        sprite_update_pen_color_func.instruction(&Instruction::Return);
         sprite_update_pen_color_func.instruction(&Instruction::End);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(5));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(4));
@@ -1392,7 +1387,6 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(11));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
-        sprite_update_pen_color_func.instruction(&Instruction::Return);
         sprite_update_pen_color_func.instruction(&Instruction::End);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(10));
@@ -1402,22 +1396,31 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(12));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(10));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
-            offset: 16,
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(11));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
-            offset: 17,
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(12));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Store(MemArg {
-            offset: 18,
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
             align: 0,
             memory_index: 0,
         }));
@@ -1496,7 +1499,7 @@ impl From<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Store(MemArg {
                 offset: (byte_offset::VARS as usize
                     + 12 * project.vars.borrow().len()
-                    + SPRITE_INFO_LEN * (project.targets.len() - 1))
+                    + usize::try_from(SPRITE_INFO_LEN).unwrap() * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1560,7 +1563,7 @@ impl From<IrProject> for WasmProject {
             tick_func.instruction(&Instruction::I32Load(MemArg {
                 offset: (byte_offset::VARS as usize
                     + 12 * project.vars.borrow().len()
-                    + SPRITE_INFO_LEN * (project.targets.len() - 1))
+                    + usize::try_from(SPRITE_INFO_LEN).unwrap() * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
