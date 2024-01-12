@@ -76,7 +76,7 @@ impl From<Sb3Project> for IrProject {
                             && comment.text.clone() == *"hq-dbg"
                     }),
                     vars: Rc::clone(&vars),
-                    target_num: sb3.targets.len()
+                    target_num: sb3.targets.len(),
                 });
                 let thread = Thread::from_hat(
                     block.clone(),

@@ -236,9 +236,7 @@ fn instructions(
         },
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
-        pen_clear => vec![
-            Call(func_indices::PEN_CLEAR),
-        ],
+        pen_clear => vec![Call(func_indices::PEN_CLEAR)],
         pen_stamp => todo!(),
         pen_penDown => vec![
             I32Const(
@@ -326,9 +324,10 @@ fn instructions(
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len() + 48 * (context.target_num - 1))
-            .try_into()
-            .expect("thread_offset out of bounds");
+                + 12 * context.vars.borrow().len()
+                + SPRITE_INFO_LEN * (context.target_num - 1))
+                .try_into()
+                .expect("thread_offset out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(threads_offset),
@@ -380,9 +379,10 @@ fn instructions(
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             let threads_offset: u64 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len() + 48 * (context.target_num - 1))
-            .try_into()
-            .expect("threads_offset length out of bounds");
+                + 12 * context.vars.borrow().len()
+                + SPRITE_INFO_LEN * (context.target_num - 1))
+                .try_into()
+                .expect("threads_offset length out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(
@@ -415,9 +415,10 @@ fn instructions(
         }
         hq_goto_if { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len() + 48 * (context.target_num - 1))
-            .try_into()
-            .expect("thread_offset out of bounds");
+                + 12 * context.vars.borrow().len()
+                + SPRITE_INFO_LEN * (context.target_num - 1))
+                .try_into()
+                .expect("thread_offset out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -472,9 +473,10 @@ fn instructions(
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
             let threads_offset: u64 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len() + 48 * (context.target_num - 1))
-            .try_into()
-            .expect("threads_offset length out of bounds");
+                + 12 * context.vars.borrow().len()
+                + SPRITE_INFO_LEN * (context.target_num - 1))
+                .try_into()
+                .expect("threads_offset length out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -751,6 +753,22 @@ pub mod byte_offset {
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
     pub const VARS: i32 = 8;
+}
+
+pub const SPRITE_INFO_LEN: i32 = 56;
+
+pub mod sprite_info_offsets {
+    pub const X_POS: i32 = 0;
+    pub const Y_POS: i32 = 8;
+    pub const PEN_COLOR: i32 = 16;
+    pub const PEN_SATURATION: i32 = 20;
+    pub const PEN_VALUE: i32 = 24;
+    pub const PEN_TRANSPARENCY: i32 = 28;
+    pub const PEN_R: i32 = 32;
+    pub const PEN_G: i32 = 36;
+    pub const PEN_B: i32 = 40;
+    pub const PEN_A: i32 = 44;
+    pub const PEN_SIZE: i32 = 48;
 }
 
 impl From<IrProject> for WasmProject {
@@ -1177,14 +1195,18 @@ impl From<IrProject> for WasmProject {
         tbl_add_string_func.instruction(&Instruction::LocalGet(1));
         tbl_add_string_func.instruction(&Instruction::End);
         code.function(&tbl_add_string_func);
-        
+
         // hsv->rgb based off of https://stackoverflow.com/a/14733008
         functions.function(types::I32_NORESULT);
         let mut sprite_update_pen_color_func = Function::new(vec![(12, ValType::I32)]);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0)); // sprite index - this is (target index - 1), assuming that the stage is target 0, which could be an issue if we don't confirm this
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(48));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(SPRITE_INFO_LEN));
         sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const((byte_offset::VARS as usize + project.vars.borrow().len() * 12 + 16).try_into().unwrap()));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(
+            (byte_offset::VARS as usize + project.vars.borrow().len() * 12 + 16)
+                .try_into()
+                .unwrap(),
+        ));
         sprite_update_pen_color_func.instruction(&Instruction::I32Add);
         sprite_update_pen_color_func.instruction(&Instruction::LocalTee(1)); // position in memory of hue
         sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
@@ -1193,7 +1215,7 @@ impl From<IrProject> for WasmProject {
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
         sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
         sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
@@ -1204,9 +1226,10 @@ impl From<IrProject> for WasmProject {
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
         sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(3)); // saturation ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
@@ -1214,22 +1237,24 @@ impl From<IrProject> for WasmProject {
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
         sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(4)); // value ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
             offset: 12,
             align: 2,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.56));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
         sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
         sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S); // transparency ∈ [0, 256)
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
         sprite_update_pen_color_func.instruction(&Instruction::I32Sub); // alpha ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
             offset: 19,
             align: 0,
@@ -1243,26 +1268,26 @@ impl From<IrProject> for WasmProject {
         }));
         sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
         sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
-        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::Return); // if alpha is 0, return (it is already set to 0 so it doesn't matter what r, g & b are)
         sprite_update_pen_color_func.instruction(&Instruction::End);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(3));
         sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
         sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
-        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
             offset: 16,
             align: 0,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
             offset: 17,
             align: 0,
             memory_index: 0,
         }));
-        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(0));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(1));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(0));
         sprite_update_pen_color_func.instruction(&Instruction::I32Store8(MemArg {
             offset: 18,
@@ -1469,7 +1494,9 @@ impl From<IrProject> for WasmProject {
                     .expect("step func index out of bounds (E006)"),
             ));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len() + 48 * (project.targets.len() - 1))
+                offset: (byte_offset::VARS as usize
+                    + 12 * project.vars.borrow().len()
+                    + SPRITE_INFO_LEN * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1531,7 +1558,9 @@ impl From<IrProject> for WasmProject {
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len() + 48 * (project.targets.len() - 1))
+                offset: (byte_offset::VARS as usize
+                    + 12 * project.vars.borrow().len()
+                    + SPRITE_INFO_LEN * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1628,7 +1657,14 @@ impl From<IrProject> for WasmProject {
                 val_type: ValType::I32,
                 mutable: false,
             },
-            &ConstExpr::i32_const(project.vars.borrow().len().try_into().expect("vars length out of bounds")),
+            &ConstExpr::i32_const(
+                project
+                    .vars
+                    .borrow()
+                    .len()
+                    .try_into()
+                    .expect("vars length out of bounds"),
+            ),
         );
 
         exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
@@ -1637,7 +1673,11 @@ impl From<IrProject> for WasmProject {
         exports.export("rr_offset", ExportKind::Global, 0);
         exports.export("thn_offset", ExportKind::Global, 1);
         exports.export("vars_num", ExportKind::Global, 2);
-        exports.export("upc", ExportKind::Func, func_indices::SPRITE_UPDATE_PEN_COLOR);
+        exports.export(
+            "upc",
+            ExportKind::Func,
+            func_indices::SPRITE_UPDATE_PEN_COLOR,
+        );
 
         module
             .section(&types)

@@ -64,6 +64,9 @@ function hsvToRgb(hsv) {
     b: Math.floor(b * 255),
   };
 }
+
+const spriteInfoLen = 56;
+
 // @ts-ignore
 export default (
   { framerate = 30, renderer, wasm_bytes, target_names, string_consts } = {
@@ -243,12 +246,12 @@ export default (
         pen_down: (i) =>{console.log('pendown', Array.from({ length: 64 }, (_, i) => new DataView(memory.buffer).getFloat32(i*4, true)),[
           ...new Uint8Array(
             memory.buffer.slice(
-              sprite_info_offset + (i - 1) * 48 + 32,
-              sprite_info_offset + (i - 1) * 48 + 36
+              sprite_info_offset + (i - 1) * spriteInfoLen + 32,
+              sprite_info_offset + (i - 1) * spriteInfoLen + 36
             )
           ),
         ],new DataView(memory.buffer).getFloat64(
-          sprite_info_offset + (i - 1) * 48 + 36,
+          sprite_info_offset + (i - 1) * spriteInfoLen + 36,
           true
         ))
           renderer.penPoint(
@@ -257,15 +260,15 @@ export default (
               //diameter: sprite_info[i].pen.size * 2,
               diameter:
                 new DataView(memory.buffer).getFloat64(
-                  sprite_info_offset + (i - 1) * 48 + 36,
+                  sprite_info_offset + (i - 1) * spriteInfoLen + 36,
                   true
                 ) * 2,
               //color4f: sprite_info[i].pen.color4f,
               color4f: [
                 ...new Uint8Array(
                   memory.buffer.slice(
-                    sprite_info_offset + (i - 1) * 48 + 32,
-                    sprite_info_offset + (i - 1) * 48 + 36
+                    sprite_info_offset + (i - 1) * spriteInfoLen + 32,
+                    sprite_info_offset + (i - 1) * spriteInfoLen + 36
                   )
                 ),
               ],
@@ -281,7 +284,7 @@ export default (
           switch (param) {
             case "color":
               new DataView(memory.buffer).setFloat32(
-                sprite_info_offset + (i - 1) * 48 + 16,
+                sprite_info_offset + (i - 1) * spriteInfoLen + 16,
                 val,
                 true
               );
@@ -289,7 +292,7 @@ export default (
               break;
             case "saturation":
               new DataView(memory.buffer).setFloat32(
-                sprite_info_offset + (i - 1) * 48 + 20,
+                sprite_info_offset + (i - 1) * spriteInfoLen + 20,
                 val,
                 true
               );
@@ -297,7 +300,7 @@ export default (
               break;
             case "brightness":
               new DataView(memory.buffer).setFloat32(
-                sprite_info_offset + (i - 1) * 48 + 24,
+                sprite_info_offset + (i - 1) * spriteInfoLen + 24,
                 val,
                 true
               );
@@ -305,7 +308,7 @@ export default (
               break;
             case "transparency":
               new DataView(memory.buffer).setFloat32(
-                sprite_info_offset + (i - 1) * 48 + 28,
+                sprite_info_offset + (i - 1) * spriteInfoLen + 28,
                 val,
                 true
               );
@@ -317,8 +320,8 @@ export default (
           console.log('pensetcolorparam', Array.from({ length: 64 }, (_, i) => new DataView(memory.buffer).getFloat32(i*4, true)),[
             ...new Uint8Array(
               memory.buffer.slice(
-                sprite_info_offset + (i - 1) * 48 + 32,
-                sprite_info_offset + (i - 1) * 48 + 36
+                sprite_info_offset + (i - 1) * spriteInfoLen + 32,
+                sprite_info_offset + (i - 1) * spriteInfoLen + 36
               )
             ),
           ])
@@ -326,8 +329,8 @@ export default (
           console.log('pensetcolorparam', Array.from({ length: 64 }, (_, i) => new DataView(memory.buffer).getFloat32(i*4, true)),[
             ...new Uint8Array(
               memory.buffer.slice(
-                sprite_info_offset + (i - 1) * 48 + 32,
-                sprite_info_offset + (i - 1) * 48 + 36
+                sprite_info_offset + (i - 1) * spriteInfoLen + 32,
+                sprite_info_offset + (i - 1) * spriteInfoLen + 36
               )
             ),
           ])
@@ -335,7 +338,7 @@ export default (
         pen_changesize: () => null,
         pen_setsize: (s, i) => {
           new DataView(memory.buffer).setFloat64(
-            sprite_info_offset + (i - 1) * 48 + 36,
+            sprite_info_offset + (i - 1) * spriteInfoLen + 36,
             s,
             true
           ); //sprite_info[i].pen.size = s
@@ -395,13 +398,13 @@ export default (
         sprite_info_offset = vars_num.value * 12 + thn_offset + 4;
         const dv = new DataView(memory.buffer);
         for (let i = 0; i < target_names.length - 1; i++) {
-          console.log(sprite_info_offset + i * 48 + 16, (sprite_info_offset + i * 48 + 16)/4)
-          dv.setFloat32(sprite_info_offset + i * 48 + 16, 66.66, true);
-          dv.setFloat32(sprite_info_offset + i * 48 + 20, 100, true);
-          dv.setFloat32(sprite_info_offset + i * 48 + 24, 100, true);
-          dv.setUint8(sprite_info_offset + i * 48 + 34, 1);
-          dv.setUint8(sprite_info_offset + i * 48 + 35, 1);
-          dv.setFloat64(sprite_info_offset + i * 48 + 36, 1, true);
+          console.log(sprite_info_offset + i * spriteInfoLen + 16, (sprite_info_offset + i * spriteInfoLen + 16)/4)
+          dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 16, 66.66, true);
+          dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 20, 100, true);
+          dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 24, 100, true);
+          dv.setUint8(sprite_info_offset + i * spriteInfoLen + 34, 1);
+          dv.setUint8(sprite_info_offset + i * spriteInfoLen + 35, 1);
+          dv.setFloat64(sprite_info_offset + i * spriteInfoLen + 36, 1, true);
         }
         console.log('hola',Array.from({ length: 64 }, (_, i) => new DataView(memory.buffer).getFloat32(i*4, true)))
         console.log(`sprite_info_offset + 16: ${sprite_info_offset + 16}`);
