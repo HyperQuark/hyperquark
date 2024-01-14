@@ -293,13 +293,17 @@ fn instructions(
             Call(func_indices::PEN_CHANGESIZE),
         ],
         pen_setPenSizeTo => vec![
-            I32Const(
-                context
-                    .target_index
-                    .try_into()
-                    .expect("target index out of bounds (E003)"),
-            ),
-            Call(func_indices::PEN_SETSIZE),
+            LocalSet(step_func_locals::F64),
+            I32Const(0),
+            LocalGet(step_func_locals::F64),
+            F64Store(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                align: 2,
+                memory_index: 0,
+            }),
         ],
         pen_setPenShadeToNumber => todo!(),
         pen_changePenShadeBy => todo!(),
@@ -676,23 +680,22 @@ pub mod func_indices {
     pub const PEN_CHANGECOLORPARAM: u32 = 30;
     pub const PEN_SETCOLORPARAM: u32 = 31;
     pub const PEN_CHANGESIZE: u32 = 32;
-    pub const PEN_SETSIZE: u32 = 33;
-    pub const PEN_SETHUE: u32 = 34;
-    pub const PEN_CHANGEHUE: u32 = 35;
+    pub const PEN_SETHUE: u32 = 33;
+    pub const PEN_CHANGEHUE: u32 = 34;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 36;
-    pub const CAST_FLOAT_BOOL: u32 = 37;
-    pub const CAST_BOOL_FLOAT: u32 = 38;
-    pub const CAST_BOOL_STRING: u32 = 39;
-    pub const CAST_ANY_STRING: u32 = 40;
-    pub const CAST_ANY_FLOAT: u32 = 41;
-    pub const CAST_ANY_BOOL: u32 = 42;
-    pub const TABLE_ADD_STRING: u32 = 43;
-    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 44;
+    pub const FMOD: u32 = 35;
+    pub const CAST_FLOAT_BOOL: u32 = 36;
+    pub const CAST_BOOL_FLOAT: u32 = 37;
+    pub const CAST_BOOL_STRING: u32 = 38;
+    pub const CAST_ANY_STRING: u32 = 39;
+    pub const CAST_ANY_FLOAT: u32 = 40;
+    pub const CAST_ANY_BOOL: u32 = 41;
+    pub const TABLE_ADD_STRING: u32 = 42;
+    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 43;
 }
-pub const BUILTIN_FUNCS: u32 = 45;
-pub const IMPORTED_FUNCS: u32 = 36;
+pub const BUILTIN_FUNCS: u32 = 44;
+pub const IMPORTED_FUNCS: u32 = 35;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -1000,11 +1003,6 @@ impl From<IrProject> for WasmProject {
         );
         imports.import(
             "runtime",
-            "pen_setsize",
-            EntityType::Function(types::F64I32_NORESULT),
-        );
-        imports.import(
-            "runtime",
             "pen_changehue",
             EntityType::Function(types::F64I32_NORESULT),
         );
@@ -1215,7 +1213,8 @@ impl From<IrProject> for WasmProject {
 
         // hsv->rgb based off of https://stackoverflow.com/a/14733008
         functions.function(types::I32_NORESULT);
-        let mut sprite_update_pen_color_func = Function::new(vec![(12, ValType::I32), (1, ValType::F32)]);
+        let mut sprite_update_pen_color_func =
+            Function::new(vec![(12, ValType::I32), (1, ValType::F32)]);
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::SPRITE_INDEX)); // sprite index - this is (target index - 1), assuming that the stage is target 0, which could be an issue if we don't confirm this
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(SPRITE_INFO_LEN));
         sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
@@ -1284,7 +1283,9 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.01));
         sprite_update_pen_color_func.instruction(&Instruction::F32Lt);
         sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
-        sprite_update_pen_color_func.instruction(&Instruction::I32Const(supc_locals::MEM_POS.try_into().unwrap()));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(
+            supc_locals::MEM_POS.try_into().unwrap(),
+        ));
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.0));
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
             offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),

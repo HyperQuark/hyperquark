@@ -7,64 +7,6 @@ function createSkin(renderer, type, layer, ...params) {
   return skin;
 }
 
-// from https://github.com/scratchfoundation/scratch-vm/blob/352b20b5c3f67e44179a0f8043f260b92dd7c392/src/util/color.js#L103
-function hsvToRgb(hsv) {
-  let h = hsv.h % 360;
-  if (h < 0) h += 360;
-  const s = Math.max(0, Math.min(hsv.s, 1));
-  const v = Math.max(0, Math.min(hsv.v, 1));
-
-  const i = Math.floor(h / 60);
-  const f = h / 60 - i;
-  const p = v * (1 - s);
-  const q = v * (1 - s * f);
-  const t = v * (1 - s * (1 - f));
-
-  let r;
-  let g;
-  let b;
-
-  switch (i) {
-    default:
-    case 0:
-      r = v;
-      g = t;
-      b = p;
-      break;
-    case 1:
-      r = q;
-      g = v;
-      b = p;
-      break;
-    case 2:
-      r = p;
-      g = v;
-      b = t;
-      break;
-    case 3:
-      r = p;
-      g = q;
-      b = v;
-      break;
-    case 4:
-      r = t;
-      g = p;
-      b = v;
-      break;
-    case 5:
-      r = v;
-      g = p;
-      b = q;
-      break;
-  }
-
-  return {
-    r: Math.floor(r * 255),
-    g: Math.floor(g * 255),
-    b: Math.floor(b * 255),
-  };
-}
-
 const spriteInfoLen = 56;
 
 // @ts-ignore
@@ -322,13 +264,6 @@ export default (
           ])
         },
         pen_changesize: () => null,
-        pen_setsize: (s, i) => {
-          new DataView(memory.buffer).setFloat64(
-            sprite_info_offset + (i - 1) * spriteInfoLen + 48,
-            s,
-            true
-          ); //sprite_info[i].pen.size = s
-        },
         pen_changehue: () => null,
         pen_sethue: () => null,
       },
