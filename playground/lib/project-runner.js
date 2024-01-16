@@ -190,14 +190,21 @@ export default (
             pen_skin,
             {
               //diameter: sprite_info[i].pen.size * 2,
-              diameter: radius * 2,
+              diameter: radius * 1,
               //color4f: sprite_info[i].pen.color4f,
               color4f: [r, g, b, a],
             },
             x,
             y
           ),
-        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => null,
+        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => renderer.penLine(
+          pen_skin,
+          {
+            diameter: radius,
+            color4f: [r,g,b,a],
+          },
+          x1, y1, x2, y2,
+        ),
         pen_up: () => null,
         pen_setcolor: () => null,
         pen_changecolorparam: () => null,

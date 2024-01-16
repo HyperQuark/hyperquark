@@ -314,7 +314,7 @@ fn instructions(
             }),
             Call(func_indices::PEN_DOWN),
         ],
-        motion_goto => vec![
+        motion_gotoxy => vec![
             LocalSet(step_func_locals::F64), // y
             LocalSet(step_func_locals::F64_2), // x
             I32Const(0),
@@ -751,6 +751,7 @@ impl CompileToWasm for (&(String, String), &Step) {
             ValType::I64,
             ValType::I32,
             ValType::I32,
+            ValType::F64,
         ];
         let mut func = Function::new_with_locals_types(locals);
         for op in self.1.opcodes() {
