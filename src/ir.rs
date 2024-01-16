@@ -451,6 +451,7 @@ impl IrOpcode {
             pen_changePenColorParamBy | pen_setPenColorParamTo => {
                 BlockDescriptor::new(vec![Text, Number], Stack)
             }
+            motion_goto => BlockDescriptor::new(vec![Number, Number], Stack),
             _ => todo!("{:?}", &self),
         }
     }
@@ -689,6 +690,7 @@ impl IrBlockVec for Vec<IrBlock> {
                 );
 
                 self.append(&mut (match block_info.opcode {
+                    BlockOpcode::motion_goto => vec![IrOpcode::motion_goto],
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
                     BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_resettimer],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],

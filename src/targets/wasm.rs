@@ -239,22 +239,173 @@ fn instructions(
         pen_clear => vec![Call(func_indices::PEN_CLEAR)],
         pen_stamp => todo!(),
         pen_penDown => vec![
-            I32Const(
-                context
-                    .target_index
-                    .try_into()
-                    .expect("target index out of bounds (E003)"),
-            ),
+            I32Const(0),
+            I32Const(1),
+            I32Store8(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
             Call(func_indices::PEN_DOWN),
         ],
+        motion_goto => vec![
+            LocalSet(step_func_locals::F64), // y
+            LocalSet(step_func_locals::F64_2), // x
+            I32Const(0),
+            I32Load8S(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            If(WasmBlockType::Empty),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            LocalGet(step_func_locals::F64),
+            LocalGet(step_func_locals::F64_2),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            Call(func_indices::PEN_LINETO),
+            End,
+        ],
         pen_penUp => vec![
-            I32Const(
-                context
-                    .target_index
-                    .try_into()
-                    .expect("target index out of bounds (E003)"),
-            ),
-            Call(func_indices::PEN_UP),
+            I32Const(0),
+            I32Const(0),
+            I32Store8(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
         ],
         pen_setPenColorToColor => vec![
             I32Const(
@@ -643,6 +794,7 @@ pub mod step_func_locals {
     pub const I64: u32 = 3;
     pub const I32: u32 = 4;
     pub const I32_2: u32 = 5;
+    pub const F64_2: u32 = 6;
 }
 
 pub mod func_indices {
@@ -675,7 +827,7 @@ pub mod func_indices {
     pub const SENSING_RESETTIMER: u32 = 25;
     pub const PEN_CLEAR: u32 = 26;
     pub const PEN_DOWN: u32 = 27;
-    pub const PEN_UP: u32 = 28;
+    pub const PEN_LINETO: u32 = 28;
     pub const PEN_SETCOLOR: u32 = 29;
     pub const PEN_CHANGECOLORPARAM: u32 = 30;
     pub const PEN_SETCOLORPARAM: u32 = 31;
@@ -736,6 +888,8 @@ pub mod types {
     pub const NOPARAM_I32: u32 = 34;
     pub const I32x2_NORESULT: u32 = 35;
     pub const EXTERNREFF64I32_NORESULT: u32 = 36;
+    pub const F64x3F32x4_NORESULT: u32 = 37;
+    pub const F64x5F32x4_NORESULT: u32 = 38;
 }
 
 pub mod table_indices {
@@ -772,6 +926,7 @@ pub mod sprite_info_offsets {
     pub const PEN_B: i32 = 40;
     pub const PEN_A: i32 = 44;
     pub const PEN_SIZE: i32 = 48;
+    pub const PEN_DOWN: i32 = 56;
 }
 
 impl From<IrProject> for WasmProject {
@@ -845,6 +1000,14 @@ impl From<IrProject> for WasmProject {
         types.function([ValType::I32, ValType::I32], []);
         types.function(
             [ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I32],
+            [],
+        );
+        types.function(
+            [ValType::F64, ValType::F64, ValType::F64, ValType::F32, ValType::F32, ValType::F32, ValType::F32],
+            [],
+        );
+        types.function(
+            [ValType::F64, ValType::F64, ValType::F64, ValType::F64, ValType::F64, ValType::F32, ValType::F32, ValType::F32, ValType::F32],
             [],
         );
 
@@ -974,12 +1137,12 @@ impl From<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "pen_down",
-            EntityType::Function(types::I32_NORESULT),
+            EntityType::Function(types::F64x3F32x4_NORESULT),
         );
         imports.import(
             "runtime",
-            "pen_up",
-            EntityType::Function(types::I32_NORESULT),
+            "pen_lineto",
+            EntityType::Function(types::F64x5F32x4_NORESULT),
         );
         imports.import(
             "runtime",

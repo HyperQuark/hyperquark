@@ -47,6 +47,8 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 | 28-31 | f32 | pen_transparency | transparency of pen (0-100) |
 | 32-47 | f32(x4) | pen_color4f | rgba color of pen [(0-1)x4] |
 | 48-55 | f64 | pen_size | pen radius |
+| 56    | u8  | pen_down | whether the pen is down (1) or not (0) |
+| 57-63 | ?   | padding | padding |
 <!--| 56-57 | ?   | padding | padding |--> 
 
 ### Variables

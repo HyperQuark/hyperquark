@@ -185,42 +185,32 @@ export default (
         sensing_timer: () => (Date.now() - start_time) / 1000,
         sensing_resettimer: () => (start_time = Date.now()),
         pen_clear: () => renderer.penClear(pen_skin),
-        pen_down: (i) =>{console.log('pendown', Array.from({ length: 64 }, (_, i) => new DataView(memory.buffer).getFloat32(i*4, true)),[
-          ...new Uint8Array(
-            memory.buffer.slice(
-              sprite_info_offset + (i - 1) * spriteInfoLen + 32,
-              sprite_info_offset + (i - 1) * spriteInfoLen + 48
-            )
-          ),
-        ],new DataView(memory.buffer).getFloat64(
-          sprite_info_offset + (i - 1) * spriteInfoLen + 48,
-          true
-        ))
+        pen_down: (radius, x, y, r, g, b, a) =>
           renderer.penPoint(
             pen_skin,
             {
               //diameter: sprite_info[i].pen.size * 2,
-              diameter:
-                new DataView(memory.buffer).getFloat64(
-                  sprite_info_offset + (i - 1) * spriteInfoLen + 48,
-                  true
-                ) * 2,
+              diameter: radius * 2,
               //color4f: sprite_info[i].pen.color4f,
-              color4f: [
-                new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + 32, true),
-                new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + 36, true),
-                new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + 40, true),
-                new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + 44, true),
-              ],
+              color4f: [r, g, b, a],
             },
-            0,
-            0
-          )},
+            x,
+            y
+          ),
+        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => null,
         pen_up: () => null,
         pen_setcolor: () => null,
         pen_changecolorparam: () => null,
         pen_setcolorparam: (param, val, i) => {
-          console.log('pensetcolorparam', Array.from({ length: 14 }, (_, j) => new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + j*4, true)))
+          console.log(
+            "pensetcolorparam",
+            Array.from({ length: 14 }, (_, j) =>
+              new DataView(memory.buffer).getFloat32(
+                sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
+                true
+              )
+            )
+          );
           switch (param) {
             case "color":
               new DataView(memory.buffer).setFloat32(
@@ -257,11 +247,27 @@ export default (
             default:
               console.warn(`can\'t update invalid color param ${param}`);
           }
-          console.log('pensetcolorparam', Array.from({ length: 14 }, (_, j) => new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + j*4, true)),[
-          ])
+          console.log(
+            "pensetcolorparam",
+            Array.from({ length: 14 }, (_, j) =>
+              new DataView(memory.buffer).getFloat32(
+                sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
+                true
+              )
+            ),
+            []
+          );
           updatePenColor(i);
-          console.log('pensetcolorparam', Array.from({ length: 14 }, (_, j) => new DataView(memory.buffer).getFloat32(sprite_info_offset + (i - 1) * spriteInfoLen + j*4, true)),[
-          ])
+          console.log(
+            "pensetcolorparam",
+            Array.from({ length: 14 }, (_, j) =>
+              new DataView(memory.buffer).getFloat32(
+                sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
+                true
+              )
+            ),
+            []
+          );
         },
         pen_changesize: () => null,
         pen_changehue: () => null,
@@ -319,8 +325,15 @@ export default (
         sprite_info_offset = vars_num.value * 12 + thn_offset + 4;
         const dv = new DataView(memory.buffer);
         for (let i = 0; i < target_names.length - 1; i++) {
-          console.log(sprite_info_offset + i * spriteInfoLen + 16, (sprite_info_offset + i * spriteInfoLen + 16)/4)
-          dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 16, 66.66, true);
+          console.log(
+            sprite_info_offset + i * spriteInfoLen + 16,
+            (sprite_info_offset + i * spriteInfoLen + 16) / 4
+          );
+          dv.setFloat32(
+            sprite_info_offset + i * spriteInfoLen + 16,
+            66.66,
+            true
+          );
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 20, 100, true);
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 24, 100, true);
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 28, 0, true);
@@ -328,7 +341,12 @@ export default (
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 44, 1, true);
           dv.setFloat64(sprite_info_offset + i * spriteInfoLen + 48, 1, true);
         }
-        console.log('hola',Array.from({ length: 64 }, (_, i) => new DataView(memory.buffer).getFloat32(i*4, true)))
+        console.log(
+          "hola",
+          Array.from({ length: 64 }, (_, i) =>
+            new DataView(memory.buffer).getFloat32(i * 4, true)
+          )
+        );
         console.log(`sprite_info_offset + 16: ${sprite_info_offset + 16}`);
         /*resolve({ strings, green_flag, step_funcs, tick, memory })*/ // @ts-ignore
         green_flag();
