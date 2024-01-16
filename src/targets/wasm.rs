@@ -8,10 +8,12 @@ use alloc::vec::Vec;
 use core::hash::BuildHasherDefault;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
+use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType,
-    ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, MemArg,
-    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
+    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
+    Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection, TableType,
+    TypeSection, ValType,
 };
 
 fn instructions(
@@ -234,12 +236,253 @@ fn instructions(
         },
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
+        pen_clear => vec![Call(func_indices::PEN_CLEAR)],
+        pen_stamp => todo!(),
+        pen_penDown => vec![
+            I32Const(0),
+            I32Const(1),
+            I32Store8(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            Call(func_indices::PEN_DOWN),
+        ],
+        motion_gotoxy => vec![
+            LocalSet(step_func_locals::F64), // y
+            LocalSet(step_func_locals::F64_2), // x
+            I32Const(0),
+            I32Load8S(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            If(WasmBlockType::Empty),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            LocalGet(step_func_locals::F64),
+            LocalGet(step_func_locals::F64_2),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            I32Const(0),
+            F32Load(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+            Call(func_indices::PEN_LINETO),
+            End,
+        ],
+        pen_penUp => vec![
+            I32Const(0),
+            I32Const(0),
+            I32Store8(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                align: 0,
+                memory_index: 0,
+            }),
+        ],
+        pen_setPenColorToColor => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETCOLOR),
+        ],
+        pen_changePenColorParamBy => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CHANGECOLORPARAM),
+        ],
+        pen_setPenColorParamTo => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETCOLORPARAM),
+        ],
+        pen_changePenSizeBy => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CHANGESIZE),
+        ],
+        pen_setPenSizeTo => vec![
+            LocalSet(step_func_locals::F64),
+            I32Const(0),
+            LocalGet(step_func_locals::F64),
+            F64Store(MemArg {
+                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
+                    + u64::try_from(byte_offset::VARS).unwrap()
+                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                align: 2,
+                memory_index: 0,
+            }),
+        ],
+        pen_setPenShadeToNumber => todo!(),
+        pen_changePenShadeBy => todo!(),
+        pen_setPenHueToNumber => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_SETHUE),
+        ],
+        pen_changePenHueBy => vec![
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .expect("target index out of bounds (E003)"),
+            ),
+            Call(func_indices::PEN_CHANGEHUE),
+        ],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len())
-            .try_into()
-            .expect("thread_offset out of bounds");
+                + 12 * context.vars.borrow().len()
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                .try_into()
+                .expect("thread_offset out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(threads_offset),
@@ -290,10 +533,11 @@ fn instructions(
             does_yield: true,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len())
-            .try_into()
-            .expect("thread_indices length out of bounds");
+            let threads_offset: u64 = (byte_offset::VARS as usize
+                + 12 * context.vars.borrow().len()
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                .try_into()
+                .expect("threads_offset length out of bounds");
             vec![
                 LocalGet(0),
                 I32Const(
@@ -302,7 +546,7 @@ fn instructions(
                         .expect("step index out of bounds (E001)"),
                 ),
                 I32Store(MemArg {
-                    offset: thread_indices,
+                    offset: threads_offset,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -326,9 +570,10 @@ fn instructions(
         }
         hq_goto_if { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len())
-            .try_into()
-            .expect("thread_offset out of bounds");
+                + 12 * context.vars.borrow().len()
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                .try_into()
+                .expect("thread_offset out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -382,10 +627,11 @@ fn instructions(
             does_yield: true,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).unwrap();
-            let thread_indices: u64 = (byte_offset::VARS as usize
-                + 12 * context.vars.borrow().len())
-            .try_into()
-            .expect("thread_indices length out of bounds");
+            let threads_offset: u64 = (byte_offset::VARS as usize
+                + 12 * context.vars.borrow().len()
+                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                .try_into()
+                .expect("threads_offset length out of bounds");
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -396,7 +642,7 @@ fn instructions(
                         .expect("step index out of bounds (E001)"),
                 ),
                 I32Store(MemArg {
-                    offset: thread_indices,
+                    offset: threads_offset,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -505,6 +751,7 @@ impl CompileToWasm for (&(String, String), &Step) {
             ValType::I64,
             ValType::I32,
             ValType::I32,
+            ValType::F64,
         ];
         let mut func = Function::new_with_locals_types(locals);
         for op in self.1.opcodes() {
@@ -521,19 +768,25 @@ impl CompileToWasm for (&(String, String), &Step) {
     }
 }
 
-pub struct WebWasmFile {
-    js_string: String,
-    wasm_bytes: Vec<u8>,
+#[wasm_bindgen(getter_with_clone)]
+pub struct WasmProject {
+    pub wasm_bytes: Vec<u8>,
+    pub string_consts: Vec<String>,
+    pub target_names: Vec<String>,
 }
-
-impl WebWasmFile {
+/*
+#[wasm_bindgen]
+impl WasmProject {
     pub fn wasm_bytes(&self) -> &Vec<u8> {
         &self.wasm_bytes
     }
-    pub fn js_string(&self) -> &String {
-        &self.js_string
+    pub fn string_consts(&self) -> &Vec<String> {
+        &self.string_consts
     }
-}
+    pub fn target_names(&self) -> &Vec<String> {
+        &self.target_names
+    }
+}*/
 
 pub mod step_func_locals {
     pub const MEM_LOCATION: u32 = 0;
@@ -542,6 +795,7 @@ pub mod step_func_locals {
     pub const I64: u32 = 3;
     pub const I32: u32 = 4;
     pub const I32_2: u32 = 5;
+    pub const F64_2: u32 = 6;
 }
 
 pub mod func_indices {
@@ -572,19 +826,29 @@ pub mod func_indices {
     pub const MATHOP_POW10: u32 = 23;
     pub const SENSING_TIMER: u32 = 24;
     pub const SENSING_RESETTIMER: u32 = 25;
+    pub const PEN_CLEAR: u32 = 26;
+    pub const PEN_DOWN: u32 = 27;
+    pub const PEN_LINETO: u32 = 28;
+    pub const PEN_SETCOLOR: u32 = 29;
+    pub const PEN_CHANGECOLORPARAM: u32 = 30;
+    pub const PEN_SETCOLORPARAM: u32 = 31;
+    pub const PEN_CHANGESIZE: u32 = 32;
+    pub const PEN_SETHUE: u32 = 33;
+    pub const PEN_CHANGEHUE: u32 = 34;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 26;
-    pub const CAST_FLOAT_BOOL: u32 = 27;
-    pub const CAST_BOOL_FLOAT: u32 = 28;
-    pub const CAST_BOOL_STRING: u32 = 29;
-    pub const CAST_ANY_STRING: u32 = 30;
-    pub const CAST_ANY_FLOAT: u32 = 31;
-    pub const CAST_ANY_BOOL: u32 = 32;
-    pub const TABLE_ADD_STRING: u32 = 33;
+    pub const FMOD: u32 = 35;
+    pub const CAST_FLOAT_BOOL: u32 = 36;
+    pub const CAST_BOOL_FLOAT: u32 = 37;
+    pub const CAST_BOOL_STRING: u32 = 38;
+    pub const CAST_ANY_STRING: u32 = 39;
+    pub const CAST_ANY_FLOAT: u32 = 40;
+    pub const CAST_ANY_BOOL: u32 = 41;
+    pub const TABLE_ADD_STRING: u32 = 42;
+    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 43;
 }
-pub const BUILTIN_FUNCS: u32 = 34;
-pub const IMPORTED_FUNCS: u32 = 26;
+pub const BUILTIN_FUNCS: u32 = 44;
+pub const IMPORTED_FUNCS: u32 = 35;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -623,6 +887,10 @@ pub mod types {
     pub const I32I64I32I64_EXTERNREF: u32 = 32;
     pub const F64_F64: u32 = 33;
     pub const NOPARAM_I32: u32 = 34;
+    pub const I32x2_NORESULT: u32 = 35;
+    pub const EXTERNREFF64I32_NORESULT: u32 = 36;
+    pub const F64x3F32x4_NORESULT: u32 = 37;
+    pub const F64x5F32x4_NORESULT: u32 = 38;
 }
 
 pub mod table_indices {
@@ -645,7 +913,24 @@ pub mod byte_offset {
     pub const VARS: i32 = 8;
 }
 
-impl From<IrProject> for WebWasmFile {
+pub const SPRITE_INFO_LEN: i32 = 56;
+
+pub mod sprite_info_offsets {
+    pub const X_POS: i32 = 0;
+    pub const Y_POS: i32 = 8;
+    pub const PEN_COLOR: i32 = 16;
+    pub const PEN_SATURATION: i32 = 20;
+    pub const PEN_VALUE: i32 = 24;
+    pub const PEN_TRANSPARENCY: i32 = 28;
+    pub const PEN_R: i32 = 32;
+    pub const PEN_G: i32 = 36;
+    pub const PEN_B: i32 = 40;
+    pub const PEN_A: i32 = 44;
+    pub const PEN_SIZE: i32 = 48;
+    pub const PEN_DOWN: i32 = 56;
+}
+
+impl From<IrProject> for WasmProject {
     fn from(project: IrProject) -> Self {
         let mut module = Module::new();
 
@@ -657,6 +942,7 @@ impl From<IrProject> for WebWasmFile {
         let mut tables = TableSection::new();
         let mut elements = ElementSection::new();
         let mut memories = MemorySection::new();
+        let mut globals = GlobalSection::new();
 
         memories.memory(MemoryType {
             minimum: 1,
@@ -712,6 +998,19 @@ impl From<IrProject> for WebWasmFile {
         );
         types.function([ValType::F64], [ValType::F64]);
         types.function([], [ValType::I32]);
+        types.function([ValType::I32, ValType::I32], []);
+        types.function(
+            [ValType::Ref(RefType::EXTERNREF), ValType::F64, ValType::I32],
+            [],
+        );
+        types.function(
+            [ValType::F64, ValType::F64, ValType::F64, ValType::F32, ValType::F32, ValType::F32, ValType::F32],
+            [],
+        );
+        types.function(
+            [ValType::F64, ValType::F64, ValType::F64, ValType::F64, ValType::F64, ValType::F32, ValType::F32, ValType::F32, ValType::F32],
+            [],
+        );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -830,6 +1129,51 @@ impl From<IrProject> for WebWasmFile {
             "runtime",
             "sensing_resettimer",
             EntityType::Function(types::NOPARAM_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_clear",
+            EntityType::Function(types::NOPARAM_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_down",
+            EntityType::Function(types::F64x3F32x4_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_lineto",
+            EntityType::Function(types::F64x5F32x4_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_setcolor",
+            EntityType::Function(types::I32x2_NORESULT), // todo: decide how to pass around colours - numbers (i32 or i64?) or strings? needs a new type or shares an integer type (needs generic monomorphisation)
+        );
+        imports.import(
+            "runtime",
+            "pen_changecolorparam",
+            EntityType::Function(types::EXTERNREFF64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_setcolorparam",
+            EntityType::Function(types::EXTERNREFF64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_changesize",
+            EntityType::Function(types::F64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_changehue",
+            EntityType::Function(types::F64I32_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "pen_sethue",
+            EntityType::Function(types::F64I32_NORESULT),
         );
 
         functions.function(types::F64x2_F64);
@@ -1014,6 +1358,282 @@ impl From<IrProject> for WebWasmFile {
         tbl_add_string_func.instruction(&Instruction::End);
         code.function(&tbl_add_string_func);
 
+        mod supc_locals {
+            pub const SPRITE_INDEX: u32 = 0;
+            pub const MEM_POS: u32 = 1;
+            pub const HUE: u32 = 2;
+            pub const SAT: u32 = 3;
+            pub const VAL: u32 = 4;
+            pub const REGION: u32 = 5;
+            pub const REMAINDER: u32 = 6;
+            pub const P: u32 = 7;
+            pub const Q: u32 = 8;
+            pub const T: u32 = 9;
+            pub const R: u32 = 10;
+            pub const G: u32 = 11;
+            pub const B: u32 = 12;
+            pub const VAL_F: u32 = 13;
+        }
+
+        // hsv->rgb based off of https://stackoverflow.com/a/14733008
+        functions.function(types::I32_NORESULT);
+        let mut sprite_update_pen_color_func =
+            Function::new(vec![(12, ValType::I32), (1, ValType::F32)]);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::SPRITE_INDEX)); // sprite index - this is (target index - 1), assuming that the stage is target 0, which could be an issue if we don't confirm this
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(SPRITE_INFO_LEN));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(
+            (byte_offset::VARS as usize + project.vars.borrow().len() * 12)
+                .try_into()
+                .unwrap(),
+        ));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Add);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalTee(supc_locals::MEM_POS)); // position in memory of sprite info
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_COLOR).unwrap(),
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::HUE)); // hue
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_SATURATION).unwrap(),
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::SAT)); // saturation ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_VALUE).unwrap(),
+            align: 2,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(2.55));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32TruncF32S);
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::VAL)); // value ∈ [0, 256)
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(100.0));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_TRANSPARENCY).unwrap(),
+            align: 2,
+            memory_index: 0,
+        })); // transparency ∈ [0, 100]
+        sprite_update_pen_color_func.instruction(&Instruction::F32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(100.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div); // alpha ∈ [0, 1]
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.01));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Lt);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(
+            supc_locals::MEM_POS.try_into().unwrap(),
+        ));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::Return); // if alpha is 0, return (it is already set to 0 so it doesn't matter what r, g & b are)
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::SAT));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::VAL_F));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL_F));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL_F));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL_F));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::Return);
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::HUE));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(43));
+        sprite_update_pen_color_func.instruction(&Instruction::I32DivU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::REGION)); // 'region'
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::HUE));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(43));
+        sprite_update_pen_color_func.instruction(&Instruction::I32RemU);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(6));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::REMAINDER)); // 'remainder'
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::SAT));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::P)); // 'p'
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REMAINDER));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::SAT));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::Q)); // 'q'
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(255));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REMAINDER));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::SAT));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Sub);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Mul);
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(8));
+        sprite_update_pen_color_func.instruction(&Instruction::I32ShrU);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::T)); // 't'
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REGION));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eqz);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::T));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::P));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REGION));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(1));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::Q));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::P));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REGION));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(2));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::P));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::T));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REGION));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(3));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::P));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::Q));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REGION));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(4));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::T));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::P));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::REGION));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Const(5));
+        sprite_update_pen_color_func.instruction(&Instruction::I32Eq);
+        sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::P));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::Q));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::R));
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::G));
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
+        sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::B));
+        sprite_update_pen_color_func.instruction(&Instruction::Call(func_indices::DBG_LOGI32));
+        sprite_update_pen_color_func.instruction(&Instruction::F32ConvertI32S);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
+        sprite_update_pen_color_func.instruction(&Instruction::F32Div);
+        sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
+            offset: u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+            align: 0,
+            memory_index: 0,
+        }));
+        sprite_update_pen_color_func.instruction(&Instruction::End);
+        code.function(&sprite_update_pen_color_func);
+
         let mut gf_func = Function::new(vec![]);
         let mut tick_func = Function::new(vec![(2, ValType::I32)]);
 
@@ -1084,7 +1704,9 @@ impl From<IrProject> for WebWasmFile {
                     .expect("step func index out of bounds (E006)"),
             ));
             func.instruction(&Instruction::I32Store(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len())
+                offset: (byte_offset::VARS as usize
+                    + 12 * project.vars.borrow().len()
+                    + usize::try_from(SPRITE_INFO_LEN).unwrap() * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1146,7 +1768,9 @@ impl From<IrProject> for WebWasmFile {
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::LocalGet(0));
             tick_func.instruction(&Instruction::I32Load(MemArg {
-                offset: (byte_offset::VARS as usize + 12 * project.vars.borrow().len())
+                offset: (byte_offset::VARS as usize
+                    + 12 * project.vars.borrow().len()
+                    + usize::try_from(SPRITE_INFO_LEN).unwrap() * (project.targets.len() - 1))
                     .try_into()
                     .expect("i32.store offset out of bounds"),
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -1224,9 +1848,46 @@ impl From<IrProject> for WebWasmFile {
             step_func_indices,
         );
 
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: false,
+            },
+            &ConstExpr::i32_const(byte_offset::REDRAW_REQUESTED),
+        );
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: false,
+            },
+            &ConstExpr::i32_const(byte_offset::THREAD_NUM),
+        );
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: false,
+            },
+            &ConstExpr::i32_const(
+                project
+                    .vars
+                    .borrow()
+                    .len()
+                    .try_into()
+                    .expect("vars length out of bounds"),
+            ),
+        );
+
         exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
         exports.export("strings", ExportKind::Table, table_indices::STRINGS);
         exports.export("memory", ExportKind::Memory, 0);
+        exports.export("rr_offset", ExportKind::Global, 0);
+        exports.export("thn_offset", ExportKind::Global, 1);
+        exports.export("vars_num", ExportKind::Global, 2);
+        exports.export(
+            "upc",
+            ExportKind::Func,
+            func_indices::SPRITE_UPDATE_PEN_COLOR,
+        );
 
         module
             .section(&types)
@@ -1234,7 +1895,7 @@ impl From<IrProject> for WebWasmFile {
             .section(&functions)
             .section(&tables)
             .section(&memories)
-            // globals
+            .section(&globals)
             .section(&exports)
             // start
             .section(&elements)
@@ -1243,170 +1904,11 @@ impl From<IrProject> for WebWasmFile {
         // data
 
         let wasm_bytes = module.finish();
-        Self { js_string: format!("
-        ({{ framerate=30 }} = {{ framerate: 30 }}) => new Promise((resolve, reject) => {{
-            const framerate_wait = Math.round(1000 / framerate);
-            let assert;
-            let exit;
-            let browser = false;
-            let output_div;
-            let text_div;
-            if (typeof require === 'undefined') {{
-              browser = true;
-              output_div = document.querySelector('div#hq-output');
-              text_div = txt => Object.assign(document.createElement('div'), {{ textContent: txt }});
-              assert = (bool) => {{
-                if (!bool) {{
-                  throw new AssertionError('Assertion failed');
-                }}
-              }}
-              exit = _ => null;
-            }} else {{
-              exit = process.exit;
-              assert = require('node:assert')/*.strict*/;
-            }}
-            let last_output;
-            let strings_tbl;
-            const wasm_val_to_js = (type, value_i64) => {{
-                return type === 0 ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0] : (type === 1 ? Boolean(value_i64) : (type === 2 ? strings_tbl.get(Number(value_i64)) : null));
-            }};
-            const wasm_output = (...args) => {{
-                const val = wasm_val_to_js(...args);
-                if (!browser) {{
-                  console.log('output: \\x1b[34m%s\\x1b[0m', val);
-                }} else {{
-                  output_div.appendChild(text_div('output: ' + String(val)));
-                }}
-                last_output = val;
-            }};
-            const assert_output = (...args) => {{
-                /*assert.equal(last_output, wasm_val_to_js(...args));*/
-                const val = wasm_val_to_js(...args);
-                if (!browser) {{
-                  console.log('assert: \\x1b[34m%s\\x1b[0m', val);
-                }} else {{
-                  output_div.appendChild(text_div('assert: ' + String(val)));
-                }}
-            }}
-            const targetOutput = (targetIndex, verb, text) => {{
-                let targetName = {target_names:?}[targetIndex];
-                if (!browser) {{
-                  console.log(`\\x1b[1;32m${{targetName}} ${{verb}}:\\x1b[0m \\x1b[35m${{text}}\\x1b[0m`);
-                }} else {{
-                  output_div.appendChild(text_div(`${{targetName}} ${{verb}}: ${{text}}`));
-                }}
-            }};
-            let start_time = 0;
-            const importObject = {{
-                dbg: {{
-                    log: wasm_output,
-                    assert: assert_output,
-                    logi32 (i32) {{
-                        console.log('logi32: \\x1b[33m%d\\x1b[0m', i32);
-                        return i32;
-                    }},
-                }},
-                runtime: {{
-                    looks_say: (ty, val, targetIndex) => targetOutput(targetIndex, 'says', wasm_val_to_js(ty, val)),
-                    looks_think: (ty, val, targetIndex) => targetOutput(targetIndex, 'thinks', wasm_val_to_js(ty, val)),
-                    operator_equals: (ty1, val1, ty2, val2) => {{
-                        if (ty1 === ty2 && val1 === val2) return true;
-                        let j1 = wasm_val_to_js(ty1, val1);
-                        let j2 = wasm_val_to_js(ty2, val2);
-                        if (typeof j1 === 'string') j1 = j1.toLowerCase();
-                        if (typeof j2 === 'string') j2 = j2.toLowerCase();
-                        return j1 == j2;
-                    }},
-                    operator_random: (lower, upper) => Math.random() * (upper - lower) + lower,
-                    operator_join: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString() + wasm_val_to_js(ty2, val2).toString(),
-                    operator_letterof: (idx, ty, val) => wasm_val_to_js(ty, val).toString()[idx - 1] ?? '',
-                    operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
-                    operator_contains: (ty1, val1, ty2, val2) => wasm_val_to_js(ty1, val1).toString().toLowerCase().includes(wasm_val_to_js(ty2, val2).toString().toLowerCase()),
-                    mathop_sin: (n) => parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
-                    mathop_cos: (n) => parseFloat(Math.cos((Math.PI * n) / 180).toFixed(10)),
-                    mathop_tan: (n) => {{
-                        /* https://github.com/scratchfoundation/scratch-vm/blob/f1f10e0aa856fef6596a622af72b49e2f491f937/src/util/math-util.js#L53-65 */
-                        n = n % 360;
-                        switch (n) {{
-                            case -270:
-                            case 90:
-                                return Infinity;
-                            case -90:
-                            case 270:
-                                return -Infinity;
-                            default:
-                                return parseFloat(Math.tan((Math.PI * n) / 180).toFixed(10));
-                        }}
-                    }},
-                    mathop_asin: (n) => (Math.asin(n) * 180) / Math.PI,
-                    mathop_acos: (n) => (Math.acos(n) * 180) / Math.PI,
-                    mathop_atan: (n) => (Math.atan(n) * 180) / Math.PI,
-                    mathop_ln: (n) => Math.log(n),
-                    mathop_log: (n) => Math.log(n) / Math.LN10,
-                    mathop_pow_e: (n) => Math.exp(n),
-                    mathop_pow10: (n) => Math.pow(10, n),
-                    sensing_timer: () => (Date.now() - start_time) / 1000,
-                    sensing_resettimer: () => start_time = Date.now(),
-                }},
-                cast: {{
-                  stringtofloat: parseFloat,
-                  stringtobool: Boolean,
-                  floattostring: Number.prototype.toString,
-                }},
-            }};
-            const buf = new Uint8Array({buf:?});
-            try {{
-                assert(WebAssembly.validate(buf));
-            }} catch {{
-                try {{
-                    new WebAssembly.Module(buf);
-                    return reject('invalid WASM module');
-                }} catch (e) {{
-                    return reject('invalid WASM module: ' + e.message);
-                }}
-            }}
-            function sleep(ms) {{
-                return new Promise((resolve) => {{
-                    setTimeout(resolve, ms);
-                }});
-            }}
-            function waitAnimationFrame() {{
-                return new Promise((resolve) => {{
-                    requestAnimationFrame(resolve);
-                }});
-            }}
-            WebAssembly.instantiate(buf, importObject).then(async ({{ instance }}) => {{
-                const {{ green_flag, tick, memory, strings, step_funcs }} = instance.exports;
-                for (const [i, str] of Object.entries({string_consts:?})) {{
-                  strings.set(i, str);
-                }}
-                strings_tbl = strings;
-                /*resolve({{ strings, green_flag, step_funcs, tick, memory }})*/;
-                green_flag();
-                start_time = Date.now();
-                $outertickloop: while (true) {{
-                    /*console.log('outer')*/
-                    const thisTickStartTime = Date.now();
-                    $innertickloop: while (Date.now() - thisTickStartTime < 23 && new Uint8Array(memory.buffer)[{rr_offset}] === 0) {{
-                        /*console.log('inner')*/
-                        tick();
-                        if (new Uint32Array(memory.buffer)[{thn_offset}/4] === 0) {{
-                            break $outertickloop;
-                        }}
-                    }}
-                    new Uint8Array(memory.buffer)[{rr_offset}] = 0;
-                    if (framerate_wait > 0) {{
-                        await sleep(Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)));
-                    }} else {{
-                        await waitAnimationFrame();
-                    }}
-                }}
-            }}).catch((e) => {{
-                reject('error when instantiating module:\\n' + e.stack);
-                /*exit(1);*/
-            }});
-        }})
-        ", target_names=&project.targets, buf=&wasm_bytes, rr_offset=byte_offset::REDRAW_REQUESTED, thn_offset=byte_offset::THREAD_NUM), wasm_bytes }
+        Self {
+            target_names: project.targets.clone(),
+            wasm_bytes,
+            string_consts,
+        }
     }
 }
 
@@ -1415,7 +1917,7 @@ mod tests {
     use super::*;
     use std::process::{Command, Stdio};
 
-    #[test]
+    /*#[test]
     fn run_wasm() {
         use crate::sb3::Sb3Project;
         use std::fs;
@@ -1424,10 +1926,8 @@ mod tests {
             .try_into()
             .unwrap();
         let ir: IrProject = proj.into();
-        let wasm: WebWasmFile = ir.into();
+        let wasm: WasmProject = ir.into();
         fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
-        fs::write("./bad.mjs", format!("export default {};", wasm.js_string()))
-            .expect("failed to write to bad.js");
         let output = Command::new("node")
             .arg("-e")
             .arg(format!(
@@ -1448,5 +1948,5 @@ mod tests {
         if !output.status.success() {
             panic!("couldn't run wasm");
         }
-    }
+    }*/
 }

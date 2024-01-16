@@ -50,6 +50,7 @@ impl From<Sb3Project> for IrProject {
                     target_index: u32::MAX,
                     dbg: false,
                     vars: Rc::new(RefCell::new(vec![])),
+                    target_num: sb3.targets.len(),
                 }),
             ),
         );
@@ -75,6 +76,7 @@ impl From<Sb3Project> for IrProject {
                             && comment.text.clone() == *"hq-dbg"
                     }),
                     vars: Rc::clone(&vars),
+                    target_num: sb3.targets.len(),
                 });
                 let thread = Thread::from_hat(
                     block.clone(),
@@ -273,7 +275,6 @@ pub enum IrOpcode {
     pen_changePenShadeBy,
     pen_setPenHueToNumber,
     pen_changePenHueBy,
-    pen_menu_colorParam,
     procedures_definition,
     procedures_call,
     procedures_prototype,
@@ -430,11 +431,27 @@ impl IrOpcode {
             operator_join => BlockDescriptor::new(vec![Any, Any], Text),
             operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
             operator_length => BlockDescriptor::new(vec![Any], Number),
-            hq_goto { .. } | sensing_resettimer => BlockDescriptor::new(vec![], Stack),
+            hq_goto { .. }
+            | sensing_resettimer
+            | pen_clear
+            | pen_stamp
+            | pen_penDown
+            | pen_penUp => BlockDescriptor::new(vec![], Stack),
             hq_goto_if { .. } => BlockDescriptor::new(vec![Boolean], Stack),
             hq_drop(n) => BlockDescriptor::new(vec![Any; *n], Stack),
             hq_cast(ty) => BlockDescriptor::new(vec![*ty], *ty),
             data_teevariable { .. } => BlockDescriptor::new(vec![Any], Any),
+            pen_setPenColorToColor
+            | pen_changePenSizeBy
+            | pen_setPenSizeTo
+            | pen_setPenShadeToNumber
+            | pen_changePenShadeBy
+            | pen_setPenHueToNumber
+            | pen_changePenHueBy => BlockDescriptor::new(vec![Number], Stack),
+            pen_changePenColorParamBy | pen_setPenColorParamTo => {
+                BlockDescriptor::new(vec![Text, Number], Stack)
+            }
+            motion_gotoxy => BlockDescriptor::new(vec![Number, Number], Stack),
             _ => todo!("{:?}", &self),
         }
     }
@@ -502,6 +519,7 @@ pub struct ThreadContext {
     pub target_index: u32,
     pub dbg: bool,
     pub vars: Rc<RefCell<Vec<IrVar>>>, // todo: fix variable id collisions between targets
+    pub target_num: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -672,10 +690,24 @@ impl IrBlockVec for Vec<IrBlock> {
                 );
 
                 self.append(&mut (match block_info.opcode {
+                    BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
                     BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_resettimer],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
                     BlockOpcode::looks_think => vec![IrOpcode::looks_think],
+                    BlockOpcode::looks_show => vec![IrOpcode::looks_show],
+                    BlockOpcode::looks_hide => vec![IrOpcode::looks_hide],
+                    BlockOpcode::looks_hideallsprites => vec![IrOpcode::looks_hideallsprites],
+                    BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+                    BlockOpcode::looks_switchbackdropto => vec![IrOpcode::looks_switchbackdropto],
+                    BlockOpcode::looks_switchbackdroptoandwait => vec![IrOpcode::looks_switchbackdroptoandwait],
+                    BlockOpcode::looks_nextcostume => vec![IrOpcode::looks_nextcostume],
+                    BlockOpcode::looks_nextbackdrop => vec![IrOpcode::looks_nextbackdrop],
+                    BlockOpcode::looks_changeeffectby => vec![IrOpcode::looks_changeeffectby],
+                    BlockOpcode::looks_seteffectto => vec![IrOpcode::looks_seteffectto],
+                    BlockOpcode::looks_cleargraphiceffects => vec![IrOpcode::looks_cleargraphiceffects],
+                    BlockOpcode::looks_changesizeby => vec![IrOpcode::looks_changesizeby],
+                    BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                     BlockOpcode::operator_add => vec![IrOpcode::operator_add],
                     BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
                     BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
@@ -693,6 +725,30 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                     BlockOpcode::operator_length => vec![IrOpcode::operator_length],
                     BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
+                    BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
+                    BlockOpcode::pen_stamp => vec![IrOpcode::pen_stamp],
+                    BlockOpcode::pen_penDown => vec![IrOpcode::pen_penDown],
+                    BlockOpcode::pen_penUp => vec![IrOpcode::pen_penUp],
+                    BlockOpcode::pen_setPenColorToColor => vec![IrOpcode::pen_setPenColorToColor],
+                    BlockOpcode::pen_changePenColorParamBy => vec![IrOpcode::pen_changePenColorParamBy],
+                    BlockOpcode::pen_setPenColorParamTo => vec![IrOpcode::pen_setPenColorParamTo],
+                    BlockOpcode::pen_changePenSizeBy => vec![IrOpcode::pen_changePenSizeBy],
+                    BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setPenSizeTo],
+                    BlockOpcode::pen_setPenShadeToNumber => vec![IrOpcode::pen_setPenShadeToNumber],
+                    BlockOpcode::pen_changePenShadeBy => vec![IrOpcode::pen_changePenShadeBy],
+                    BlockOpcode::pen_setPenHueToNumber => vec![IrOpcode::pen_setPenHueToNumber],
+                    BlockOpcode::pen_changePenHueBy => vec![IrOpcode::pen_changePenHueBy],
+                    BlockOpcode::pen_menu_colorParam => {
+                        let maybe_val = match block_info.fields.get("colorParam")
+                            .expect("invalid project.json - missing field colorParam") {
+                            Field::Value((v,)) | Field::ValueId(v, _) => v,
+                        };
+                        let val_varval = maybe_val.clone().expect("invalid project.json - null value for OPERATOR field (E039)");
+                        let VarVal::String(val) = val_varval else {
+                            panic!("invalid project.json - expected colorParam field to be string");
+                        };
+                        vec![IrOpcode::text { TEXT: val }]
+                    },
                     BlockOpcode::operator_mathop => {
                         let maybe_val = match block_info.fields.get("OPERATOR")
                             .expect("invalid project.json - missing field OPERATOR (E038)") {

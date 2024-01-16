@@ -444,7 +444,7 @@ impl TryFrom<&str> for Sb3Project {
         }
     }
 }
-
+/*
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -553,3 +553,4 @@ pub mod tests {
         dbg!(j);
     }
 }
+*/

@@ -4,20 +4,15 @@
 extern crate alloc;
 extern crate enum_field_getter;
 
-use alloc::string::{String, ToString};
-
 use wasm_bindgen::prelude::*;
 
 pub mod ir;
 pub mod sb3;
 pub mod targets;
 
+use targets::wasm;
+
 #[wasm_bindgen]
-pub fn sb3_to_wasm(proj: &str) -> String {
-    (*targets::wasm::WebWasmFile::from(ir::IrProject::from(
-        sb3::Sb3Project::try_from(proj).expect("uh oh"),
-    ))
-    .js_string()
-    .clone())
-    .to_string()
+pub fn sb3_to_wasm(proj: &str) -> wasm::WasmProject {
+    ir::IrProject::from(sb3::Sb3Project::try_from(proj).expect("uh oh")).into()
 }

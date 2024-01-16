@@ -6,29 +6,34 @@
     <summary>An error occured whilst trying to load the project.</summary>
     {{ error }}
   </details>
-  <template v-else>
+  <!--<template v-else>-->
     <br>
     <br>
     <button @click="greenFlag">green flag</button> <button>stop</button>
-    <canvas width="480" height="360"></canvas>
+    <canvas width="480" height="360" ref="canvas"></canvas>
     <div id="hq-output">Project output:<br></div>
-  </template>
+  <!--</template>-->
 </template>
 
 <script setup>
-  import { sb3_to_wasm } from '@/../js/hyperquark.js';
-  import { ref, nextTick } from 'vue';
-  
+  import { sb3_to_wasm, WasmProject } from '@/../js/hyperquark.js';
+  import runProject from '@/lib/project-runner.js';
+  import { ref, onMounted } from 'vue';
+  const Renderer = window.ScratchRender;
   const props = defineProps(['json', 'title', 'author', 'assets']);
   let error = ref(null);
   let turbo = ref(false);
-  let wasm;
+  let canvas = ref(null);
+  let renderer;
+  let wasmProject;
   let start;
+  onMounted(() => {
+    renderer = new Renderer(canvas.value);
+  });
   try {
-    wasm = sb3_to_wasm(JSON.stringify(props.json));
-    start = eval(wasm);
-    if (!typeof start === 'function') {
-      throw start;
+    wasmProject = sb3_to_wasm(JSON.stringify(props.json));
+    if (!wasmProject instanceof WasmProject) {
+      throw new Error("unknown error occurred when compiling project");
     }
   } catch (e) {
     error.value = e.toString();
@@ -36,9 +41,14 @@
       error.value += '\n' + e.stack;
     }
   }
-  console.log(start);
   function greenFlag() {
-    start({ framerate: turbo ? Infinity : 30 }).then(_=>alert('done')).catch(e => {
+    runProject({
+      framerate: turbo ? Infinity : 30,
+      renderer,
+      wasm_bytes: wasmProject.wasm_bytes,
+      string_consts: wasmProject.string_consts,
+      target_names: wasmProject.target_names,
+    }).then(_=>alert('done')).catch(e => {
       error.value = e.toString();
       if (e.stack) {
         error.value += '\n' + e.stack;
