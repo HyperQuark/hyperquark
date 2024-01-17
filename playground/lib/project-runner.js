@@ -158,7 +158,7 @@ export default (
         sensing_resettimer: () => (start_time = Date.now()),
         pen_clear: () => renderer.penClear(pen_skin),
         pen_down: (radius, x, y, r, g, b, a) =>
-          console.log(x,y)||renderer.penPoint(
+          renderer.penPoint(
             pen_skin,
             {
               diameter: radius, // awkward variable naming moment
@@ -167,7 +167,7 @@ export default (
             x,
             y
           ),
-        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => console.log(x1,y1,x2,y2)||renderer.penLine(
+        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => renderer.penLine(
           pen_skin,
           {
             diameter: radius,
