@@ -897,7 +897,9 @@ impl IrBlockVec for Vec<IrBlock> {
                             looper_opcodes.fixup_types();
                             steps.insert((target_id.clone(), looper_id.clone()), Step::new(looper_opcodes, Rc::clone(&context)));
                         }
-                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+                        if let Some(next) = block_info.next.clone() {
+                            step_from_top_block(next, last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+                        }
                         step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps, target_id.clone());
                         let mut opcodes = vec![];
                         //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());

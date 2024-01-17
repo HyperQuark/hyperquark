@@ -26,18 +26,6 @@ export default (
     window.renderer = renderer;
     renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
     //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
-    let sprite_info = Array.from({ length: target_names.length }, (_) => ({
-      x: 0,
-      y: 0,
-      pen: {
-        color: 66.66,
-        saturation: 100,
-        brightness: 100,
-        transparency: 0,
-        color4f: [0, 0, 1, 1],
-        size: 1,
-      },
-    }));
     const pen_skin = createSkin(renderer, "Pen", "pen");
     if (typeof require === "undefined") {
       browser = true;
@@ -186,7 +174,7 @@ export default (
         sensing_resettimer: () => (start_time = Date.now()),
         pen_clear: () => renderer.penClear(pen_skin),
         pen_down: (radius, x, y, r, g, b, a) =>
-          renderer.penPoint(
+          console.log(x,y)||renderer.penPoint(
             pen_skin,
             {
               //diameter: sprite_info[i].pen.size * 2,
@@ -197,7 +185,7 @@ export default (
             x,
             y
           ),
-        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => renderer.penLine(
+        pen_lineto: (radius, x1, y1, x2, y2, r, g, b, a) => console.log(x1,y1,x2,y2)||renderer.penLine(
           pen_skin,
           {
             diameter: radius,
@@ -209,15 +197,15 @@ export default (
         pen_setcolor: () => null,
         pen_changecolorparam: () => null,
         pen_setcolorparam: (param, val, i) => {
-          console.log(
-            "pensetcolorparam",
-            Array.from({ length: 14 }, (_, j) =>
-              new DataView(memory.buffer).getFloat32(
-                sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
-                true
-              )
-            )
-          );
+          // console.log(
+          //   "pensetcolorparam",
+          //   Array.from({ length: 14 }, (_, j) =>
+          //     new DataView(memory.buffer).getFloat32(
+          //       sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
+          //       true
+          //     )
+          //   )
+          // );
           switch (param) {
             case "color":
               new DataView(memory.buffer).setFloat32(
@@ -254,27 +242,27 @@ export default (
             default:
               console.warn(`can\'t update invalid color param ${param}`);
           }
-          console.log(
-            "pensetcolorparam",
-            Array.from({ length: 14 }, (_, j) =>
-              new DataView(memory.buffer).getFloat32(
-                sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
-                true
-              )
-            ),
-            []
-          );
+          // console.log(
+          //   "pensetcolorparam",
+          //   Array.from({ length: 14 }, (_, j) =>
+          //     new DataView(memory.buffer).getFloat32(
+          //       sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
+          //       true
+          //     )
+          //   ),
+          //   []
+          // );
           updatePenColor(i);
-          console.log(
-            "pensetcolorparam",
-            Array.from({ length: 14 }, (_, j) =>
-              new DataView(memory.buffer).getFloat32(
-                sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
-                true
-              )
-            ),
-            []
-          );
+          // console.log(
+          //   "pensetcolorparam",
+          //   Array.from({ length: 14 }, (_, j) =>
+          //     new DataView(memory.buffer).getFloat32(
+          //       sprite_info_offset + (i - 1) * spriteInfoLen + j * 4,
+          //       true
+          //     )
+          //   ),
+          //   []
+          // );
         },
         pen_changesize: () => null,
         pen_changehue: () => null,
@@ -324,18 +312,23 @@ export default (
           // @ts-ignore
           strings.set(i, str);
         }
-        console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
+        //console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
         updatePenColor = (i) => upc(i - 1);
         strings_tbl = strings;
         window.memory = memory;
+        window.stop = () => {
+          for (let i = 0; i < new Uint32Array(memory.buffer)[thn_offset.value / 4]; i++) {
+            new Uint32Array(memory.buffer)[(i + sprite_info_offset + spriteInfoLen * (target_names.length - 1)) / 4] = 0;
+          }
+        };
         // @ts-ignore
         sprite_info_offset = vars_num.value * 12 + thn_offset + 4;
         const dv = new DataView(memory.buffer);
         for (let i = 0; i < target_names.length - 1; i++) {
-          console.log(
-            sprite_info_offset + i * spriteInfoLen + 16,
-            (sprite_info_offset + i * spriteInfoLen + 16) / 4
-          );
+          // console.log(
+          //   sprite_info_offset + i * spriteInfoLen + 16,
+          //   (sprite_info_offset + i * spriteInfoLen + 16) / 4
+          // );
           dv.setFloat32(
             sprite_info_offset + i * spriteInfoLen + 16,
             66.66,
@@ -348,32 +341,32 @@ export default (
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 44, 1, true);
           dv.setFloat64(sprite_info_offset + i * spriteInfoLen + 48, 1, true);
         }
-        console.log(
-          "hola",
-          Array.from({ length: 64 }, (_, i) =>
-            new DataView(memory.buffer).getFloat32(i * 4, true)
-          )
-        );
-        console.log(`sprite_info_offset + 16: ${sprite_info_offset + 16}`);
+        // console.log(
+        //   "hola",
+        //   Array.from({ length: 64 }, (_, i) =>
+        //     new DataView(memory.buffer).getFloat32(i * 4, true)
+        //   )
+        // );
+        // console.log(`sprite_info_offset + 16: ${sprite_info_offset + 16}`);
         /*resolve({ strings, green_flag, step_funcs, tick, memory })*/ // @ts-ignore
         green_flag();
-        console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
+        //console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
         start_time = Date.now();
         console.log("green_flag()");
         $outertickloop: while (true) {
-          console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
+          //console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
           // console.log(new Uint32Array(memory.buffer)[thn_offset.value / 4])
           renderer.draw();
           // console.log('outer')
           const thisTickStartTime = Date.now();
           // @ts-ignore
-          $innertickloop: while (
+          $innertickloop: /*while (
             Date.now() - thisTickStartTime < 23 &&
             new Uint8Array(memory.buffer)[rr_offset.value] === 0
-          ) {
+          ){*/for (const _ of [1]) {
             //console.log('inner')
             // @ts-ignore
-            console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
+            //console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
             tick();
             // @ts-ignore
             if (new Uint32Array(memory.buffer)[thn_offset.value / 4] === 0) {
@@ -390,7 +383,7 @@ export default (
           } else {
             await waitAnimationFrame();
           }
-          console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
+          //console.log([...new Uint8Array(memory.buffer.slice(0, 256))]);
         }
       })
       .catch((e) => {
