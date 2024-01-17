@@ -351,6 +351,9 @@ impl IrBlock {
                     does_yield: true,
                     ..
                 }
+                | motion_gotoxy
+                | pen_penDown
+                | pen_clear
         )
     }
     pub fn is_hat(&self) -> bool {
