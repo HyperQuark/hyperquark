@@ -883,6 +883,32 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
                             ]
                     }
+                    BlockOpcode::control_forever => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").expect("missing SUBSTACK input for control_if").get_1().unwrap().clone().unwrap() { id } else { panic!("malformed SUBSTACK input") };
+                        let mut condition_opcodes = vec![
+                                //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true }.into(),
+                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
+                            ];
+                        let looper_id = Uuid::new_v4().to_string();
+                        if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
+                            let mut looper_opcodes = vec![];
+                            //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
+                            looper_opcodes.append(&mut condition_opcodes.clone());
+                            looper_opcodes.fixup_types();
+                            steps.insert((target_id.clone(), looper_id.clone()), Step::new(looper_opcodes, Rc::clone(&context)));
+                        }
+                        step_from_top_block(block_info.next.clone().unwrap(), last_nexts, blocks, Rc::clone(&context), steps, target_id.clone());
+                        step_from_top_block(substack_id.clone(), vec![looper_id], blocks, Rc::clone(&context), steps, target_id.clone());
+                        let mut opcodes = vec![];
+                        //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
+                        opcodes.append(&mut condition_opcodes);
+                        opcodes.fixup_types();
+                        steps.insert((target_id.clone(), block_id.clone()), Step::new(opcodes.clone(), Rc::clone(&context)));
+                        vec![
+                                //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().unwrap())), does_yield: true },
+                                IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
+                            ]
+                    }
                     _ => todo!(),
                 }).into_iter().map(IrBlock::from).collect());
             }
