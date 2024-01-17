@@ -9,7 +9,7 @@
   <!--<template v-else>-->
     <br>
     <br>
-    <button @click="greenFlag">green flag</button> <button>stop</button>
+    <button @click="greenFlag">green flag</button> <button @click="stop">stop</button>
     <canvas width="480" height="360" ref="canvas"></canvas>
     <div id="hq-output">Project output:<br></div>
   <!--</template>-->
@@ -54,6 +54,9 @@
         error.value += '\n' + e.stack;
       }
     });
+  }
+  function stop() {
+    window.stop()
   }
 </script>
 
