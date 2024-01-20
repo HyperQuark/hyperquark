@@ -73,9 +73,9 @@ fn instructions(
             if expected_output == Text {
                 actual_output = Text;
                 instructions(
-                    &IrBlock::from(text {
+                    &IrBlock::try_from(text {
                         TEXT: format!("{}", NUM),
-                    }),
+                    })?,
                     Rc::clone(&context),
                     string_consts,
                     steps,
@@ -238,7 +238,7 @@ fn instructions(
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
         pen_clear => vec![Call(func_indices::PEN_CLEAR)],
-        pen_stamp => todo!(),
+        pen_stamp => hq_todo!(""),
         pen_penDown => vec![
             I32Const(0),
             I32Const(1),
@@ -515,8 +515,8 @@ fn instructions(
                 memory_index: 0,
             }),
         ],
-        pen_setPenShadeToNumber => todo!(),
-        pen_changePenShadeBy => todo!(),
+        pen_setPenShadeToNumber => hq_todo!(""),
+        pen_changePenShadeBy => hq_todo!(""),
         pen_setPenHueToNumber => vec![
             I32Const(
                 context
@@ -733,7 +733,7 @@ fn instructions(
                 End,
             ]
         }
-        _ => todo!(),
+        _ => hq_todo!(""),
     };
     instructions.append(&mut match (actual_output, expected_output) {
         (Text, Number) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],

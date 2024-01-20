@@ -331,15 +331,17 @@ pub struct IrBlock {
     pub expected_output: BlockType, // the output type the parent block wants
 }
 
-impl From<IrOpcode> for IrBlock {
-    fn from(opcode: IrOpcode) -> Self {
-        let descriptor = opcode.descriptor();
+impl TryFrom<IrOpcode> for IrBlock {
+    type Error = HQError;
+    
+    fn try_from(opcode: IrOpcode) -> Result<Self, HQError> {
+        let descriptor = opcode.descriptor()?;
         let output = descriptor.output();
-        Self {
+        Ok(Self {
             opcode,
             actual_output: *output,
             expected_output: *output,
-        }
+        })
     }
 }
 
@@ -413,10 +415,10 @@ impl IrOpcode {
         use IrOpcode::*;
         matches!(self, looks_say | looks_think)
     }
-    pub fn descriptor(&self) -> BlockDescriptor {
+    pub fn descriptor(&self) -> Result<BlockDescriptor, HQError> {
         use BlockType::*;
         use IrOpcode::*;
-        match self {
+        Ok(match self {
             operator_add | operator_subtract | operator_multiply | operator_divide
             | operator_mod | operator_random => BlockDescriptor::new(vec![Number, Number], Number),
             operator_round | operator_mathop { .. } => BlockDescriptor::new(vec![Number], Number),
@@ -458,8 +460,8 @@ impl IrOpcode {
                 BlockDescriptor::new(vec![Text, Number], Stack)
             }
             motion_gotoxy => BlockDescriptor::new(vec![Number, Number], Stack),
-            _ => todo!("{:?}", &self),
-        }
+            _ => hq_todo!("{:?}", &self),
+        })
     }
 }
 
@@ -562,21 +564,21 @@ impl IrBlockVec for Vec<IrBlock> {
         let mut type_stack: Vec<(usize, BlockType)> = vec![];
         let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
         for (index, op) in self.iter().enumerate() {
-            if !type_stack.len() >= op.opcode().descriptor().inputs().len() {
+            if type_stack.len() < op.opcode().descriptor()?.inputs().len() {
                 hq_bug!(
                     "type stack not big enough (expected >={} items, got {})",
-                    op.opcode().descriptor().inputs().len(),
+                    op.opcode().descriptor()?.inputs().len(),
                     type_stack.len()
                 )
             };
-            for block_type in op.opcode().descriptor().inputs().iter().rev() {
+            for block_type in op.opcode().descriptor()?.inputs().iter().rev() {
                 let top_type = type_stack
                     .pop()
                     .ok_or(make_hq_bug!("couldn't pop from type stack"))?;
                 expected_outputs.push((top_type.0, *block_type))
             }
-            if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
-                type_stack.push((index, (*op.opcode().descriptor().output())));
+            if !matches!(op.opcode().descriptor()?.output(), BlockType::Stack) {
+                type_stack.push((index, (*op.opcode().descriptor()?.output())));
             }
         }
         if !type_stack.is_empty() {
@@ -657,7 +659,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     8 => IrOpcode::math_angle {
                         NUM: value.parse().map_err(|_| make_hq_bug!(""))?,
                     },
-                    9 => todo!(),
+                    9 => hq_todo!(""),
                     10 => IrOpcode::text {
                         TEXT: value.to_string(),
                     },
@@ -667,16 +669,16 @@ impl IrBlockVec for Vec<IrBlock> {
                     12 => IrOpcode::data_variable {
                         VARIABLE: id.to_string(),
                     },
-                    _ => todo!(),
+                    _ => hq_todo!(""),
                 },
                 BlockArray::VariableOrList(ty, _name, id, _pos_x, _pos_y) => match ty {
                     12 => IrOpcode::data_variable {
                         VARIABLE: id.to_string(),
                     },
-                    _ => todo!(),
+                    _ => hq_todo!(""),
                 },
             }
-            .into(),
+            .try_into()?,
         );
         Ok(())
     }
@@ -833,19 +835,19 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?.get_1().ok_or(make_hq_bug!(""))?.clone().ok_or(make_hq_bug!(""))? { id } else { hq_bad_proj!("malformed SUBSTACK input") };
                         let mut condition_opcodes = vec![
-                                IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().ok_or(make_hq_bug!(""))?)), does_yield: true }.into(),
-                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
+                                IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().ok_or(make_hq_bug!(""))?)), does_yield: true }.try_into()?,
+                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.try_into()?,
                             ];
                         let looper_id = Uuid::new_v4().to_string();
                         context.vars.borrow_mut().push(IrVar::new(looper_id.clone(), looper_id.clone(), VarVal::Float(0.0), false));
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
                             let mut looper_opcodes = vec![
-                                IrOpcode::data_variable { VARIABLE: looper_id.clone() }.into(),
-                                IrOpcode::math_number { NUM: 1.0 }.into(),
-                                IrOpcode::operator_subtract.into(),
-                                IrOpcode::data_teevariable { VARIABLE: looper_id.clone() }.into(),
-                                IrOpcode::math_number { NUM: 1.0 }.into(),
-                                IrOpcode::operator_lt.into(),
+                                IrOpcode::data_variable { VARIABLE: looper_id.clone() }.try_into()?,
+                                IrOpcode::math_number { NUM: 1.0 }.try_into()?,
+                                IrOpcode::operator_subtract.try_into()?,
+                                IrOpcode::data_teevariable { VARIABLE: looper_id.clone() }.try_into()?,
+                                IrOpcode::math_number { NUM: 1.0 }.try_into()?,
+                                IrOpcode::operator_lt.try_into()?,
                             ];
                             //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                             looper_opcodes.append(&mut condition_opcodes.clone());
@@ -871,8 +873,8 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::control_repeat_until => {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?.get_1().ok_or(make_hq_bug!(""))?.clone().ok_or(make_hq_bug!(""))? { id } else { hq_bad_proj!("malformed SUBSTACK input") };
                         let mut condition_opcodes = vec![
-                                IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().ok_or(make_hq_bug!(""))?)), does_yield: true }.into(),
-                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
+                                IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().ok_or(make_hq_bug!(""))?)), does_yield: true }.try_into()?,
+                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.try_into()?,
                             ];
                         let looper_id = Uuid::new_v4().to_string();
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
@@ -898,7 +900,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info.inputs.get("SUBSTACK").ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?.get_1().ok_or(make_hq_bug!(""))?.clone().ok_or(make_hq_bug!(""))? { id } else { hq_bad_proj!("malformed SUBSTACK input") };
                         let mut condition_opcodes = vec![
                                 //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true }.into(),
-                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.into(),
+                                IrOpcode::hq_goto { step: Some((target_id.clone(), substack_id.clone())), does_yield: true }.try_into()?,
                             ];
                         let looper_id = Uuid::new_v4().to_string();
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
@@ -922,8 +924,8 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
                             ]
                     }
-                    _ => todo!(),
-                }).into_iter().map(IrBlock::from).collect());
+                    _ => hq_todo!(""),
+                }).into_iter().map(IrBlock::try_from).collect::<Result<_, _>>()?);
             }
             Block::Special(a) => self.add_block_arr(a)?,
         };
@@ -988,7 +990,7 @@ pub fn step_from_top_block<'a>(
                     step: Some((target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?)),
                     does_yield: false,
                 }
-                .into(),
+                .try_into()?,
             );
             next_id = None;
             break;
@@ -1015,15 +1017,15 @@ pub fn step_from_top_block<'a>(
             steps,
             target_id.clone(),
         )?;
-        IrBlock::from(IrOpcode::hq_goto {
+        IrBlock::try_from(IrOpcode::hq_goto {
             step: Some((target_id.clone(), id.clone())),
             does_yield: true,
-        })
+        })?
     } else {
-        IrBlock::from(IrOpcode::hq_goto {
+        IrBlock::try_from(IrOpcode::hq_goto {
             step: None,
             does_yield: false,
-        })
+        })?
     });
     steps.insert((target_id.clone(), top_id.clone()), step);
     steps.get(&(target_id, top_id)).ok_or(make_hq_bug!(""))
@@ -1075,7 +1077,7 @@ impl Thread {
         let start_type = if let Block::Normal { block_info, .. } = &hat {
             match block_info.opcode {
                 BlockOpcode::event_whenflagclicked => ThreadStart::GreenFlag,
-                _ => todo!(),
+                _ => hq_todo!(""),
             }
         } else {
             unreachable!()
