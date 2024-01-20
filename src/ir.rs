@@ -564,7 +564,7 @@ impl IrBlockVec for Vec<IrBlock> {
         for (index, op) in self.iter().enumerate() {
             if !type_stack.len() >= op.opcode().descriptor().inputs().len() {
                 hq_bug!(
-                    "type stack not big enough (expected >={} items, got {}) (E019)",
+                    "type stack not big enough (expected >={} items, got {})",
                     op.opcode().descriptor().inputs().len(),
                     type_stack.len()
                 )
@@ -572,7 +572,7 @@ impl IrBlockVec for Vec<IrBlock> {
             for block_type in op.opcode().descriptor().inputs().iter().rev() {
                 let top_type = type_stack
                     .pop()
-                    .ok_or(make_hq_bug!("couldn't pop from type stack (E020)"))?;
+                    .ok_or(make_hq_bug!("couldn't pop from type stack"))?;
                 expected_outputs.push((top_type.0, *block_type))
             }
             if !matches!(op.opcode().descriptor().output(), BlockType::Stack) {
@@ -588,7 +588,7 @@ impl IrBlockVec for Vec<IrBlock> {
         };
         for (index, ty) in expected_outputs {
             self.get_mut(index)
-                .ok_or(make_hq_bug!("ir block doesn't exist (E043)"))?
+                .ok_or(make_hq_bug!("ir block doesn't exist"))?
                 .set_expected_output(ty);
         }
         Ok(())
@@ -754,7 +754,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             .ok_or(make_hq_bad_proj!("invalid project.json - missing field colorParam"))? {
                             Field::Value((v,)) | Field::ValueId(v, _) => v,
                         };
-                        let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!("invalid project.json - null value for OPERATOR field (E039)"))?;
+                        let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!("invalid project.json - null value for OPERATOR field"))?;
                         let VarVal::String(val) = val_varval else {
                             hq_bad_proj!("invalid project.json - expected colorParam field to be string");
                         };
@@ -762,12 +762,12 @@ impl IrBlockVec for Vec<IrBlock> {
                     },
                     BlockOpcode::operator_mathop => {
                         let maybe_val = match block_info.fields.get("OPERATOR")
-                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field OPERATOR (E038)"))? {
+                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field OPERATOR"))? {
                             Field::Value((v,)) | Field::ValueId(v, _) => v,
                         };
-                        let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!("invalid project.json - null value for OPERATOR field (E039)"))?;
+                        let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!("invalid project.json - null value for OPERATOR field"))?;
                         let VarVal::String(val) = val_varval else {
-                            hq_bad_proj!("invalid project.json - expected OPERATOR field to be string (E040)");
+                            hq_bad_proj!("invalid project.json - expected OPERATOR field to be string");
                         };
                         vec![IrOpcode::operator_mathop {
                             OPERATOR: val,
@@ -775,30 +775,30 @@ impl IrBlockVec for Vec<IrBlock> {
                     },
                     BlockOpcode::data_variable => {
                         let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
-                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field VARIABLE (E023)"))? else {
-                                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field (E024)");
+                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field VARIABLE"))? else {
+                                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
                             };
-                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field (E025)"))?;
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field"))?;
                         vec![IrOpcode::data_variable {
                           VARIABLE: id,
                         }]
                     },
                     BlockOpcode::data_setvariableto => {
                         let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
-                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field VARIABLE (E026)"))? else {
-                                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field (E027)");
+                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field VARIABLE"))? else {
+                                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
                             };
-                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field (E028)"))?;
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field"))?;
                         vec![IrOpcode::data_setvariableto {
                           VARIABLE: id,
                         }]
                     },
                     BlockOpcode::data_changevariableby => {
                         let Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE")
-                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field VARIABLE (E029)"))? else {
-                                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field (E030)");
+                            .ok_or(make_hq_bad_proj!("invalid project.json - missing field VARIABLE"))? else {
+                                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
                             };
-                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!("invalid project.json - null id for VARIABLE field (E031)"))?;
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!("invalid project.json - null id for VARIABLE field"))?;
                         vec![
                           IrOpcode::data_variable {
                             VARIABLE: id.to_string(),

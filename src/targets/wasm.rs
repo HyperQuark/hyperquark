@@ -38,7 +38,7 @@ fn instructions(
                         context
                             .target_index
                             .try_into()
-                            .map_err(|_| make_hq_bug!("target index out of bounds (E002)"))?,
+                            .map_err(|_| make_hq_bug!("target index out of bounds"))?,
                     ),
                     Call(func_indices::LOOKS_THINK),
                 ]
@@ -53,7 +53,7 @@ fn instructions(
                         context
                             .target_index
                             .try_into()
-                            .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                            .map_err(|_| make_hq_bug!("target index out of bounds"))?,
                     ),
                     Call(func_indices::LOOKS_SAY),
                 ]
@@ -104,7 +104,7 @@ fn instructions(
                     }
                 }
                 .try_into()
-                .map_err(|_| make_hq_bug!("string index out of bounds (E022)"))?;
+                .map_err(|_| make_hq_bug!("string index out of bounds"))?;
                 if expected_output == Any {
                     actual_output = Any;
                     vec![
@@ -122,12 +122,12 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .ok_or(make_hq_bug!("couldn't find variable index (E033)"))?
+                .ok_or(make_hq_bug!("couldn't find variable index"))?
                 .try_into()
-                .map_err(|_| make_hq_bug!("variable index out of bounds (E034)"))?;
+                .map_err(|_| make_hq_bug!("variable index out of bounds"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
-                .map_err(|_| make_hq_bug!("variable offset out of bounds (E035)"))?;
+                .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             vec![
                 I32Const(0),
                 I32Load(MemArg {
@@ -149,12 +149,12 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .ok_or(make_hq_bug!("couldn't find variable index (E033)"))?
+                .ok_or(make_hq_bug!("couldn't find variable index"))?
                 .try_into()
-                .map_err(|_| make_hq_bug!("variable index out of bounds (E034)"))?;
+                .map_err(|_| make_hq_bug!("variable index out of bounds"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
-                .map_err(|_| make_hq_bug!("variable offset out of bounds (E035)"))?;
+                .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             vec![
                 LocalSet(step_func_locals::I64),
                 LocalSet(step_func_locals::I32),
@@ -180,12 +180,12 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .ok_or(make_hq_bug!("couldn't find variable index (E033)"))?
+                .ok_or(make_hq_bug!("couldn't find variable index"))?
                 .try_into()
-                .map_err(|_| make_hq_bug!("variable index out of bounds (E034)"))?;
+                .map_err(|_| make_hq_bug!("variable index out of bounds"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
-                .map_err(|_| make_hq_bug!("variable offset out of bounds (E035)"))?;
+                .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             vec![
                 LocalSet(step_func_locals::I64),
                 LocalSet(step_func_locals::I32),
@@ -433,7 +433,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_SETCOLOR),
         ],
@@ -442,7 +442,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_CHANGECOLORPARAM),
         ],
@@ -451,7 +451,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_SETCOLORPARAM),
         ],
@@ -460,7 +460,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_CHANGESIZE),
         ],
@@ -484,7 +484,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_SETHUE),
         ],
@@ -493,7 +493,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("target index out of bounds (E003)"))?,
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_CHANGEHUE),
         ],
@@ -515,7 +515,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E009)"))?,
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -532,7 +532,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E010)"))?,
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -541,7 +541,7 @@ fn instructions(
                 I32Store(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E011)"))?,
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -564,7 +564,7 @@ fn instructions(
                 I32Const(
                     next_step_index
                         .try_into()
-                        .map_err(|_| make_hq_bug!("step index out of bounds (E001)"))?,
+                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
                 ),
                 I32Store(MemArg {
                     offset: threads_offset,
@@ -608,7 +608,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E009)"))?,
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -625,7 +625,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E010)"))?,
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -634,7 +634,7 @@ fn instructions(
                 I32Store(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E011)"))?,
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -660,7 +660,7 @@ fn instructions(
                 I32Const(
                     next_step_index
                         .try_into()
-                        .map_err(|_| make_hq_bug!("step index out of bounds (E001)"))?,
+                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
                 ),
                 I32Store(MemArg {
                     offset: threads_offset,
@@ -1719,7 +1719,7 @@ impl TryFrom<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E015)"))?,
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
@@ -1727,13 +1727,13 @@ impl TryFrom<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Mul);
             let thread_start_count: i32 = (*thread_start_counts.get(&start_type).unwrap_or(&0))
                 .try_into()
-                .map_err(|_| make_hq_bug!("start_type count out of bounds (E017)"))?;
+                .map_err(|_| make_hq_bug!("start_type count out of bounds"))?;
             func.instruction(&Instruction::I32Const(thread_start_count * THREAD_BYTE_LEN));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Const(
                 index
                     .try_into()
-                    .map_err(|_| make_hq_bug!("step func index out of bounds (E006)"))?,
+                    .map_err(|_| make_hq_bug!("step func index out of bounds"))?,
             ));
             func.instruction(&Instruction::I32Store(MemArg {
                 offset: (byte_offset::VARS as usize
@@ -1758,20 +1758,20 @@ impl TryFrom<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E012)"))?,
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
             func.instruction(&Instruction::I32Const(
                 count
                     .try_into()
-                    .map_err(|_| make_hq_bug!("thread_start count out of bounds (E014)"))?,
+                    .map_err(|_| make_hq_bug!("thread_start count out of bounds"))?,
             ));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Store(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E016)"))?,
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
@@ -1782,7 +1782,7 @@ impl TryFrom<IrProject> for WasmProject {
             tick_func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds (E013)"))?,
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
@@ -1850,12 +1850,12 @@ impl TryFrom<IrProject> for WasmProject {
             minimum: step_funcs
                 .len()
                 .try_into()
-                .map_err(|_| make_hq_bug!("step_funcs length out of bounds (E007)"))?,
+                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
             maximum: Some(
                 step_funcs
                     .len()
                     .try_into()
-                    .map_err(|_| make_hq_bug!("step_funcs length out of bounds (E008)"))?,
+                    .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
             ),
         });
 
@@ -1864,7 +1864,7 @@ impl TryFrom<IrProject> for WasmProject {
             minimum: string_consts
                 .len()
                 .try_into()
-                .map_err(|_| make_hq_bug!("string_consts len out of bounds (E037)"))?,
+                .map_err(|_| make_hq_bug!("string_consts len out of bounds"))?,
             maximum: None,
         });
 
