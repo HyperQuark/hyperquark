@@ -1,10 +1,10 @@
 #[cfg(feature = "buddy-alloc")]
 mod alloc;
 
+use crate::error::HQError;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use crate::error::HQError;
 use enum_field_getter::EnumFieldGetter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

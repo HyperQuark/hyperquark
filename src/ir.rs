@@ -23,7 +23,7 @@ pub struct IrProject {
 
 impl TryFrom<Sb3Project> for IrProject {
     type Error = HQError;
-    
+
     fn try_from(sb3: Sb3Project) -> Result<IrProject, Self::Error> {
         let vars: Rc<RefCell<Vec<IrVar>>> = Rc::new(RefCell::new(
             sb3.targets
@@ -954,20 +954,35 @@ pub fn step_from_top_block<'a>(
             steps,
             target_id.clone(),
         )?;
-        if next_block.block_info().ok_or(make_hq_bug!(""))?.next.is_none() {
+        if next_block
+            .block_info()
+            .ok_or(make_hq_bug!(""))?
+            .next
+            .is_none()
+        {
             next_id = last_nexts.pop();
         } else {
-            next_id = next_block.block_info().ok_or(make_hq_bug!(""))?.next.clone();
+            next_id = next_block
+                .block_info()
+                .ok_or(make_hq_bug!(""))?
+                .next
+                .clone();
         }
-        if ops.is_empty() { hq_bug!("assertion failed: !ops.is_empty()") };
-        if matches!(ops.last().ok_or(make_hq_bug!(""))?.opcode(), IrOpcode::hq_goto { .. }) {
+        if ops.is_empty() {
+            hq_bug!("assertion failed: !ops.is_empty()")
+        };
+        if matches!(
+            ops.last().ok_or(make_hq_bug!(""))?.opcode(),
+            IrOpcode::hq_goto { .. }
+        ) {
             next_id = None;
         }
         if next_id.is_none() {
             break;
         } else if let Some(block) = blocks.get(&next_id.clone().ok_or(make_hq_bug!(""))?) {
             next_block = block;
-        } else if steps.contains_key(&(target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?)) {
+        } else if steps.contains_key(&(target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?))
+        {
             ops.push(
                 IrOpcode::hq_goto {
                     step: Some((target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?)),
