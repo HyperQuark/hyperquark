@@ -1,6 +1,7 @@
 use crate::ir::{
     BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
 };
+use crate::HQError;
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
@@ -21,7 +22,7 @@ fn instructions(
     context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
     steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
-) -> Vec<Instruction<'static>> {
+) -> Result<Vec<Instruction<'static>>, HQError> {
     use Instruction::*;
     use IrBlockType::*;
     use IrOpcode::*;
@@ -37,7 +38,7 @@ fn instructions(
                         context
                             .target_index
                             .try_into()
-                            .expect("target index out of bounds (E002)"),
+                            .map_err(|_| make_hq_bug!("target index out of bounds"))?,
                     ),
                     Call(func_indices::LOOKS_THINK),
                 ]
@@ -52,7 +53,7 @@ fn instructions(
                         context
                             .target_index
                             .try_into()
-                            .expect("target index out of bounds (E003)"),
+                            .map_err(|_| make_hq_bug!("target index out of bounds"))?,
                     ),
                     Call(func_indices::LOOKS_SAY),
                 ]
@@ -78,7 +79,7 @@ fn instructions(
                     Rc::clone(&context),
                     string_consts,
                     steps,
-                )
+                )?
             } else if expected_output == Any {
                 actual_output = Any;
                 vec![
@@ -103,7 +104,7 @@ fn instructions(
                     }
                 }
                 .try_into()
-                .expect("string index out of bounds (E022)");
+                .map_err(|_| make_hq_bug!("string index out of bounds"))?;
                 if expected_output == Any {
                     actual_output = Any;
                     vec![
@@ -121,12 +122,12 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .expect("couldn't find variable index (E033)")
+                .ok_or(make_hq_bug!("couldn't find variable index"))?
                 .try_into()
-                .expect("variable index out of bounds (E034)");
+                .map_err(|_| make_hq_bug!("variable index out of bounds"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
-                .expect("variable offset out of bounds (E035)");
+                .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             vec![
                 I32Const(0),
                 I32Load(MemArg {
@@ -148,12 +149,12 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .expect("couldn't find variable index (E033)")
+                .ok_or(make_hq_bug!("couldn't find variable index"))?
                 .try_into()
-                .expect("variable index out of bounds (E034)");
+                .map_err(|_| make_hq_bug!("variable index out of bounds"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
-                .expect("variable offset out of bounds (E035)");
+                .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             vec![
                 LocalSet(step_func_locals::I64),
                 LocalSet(step_func_locals::I32),
@@ -179,12 +180,12 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .expect("couldn't find variable index (E033)")
+                .ok_or(make_hq_bug!("couldn't find variable index"))?
                 .try_into()
-                .expect("variable index out of bounds (E034)");
+                .map_err(|_| make_hq_bug!("variable index out of bounds"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
                 .try_into()
-                .expect("variable offset out of bounds (E035)");
+                .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             vec![
                 LocalSet(step_func_locals::I64),
                 LocalSet(step_func_locals::I32),
@@ -232,7 +233,7 @@ fn instructions(
             "log" => vec![Call(func_indices::MATHOP_LOG)],
             "e ^" => vec![Call(func_indices::MATHOP_POW_E)],
             "10 ^" => vec![Call(func_indices::MATHOP_POW10)],
-            _ => panic!("invalid OPERATOR field (E041)"),
+            other => hq_bad_proj!("invalid OPERATOR field \"{}\"", other),
         },
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
@@ -243,72 +244,86 @@ fn instructions(
             I32Const(1),
             I32Store8(MemArg {
                 offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F64Load(MemArg {
                 offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F64Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F64Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_R).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_G).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_B).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_A).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
@@ -319,38 +334,46 @@ fn instructions(
             LocalSet(step_func_locals::F64_2), // x
             I32Const(0),
             I32Load8S(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             If(WasmBlockType::Empty),
             I32Const(0),
             F64Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F64Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F64Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
@@ -358,37 +381,45 @@ fn instructions(
             LocalGet(step_func_locals::F64),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_R).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_G).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_B).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             F32Load(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_A).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
@@ -397,20 +428,24 @@ fn instructions(
             I32Const(0),
             LocalGet(step_func_locals::F64_2),
             F64Store(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::X_POS).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::X_POS).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
             I32Const(0),
             LocalGet(step_func_locals::F64),
             F64Store(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::Y_POS).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::Y_POS).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
@@ -419,10 +454,12 @@ fn instructions(
             I32Const(0),
             I32Const(0),
             I32Store8(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_DOWN).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_DOWN).map_err(|_| make_hq_bug!(""))?,
                 align: 0,
                 memory_index: 0,
             }),
@@ -432,7 +469,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .expect("target index out of bounds (E003)"),
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_SETCOLOR),
         ],
@@ -441,7 +478,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .expect("target index out of bounds (E003)"),
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_CHANGECOLORPARAM),
         ],
@@ -450,7 +487,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .expect("target index out of bounds (E003)"),
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_SETCOLORPARAM),
         ],
@@ -459,7 +496,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .expect("target index out of bounds (E003)"),
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_CHANGESIZE),
         ],
@@ -468,10 +505,12 @@ fn instructions(
             I32Const(0),
             LocalGet(step_func_locals::F64),
             F64Store(MemArg {
-                offset: (context.target_index - 1) as u64 * u64::try_from(SPRITE_INFO_LEN).unwrap()
-                    + u64::try_from(byte_offset::VARS).unwrap()
-                    + u64::try_from(context.vars.borrow().len()).unwrap() * 12
-                    + u64::try_from(sprite_info_offsets::PEN_SIZE).unwrap(),
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * 12
+                    + u64::try_from(sprite_info_offsets::PEN_SIZE).map_err(|_| make_hq_bug!(""))?,
                 align: 2,
                 memory_index: 0,
             }),
@@ -483,7 +522,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .expect("target index out of bounds (E003)"),
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_SETHUE),
         ],
@@ -492,7 +531,7 @@ fn instructions(
                 context
                     .target_index
                     .try_into()
-                    .expect("target index out of bounds (E003)"),
+                    .map_err(|_| make_hq_bug!("target index out of bounds"))?,
             ),
             Call(func_indices::PEN_CHANGEHUE),
         ],
@@ -500,9 +539,10 @@ fn instructions(
         hq_goto { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    * (context.target_num - 1))
                 .try_into()
-                .expect("thread_offset out of bounds");
+                .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
             vec![
                 LocalGet(0),
                 I32Const(threads_offset),
@@ -514,7 +554,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM out of bounds (E009)"),
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -531,7 +571,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM out of bounds (E010)"),
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -540,7 +580,7 @@ fn instructions(
                 I32Store(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM out of bounds (E011)"),
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -552,18 +592,19 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: true,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).unwrap();
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             let threads_offset: u64 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    * (context.target_num - 1))
                 .try_into()
-                .expect("threads_offset length out of bounds");
+                .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
             vec![
                 LocalGet(0),
                 I32Const(
                     next_step_index
                         .try_into()
-                        .expect("step index out of bounds (E001)"),
+                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
                 ),
                 I32Store(MemArg {
                     offset: threads_offset,
@@ -578,12 +619,13 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: false,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).unwrap();
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
                 LocalGet(step_func_locals::MEM_LOCATION),
                 Call(
                     BUILTIN_FUNCS
-                        + u32::try_from(next_step_index).expect("next_step_index out of bounds"),
+                        + u32::try_from(next_step_index)
+                            .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
                 ),
                 Return,
             ]
@@ -591,9 +633,10 @@ fn instructions(
         hq_goto_if { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    * (context.target_num - 1))
                 .try_into()
-                .expect("thread_offset out of bounds");
+                .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -607,7 +650,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM out of bounds (E009)"),
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -624,7 +667,7 @@ fn instructions(
                 I32Load(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM out of bounds (E010)"),
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -633,7 +676,7 @@ fn instructions(
                 I32Store(MemArg {
                     offset: byte_offset::THREAD_NUM
                         .try_into()
-                        .expect("THREAD_NUM out of bounds (E011)"),
+                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                     align: 2,
                     memory_index: 0,
                 }),
@@ -646,12 +689,13 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: true,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).unwrap();
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             let threads_offset: u64 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).unwrap() * (context.target_num - 1))
+                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    * (context.target_num - 1))
                 .try_into()
-                .expect("threads_offset length out of bounds");
+                .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -659,7 +703,7 @@ fn instructions(
                 I32Const(
                     next_step_index
                         .try_into()
-                        .expect("step index out of bounds (E001)"),
+                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
                 ),
                 I32Store(MemArg {
                     offset: threads_offset,
@@ -675,14 +719,15 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: false,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).unwrap();
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(step_func_locals::MEM_LOCATION),
                 Call(
                     BUILTIN_FUNCS
-                        + u32::try_from(next_step_index).expect("next_step_index out of bounds"),
+                        + u32::try_from(next_step_index)
+                            .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
                 ),
                 Return,
                 End,
@@ -731,7 +776,7 @@ fn instructions(
             }),
         ]);
     }
-    instructions
+    Ok(instructions)
 }
 
 pub trait CompileToWasm {
@@ -744,7 +789,7 @@ pub trait CompileToWasm {
         >,
         string_consts: &mut Vec<String>,
         steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
-    ) -> u32;
+    ) -> Result<u32, HQError>;
 }
 
 impl CompileToWasm for (&(String, String), &Step) {
@@ -757,13 +802,14 @@ impl CompileToWasm for (&(String, String), &Step) {
         >,
         string_consts: &mut Vec<String>,
         steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
-    ) -> u32 {
+    ) -> Result<u32, HQError> {
         if step_funcs.contains_key(&Some(self.0.clone())) {
-            return step_funcs
-                .get_index_of(&Some(self.0.clone()))
-                .unwrap()
-                .try_into()
-                .expect("IndexMap index out of bounds");
+            return u32::try_from(
+                step_funcs
+                    .get_index_of(&Some(self.0.clone()))
+                    .ok_or(make_hq_bug!(""))?,
+            )
+            .map_err(|_| make_hq_bug!("IndexMap index out of bounds"));
         }
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
@@ -775,16 +821,15 @@ impl CompileToWasm for (&(String, String), &Step) {
         ];
         let mut func = Function::new_with_locals_types(locals);
         for op in self.1.opcodes() {
-            let instrs = instructions(op, self.1.context(), string_consts, steps);
+            let instrs = instructions(op, self.1.context(), string_consts, steps)?;
             for instr in instrs {
                 func.instruction(&instr);
             }
         }
         func.instruction(&Instruction::End);
         step_funcs.insert(Some(self.0.clone()), func);
-        (step_funcs.len() - 1)
-            .try_into()
-            .expect("step_funcs length out of bounds")
+        u32::try_from(step_funcs.len() - 1)
+            .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))
     }
 }
 
@@ -950,8 +995,10 @@ pub mod sprite_info_offsets {
     pub const PEN_DOWN: i32 = 56;
 }
 
-impl From<IrProject> for WasmProject {
-    fn from(project: IrProject) -> Self {
+impl TryFrom<IrProject> for WasmProject {
+    type Error = HQError;
+
+    fn try_from(project: IrProject) -> Result<Self, Self::Error> {
         let mut module = Module::new();
 
         let mut imports = ImportSection::new();
@@ -1423,12 +1470,12 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(
             (byte_offset::VARS as usize + project.vars.borrow().len() * 12)
                 .try_into()
-                .unwrap(),
+                .map_err(|_| make_hq_bug!(""))?,
         ));
         sprite_update_pen_color_func.instruction(&Instruction::I32Add);
         sprite_update_pen_color_func.instruction(&Instruction::LocalTee(supc_locals::MEM_POS)); // position in memory of sprite info
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_COLOR).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_COLOR).map_err(|_| make_hq_bug!(""))?,
             align: 2,
             memory_index: 0,
         }));
@@ -1438,7 +1485,8 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::HUE)); // hue
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_SATURATION).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_SATURATION)
+                .map_err(|_| make_hq_bug!(""))?,
             align: 2,
             memory_index: 0,
         }));
@@ -1448,7 +1496,7 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalSet(supc_locals::SAT)); // saturation ∈ [0, 256)
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_VALUE).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_VALUE).map_err(|_| make_hq_bug!(""))?,
             align: 2,
             memory_index: 0,
         }));
@@ -1460,7 +1508,8 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(100.0));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_TRANSPARENCY).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_TRANSPARENCY)
+                .map_err(|_| make_hq_bug!(""))?,
             align: 2,
             memory_index: 0,
         })); // transparency ∈ [0, 100]
@@ -1468,13 +1517,13 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(100.0));
         sprite_update_pen_color_func.instruction(&Instruction::F32Div); // alpha ∈ [0, 1]
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_A).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::F32Load(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_A).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
@@ -1482,11 +1531,13 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Lt);
         sprite_update_pen_color_func.instruction(&Instruction::If(WasmBlockType::Empty));
         sprite_update_pen_color_func.instruction(&Instruction::I32Const(
-            supc_locals::MEM_POS.try_into().unwrap(),
+            supc_locals::MEM_POS
+                .try_into()
+                .map_err(|_| make_hq_bug!(""))?,
         ));
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(0.0));
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_A).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_A).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
@@ -1503,21 +1554,21 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL_F));
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_R).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL_F));
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_G).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::MEM_POS));
         sprite_update_pen_color_func.instruction(&Instruction::LocalGet(supc_locals::VAL_F));
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_B).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
@@ -1638,7 +1689,7 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
         sprite_update_pen_color_func.instruction(&Instruction::F32Div);
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_R).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_R).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
@@ -1648,7 +1699,7 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
         sprite_update_pen_color_func.instruction(&Instruction::F32Div);
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_G).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_G).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
@@ -1658,7 +1709,7 @@ impl From<IrProject> for WasmProject {
         sprite_update_pen_color_func.instruction(&Instruction::F32Const(255.0));
         sprite_update_pen_color_func.instruction(&Instruction::F32Div);
         sprite_update_pen_color_func.instruction(&Instruction::F32Store(MemArg {
-            offset: u64::try_from(sprite_info_offsets::PEN_B).unwrap(),
+            offset: u64::try_from(sprite_info_offsets::PEN_B).map_err(|_| make_hq_bug!(""))?,
             align: 0,
             memory_index: 0,
         }));
@@ -1684,16 +1735,16 @@ impl From<IrProject> for WasmProject {
             if step.0 == &("".into(), "".into()) {
                 continue;
             };
-            step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps);
+            step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps)?;
         }
 
         for thread in project.threads {
             let first_idx = project
                 .steps
                 .get_index_of(&(thread.target_id().clone(), thread.first_step().clone()))
-                .unwrap()
+                .ok_or(make_hq_bug!(""))?
                 .try_into()
-                .expect("step index out of bounds");
+                .map_err(|_| make_hq_bug!("step index out of bounds"))?;
             thread_indices.push((thread.start().clone(), first_idx));
         }
 
@@ -1718,7 +1769,7 @@ impl From<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .expect("THREAD_NUM out of bounds (E015)"),
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
@@ -1726,20 +1777,21 @@ impl From<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Mul);
             let thread_start_count: i32 = (*thread_start_counts.get(&start_type).unwrap_or(&0))
                 .try_into()
-                .expect("start_type count out of bounds (E017)");
+                .map_err(|_| make_hq_bug!("start_type count out of bounds"))?;
             func.instruction(&Instruction::I32Const(thread_start_count * THREAD_BYTE_LEN));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Const(
                 index
                     .try_into()
-                    .expect("step func index out of bounds (E006)"),
+                    .map_err(|_| make_hq_bug!("step func index out of bounds"))?,
             ));
             func.instruction(&Instruction::I32Store(MemArg {
                 offset: (byte_offset::VARS as usize
                     + 12 * project.vars.borrow().len()
-                    + usize::try_from(SPRITE_INFO_LEN).unwrap() * (project.targets.len() - 1))
+                    + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                        * (project.targets.len() - 1))
                     .try_into()
-                    .expect("i32.store offset out of bounds"),
+                    .map_err(|_| make_hq_bug!("i32.store offset out of bounds"))?,
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
@@ -1757,20 +1809,20 @@ impl From<IrProject> for WasmProject {
             func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .expect("THREAD_NUM out of bounds (E012)"),
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
             func.instruction(&Instruction::I32Const(
                 count
                     .try_into()
-                    .expect("thread_start count out of bounds (E014)"),
+                    .map_err(|_| make_hq_bug!("thread_start count out of bounds"))?,
             ));
             func.instruction(&Instruction::I32Add);
             func.instruction(&Instruction::I32Store(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .expect("THREAD_NUM out of bounds (E016)"),
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
@@ -1781,7 +1833,7 @@ impl From<IrProject> for WasmProject {
             tick_func.instruction(&Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .expect("THREAD_NUM out of bounds (E013)"),
+                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }));
@@ -1801,9 +1853,10 @@ impl From<IrProject> for WasmProject {
             tick_func.instruction(&Instruction::I32Load(MemArg {
                 offset: (byte_offset::VARS as usize
                     + 12 * project.vars.borrow().len()
-                    + usize::try_from(SPRITE_INFO_LEN).unwrap() * (project.targets.len() - 1))
+                    + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                        * (project.targets.len() - 1))
                     .try_into()
-                    .expect("i32.store offset out of bounds"),
+                    .map_err(|_| make_hq_bug!("i32.store offset out of bounds"))?,
                 align: 2, // 2 ** 2 = 4 (bytes)
                 memory_index: 0,
             }));
@@ -1849,12 +1902,12 @@ impl From<IrProject> for WasmProject {
             minimum: step_funcs
                 .len()
                 .try_into()
-                .expect("step_funcs length out of bounds (E007)"),
+                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
             maximum: Some(
                 step_funcs
                     .len()
                     .try_into()
-                    .expect("step_funcs length out of bounds (E008)"),
+                    .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
             ),
         });
 
@@ -1863,12 +1916,13 @@ impl From<IrProject> for WasmProject {
             minimum: string_consts
                 .len()
                 .try_into()
-                .expect("string_consts len out of bounds (E037)"),
+                .map_err(|_| make_hq_bug!("string_consts len out of bounds"))?,
             maximum: None,
         });
 
         let step_indices = (BUILTIN_FUNCS
-            ..(u32::try_from(step_funcs.len()).expect("step_funcs length out of bounds")
+            ..(u32::try_from(step_funcs.len())
+                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?
                 + BUILTIN_FUNCS))
             .collect::<Vec<_>>();
         let step_func_indices = Elements::Functions(&step_indices[..]);
@@ -1904,7 +1958,7 @@ impl From<IrProject> for WasmProject {
                     .borrow()
                     .len()
                     .try_into()
-                    .expect("vars length out of bounds"),
+                    .map_err(|_| make_hq_bug!("vars length out of bounds"))?,
             ),
         );
 
@@ -1935,11 +1989,11 @@ impl From<IrProject> for WasmProject {
         // data
 
         let wasm_bytes = module.finish();
-        Self {
+        Ok(Self {
             target_names: project.targets.clone(),
             wasm_bytes,
             string_consts,
-        }
+        })
     }
 }
 

@@ -1,6 +1,7 @@
 #[cfg(feature = "buddy-alloc")]
 mod alloc;
 
+use crate::error::HQError;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -421,7 +422,7 @@ pub struct Meta {
 }
 
 impl TryFrom<String> for Sb3Project {
-    type Error = &'static str;
+    type Error = HQError;
 
     fn try_from(string: String) -> Result<Self, Self::Error> {
         (&string[..]).try_into()
@@ -429,18 +430,18 @@ impl TryFrom<String> for Sb3Project {
 }
 
 impl TryFrom<&str> for Sb3Project {
-    type Error = &'static str;
+    type Error = HQError;
 
     fn try_from(string: &str) -> Result<Self, Self::Error> {
         use serde_json::error::Category;
         let sb3: Result<Self, serde_json::Error> = serde_json::from_str(string);
         match sb3 {
             Ok(proj) => Ok(proj),
-            Err(err) => Err(match err.classify() {
-                Category::Syntax => "Invalid JSON syntax",
-                Category::Data => "Invalid project.json",
-                _ => "Failed to deserialize json",
-            }),
+            Err(err) => match err.classify() {
+                Category::Syntax => hq_bad_proj!("Invalid JSON syntax"),
+                Category::Data => hq_bad_proj!("Invalid project.json"),
+                _ => hq_bad_proj!("Failed to deserialize json"),
+            },
         }
     }
 }

@@ -4,7 +4,7 @@
   <input type="checkbox" id="turbo" :value="turbo"> <label for="turbo">turbo mode</label>
   <details v-if="error">
     <summary>An error occured whilst trying to load the project.</summary>
-    {{ error }}
+    <span v-html="error"></span>
   </details>
   <!--<template v-else>-->
     <br>
