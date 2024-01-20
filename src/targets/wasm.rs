@@ -122,7 +122,7 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .map_or(Err(make_hq_bug!("couldn't find variable index (E033)")), Ok)?
+                .ok_or(make_hq_bug!("couldn't find variable index (E033)"))?
                 .try_into()
                 .map_err(|_| make_hq_bug!("variable index out of bounds (E034)"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
@@ -149,7 +149,7 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .map_or(Err(make_hq_bug!("couldn't find variable index (E033)")), Ok)?
+                .ok_or(make_hq_bug!("couldn't find variable index (E033)"))?
                 .try_into()
                 .map_err(|_| make_hq_bug!("variable index out of bounds (E034)"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
@@ -180,7 +180,7 @@ fn instructions(
                 .borrow()
                 .iter()
                 .position(|var| VARIABLE == var.id())
-                .map_or(Err(make_hq_bug!("couldn't find variable index (E033)")), Ok)?
+                .ok_or(make_hq_bug!("couldn't find variable index (E033)"))?
                 .try_into()
                 .map_err(|_| make_hq_bug!("variable index out of bounds (E034)"))?;
             let var_offset: u64 = (byte_offset::VARS + 12 * var_index)
@@ -553,7 +553,7 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: true,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).map_or(Err(make_hq_bug!("")), Ok)?;
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             let threads_offset: u64 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
                 + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))? * (context.target_num - 1))
@@ -579,7 +579,7 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: false,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).map_or(Err(make_hq_bug!("")), Ok)?;
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
                 LocalGet(step_func_locals::MEM_LOCATION),
                 Call(
@@ -647,7 +647,7 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: true,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).map_or(Err(make_hq_bug!("")), Ok)?;
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             let threads_offset: u64 = (byte_offset::VARS as usize
                 + 12 * context.vars.borrow().len()
                 + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))? * (context.target_num - 1))
@@ -676,7 +676,7 @@ fn instructions(
             step: Some(next_step_id),
             does_yield: false,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).map_or(Err(make_hq_bug!("")), Ok)?;
+            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
                 I32WrapI64,
                 If(WasmBlockType::Empty),
@@ -762,7 +762,7 @@ impl CompileToWasm for (&(String, String), &Step) {
         if step_funcs.contains_key(&Some(self.0.clone())) {
             return u32::try_from(step_funcs
                 .get_index_of(&Some(self.0.clone()))
-                .map_or(Err(make_hq_bug!("")), Ok)?)
+                .ok_or(make_hq_bug!(""))?)
                 .map_err(|_| make_hq_bug!("IndexMap index out of bounds"));
         }
         let locals = vec![
@@ -1692,7 +1692,7 @@ impl TryFrom<IrProject> for WasmProject {
             let first_idx = project
                 .steps
                 .get_index_of(&(thread.target_id().clone(), thread.first_step().clone()))
-                .map_or(Err(make_hq_bug!("")), Ok)?
+                .ok_or(make_hq_bug!(""))?
                 .try_into()
                 .map_err(|_| make_hq_bug!("step index out of bounds"))?;
             thread_indices.push((thread.start().clone(), first_idx));
