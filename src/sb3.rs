@@ -438,8 +438,9 @@ impl TryFrom<&str> for Sb3Project {
         match sb3 {
             Ok(proj) => Ok(proj),
             Err(err) => match err.classify() {
-                Category::Syntax => hq_bad_proj!("Invalid JSON syntax"),
-                Category::Data => hq_bad_proj!("Invalid project.json"),
+                Category::Syntax => hq_bad_proj!("Invalid JSON syntax at project.json:{}:{}", err.line(), err.column()),
+                Category::Data => hq_bad_proj!("Invalid project.json at project.json:{}:{}", err.line(), err.column()),
+                Category::Eof => hq_bad_proj!("Unexpected end of file at project.json:{}:{}", err.line(), err.column()),
                 _ => hq_bad_proj!("Failed to deserialize json"),
             },
         }
