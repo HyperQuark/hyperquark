@@ -12,6 +12,8 @@ usage()
   echo "  -v     do not build the website with vite"
   echo "  -W     build wasm"
   echo "  -w     do not build wasm"
+  echo "  -o     do not run wasm-opt"
+  echo "  -O     run wasm-opt"
   exit 1
 }
 
@@ -29,7 +31,7 @@ set_variable()
 }
 
 unset PROD VITE WASM
-while getopts 'dpwvWV' c
+while getopts 'dpwvoWVO' c
 do
   case $c in
     d) set_variable PROD 0 ;;
@@ -38,6 +40,8 @@ do
     w) set_variable WASM 0 ;;
     V) set_variable VITE 1 ;;
     W) set_variable WASM 1 ;;
+    o) set_variable WOPT 0 ;;
+    O) set_variable WOPT 1 ;;
     h|?) usage ;;
   esac
 done
@@ -45,7 +49,14 @@ done
 [ -z $PROD ] && usage
 [ -z $VITE ] && usage
 [ -z $WASM ] && usage
-[ $VITE = "0" ] && [ $WASM = "0" ] && echo "exiting (nothing to build)" && exit 0
+if [ -z $WOPT ]; then
+  if [ $PROD = "1" ]; then
+    set_variable WOPT 1;
+  else
+    set_variable WOPT 0;
+  fi
+fi
+[ $VITE = "0" ] && [ $WASM = "0" ] && [ $WOPT = "0" ] && echo "exiting (nothing to build)" && exit 0
 
 if [ $WASM = "1" ]; then
   if [ $PROD = "1" ]; then
@@ -53,14 +64,16 @@ if [ $WASM = "1" ]; then
     cargo build --target=wasm32-unknown-unknown --release --quiet
     echo running wasm-bindgen...
     wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js
-    echo running wasm-opt...
-    wasm-opt -Oz js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
   else
     echo building hyperquark for development...
     cargo build --target=wasm32-unknown-unknown --quiet
     echo running wasm-bindgen...
     wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js
   fi
+fi
+if [ $WOPT = "1" ]; then
+  echo running wasm-opt...
+  wasm-opt -Oz js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
 fi
 if [ $VITE = "1" ]; then
   echo running npm build...
