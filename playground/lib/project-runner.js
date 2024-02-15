@@ -2,7 +2,7 @@ function createSkin(renderer, type, layer, ...params) {
   let drawable = renderer.createDrawable(layer.toString());
   let skin = renderer[`create${type}Skin`](...params);
   renderer.updateDrawableSkinId(drawable, skin);
-  return skin;
+  return [skin, drawable];
 }
 
 const spriteInfoLen = 56;
@@ -24,7 +24,7 @@ export default (
     window.renderer = renderer;
     renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
     //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
-    const pen_skin = createSkin(renderer, "Pen", "pen");
+    const pen_skin = createSkin(renderer, "Pen", "pen")[0];
     if (typeof require === "undefined") {
       browser = true;
       output_div = document.querySelector("div#hq-output");
@@ -42,14 +42,7 @@ export default (
     }
     let last_output;
     let strings_tbl;
-    const renderBubble = createSkin(
-      renderer,
-      "Text",
-      "sprite",
-      "say",
-      "",
-      false
-    );
+    const target_bubbles = target_names.map(_ => null);
     const wasm_val_to_js = (type, value_i64) => {
       return type === 0
         ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0]
@@ -85,7 +78,18 @@ export default (
           `\x1b[1;32m${targetName} ${verb}:\x1b[0m \x1b[35m${text}\x1b[0m`
         );
       } else {
-        renderer.updateTextSkin(renderBubble, verb, text, false);
+        if (target_bubbles[targetIndex] === null) {
+          target_bubbles[targetIndex] = createSkin(
+            renderer,
+            "Text",
+            "sprite",
+            verb,
+            text,
+            false
+          );
+        } else {
+          renderer.updateTextSkin(target_bubbles[targetIndex][0], verb, text, false);
+        }
       }
     };
     let updatePenColor;
