@@ -1,6 +1,15 @@
 # build script for hyperquark
 # a lot of code here was adapted from https://www.shellscript.sh/examples/getopts/
 
+trap "err" ERR # exit if any command returns a non-zero exit code
+
+
+err()
+{
+  echo;
+  echo Exiting early since previous build step failed!;
+  exit 1;
+}
 usage()
 {
   echo "Usage: $0 [options]"
