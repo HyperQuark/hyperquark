@@ -19,14 +19,16 @@ You may need to run `chmod +x build.sh` if it says it doesn't have permission.
 
 The build script has additonal configuration options; run `./build.sh -h` for info on these.
 
+If you experience runtime stack overflow errors in debug mode, try using the `-O` option to enable wasm-opt.
+
 ## generared WASM module memory layout
 
 |    name       |                           number of bytes                            | optional? | description                                                                                                                                                                                                                                                                                                        |
 | :-----------: | :------------------------------------------------------------------: | :-------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | redraw_requested |                                 4                                  |    no     | if a redraw has been requested or not                                                                                                                                                                                                                                                                            |
 | thread_num | 4 | no | the number of currently running threads |
-| vars | 12 \* number of global & local variables | yes | see [variables](#variables) |
-| sprite_info | 56 \* number of sprites (i.e. target num -1) | yes | see [sprite info](#sprite-info)
+| vars | 16 \* number of global & local variables | yes | see [variables](#variables) |
+| sprite_info | 80 \* number of sprites (i.e. `target num - 1`) | yes | see [sprite info](#sprite-info)
 | threads | 4 \* thread_num | no | imdices of the next step funcs of currently running threads |
 <!--|    pen        |                       360 \* 480 \* 4 = 691200                       |    yes    | present if pen is used; the pen layer: 4 bytes for each rgba pixel, from left to right, top to bottom                                                                                                                                                                                                              |
 | spriteData    |                      43(?) \* number of sprites                      |    yes    | for each sprite (**not target**), 4 bytes each (1 f32 each) for: x, y, size, direction, costume number, pitch, pan,layer number; plus 1 byte each for: colour effect, ghost effect, mosaic effect, whirl effect, pixelate effect, fisheye effect, brightness effect, volume, visibility, rotation style, draggable |
@@ -47,8 +49,12 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 | 28-31 | f32 | pen_transparency | transparency of pen (0-100) |
 | 32-47 | f32(x4) | pen_color4f | rgba color of pen [(0-1)x4] |
 | 48-55 | f64 | pen_size | pen radius |
-| 56    | u8  | pen_down | whether the pen is down (1) or not (0) |
-| 57-63 | ?   | padding | padding |
+| 56 | i8 | pen_down | `1` if pen down else `0` |
+| 57 | i8 | visible | `1` if sprite is visible else `0` |
+| 58-59 | - | padding | reserved |
+| 60-63 | i32 | costume | the current costume number, 0-indexed |
+| 64-71 | f64 | size | sprite size |
+| 72-79 | f64 | rotation | sprite rotation, in scratch angles (0 = up, 90 = right) |
 <!--| 56-57 | ?   | padding | padding |--> 
 
 ### Variables
@@ -56,15 +62,20 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 | byte | description                          |
 | :--: | :-----------------------------------: |
 | 0-3  | identifies the [type](#variable-types) of the variable  |
-| 4-11 | identifies the value of the variable |
+| 4-7 | padding
+| 8-15 | identifies the value of the variable |
 
 #### Variable types
 
 | value |            type           | variable value type | value description                                                         |
 | :---: | :-----------------------: | :-----------------: | :-----------------------------------------------------------------------: |
 | 0x00  |           float64         |        `f64`        |                            a float                               |
-| 0x01  |           bool64          |        `i64`        |   an integer - the least significant bit is the one we actually care about for booleans   |
+| 0x01  |           bool64          |        `i64`        |   an integer - only the least significant bit is used   |
 | 0x02  | externref string (64 bit) |        `i64`        | wrapped to a 32 bit pointer to an `externref` value in the `anyref` table |
+
+### Memory layout guarantees
+
+All values should be guaranteed to have the maximum possible alignment for that value type. Unused/padding bytes are not guaranteed to have any specific values and may be overwritten.
 
 ## License
 

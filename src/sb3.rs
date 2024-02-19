@@ -290,13 +290,20 @@ pub struct BlockInfo {
     pub mutation: Mutation,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum CostumeDataFormat {
+    svg,
+    bitmap,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Costume {
     pub asset_id: String,
     pub name: String,
     pub md5ext: String,
-    pub data_format: String,
+    pub data_format: CostumeDataFormat,
     #[serde(default)]
     pub bitmap_resolution: f64,
     pub rotation_center_x: f64,
@@ -438,9 +445,21 @@ impl TryFrom<&str> for Sb3Project {
         match sb3 {
             Ok(proj) => Ok(proj),
             Err(err) => match err.classify() {
-                Category::Syntax => hq_bad_proj!("Invalid JSON syntax at project.json:{}:{}", err.line(), err.column()),
-                Category::Data => hq_bad_proj!("Invalid project.json at project.json:{}:{}", err.line(), err.column()),
-                Category::Eof => hq_bad_proj!("Unexpected end of file at project.json:{}:{}", err.line(), err.column()),
+                Category::Syntax => hq_bad_proj!(
+                    "Invalid JSON syntax at project.json:{}:{}",
+                    err.line(),
+                    err.column()
+                ),
+                Category::Data => hq_bad_proj!(
+                    "Invalid project.json at project.json:{}:{}",
+                    err.line(),
+                    err.column()
+                ),
+                Category::Eof => hq_bad_proj!(
+                    "Unexpected end of file at project.json:{}:{}",
+                    err.line(),
+                    err.column()
+                ),
                 _ => hq_bad_proj!("Failed to deserialize json"),
             },
         }

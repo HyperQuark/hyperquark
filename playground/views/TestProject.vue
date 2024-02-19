@@ -1,9 +1,9 @@
 <template>
     <Suspense>
-    <ProjectPlayer :json="json" title="HQ test project" author="HyperQuark"></ProjectPlayer>
-    <template #fallback>
-        <Loading></Loading>
-    </template>
+      <ProjectPlayer :json="json" title="HQ test project" author="HyperQuark"></ProjectPlayer>
+      <template #fallback>
+          <Loading></Loading>
+      </template>
     </Suspense>
 </template>
 

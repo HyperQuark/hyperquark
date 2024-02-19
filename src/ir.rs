@@ -1,6 +1,6 @@
 // intermediate representation
 use crate::sb3::{
-    Block, BlockArray, BlockArrayOrId, BlockOpcode, Field, Input, Sb3Project, VarVal, VariableInfo,
+    Block, BlockArray, BlockArrayOrId, BlockOpcode, CostumeDataFormat, Field, Input, Sb3Project, VarVal, VariableInfo,
 };
 use crate::HQError;
 use alloc::collections::BTreeMap;
@@ -13,11 +13,19 @@ use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct IrCostume {
+    pub name: String,
+    pub data_format: CostumeDataFormat,
+    pub md5ext: String,
+}
+
 #[derive(Debug)]
 pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<RefCell<Vec<IrVar>>>,
     pub targets: Vec<String>,
+    pub costumes: Vec<Vec<IrCostume>>, // (name, assetName)
     pub steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
 }
 
@@ -40,6 +48,17 @@ impl TryFrom<Sb3Project> for IrProject {
                 })
                 .collect(),
         ));
+        
+        let costumes: Vec<Vec<IrCostume>> = sb3.targets.iter().map(|target| {
+            target.costumes.iter().map(|costume| {
+                IrCostume {
+                    name: costume.name.clone(),
+                    data_format: costume.data_format,
+                    md5ext: costume.md5ext.clone(),
+                    //data: load_asset(costume.md5ext.as_str()),
+                }
+            }).collect()
+        }).collect();
 
         let mut steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>> =
             Default::default();
@@ -54,6 +73,7 @@ impl TryFrom<Sb3Project> for IrProject {
                     dbg: false,
                     vars: Rc::new(RefCell::new(vec![])),
                     target_num: sb3.targets.len(),
+                    costumes: vec![],
                 }),
             ),
         );
@@ -80,6 +100,7 @@ impl TryFrom<Sb3Project> for IrProject {
                     }),
                     vars: Rc::clone(&vars),
                     target_num: sb3.targets.len(),
+                    costumes: costumes.get(target_index).ok_or(make_hq_bug!(""))?.clone(),
                 });
                 let thread = Thread::from_hat(
                     block.clone(),
@@ -101,6 +122,7 @@ impl TryFrom<Sb3Project> for IrProject {
             threads,
             targets,
             steps,
+            costumes,
         })
     }
 }
@@ -204,7 +226,6 @@ pub enum IrOpcode {
     looks_size,
     looks_costumenumbername,
     looks_backdropnumbername,
-    looks_costume,
     looks_backdrops,
     math_angle {
         NUM: f64,
@@ -422,15 +443,15 @@ impl IrOpcode {
             operator_add | operator_subtract | operator_multiply | operator_divide
             | operator_mod | operator_random => BlockDescriptor::new(vec![Number, Number], Number),
             operator_round | operator_mathop { .. } => BlockDescriptor::new(vec![Number], Number),
-            looks_say | looks_think => BlockDescriptor::new(vec![Any], Stack),
+            looks_say | looks_think | data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
             math_number { .. }
             | math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
             | math_positive_number { .. }
-            | sensing_timer => BlockDescriptor::new(vec![], Number),
+            | sensing_timer
+            | looks_size => BlockDescriptor::new(vec![], Number),
             data_variable { .. } => BlockDescriptor::new(vec![], Any),
-            data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
             text { .. } => BlockDescriptor::new(vec![], Text),
             operator_lt | operator_gt => BlockDescriptor::new(vec![Number, Number], Boolean),
             operator_equals | operator_contains => BlockDescriptor::new(vec![Any, Any], Boolean),
@@ -455,7 +476,12 @@ impl IrOpcode {
             | pen_setPenShadeToNumber
             | pen_changePenShadeBy
             | pen_setPenHueToNumber
-            | pen_changePenHueBy => BlockDescriptor::new(vec![Number], Stack),
+            | pen_changePenHueBy
+            | looks_setsizeto
+            | looks_changesizeby
+            | motion_turnleft
+            // todo: looks_switchcostumeto waiting on generic monomorphisation to work properly
+            | looks_switchcostumeto => BlockDescriptor::new(vec![Number], Stack),
             pen_changePenColorParamBy | pen_setPenColorParamTo => {
                 BlockDescriptor::new(vec![Text, Number], Stack)
             }
@@ -528,6 +554,7 @@ pub struct ThreadContext {
     pub dbg: bool,
     pub vars: Rc<RefCell<Vec<IrVar>>>, // todo: fix variable id collisions between targets
     pub target_num: usize,
+    pub costumes: Vec<IrCostume>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -604,7 +631,7 @@ impl IrBlockVec for Vec<IrBlock> {
         target_id: String,
     ) -> Result<(), HQError> {
         for (name, input) in inputs {
-            if matches!(name.as_str(), "SUBSTACK" | "SUBSTACK2") {
+            if name.starts_with("SUBSTACK") {
                 continue;
             }
             match input {
@@ -712,6 +739,21 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::looks_hide => vec![IrOpcode::looks_hide],
                     BlockOpcode::looks_hideallsprites => vec![IrOpcode::looks_hideallsprites],
                     BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+                    BlockOpcode::looks_costume => {
+                        let val =  match block_info.fields.get("COSTUME").ok_or(make_hq_bad_proj!("invalid project.json - missing field COSTUME"))? {
+                            Field::Value((val,)) => val,
+                            Field::ValueId(val, _) => val,
+                        };/* else {
+                                hq_bad_proj!("invalid project.json - missing costume for COSTUME field");
+                            };*/
+                        let VarVal::String(_name) = val.clone().ok_or(make_hq_bad_proj!("invalid project.json - null costume name for COSTUME field"))? else {
+                            hq_bad_proj!("invalid project.json - COSTUME field is not of type String");
+                        };
+                        let index = 0; // placeholder for now
+                        vec![IrOpcode::math_whole_number {
+                          NUM: index as f64,
+                        }]
+                    },
                     BlockOpcode::looks_switchbackdropto => vec![IrOpcode::looks_switchbackdropto],
                     BlockOpcode::looks_switchbackdroptoandwait => vec![IrOpcode::looks_switchbackdroptoandwait],
                     BlockOpcode::looks_nextcostume => vec![IrOpcode::looks_nextcostume],
@@ -721,6 +763,8 @@ impl IrBlockVec for Vec<IrBlock> {
                     BlockOpcode::looks_cleargraphiceffects => vec![IrOpcode::looks_cleargraphiceffects],
                     BlockOpcode::looks_changesizeby => vec![IrOpcode::looks_changesizeby],
                     BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
+                    BlockOpcode::motion_turnleft => vec![IrOpcode::motion_turnleft],
+                    BlockOpcode::looks_size => vec![IrOpcode::looks_size],
                     BlockOpcode::operator_add => vec![IrOpcode::operator_add],
                     BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
                     BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
@@ -924,7 +968,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::hq_goto { step: Some((target_id, substack_id)), does_yield: false },
                             ]
                     }
-                    _ => hq_todo!(""),
+                    ref other => hq_todo!("unknown block {:?}", other),
                 }).into_iter().map(IrBlock::try_from).collect::<Result<_, _>>()?);
             }
             Block::Special(a) => self.add_block_arr(a)?,
