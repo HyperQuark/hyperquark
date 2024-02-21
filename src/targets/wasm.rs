@@ -1,6 +1,7 @@
 use crate::ir::{
     BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
 };
+use crate::sb3::VarVal;
 use crate::HQError;
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
@@ -11,10 +12,10 @@ use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
-    BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, EntityType,
-    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
-    Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection, TableType,
-    TypeSection, ValType,
+    BlockType as WasmBlockType, CodeSection, ConstExpr, DataSection, ElementSection, Elements,
+    EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
+    ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection,
+    TableType, TypeSection, ValType,
 };
 
 fn instructions(
@@ -477,7 +478,12 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            I32Const(context.target_index.try_into().map_err(|_| make_hq_bug!(""))?),
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!(""))?,
+            ),
             Call(func_indices::EMIT_SPRITE_POS_CHANGE),
         ],
         pen_penUp => vec![
@@ -598,7 +604,12 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            I32Const(context.target_index.try_into().map_err(|_| make_hq_bug!(""))?),
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!(""))?,
+            ),
             Call(func_indices::EMIT_SPRITE_SIZE_CHANGE),
         ],
         motion_turnleft => vec![
@@ -636,7 +647,12 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            I32Const(context.target_index.try_into().map_err(|_| make_hq_bug!(""))?),
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!(""))?,
+            ),
             Call(func_indices::EMIT_SPRITE_ROTATION_CHANGE),
         ],
         looks_changesizeby => vec![
@@ -674,7 +690,12 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            I32Const(context.target_index.try_into().map_err(|_| make_hq_bug!(""))?),
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!(""))?,
+            ),
             Call(func_indices::EMIT_SPRITE_SIZE_CHANGE),
         ],
         looks_switchcostumeto => vec![
@@ -698,7 +719,12 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            I32Const(context.target_index.try_into().map_err(|_| make_hq_bug!(""))?),
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!(""))?,
+            ),
             Call(func_indices::EMIT_SPRITE_COSTUME_CHANGE),
         ],
         hq_drop(n) => vec![Drop; 2 * *n],
@@ -2009,7 +2035,7 @@ impl TryFrom<IrProject> for WasmProject {
                 offset: (byte_offset::VARS as usize
                     + VAR_INFO_LEN as usize * project.vars.borrow().len()
                     + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                        * (project.targets.len() - 1))
+                        * (project.target_names.len() - 1))
                     .try_into()
                     .map_err(|_| make_hq_bug!("i32.store offset out of bounds"))?,
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -2074,7 +2100,7 @@ impl TryFrom<IrProject> for WasmProject {
                 offset: (byte_offset::VARS as usize
                     + VAR_INFO_LEN as usize * project.vars.borrow().len()
                     + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                        * (project.targets.len() - 1))
+                        * (project.target_names.len() - 1))
                     .try_into()
                     .map_err(|_| make_hq_bug!("i32.store offset out of bounds"))?,
                 align: 2, // 2 ** 2 = 4 (bytes)
@@ -2194,6 +2220,53 @@ impl TryFrom<IrProject> for WasmProject {
             func_indices::SPRITE_UPDATE_PEN_COLOR,
         );
 
+        let mut data = DataSection::new();
+
+        let mut default_data: Vec<u8> = Vec::with_capacity(
+            8 + 16 * project.vars.borrow().len() + 80 * (project.target_names.len() - 1),
+        );
+
+        default_data.extend([0; 8]);
+
+        //project.vars;
+
+        for var in project.vars.take() {
+            match var.initial_value() {
+                VarVal::Float(float) => {
+                    default_data.extend([0; 8]);
+                    default_data.extend(float.to_le_bytes());
+                }
+                VarVal::Bool(boolean) => {
+                    default_data.extend(1i64.to_le_bytes());
+                    default_data.extend([0; 4]);
+                    default_data.extend((*boolean as i64).to_le_bytes());
+                }
+                VarVal::String(string) => {
+                    default_data.extend(2i64.to_le_bytes());
+                    default_data.extend([0; 4]);
+                    let index = string_consts.len();
+                    string_consts.push(string.clone());
+                    default_data.extend((index as u64).to_le_bytes());
+                }
+            }
+        }
+
+        for target in project.sb3.targets {
+            if target.is_stage {
+                continue;
+            }
+            default_data.extend(target.x.to_le_bytes());
+            default_data.extend(target.y.to_le_bytes());
+            default_data.extend([0; 41]);
+            default_data.push(target.visible as u8);
+            default_data.extend([0; 2]);
+            default_data.extend(target.current_costume.to_le_bytes());
+            default_data.extend(target.size.to_le_bytes());
+            default_data.extend(target.direction.to_le_bytes());
+        }
+
+        data.active(0, &ConstExpr::i32_const(0), default_data);
+
         module
             .section(&types)
             .section(&imports)
@@ -2205,12 +2278,12 @@ impl TryFrom<IrProject> for WasmProject {
             // start
             .section(&elements)
             // datacount
-            .section(&code);
-        // data
+            .section(&code)
+            .section(&data);
 
         let wasm_bytes = module.finish();
         Ok(Self {
-            target_names: project.targets.clone(),
+            target_names: project.target_names.clone(),
             wasm_bytes,
             string_consts,
         })
