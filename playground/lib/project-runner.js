@@ -10,13 +10,6 @@ function createSkin(renderer, type, layer, ...params) {
   return [skin, drawableId];
 }
 
-const load_asset = async (md5ext) => {
-    const file = props.zip.file(md5ext);
-    const data = await file.async("text")//.then(console.log);
-    console.log(file, data);
-    return data;
-}
-
 const spriteInfoLen = 80;
 
 // @ts-ignore
@@ -40,8 +33,7 @@ export default async (
         ({ md5ext }) => assets[md5ext]
       )
     );
-    console.log(assets)
-    console.log(costumes)
+
     
     const costumeNameMap = project_json.targets.map(
       target => Object.fromEntries(target.costumes.map(
@@ -76,10 +68,17 @@ export default async (
     const target_skins = project_json.targets.map((target, index) => {
       const realCostume = target.costumes[target.currentCostume];
       const costume = costumes[index][target.currentCostume];
-      const [skin, drawable] = createSkin(renderer, costume[0], 'sprite', costume[1], [realCostume.rotationCenterX, realCostume.rotationCenterY]);
-      renderer.getDrawable(drawable).updateVisible(target.visible);
-      return [skin, drawable];
+      const [skin, drawableId] = createSkin(renderer, costume[0], 'sprite', costume[1], [realCostume.rotationCenterX, realCostume.rotationCenterY]);
+      const drawable = renderer.getDrawable(drawableId);
+      if (!target.is_stage) {
+        drawable.updateVisible(target.visible);
+        drawable.updatePosition([target.x, target.y]);
+        drawable.updateDirection(target.rotation);
+        drawable.updateScale([target.size, target.size]);
+      }
+      return [skin, drawableId];
     });
+    console.log(target_skins)
     
     const wasm_val_to_js = (type, value_i64) => {
       return type === 0
@@ -258,17 +257,25 @@ export default async (
         pen_changesize: () => null,
         pen_changehue: () => null,
         pen_sethue: () => null,
-        emit_sprite_pos_change: (i) => null,
+        emit_sprite_pos_change: (i) => {
+          const x = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen) / 8];
+          const y = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 8) / 8];
+          renderer.getDrawable(target_skins[i][1]).updatePosition([x, y]);
+        },
         emit_sprite_x_change: (i) => null,
         emit_sprite_y_change: (i) => null,
         emit_sprite_size_change: (i) => {
-          const size = 100+new Float64Array(memory.buffer)[sprite_info_offset + (i - 1) * spriteInfoLen + 64];
-          console.log(size)
+          const size = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 64) / 8];
           renderer.getDrawable(target_skins[i][1]).updateScale([size, size]);
         },
-        emit_sprite_costume_change: (i) => null,
+        emit_sprite_costume_change: (i) => {
+          const costumeNum = new Int32Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 60) / 4];
+          const costume = costumes[i][costumeNum];
+          renderer.getSkin(target_skins[i][0]).setSVG(costume[1]);
+        },
         emit_sprite_rotation_change: (i) => {
-          renderer.getDrawable(target_skins[i][1]).updateDirection(new Float64Array(memory.buffer)[sprite_info_offset + (i - 1) * spriteInfoLen + 72]);
+          const rot = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 72) / 8]
+          renderer.getDrawable(target_skins[i][1]).updateDirection(rot);
         },
         emit_sprite_visibility_change: (i) => {
           renderer.getDrawable(target_skins[i][1]).updateVisible(!!new Uint8Array(memory.buffer)[sprite_info_offset + (i - 1) * spriteInfoLen + 57]);

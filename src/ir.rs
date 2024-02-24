@@ -4,6 +4,7 @@ use crate::sb3::{
     VarVal, VariableInfo,
 };
 use crate::HQError;
+use crate::log;
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
@@ -760,7 +761,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             }; /* else {
                                    hq_bad_proj!("invalid project.json - missing costume for COSTUME field");
                                };*/
-                            let VarVal::String(_name) = val.clone().ok_or(make_hq_bad_proj!(
+                            let VarVal::String(name) = val.clone().ok_or(make_hq_bad_proj!(
                                 "invalid project.json - null costume name for COSTUME field"
                             ))?
                             else {
@@ -768,7 +769,13 @@ impl IrBlockVec for Vec<IrBlock> {
                                     "invalid project.json - COSTUME field is not of type String"
                                 );
                             };
-                            let index = 0; // placeholder for now
+                            log(&name.as_str());
+                            let index = context
+                                .costumes
+                                .iter()
+                                .position(|costume| costume.name == name)
+                                .ok_or(make_hq_bad_proj!("missing costume with name {}", name))?;
+                            log(&format!("{}", index).as_str());
                             vec![IrOpcode::math_whole_number { NUM: index as f64 }]
                         }
                         BlockOpcode::looks_switchbackdropto => {
