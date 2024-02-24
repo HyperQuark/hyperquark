@@ -42,6 +42,7 @@
     console.log(res, json, zip);
     fileStore.json = json;
     fileStore.title = file.name.replace(/\..+?$/, '');
+    fileStore.zip = zip;
     router.push({ name: 'projectFilePlayer' });
   }
 </script>

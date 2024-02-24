@@ -2,7 +2,7 @@
   <Suspense>
     <ProjectIdPlayer :id="props.id"></ProjectIdPlayer>
     <template #fallback>
-      <Loading></Loading>
+      <Loading>Loading project</Loading>
     </template>
   </Suspense>
 </template>

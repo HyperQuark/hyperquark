@@ -1,30 +1,51 @@
 function createSkin(renderer, type, layer, ...params) {
-  let drawable = renderer.createDrawable(layer.toString());
-  let skin = renderer[`create${type}Skin`](...params);
-  renderer.updateDrawableSkinId(drawable, skin);
-  return [skin, drawable];
+  let drawableId = renderer.createDrawable(layer.toString());
+  const realType = {
+    pen: 'Pen',
+    text: 'Text',
+    svg: 'SVG'
+  }[type.toLowerCase()];
+  let skin = renderer[`create${realType}Skin`](...params);
+  renderer.updateDrawableSkinId(drawableId, skin);
+  return [skin, drawableId];
 }
 
-const spriteInfoLen = 56;
+const spriteInfoLen = 80;
 
 // @ts-ignore
-export default (
-  { framerate = 30, renderer, wasm_bytes, target_names, string_consts } = {
+export default async (
+  { framerate = 30, renderer, wasm_bytes, target_names, string_consts, project_json, assets } = {
     framerate: 30,
   }
-) =>
-  new Promise((resolve, reject) => {
+) => {
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
     let exit;
     let browser = false;
     let output_div;
     let text_div;
+    
+    renderer.getDrawable = id => renderer._allDrawables[id];
+    renderer.getSkin = id => renderer._allSkins[id];
+    
+    const costumes = project_json.targets.map(
+      (target, index) => target.costumes.map(
+        ({ md5ext }) => assets[md5ext]
+      )
+    );
+
+    
+    const costumeNameMap = project_json.targets.map(
+      target => Object.fromEntries(target.costumes.map(
+        ({ name }, index) => [name, index]
+      ))
+    );
+    
     // @ts-ignore
     window.renderer = renderer;
     renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
     //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
-    const pen_skin = createSkin(renderer, "Pen", "pen")[0];
+    const pen_skin = createSkin(renderer, "pen", "pen")[0];
     if (typeof require === "undefined") {
       browser = true;
       output_div = document.querySelector("div#hq-output");
@@ -43,6 +64,22 @@ export default (
     let last_output;
     let strings_tbl;
     const target_bubbles = target_names.map(_ => null);
+    
+    const target_skins = project_json.targets.map((target, index) => {
+      const realCostume = target.costumes[target.currentCostume];
+      const costume = costumes[index][target.currentCostume];
+      const [skin, drawableId] = createSkin(renderer, costume[0], 'sprite', costume[1], [realCostume.rotationCenterX, realCostume.rotationCenterY]);
+      const drawable = renderer.getDrawable(drawableId);
+      if (!target.is_stage) {
+        drawable.updateVisible(target.visible);
+        drawable.updatePosition([target.x, target.y]);
+        drawable.updateDirection(target.rotation);
+        drawable.updateScale([target.size, target.size]);
+      }
+      return [skin, drawableId];
+    });
+    console.log(target_skins)
+    
     const wasm_val_to_js = (type, value_i64) => {
       return type === 0
         ? new Float64Array(new BigInt64Array([value_i64]).buffer)[0]
@@ -81,7 +118,7 @@ export default (
         if (target_bubbles[targetIndex] === null) {
           target_bubbles[targetIndex] = createSkin(
             renderer,
-            "Text",
+            "text",
             "sprite",
             verb,
             text,
@@ -220,6 +257,29 @@ export default (
         pen_changesize: () => null,
         pen_changehue: () => null,
         pen_sethue: () => null,
+        emit_sprite_pos_change: (i) => {
+          const x = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen) / 8];
+          const y = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 8) / 8];
+          renderer.getDrawable(target_skins[i][1]).updatePosition([x, y]);
+        },
+        emit_sprite_x_change: (i) => null,
+        emit_sprite_y_change: (i) => null,
+        emit_sprite_size_change: (i) => {
+          const size = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 64) / 8];
+          renderer.getDrawable(target_skins[i][1]).updateScale([size, size]);
+        },
+        emit_sprite_costume_change: (i) => {
+          const costumeNum = new Int32Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 60) / 4];
+          const costume = costumes[i][costumeNum];
+          renderer.getSkin(target_skins[i][0]).setSVG(costume[1]);
+        },
+        emit_sprite_rotation_change: (i) => {
+          const rot = new Float64Array(memory.buffer)[(sprite_info_offset + (i - 1) * spriteInfoLen + 72) / 8]
+          renderer.getDrawable(target_skins[i][1]).updateDirection(rot);
+        },
+        emit_sprite_visibility_change: (i) => {
+          renderer.getDrawable(target_skins[i][1]).updateVisible(!!new Uint8Array(memory.buffer)[sprite_info_offset + (i - 1) * spriteInfoLen + 57]);
+        },
       },
       cast: {
         stringtofloat: parseFloat,
@@ -232,9 +292,9 @@ export default (
     } catch {
       try {
         new WebAssembly.Module(wasm_bytes);
-        return reject("invalid WASM module");
+        throw new Error("invalid WASM module");
       } catch (e) {
-        return reject("invalid WASM module: " + e.message);
+        throw new Error("invalid WASM module: " + e.message);
       }
     }
     function sleep(ms) {
@@ -273,7 +333,7 @@ export default (
           }
         };
         // @ts-ignore
-        sprite_info_offset = vars_num.value * 12 + thn_offset + 4;
+        sprite_info_offset = vars_num.value * 16 + thn_offset + 4;
         const dv = new DataView(memory.buffer);
         for (let i = 0; i < target_names.length - 1; i++) {
           dv.setFloat32(
@@ -318,7 +378,7 @@ export default (
         }
       })
       .catch((e) => {
-        reject("error when instantiating module:\n" + e.stack);
+        throw new Error("error when instantiating module:\n" + e.stack);
         /*exit(1);*/
       });
-  });
+  };

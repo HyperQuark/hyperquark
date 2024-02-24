@@ -4,7 +4,7 @@
     {{error}}
   </details>
   <template v-else>
-    <ProjectPlayer v-if="file.json !== null" :json="file.json" :assets="file.assets" :title="file.title" :author="file.author"></ProjectPlayer>
+    <ProjectPlayer v-if="file.json !== null" :json="file.json" :assets="file.assets" :title="file.title" :author="file.author" :zip="file.zip"></ProjectPlayer>
     <div v-else>Upload a project: <ProjectFileInput @error="err"></ProjectFileInput></div>
   </template>
 </template>

@@ -16,6 +16,11 @@ pub use error::{HQError, HQErrorType};
 
 use targets::wasm;
 
+#[wasm_bindgen(js_namespace=console)]
+extern "C" {
+    pub fn log(s: &str);
+}
+
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str) -> Result<wasm::WasmProject, HQError> {
     ir::IrProject::try_from(sb3::Sb3Project::try_from(proj)?)?.try_into()

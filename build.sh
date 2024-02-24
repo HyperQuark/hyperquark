@@ -40,7 +40,8 @@ set_variable()
 }
 
 unset PROD VITE WASM
-while getopts 'dpwvoWVO' c
+QUIET=1
+while getopts 'dpwvoWVOhi' c
 do
   case $c in
     d) set_variable PROD 0 ;;
@@ -51,6 +52,7 @@ do
     W) set_variable WASM 1 ;;
     o) set_variable WOPT 0 ;;
     O) set_variable WOPT 1 ;;
+    i) unset QUIET ;;
     h|?) usage ;;
   esac
 done
@@ -70,12 +72,12 @@ fi
 if [ $WASM = "1" ]; then
   if [ $PROD = "1" ]; then
     echo building hyperquark for production...
-    cargo build --target=wasm32-unknown-unknown --release --quiet
+    cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet}
     echo running wasm-bindgen...
     wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js
   else
     echo building hyperquark for development...
-    cargo build --target=wasm32-unknown-unknown --quiet
+    cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet}
     echo running wasm-bindgen...
     wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js
   fi

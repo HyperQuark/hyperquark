@@ -1,5 +1,5 @@
 <template>
-  <ProjectPlayer v-if="success === true" :json="json" :author="author" :title="title"></ProjectPlayer>
+  <ProjectPlayer v-if="success === true" :json="json" :author="author" :title="title" :zip="null"></ProjectPlayer>
   <template v-else>
     <h1>Project not found</h1>
     This could be because it doesn't exist, or it may be private.
