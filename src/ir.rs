@@ -769,13 +769,13 @@ impl IrBlockVec for Vec<IrBlock> {
                                     "invalid project.json - COSTUME field is not of type String"
                                 );
                             };
-                            log(&name.as_str());
+                            log(name.as_str());
                             let index = context
                                 .costumes
                                 .iter()
                                 .position(|costume| costume.name == name)
                                 .ok_or(make_hq_bad_proj!("missing costume with name {}", name))?;
-                            log(&format!("{}", index).as_str());
+                            log(format!("{}", index).as_str());
                             vec![IrOpcode::math_whole_number { NUM: index as f64 }]
                         }
                         BlockOpcode::looks_switchbackdropto => {
