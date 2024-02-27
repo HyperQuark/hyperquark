@@ -655,6 +655,49 @@ fn instructions(
             ),
             Call(func_indices::EMIT_SPRITE_ROTATION_CHANGE),
         ],
+        motion_turnright => vec![
+            I32Const(0),
+            I32Const(0),
+            I32Store8(MemArg {
+                offset: 0,
+                align: 0,
+                memory_index: 0,
+            }),
+            LocalSet(step_func_locals::F64),
+            I32Const(0),
+            F64Load(MemArg {
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * VAR_INFO_LEN
+                    + u64::try_from(sprite_info_offsets::ROTATION).map_err(|_| make_hq_bug!(""))?,
+                align: 3,
+                memory_index: 0,
+            }),
+            LocalGet(step_func_locals::F64),
+            F64Add,
+            LocalSet(step_func_locals::F64),
+            I32Const(0),
+            LocalGet(step_func_locals::F64),
+            F64Store(MemArg {
+                offset: (context.target_index - 1) as u64
+                    * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(byte_offset::VARS).map_err(|_| make_hq_bug!(""))?
+                    + u64::try_from(context.vars.borrow().len()).map_err(|_| make_hq_bug!(""))?
+                        * VAR_INFO_LEN
+                    + u64::try_from(sprite_info_offsets::ROTATION).map_err(|_| make_hq_bug!(""))?,
+                align: 3,
+                memory_index: 0,
+            }),
+            I32Const(
+                context
+                    .target_index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!(""))?,
+            ),
+            Call(func_indices::EMIT_SPRITE_ROTATION_CHANGE),
+        ],
         looks_changesizeby => vec![
             I32Const(0),
             I32Const(0),
