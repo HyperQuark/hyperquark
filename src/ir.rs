@@ -1,10 +1,10 @@
 // intermediate representation
+use crate::log;
 use crate::sb3::{
     Block, BlockArray, BlockArrayOrId, BlockOpcode, CostumeDataFormat, Field, Input, Sb3Project,
     VarVal, VariableInfo,
 };
 use crate::HQError;
-use crate::log;
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
