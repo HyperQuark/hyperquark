@@ -358,47 +358,67 @@ pub enum IrOpcode {
     },
 }
 
-struct TypeStack(pub Option<Rc<RefCell<TypeStack>>>, pub InputType);
+#[derive(Debug, Clone)]
+struct TypeStack(pub Rc<RefCell<Option<TypeStack>>>, pub InputType);
 
-impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {};
-
-pub trait TypeStackImpl {
-  pub get(&self, i) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError> {
-    if i == 0 {
-      Ok(Rc::clone(&self))
-    } else {
-      self.borrow().ok_or(hq_make_bug!(""))?.0.get(i - 1)
+impl TypeStack {
+    pub fn new_some(prev: TypeStack) -> Rc<RefCell<Option<Self>>> {
+        Rc::new(RefCell::new(Some(prev)))
     }
-  }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+pub trait TypeStackImpl {
+    fn get(&self, i: usize) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError>;
+}
+
+impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
+    fn get(&self, i: usize) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError> {
+        if i == 0 {
+            Ok(Rc::clone(self))
+        } else {
+            self.borrow().ok_or(make_hq_bug!(""))?.0.get(i - 1)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct IrBlock {
     pub opcode: IrOpcode,
     pub type_stack: Rc<RefCell<Option<TypeStack>>>,
 }
 
 impl IrBlock {
-    pub fn new_with_inputs<F>(opcode: IrOpcode, inputs: Vec<InputType>, type_stack: Rc<RefCell<Option<TypeStack>>>>, add_cast: F) -> Result<Self, HQError> where 
-        F: FnMut(usize, InputType) {
-      let expected_inputs = opcode.expected_inputs()?;
-      if inputs.len() != expected_inputs.len() {
-        hq_bug!("expected {} inputs, got {}", expected_inputs.len(), inputs.len());
-      }
-      for i in 0..inputs.len() {
-        let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
-        let actual = inputs.get(i).ok_or(make_hq_bug!(""))?;
-        if !expected.includes(actual) {
-          add_cast(i, expected);
+    pub fn new_with_inputs<F>(
+        opcode: IrOpcode,
+        inputs: Vec<InputType>,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+        add_cast: F,
+    ) -> Result<Self, HQError>
+    where
+        F: FnMut(usize, &InputType),
+    {
+        let expected_inputs = opcode.expected_inputs()?;
+        if inputs.len() != expected_inputs.len() {
+            hq_bug!(
+                "expected {} inputs, got {}",
+                expected_inputs.len(),
+                inputs.len()
+            );
         }
-      }
-      let output_stack = opcode.output(inputs, type_stack);
-      IrBlock {
-        opcode,
-        type_stack: output_stack,
-      }
+        for i in 0..inputs.len() {
+            let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
+            let actual = inputs.get(i).ok_or(make_hq_bug!(""))?;
+            if !expected.includes(actual) {
+                add_cast(i, expected);
+            }
+        }
+        let output_stack = opcode.output(inputs, type_stack);
+        Ok(IrBlock {
+            opcode,
+            type_stack: output_stack,
+        })
     }
-    
+
     pub fn does_request_redraw(&self) -> bool {
         use IrOpcode::*;
         matches!(
@@ -436,38 +456,38 @@ impl IrBlock {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum InputType {
-  Any,
-  String,
-  Number,
-  Float,
-  Integer,
-  Boolean,
-  ConcreteInteger,
-  Unknown,
-  Union(Box<InputType>, Box<InputType>),
+    Any,
+    String,
+    Number,
+    Float,
+    Integer,
+    Boolean,
+    ConcreteInteger,
+    Unknown,
+    Union(Box<InputType>, Box<InputType>),
 }
 
 impl InputType {
-  fn base_type(&self) -> InputType {
-    use InputType::*;
-    match self {
-      Any => Union(Box::new(String), Box::new(Number)).base_type(),
-      Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
-      Integer => Union(Box::new(Boolean), Box::new(ConcreteInteger)).base_type(),
-      Union(a, b) => Union(Box::new(a.base_type()), Box::new(b.base_type())),
-      _ => self.clone()
+    fn base_type(&self) -> InputType {
+        use InputType::*;
+        match self {
+            Any => Union(Box::new(String), Box::new(Number)).base_type(),
+            Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
+            Integer => Union(Box::new(Boolean), Box::new(ConcreteInteger)).base_type(),
+            Union(a, b) => Union(Box::new(a.base_type()), Box::new(b.base_type())),
+            _ => self.clone(),
+        }
     }
-  }
-  
-  fn includes(&self, other: Self) {
-    if self.base_type() == other.base_type() {
-      true
-    } else if let InputType::Union(a, b) = self {
-      a.includes(other) || b.includes(other)
-    } else {
-      false
+
+    fn includes(&self, other: &Self) -> bool {
+        if self.base_type() == other.base_type() {
+            true
+        } else if let InputType::Union(a, b) = self {
+            a.includes(other) || b.includes(other)
+        } else {
+            false
+        }
     }
-  }
 }
 
 type OutputType = Option<InputType>;
@@ -477,7 +497,7 @@ impl IrOpcode {
         use IrOpcode::*;
         matches!(self, looks_say | looks_think)
     }
-    
+
     pub fn expected_inputs(&self) -> Result<Vec<InputType>, HQError> {
         use InputType::*;
         use IrOpcode::*;
@@ -485,7 +505,7 @@ impl IrOpcode {
             operator_add | operator_subtract | operator_multiply | operator_divide
             | operator_mod | operator_random => vec![Number, Number],
             operator_round | operator_mathop { .. } => vec![Number],
-            looks_say | looks_think | data_setvariableto { .. } => [Any],
+            looks_say | looks_think | data_setvariableto { .. } => vec![Any],
             math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
@@ -530,61 +550,100 @@ impl IrOpcode {
             _ => hq_todo!("{:?}", &self),
         })
     }
-    
-    pub fn output(&self, inputs: Vec<InputType>, type_stack: Rc<RefCell<Option<TypeStack>>>>) -> Rc<RefCell<Option<TypeStack>>> {
-      let expected_inputs = opcode.expected_inputs()?;
-      if inputs.len() != expected_inputs.len() {
-        hq_bug!("expected {} inputs, got {}", expected_inputs.len(), inputs.len());
-      }
-      let get_input = |i| inputs.get(i).ok_or(make_hq_bug!(""))?;
-      let output = match opcode {
-        data_teevariable => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), get_input(0))))),
-        hq_cast => Some(Rc::new(RefCell::new(TypeStack(type_stack.get(1)?, get_input(0))))),
-        operator_add | operator_subtract | operator_multiply | operator_random | operator_mod => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), if Integer.includes(get_input(0)) && Integer.includes(get_input(1)) {
-            ConcreteInteger
-          } else {
-            Float
-          })))),
-        operator_divide | looks_size | sensing_timer | math_number { .. } => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), Float)))),
-        data_variable => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), Unknown)))),
-        operator_round
-        | operator_length
-        | math_integer { .. }
-        | math_angle { .. }
-        | math_whole_number { .. }
-        | math_positive_number { .. } => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), ConcreteInteger)))),
-        operator_mathop { OPERATOR } => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), match OPERATOR {
-          "CEILING" | "FLOOR" => ConcreteInteger,
-          _ => Float,
-        })))),
-        text { .. } | operator_join | operator_letter_of => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), String)))),
-        operator_contains | operator_and | operator_or | operator_gt | operator_lt | operator_equals | operator_not => Some(Rc::new(RefCell::new(TypeStack(Rc::clone(type_stack), Boolean)))),
-        data_setvariableto
-        | motion_gotoxy
-        | motion_turnleft
-        | motion_turnright
-        | looks_switchcostumeto
-        | looks_changesizeby
-        | looks_setsizeto
-        | looks_say
-        | looks_size
-        | pen_setPenColorToColor
-        | pen_changePenSizeBy
-        | pen_setPenSizeTo
-        | pen_setPenShadeToNumber
-        | pen_changePenShadeBy
-        | pen_setPenHueToNumber
-        | pen_changePenHueBy
-        | pen_clear
-        | pen_penUp
-        | pen_penDown
-        | pen_stamp
-        | sensing_resettimer
-        | hq_goto { .. }
-        | hq_goto_if { .. } => Rc::clone(type_stack),
-        hq_drop(*n) => type_stack.get(n)?,
-      };
-      output
+
+    pub fn output(
+        &self,
+        inputs: Vec<InputType>,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+    ) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError> {
+        use InputType::*;
+        use IrOpcode::*;
+        let expected_inputs = self.expected_inputs()?;
+        if inputs.len() != expected_inputs.len() {
+            hq_bug!(
+                "expected {} inputs, got {}",
+                expected_inputs.len(),
+                inputs.len()
+            );
+        }
+        let get_input = |i| inputs.get(i).ok_or(make_hq_bug!(""))?;
+        let output = match self {
+            data_teevariable { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                get_input(0).clone(),
+            ))),
+            hq_cast(ty) => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.borrow().unwrap().0),
+                ty,
+            ))),
+            operator_add | operator_subtract | operator_multiply | operator_random
+            | operator_mod => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                if Integer.includes(get_input(0)) && Integer.includes(get_input(1)) {
+                    ConcreteInteger
+                } else {
+                    Float
+                },
+            ))),
+            operator_divide | looks_size | sensing_timer | math_number { .. } => Ok(
+                TypeStack::new_some(TypeStack(Rc::clone(&type_stack), Float)),
+            ),
+            data_variable => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                Unknown,
+            ))),
+            operator_round
+            | operator_length
+            | math_integer { .. }
+            | math_angle { .. }
+            | math_whole_number { .. }
+            | math_positive_number { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                ConcreteInteger,
+            ))),
+            operator_mathop { OPERATOR } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                match OPERATOR.as_str() {
+                    "CEILING" | "FLOOR" => ConcreteInteger,
+                    _ => Float,
+                },
+            ))),
+            text { .. } | operator_join | operator_letter_of => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                String,
+            ))),
+            operator_contains | operator_and | operator_or | operator_gt | operator_lt
+            | operator_equals | operator_not => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                Boolean,
+            ))),
+            data_setvariableto { .. }
+            | motion_gotoxy
+            | motion_turnleft
+            | motion_turnright
+            | looks_switchcostumeto
+            | looks_changesizeby
+            | looks_setsizeto
+            | looks_say
+            | looks_size
+            | pen_setPenColorToColor
+            | pen_changePenSizeBy
+            | pen_setPenSizeTo
+            | pen_setPenShadeToNumber
+            | pen_changePenShadeBy
+            | pen_setPenHueToNumber
+            | pen_changePenHueBy
+            | pen_clear
+            | pen_penUp
+            | pen_penDown
+            | pen_stamp
+            | sensing_resettimer
+            | hq_goto { .. }
+            | hq_goto_if { .. } => Ok(Rc::clone(&type_stack)),
+            hq_drop(n) => type_stack.get(n),
+            _ => hq_todo!("{:?}", &self),
+        };
+        output
     }
 }
 
