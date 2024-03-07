@@ -566,20 +566,20 @@ impl IrOpcode {
                 inputs.len()
             );
         }
-        let get_input = |i| inputs.get(i).ok_or(make_hq_bug!(""))?;
+        let get_input = |i| inputs.get(i).ok_or(make_hq_bug!(""));
         let output = match self {
             data_teevariable { .. } => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack),
-                get_input(0).clone(),
+                get_input(0)?.clone(),
             ))),
             hq_cast(ty) => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack.borrow().unwrap().0),
-                ty,
+                ty.clone(),
             ))),
             operator_add | operator_subtract | operator_multiply | operator_random
             | operator_mod => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack),
-                if Integer.includes(get_input(0)) && Integer.includes(get_input(1)) {
+                if Integer.includes(get_input(0)?) && Integer.includes(get_input(1)?) {
                     ConcreteInteger
                 } else {
                     Float
@@ -640,7 +640,7 @@ impl IrOpcode {
             | sensing_resettimer
             | hq_goto { .. }
             | hq_goto_if { .. } => Ok(Rc::clone(&type_stack)),
-            hq_drop(n) => type_stack.get(n),
+            hq_drop(n) => type_stack.get(*n),
             _ => hq_todo!("{:?}", &self),
         };
         output
@@ -683,7 +683,7 @@ pub enum ThreadStart {
     GreenFlag,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Step {
     opcodes: Vec<IrBlock>,
     context: Rc<ThreadContext>,
