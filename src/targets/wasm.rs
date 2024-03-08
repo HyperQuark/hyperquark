@@ -1,5 +1,5 @@
 use crate::ir::{
-    BlockType as IrBlockType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
+    InputType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
 };
 use crate::sb3::VarVal;
 use crate::HQError;
@@ -25,10 +25,10 @@ fn instructions(
     steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
 ) -> Result<Vec<Instruction<'static>>, HQError> {
     use Instruction::*;
-    use IrBlockType::*;
+    use InputType::*;
     use IrOpcode::*;
-    let expected_output = *op.expected_output();
-    let mut actual_output = *op.actual_output();
+    //let expected_output = *op.expected_output();
+    //let mut actual_output = *op.actual_output();
     let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {
@@ -85,7 +85,7 @@ fn instructions(
         | math_angle { NUM }
         | math_whole_number { NUM }
         | math_positive_number { NUM } => {
-            if expected_output == Text {
+           /* if expected_output == Text {
                 actual_output = Text;
                 instructions(
                     &IrBlock::try_from(text {
@@ -101,15 +101,15 @@ fn instructions(
                     I32Const(hq_value_types::FLOAT64),
                     I64Const((*NUM).to_bits() as i64),
                 ]
-            } else {
+            } else {*/
                 vec![F64Const(*NUM)]
-            }
+          //  }
         }
         text { TEXT } => {
-            if expected_output == Number {
+            /*if expected_output == Number {
                 actual_output = Number;
                 vec![F64Const(TEXT.parse().unwrap_or(f64::NAN))]
-            } else {
+            } else {*/
                 let str_idx: i32 = {
                     if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
                         idx
@@ -120,16 +120,16 @@ fn instructions(
                 }
                 .try_into()
                 .map_err(|_| make_hq_bug!("string index out of bounds"))?;
-                if expected_output == Any {
+               /* if expected_output == Any {
                     actual_output = Any;
                     vec![
                         I32Const(hq_value_types::EXTERN_STRING_REF64),
                         I64Const(str_idx.into()),
                     ]
-                } else {
+                } else {*/
                     vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
-                }
-            }
+                //}
+            //}
         }
         data_variable { VARIABLE } => {
             let var_index = context
@@ -969,38 +969,38 @@ fn instructions(
                 End,
             ]
         }
+        hq_cast(from, to) => match (from.clone(), to.clone()) {
+            (String, ConcreteFloat) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
+            (String, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
+            (String, Unknown) => vec![
+                LocalSet(step_func_locals::EXTERNREF),
+                I32Const(hq_value_types::EXTERN_STRING_REF64),
+                LocalGet(step_func_locals::EXTERNREF),
+                Call(func_indices::TABLE_ADD_STRING),
+                I64ExtendI32S,
+            ],
+            (Boolean, ConcreteFloat) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
+            (Boolean, String) => vec![Call(func_indices::CAST_BOOL_STRING)],
+            (Boolean, Unknown) => vec![
+                LocalSet(step_func_locals::I64),
+                I32Const(hq_value_types::BOOL64),
+                LocalGet(step_func_locals::I64),
+            ],
+            (ConcreteFloat, String) => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
+            (ConcreteFloat, Boolean) => vec![Call(func_indices::CAST_FLOAT_BOOL)],
+            (ConcreteFloat, Unknown) => vec![
+                LocalSet(step_func_locals::F64),
+                I32Const(hq_value_types::FLOAT64),
+                LocalGet(step_func_locals::F64),
+                I64ReinterpretF64,
+            ],
+            (Unknown, String) => vec![Call(func_indices::CAST_ANY_STRING)],
+            (Unknown, ConcreteFloat) => vec![Call(func_indices::CAST_ANY_FLOAT)],
+            (Unknown, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
+            _ => hq_todo!("unimplemented cast: {:?} -> {:?}", to, from),
+        }
         other => hq_todo!("missing WASM impl for {:?}", other),
     };
-    instructions.append(&mut match (actual_output, expected_output) {
-        (Text, Number) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
-        (Text, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
-        (Text, Any) => vec![
-            LocalSet(step_func_locals::EXTERNREF),
-            I32Const(hq_value_types::EXTERN_STRING_REF64),
-            LocalGet(step_func_locals::EXTERNREF),
-            Call(func_indices::TABLE_ADD_STRING),
-            I64ExtendI32S,
-        ],
-        (Boolean, Number) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
-        (Boolean, Text) => vec![Call(func_indices::CAST_BOOL_STRING)],
-        (Boolean, Any) => vec![
-            LocalSet(step_func_locals::I64),
-            I32Const(hq_value_types::BOOL64),
-            LocalGet(step_func_locals::I64),
-        ],
-        (Number, Text) => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
-        (Number, Boolean) => vec![Call(func_indices::CAST_FLOAT_BOOL)],
-        (Number, Any) => vec![
-            LocalSet(step_func_locals::F64),
-            I32Const(hq_value_types::FLOAT64),
-            LocalGet(step_func_locals::F64),
-            I64ReinterpretF64,
-        ],
-        (Any, Text) => vec![Call(func_indices::CAST_ANY_STRING)],
-        (Any, Number) => vec![Call(func_indices::CAST_ANY_FLOAT)],
-        (Any, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
-        _ => vec![],
-    });
     if op.does_request_redraw() && !(*op.opcode() == looks_say && context.dbg) {
         instructions.append(&mut vec![
             I32Const(byte_offset::REDRAW_REQUESTED),

@@ -205,7 +205,7 @@ pub enum IrOpcode {
     event_whenbackdropswitchesto,
     event_whengreaterthan,
     event_whenbroadcastreceived,
-    hq_cast(InputType),
+    hq_cast(InputType, InputType),
     hq_drop(usize),
     hq_goto {
         step: Option<(String, String)>,
@@ -369,6 +369,7 @@ impl TypeStack {
 
 pub trait TypeStackImpl {
     fn get(&self, i: usize) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError>;
+    fn len(&self) -> usize;
 }
 
 impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
@@ -377,6 +378,14 @@ impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
             Ok(Rc::clone(self))
         } else {
             self.borrow().ok_or(make_hq_bug!(""))?.0.get(i - 1)
+        }
+    }
+
+    fn len(&self) -> usize {
+        if self.borrow().is_none() {
+            0
+        } else {
+            1 + self.borrow().unwrap().0.len()
         }
     }
 }
@@ -388,31 +397,56 @@ pub struct IrBlock {
 }
 
 impl IrBlock {
-    pub fn new_with_inputs<F>(
+    pub fn new_with_stack<F>(
         opcode: IrOpcode,
-        inputs: Vec<InputType>,
         type_stack: Rc<RefCell<Option<TypeStack>>>,
         add_cast: F,
     ) -> Result<Self, HQError>
     where
-        F: FnMut(usize, &InputType),
+        F: FnMut(usize, &InputType) -> Result<(), HQError>,
     {
         let expected_inputs = opcode.expected_inputs()?;
-        if inputs.len() != expected_inputs.len() {
+        if type_stack.len() != expected_inputs.len() {
             hq_bug!(
                 "expected {} inputs, got {}",
                 expected_inputs.len(),
-                inputs.len()
+                type_stack.len()
             );
         }
-        for i in 0..inputs.len() {
+        for i in 0..type_stack.len() {
             let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
-            let actual = inputs.get(i).ok_or(make_hq_bug!(""))?;
+            let actual = &type_stack.get(i)?.borrow().unwrap().1;
             if !expected.includes(actual) {
-                add_cast(i, expected);
+                add_cast(i, expected)?;
             }
         }
-        let output_stack = opcode.output(inputs, type_stack);
+        let output_stack = opcode.output(type_stack)?;
+        Ok(IrBlock {
+            opcode,
+            type_stack: output_stack,
+        })
+    }
+
+    pub fn new_with_stack_no_cast(
+        opcode: IrOpcode,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+    ) -> Result<Self, HQError> {
+        let expected_inputs = opcode.expected_inputs()?;
+        if type_stack.len() != expected_inputs.len() {
+            hq_bug!(
+                "expected {} inputs, got {}",
+                expected_inputs.len(),
+                type_stack.len()
+            );
+        }
+        for i in 0..type_stack.len() {
+            let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
+            let actual = &type_stack.get(i)?.borrow().unwrap().1;
+            if !expected.includes(actual) {
+                hq_bug!("cast neeed at stack position {:}, -> {:?}, but no casts were expected", i, expected);
+            }
+        }
+        let output_stack = opcode.output(type_stack)?;
         Ok(IrBlock {
             opcode,
             type_stack: output_stack,
@@ -446,11 +480,8 @@ impl IrBlock {
     pub fn opcode(&self) -> &IrOpcode {
         &self.opcode
     }
-    pub fn inputs(&self) -> &Vec<InputType> {
-        &self.inputs
-    }
-    pub fn output(&self) -> &OutputType {
-        &self.output
+    pub fn type_stack(&self) -> Rc<RefCell<Option<TypeStack>>> {
+        Rc::clone(&self.type_stack)
     }
 }
 
@@ -530,7 +561,7 @@ impl IrOpcode {
             | pen_penUp => vec![],
             hq_goto_if { .. } => vec![Boolean],
             hq_drop(n) => vec![Any; *n],
-            hq_cast(ty) => vec![*ty],
+            hq_cast(from, to) => vec![*from],
             data_teevariable { .. } => vec![Any],
             pen_setPenColorToColor
             | pen_changePenSizeBy
@@ -553,28 +584,27 @@ impl IrOpcode {
 
     pub fn output(
         &self,
-        inputs: Vec<InputType>,
         type_stack: Rc<RefCell<Option<TypeStack>>>,
     ) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError> {
         use InputType::*;
         use IrOpcode::*;
         let expected_inputs = self.expected_inputs()?;
-        if inputs.len() != expected_inputs.len() {
+        if type_stack.len() != expected_inputs.len() {
             hq_bug!(
                 "expected {} inputs, got {}",
                 expected_inputs.len(),
-                inputs.len()
+                type_stack.len()
             );
         }
-        let get_input = |i| inputs.get(i).ok_or(make_hq_bug!(""));
+        let get_input = |i| type_stack.get(type_stack.len() - 1 - i).map_err(|_| make_hq_bug!("")).map(|ts| &ts.borrow().unwrap().1);
         let output = match self {
             data_teevariable { .. } => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack),
                 get_input(0)?.clone(),
             ))),
-            hq_cast(ty) => Ok(TypeStack::new_some(TypeStack(
+            hq_cast(_from, to) => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack.borrow().unwrap().0),
-                ty.clone(),
+                to.clone(),
             ))),
             operator_add | operator_subtract | operator_multiply | operator_random
             | operator_mod => Ok(TypeStack::new_some(TypeStack(
@@ -739,11 +769,11 @@ trait IrBlockVec {
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
     ) -> Result<(), HQError>;
-    fn fixup_types(&mut self) -> Result<(), HQError>;
+    //fn fixup_types(&mut self) -> Result<(), HQError>;
 }
 
 impl IrBlockVec for Vec<IrBlock> {
-    fn fixup_types(&mut self) -> Result<(), HQError> {
+    /*fn fixup_types(&mut self) -> Result<(), HQError> {
         let mut type_stack: Vec<(usize, BlockType)> = vec![];
         let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
         for (index, op) in self.iter().enumerate() {
@@ -777,7 +807,7 @@ impl IrBlockVec for Vec<IrBlock> {
                 .set_expected_output(ty);
         }
         Ok(())
-    }
+    }*/
     fn add_inputs(
         &mut self,
         inputs: &BTreeMap<String, Input>,
@@ -816,7 +846,26 @@ impl IrBlockVec for Vec<IrBlock> {
         Ok(())
     }
     fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError> {
-        self.push(
+        let prev_block = self.get(self.len() - 1);
+        let type_stack = if let Some(block) = prev_block {
+            Rc::clone(&block.type_stack)
+        } else {
+            Rc::new(RefCell::new(None))
+        };
+        let mut add_cast = |i, ty: &InputType| {
+            let this_prev_block = self.get(i);
+            let this_type_stack = if let Some(block) = prev_block {
+                Rc::clone(&block.type_stack)
+            } else {
+                Rc::new(RefCell::new(None))
+            };
+            self.insert(i + 1, IrBlock::new_with_stack_no_cast(
+                IrOpcode::hq_cast(this_type_stack.borrow().unwrap().1, ty.clone()),
+                this_type_stack,
+            )?);
+            Ok(())
+        };
+        self.push(IrBlock::new_with_stack(
             match block_arr {
                 BlockArray::NumberOrAngle(ty, value) => match ty {
                     4 => IrOpcode::math_number { NUM: *value },
@@ -860,8 +909,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     },
                     _ => hq_todo!(""),
                 },
-            }
-            .try_into()?,
+            }, type_stack, add_cast)?,
         );
         Ok(())
     }
@@ -884,8 +932,26 @@ impl IrBlockVec for Vec<IrBlock> {
                     steps,
                     target_id.clone(),
                 )?;
-
-                self.append(
+                let prev_block = self.get(self.len() - 1);
+                let type_stack = if let Some(block) = prev_block {
+                    Rc::clone(&block.type_stack)
+                } else {
+                    Rc::new(RefCell::new(None))
+                };
+                let mut add_cast = |i, ty: &InputType| {
+                    let this_prev_block = self.get(i);
+                    let this_type_stack = if let Some(block) = prev_block {
+                        Rc::clone(&block.type_stack)
+                    } else {
+                        Rc::new(RefCell::new(None))
+                    };
+                    self.insert(i + 1, IrBlock::new_with_stack_no_cast(
+                        IrOpcode::hq_cast(this_type_stack.borrow().unwrap().1, ty.clone()),
+                        this_type_stack,
+                    )?);
+                    Ok(())
+                };
+                let ops =
                     &mut (match block_info.opcode {
                         BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
                         BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
@@ -1209,23 +1275,21 @@ impl IrBlockVec for Vec<IrBlock> {
                                 false,
                             ));
                             if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
-                                let mut looper_opcodes = vec![
-                                    IrOpcode::data_variable {
-                                        VARIABLE: looper_id.clone(),
-                                    }
-                                    .try_into()?,
-                                    IrOpcode::math_number { NUM: 1.0 }.try_into()?,
-                                    IrOpcode::operator_subtract.try_into()?,
+                                let type_stack = Rc::new(RefCell::new(None));
+                                let mut looper_opcodes = vec![];
+                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(IrOpcode::data_variable {
+                                    VARIABLE: looper_id.clone(),
+                                }, type_stack)?);
+                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(IrOpcode::math_number { NUM: 1.0 }, Rc::clone(looper_opcodes.get(0).unwrap().type_stack))?);
+                                    IrOpcode::operator_subtract;
                                     IrOpcode::data_teevariable {
                                         VARIABLE: looper_id.clone(),
-                                    }
-                                    .try_into()?,
-                                    IrOpcode::math_number { NUM: 1.0 }.try_into()?,
-                                    IrOpcode::operator_lt.try_into()?,
-                                ];
+                                    };
+                                    IrOpcode::math_number { NUM: 1.0 };
+                                    IrOpcode::operator_lt;
                                 //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                                 looper_opcodes.append(&mut condition_opcodes.clone());
-                                looper_opcodes.fixup_types()?;
+                                //looper_opcodes.fixup_types()?;
                                 steps.insert(
                                     (target_id.clone(), looper_id.clone()),
                                     Step::new(looper_opcodes, Rc::clone(&context)),
@@ -1256,7 +1320,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 target_id.clone(),
                             )?;
                             opcodes.append(&mut condition_opcodes);
-                            opcodes.fixup_types()?;
+                            //opcodes.fixup_types()?;
                             steps.insert(
                                 (target_id.clone(), block_id.clone()),
                                 Step::new(opcodes.clone(), Rc::clone(&context)),
@@ -1321,7 +1385,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                     target_id.clone(),
                                 )?;
                                 looper_opcodes.append(&mut condition_opcodes.clone());
-                                looper_opcodes.fixup_types()?;
+                                //looper_opcodes.fixup_types()?;
                                 steps.insert(
                                     (target_id.clone(), looper_id.clone()),
                                     Step::new(looper_opcodes, Rc::clone(&context)),
@@ -1352,7 +1416,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 target_id.clone(),
                             )?;
                             opcodes.append(&mut condition_opcodes);
-                            opcodes.fixup_types()?;
+                            //opcodes.fixup_types()?;
                             steps.insert(
                                 (target_id.clone(), block_id.clone()),
                                 Step::new(opcodes.clone(), Rc::clone(&context)),
@@ -1398,7 +1462,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 let mut looper_opcodes = vec![];
                                 //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                                 looper_opcodes.append(&mut condition_opcodes.clone());
-                                looper_opcodes.fixup_types()?;
+                                //looper_opcodes.fixup_types()?;
                                 steps.insert(
                                     (target_id.clone(), looper_id.clone()),
                                     Step::new(looper_opcodes, Rc::clone(&context)),
@@ -1425,7 +1489,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             let mut opcodes = vec![];
                             //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
                             opcodes.append(&mut condition_opcodes);
-                            opcodes.fixup_types()?;
+                            //opcodes.fixup_types()?;
                             steps.insert(
                                 (target_id.clone(), block_id.clone()),
                                 Step::new(opcodes.clone(), Rc::clone(&context)),
@@ -1441,9 +1505,9 @@ impl IrBlockVec for Vec<IrBlock> {
                         ref other => hq_todo!("unknown block {:?}", other),
                     })
                     .into_iter()
-                    .map(IrBlock::try_from)
-                    .collect::<Result<_, _>>()?,
-                );
+                    .map(|opcode| IrBlock::new_with_stack(opcode, type_stack, add_cast))
+                    .collect::<Result<_, _>>()?;
+                    self.append(ops);
             }
             Block::Special(a) => self.add_block_arr(a)?,
         };
@@ -1524,7 +1588,7 @@ pub fn step_from_top_block<'a>(
             break;
         }
     }
-    ops.fixup_types()?;
+    //ops.fixup_types()?;
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
     step.opcodes_mut().push(if let Some(ref id) = next_id {
         step_from_top_block(
