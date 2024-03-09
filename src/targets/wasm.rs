@@ -1,6 +1,4 @@
-use crate::ir::{
-    InputType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart,
-};
+use crate::ir::{InputType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart};
 use crate::sb3::VarVal;
 use crate::HQError;
 use alloc::collections::BTreeMap;
@@ -24,8 +22,8 @@ fn instructions(
     string_consts: &mut Vec<String>,
     steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
 ) -> Result<Vec<Instruction<'static>>, HQError> {
-    use Instruction::*;
     use InputType::*;
+    use Instruction::*;
     use IrOpcode::*;
     //let expected_output = *op.expected_output();
     //let mut actual_output = *op.actual_output();
@@ -85,7 +83,7 @@ fn instructions(
         | math_angle { NUM }
         | math_whole_number { NUM }
         | math_positive_number { NUM } => {
-           /* if expected_output == Text {
+            /* if expected_output == Text {
                 actual_output = Text;
                 instructions(
                     &IrBlock::try_from(text {
@@ -102,33 +100,33 @@ fn instructions(
                     I64Const((*NUM).to_bits() as i64),
                 ]
             } else {*/
-                vec![F64Const(*NUM)]
-          //  }
+            vec![F64Const(*NUM)]
+            //  }
         }
         text { TEXT } => {
             /*if expected_output == Number {
                 actual_output = Number;
                 vec![F64Const(TEXT.parse().unwrap_or(f64::NAN))]
             } else {*/
-                let str_idx: i32 = {
-                    if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
-                        idx
-                    } else {
-                        string_consts.push(TEXT.clone());
-                        string_consts.len() - 1
-                    }
+            let str_idx: i32 = {
+                if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
+                    idx
+                } else {
+                    string_consts.push(TEXT.clone());
+                    string_consts.len() - 1
                 }
-                .try_into()
-                .map_err(|_| make_hq_bug!("string index out of bounds"))?;
-               /* if expected_output == Any {
-                    actual_output = Any;
-                    vec![
-                        I32Const(hq_value_types::EXTERN_STRING_REF64),
-                        I64Const(str_idx.into()),
-                    ]
-                } else {*/
-                    vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
-                //}
+            }
+            .try_into()
+            .map_err(|_| make_hq_bug!("string index out of bounds"))?;
+            /* if expected_output == Any {
+                actual_output = Any;
+                vec![
+                    I32Const(hq_value_types::EXTERN_STRING_REF64),
+                    I64Const(str_idx.into()),
+                ]
+            } else {*/
+            vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
+            //}
             //}
         }
         data_variable { VARIABLE } => {
@@ -998,7 +996,7 @@ fn instructions(
             (Unknown, ConcreteFloat) => vec![Call(func_indices::CAST_ANY_FLOAT)],
             (Unknown, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
             _ => hq_todo!("unimplemented cast: {:?} -> {:?}", to, from),
-        }
+        },
         other => hq_todo!("missing WASM impl for {:?}", other),
     };
     if op.does_request_redraw() && !(*op.opcode() == looks_say && context.dbg) {
