@@ -968,7 +968,7 @@ fn instructions(
             ]
         }
         hq_cast(from, to) => match (from.clone(), to.clone()) {
-            (String, ConcreteFloat) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
+            (String, Float) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
             (String, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
             (String, Unknown) => vec![
                 LocalSet(step_func_locals::EXTERNREF),
@@ -977,23 +977,23 @@ fn instructions(
                 Call(func_indices::TABLE_ADD_STRING),
                 I64ExtendI32S,
             ],
-            (Boolean, ConcreteFloat) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
+            (Boolean, Float) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
             (Boolean, String) => vec![Call(func_indices::CAST_BOOL_STRING)],
             (Boolean, Unknown) => vec![
                 LocalSet(step_func_locals::I64),
                 I32Const(hq_value_types::BOOL64),
                 LocalGet(step_func_locals::I64),
             ],
-            (ConcreteFloat, String) => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
-            (ConcreteFloat, Boolean) => vec![Call(func_indices::CAST_FLOAT_BOOL)],
-            (ConcreteFloat, Unknown) => vec![
+            (Float, String) => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
+            (Float, Boolean) => vec![Call(func_indices::CAST_FLOAT_BOOL)],
+            (Float, Unknown) => vec![
                 LocalSet(step_func_locals::F64),
                 I32Const(hq_value_types::FLOAT64),
                 LocalGet(step_func_locals::F64),
                 I64ReinterpretF64,
             ],
             (Unknown, String) => vec![Call(func_indices::CAST_ANY_STRING)],
-            (Unknown, ConcreteFloat) => vec![Call(func_indices::CAST_ANY_FLOAT)],
+            (Unknown, Float) => vec![Call(func_indices::CAST_ANY_FLOAT)],
             (Unknown, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
             _ => hq_todo!("unimplemented cast: {:?} -> {:?}", to, from),
         },
