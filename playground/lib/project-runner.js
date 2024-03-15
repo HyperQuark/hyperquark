@@ -18,6 +18,7 @@ export default async (
     framerate: 30,
   }
 ) => {
+    window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
     let exit;
@@ -144,10 +145,10 @@ export default async (
       },
       runtime: {
         looks_say: (ty, val, targetIndex) => {
-          targetOutput(targetIndex, "say", wasm_val_to_js(ty, val));
+          targetOutput(targetIndex, "say", wasm_val_to_js(ty, val).toString());
         },
         looks_think: (ty, val, targetIndex) => {
-          targetOutput(targetIndex, "think", wasm_val_to_js(ty, val));
+          targetOutput(targetIndex, "think", wasm_val_to_js(ty, val).toString());
         },
         operator_equals: (ty1, val1, ty2, val2) => {
           if (ty1 === ty2 && val1 === val2) return true;
@@ -159,12 +160,12 @@ export default async (
         },
         operator_random: (lower, upper) =>
           Math.random() * (upper - lower) + lower,
-        operator_join: (ty1, val1, ty2, val2) =>
-          wasm_val_to_js(ty1, val1).toString() +
-          wasm_val_to_js(ty2, val2).toString(),
+        operator_join: (str1, str2) =>
+          str1.toString() +
+          str2.toString(),
         operator_letterof: (idx, ty, val) =>
           wasm_val_to_js(ty, val).toString()[idx - 1] ?? "",
-        operator_length: (ty, val) => wasm_val_to_js(ty, val).toString().length,
+        operator_length: (str) => str.length,
         operator_contains: (ty1, val1, ty2, val2) =>
           wasm_val_to_js(ty1, val1)
             .toString()

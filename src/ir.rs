@@ -423,7 +423,6 @@ impl IrBlock {
             let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
             let actual = &type_stack.get(i).borrow().clone().unwrap().1;
             if !expected.includes(actual) {
-                dbg!("cast: {:?} -> {:?}, input {}", &actual, &expected, i);
                 add_cast(i, expected);
             }
         }
@@ -446,7 +445,6 @@ impl IrBlock {
                 type_stack.len()
             );
         }
-        dbg!(&type_stack);
         for i in 0..expected_inputs.len() {
             let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
             let actual = &type_stack
@@ -519,18 +517,27 @@ pub enum InputType {
 }
 
 impl InputType {
-    fn base_type(&self) -> InputType {
+    pub fn base_type(&self) -> InputType {
         use InputType::*;
+        // unions of types should be represented with the least restrictive type first, so that casting chooses the less restrictive type to cast to
         match self {
             Any => Union(Box::new(String), Box::new(Number)).base_type(),
             Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
-            Integer => Union(Box::new(Boolean), Box::new(ConcreteInteger)).base_type(),
+            Integer => Union(Box::new(ConcreteInteger), Box::new(Boolean)).base_type(),
             Union(a, b) => Union(Box::new(a.base_type()), Box::new(b.base_type())),
             _ => self.clone(),
         }
     }
 
-    fn includes(&self, other: &Self) -> bool {
+    pub fn least_restrictive_concrete_type(&self) -> InputType {
+        use InputType::*;
+        match self.base_type() {
+            Union(a, _) => a.least_restrictive_concrete_type(),
+            a @ _ => a.clone(),
+        }
+    }
+
+    pub fn includes(&self, other: &Self) -> bool {
         if self.base_type() == other.base_type() {
             true
         } else if let InputType::Union(a, b) = self.base_type() {
@@ -556,7 +563,8 @@ impl IrOpcode {
             operator_add | operator_subtract | operator_multiply | operator_divide
             | operator_mod | operator_random => vec![Number, Number],
             operator_round | operator_mathop { .. } => vec![Number],
-            looks_say | looks_think | data_setvariableto { .. } => vec![Any],
+            looks_say | looks_think => vec![Unknown],
+            data_setvariableto { .. } | data_teevariable { .. } => vec![Unknown],
             math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
@@ -567,7 +575,7 @@ impl IrOpcode {
             | data_variable { .. }
             | text { .. } => vec![],
             operator_lt | operator_gt => vec![Number, Number],
-            operator_equals => vec![Any, Any],
+            operator_equals => vec![Unknown, Unknown],
             operator_and | operator_or => vec![Boolean, Boolean],
             operator_not => vec![Boolean],
             operator_join | operator_contains => vec![String, String],
@@ -582,7 +590,6 @@ impl IrOpcode {
             hq_goto_if { .. } => vec![Boolean],
             hq_drop(n) => vec![Any; *n],
             hq_cast(from, _to) => vec![from.clone()],
-            data_teevariable { .. } => vec![Any],
             pen_setPenColorToColor
             | pen_changePenSizeBy
             | pen_setPenSizeTo
@@ -969,6 +976,7 @@ impl IrBlockVec for Vec<IrBlock> {
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
     ) -> Result<(), HQError> {
+        use InputType::*;
         let block = blocks.get(&block_id).ok_or(make_hq_bug!(""))?;
         match block {
             Block::Normal { block_info, .. } => {
@@ -1325,9 +1333,11 @@ impl IrBlockVec for Vec<IrBlock> {
                                 IrOpcode::hq_cast(InputType::Unknown, InputType::Float), // todo: integer
                                 IrOpcode::math_whole_number { NUM: 1.0 },
                                 IrOpcode::operator_subtract,
+                                IrOpcode::hq_cast(Float, Unknown),
                                 IrOpcode::data_teevariable {
                                     VARIABLE: looper_id.clone(),
                                 },
+                                IrOpcode::hq_cast(Unknown, Float),
                                 IrOpcode::math_whole_number { NUM: 1.0 },
                                 IrOpcode::operator_lt,
                             ]
@@ -1340,15 +1350,10 @@ impl IrBlockVec for Vec<IrBlock> {
                                     ),
                                 )?);
                             }
-                            for op in [
-                                IrOpcode::math_whole_number { NUM: 1.0 },
-                                IrOpcode::operator_lt,
-                            ]
-                            .into_iter()
-                            .chain(condition_opcodes.clone().into_iter())
+                            for op in condition_opcodes.iter()
                             {
                                 looper_opcodes.push(IrBlock::new_with_stack_no_cast(
-                                    op,
+                                    op.clone(),
                                     Rc::clone(
                                         &looper_opcodes.last().ok_or(make_hq_bug!(""))?.type_stack,
                                     ),
@@ -1384,7 +1389,12 @@ impl IrBlockVec for Vec<IrBlock> {
                             steps,
                             target_id.clone(),
                         )?;
-                        for op in condition_opcodes.into_iter() {
+                        for op in [
+                                IrOpcode::math_whole_number { NUM: 1.0 },
+                                IrOpcode::operator_lt,
+                            ]
+                            .into_iter()
+                            .chain(condition_opcodes.clone().into_iter()) {
                             opcodes.push(IrBlock::new_with_stack_no_cast(
                                 op,
                                 Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
@@ -1397,9 +1407,11 @@ impl IrBlockVec for Vec<IrBlock> {
                         );
                         vec![
                             IrOpcode::operator_round,
+                            IrOpcode::hq_cast(Integer, Unknown),
                             IrOpcode::data_teevariable {
                                 VARIABLE: looper_id,
                             },
+                            IrOpcode::hq_cast(Integer, Unknown),
                             IrOpcode::math_number { NUM: 1.0 },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {
@@ -1610,15 +1622,6 @@ impl IrBlockVec for Vec<IrBlock> {
                             .rposition(|b| b.type_stack.len() == type_stack.len() - j)
                             .ok_or(make_hq_bug!(""))?;
                         let cast_stack = self.get_type_stack(Some(cast_pos));
-                        dbg!(
-                            &j,
-                            &type_stack.len(),
-                            &self.len(),
-                            &cast_pos,
-                            &cast_type,
-                            &cast_stack,
-                            &self
-                        );
                         let cast_block = IrBlock::new_with_stack_no_cast(
                             IrOpcode::hq_cast(
                                 {

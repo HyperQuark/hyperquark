@@ -1,4 +1,6 @@
-use crate::ir::{InputType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart};
+use crate::ir::{
+    InputType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart, TypeStackImpl,
+};
 use crate::sb3::VarVal;
 use crate::HQError;
 use alloc::collections::BTreeMap;
@@ -72,12 +74,28 @@ fn instructions(
                 ]
             }
         }
-        operator_add => vec![F64Add],
-        operator_subtract => vec![F64Sub],
+        operator_add => {
+            if InputType::Integer.includes(&op.type_stack.get(0).borrow().clone().unwrap().1)
+                && InputType::Integer.includes(&op.type_stack.get(1).borrow().clone().unwrap().1)
+            {
+                vec![I32Add]
+            } else {
+                vec![F64Add]
+            }
+        }
+        operator_subtract => {
+            if InputType::Integer.includes(&op.type_stack.get(0).borrow().clone().unwrap().1)
+                && InputType::Integer.includes(&op.type_stack.get(1).borrow().clone().unwrap().1)
+            {
+                vec![I32Sub]
+            } else {
+                vec![F64Sub]
+            }
+        }
         operator_divide => vec![F64Div],
-        operator_multiply => vec![F64Mul],
-        operator_mod => vec![Call(func_indices::FMOD)],
-        operator_round => vec![F64Nearest],
+        operator_multiply => vec![F64Mul], // todo: int opt
+        operator_mod => vec![Call(func_indices::FMOD)], // todo: int opt
+        operator_round => vec![F64Nearest, I32TruncF64S],
         math_number { NUM }
         | math_integer { NUM }
         | math_angle { NUM }
@@ -967,7 +985,8 @@ fn instructions(
                 End,
             ]
         }
-        hq_cast(from, to) => match (from.clone(), to.clone()) {
+        hq_cast(from, to) => match (from.clone(), to.least_restrictive_concrete_type()) {
+            // cast from type should always be a concrete type
             (String, Float) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
             (String, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
             (String, Unknown) => vec![
@@ -992,10 +1011,16 @@ fn instructions(
                 LocalGet(step_func_locals::F64),
                 I64ReinterpretF64,
             ],
+            (ConcreteInteger, Unknown) => vec![
+                LocalSet(step_func_locals::I64),
+                I32Const(hq_value_types::INT64),
+                LocalGet(step_func_locals::I64),
+            ],
             (Unknown, String) => vec![Call(func_indices::CAST_ANY_STRING)],
             (Unknown, Float) => vec![Call(func_indices::CAST_ANY_FLOAT)],
             (Unknown, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
-            _ => hq_todo!("unimplemented cast: {:?} -> {:?}", to, from),
+            (Unknown, ConcreteInteger) => vec![Call(func_indices::CAST_ANY_INT)],
+            _ => hq_todo!("unimplemented cast: {:?} -> {:?} at {:?}", to, from, op),
         },
         other => hq_todo!("missing WASM impl for {:?}", other),
     };
@@ -1150,10 +1175,11 @@ pub mod func_indices {
     pub const CAST_ANY_STRING: u32 = 46;
     pub const CAST_ANY_FLOAT: u32 = 47;
     pub const CAST_ANY_BOOL: u32 = 48;
-    pub const TABLE_ADD_STRING: u32 = 49;
-    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 50;
+    pub const CAST_ANY_INT: u32 = 49;
+    pub const TABLE_ADD_STRING: u32 = 50;
+    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 51;
 }
-pub const BUILTIN_FUNCS: u32 = 51;
+pub const BUILTIN_FUNCS: u32 = 52;
 pub const IMPORTED_FUNCS: u32 = 42;
 
 pub mod types {
@@ -1197,6 +1223,7 @@ pub mod types {
     pub const EXTERNREFF64I32_NORESULT: u32 = 36;
     pub const F64x3F32x4_NORESULT: u32 = 37;
     pub const F64x5F32x4_NORESULT: u32 = 38;
+    pub const EXTERNREFx2_EXTERNREF: u32 = 39;
 }
 
 pub mod table_indices {
@@ -1208,6 +1235,7 @@ pub mod hq_value_types {
     pub const FLOAT64: i32 = 0;
     pub const BOOL64: i32 = 1;
     pub const EXTERN_STRING_REF64: i32 = 2;
+    pub const INT64: i32 = 3;
 }
 
 // the number of bytes that one step takes up in linear memory
@@ -1349,6 +1377,7 @@ impl TryFrom<IrProject> for WasmProject {
             ],
             [],
         );
+        types.function([ValType::Ref(RefType::EXTERNREF), ValType::Ref(RefType::EXTERNREF)], [ValType::Ref(RefType::EXTERNREF)]);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -1395,7 +1424,7 @@ impl TryFrom<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "operator_join",
-            EntityType::Function(types::I32I64I32I64_EXTERNREF),
+            EntityType::Function(types::EXTERNREFx2_EXTERNREF),
         );
         imports.import(
             "runtime",
@@ -1405,7 +1434,7 @@ impl TryFrom<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "operator_length",
-            EntityType::Function(types::I32I64_F64),
+            EntityType::Function(types::EXTERNREF_F64),
         );
         imports.import(
             "runtime",
@@ -1715,6 +1744,12 @@ impl TryFrom<IrProject> for WasmProject {
         any2bool_func.instruction(&Instruction::End);
         any2bool_func.instruction(&Instruction::End);
         code.function(&any2bool_func);
+
+        functions.function(types::I32I64_I64);
+        let mut any2int_func = Function::new(vec![]);
+        any2int_func.instruction(&Instruction::Unreachable);
+        any2int_func.instruction(&Instruction::End);
+        code.function(&any2int_func);
 
         functions.function(types::EXTERNREF_I32);
         let mut tbl_add_string_func = Function::new(vec![(1, ValType::I32)]);
@@ -2199,28 +2234,6 @@ impl TryFrom<IrProject> for WasmProject {
             ),
         });
 
-        tables.table(TableType {
-            element_type: RefType::EXTERNREF,
-            minimum: string_consts
-                .len()
-                .try_into()
-                .map_err(|_| make_hq_bug!("string_consts len out of bounds"))?,
-            maximum: None,
-        });
-
-        let step_indices = (BUILTIN_FUNCS
-            ..(u32::try_from(step_funcs.len())
-                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?
-                + BUILTIN_FUNCS))
-            .collect::<Vec<_>>();
-        let step_func_indices = Elements::Functions(&step_indices[..]);
-        elements.active(
-            Some(table_indices::STEP_FUNCS),
-            &ConstExpr::i32_const(0),
-            RefType::FUNCREF,
-            step_func_indices,
-        );
-
         globals.global(
             GlobalType {
                 val_type: ValType::I32,
@@ -2308,6 +2321,28 @@ impl TryFrom<IrProject> for WasmProject {
         }
 
         data.active(0, &ConstExpr::i32_const(0), default_data);
+
+        tables.table(TableType {
+            element_type: RefType::EXTERNREF,
+            minimum: string_consts
+                .len()
+                .try_into()
+                .map_err(|_| make_hq_bug!("string_consts len out of bounds"))?,
+            maximum: None,
+        });
+
+        let step_indices = (BUILTIN_FUNCS
+            ..(u32::try_from(step_funcs.len())
+                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?
+                + BUILTIN_FUNCS))
+            .collect::<Vec<_>>();
+        let step_func_indices = Elements::Functions(&step_indices[..]);
+        elements.active(
+            Some(table_indices::STEP_FUNCS),
+            &ConstExpr::i32_const(0),
+            RefType::FUNCREF,
+            step_func_indices,
+        );
 
         module
             .section(&types)
