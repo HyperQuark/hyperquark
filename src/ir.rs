@@ -600,9 +600,9 @@ impl IrOpcode {
             | looks_setsizeto
             | looks_changesizeby
             | motion_turnleft
-            | motion_turnright
+            | motion_turnright => vec![Number],
             // todo: looks_switchcostumeto waiting on generic monomorphisation to work properly
-            | looks_switchcostumeto => vec![Any],
+            looks_switchcostumeto => vec![Any],
             pen_changePenColorParamBy | pen_setPenColorParamTo => vec![String, Number],
             motion_gotoxy => vec![Number, Number],
             _ => hq_todo!("{:?}", &self),
@@ -1407,11 +1407,11 @@ impl IrBlockVec for Vec<IrBlock> {
                         );
                         vec![
                             IrOpcode::operator_round,
-                            IrOpcode::hq_cast(Integer, Unknown),
+                            IrOpcode::hq_cast(ConcreteInteger, Unknown),
                             IrOpcode::data_teevariable {
                                 VARIABLE: looper_id,
                             },
-                            IrOpcode::hq_cast(Integer, Unknown),
+                            IrOpcode::hq_cast(Unknown, ConcreteInteger),
                             IrOpcode::math_number { NUM: 1.0 },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {

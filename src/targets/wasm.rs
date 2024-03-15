@@ -1020,7 +1020,7 @@ fn instructions(
             (Unknown, Float) => vec![Call(func_indices::CAST_ANY_FLOAT)],
             (Unknown, Boolean) => vec![Call(func_indices::CAST_ANY_BOOL)],
             (Unknown, ConcreteInteger) => vec![Call(func_indices::CAST_ANY_INT)],
-            _ => hq_todo!("unimplemented cast: {:?} -> {:?} at {:?}", to, from, op),
+            _ => hq_todo!("unimplemented cast: {:?} -> {:?} at {:?}", from, to, op),
         },
         other => hq_todo!("missing WASM impl for {:?}", other),
     };
