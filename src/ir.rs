@@ -370,6 +370,7 @@ impl TypeStack {
     }
 }
 
+#[allow(clippy::len_without_is_empty)]
 pub trait TypeStackImpl {
     fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>>;
     fn len(&self) -> usize;
@@ -377,9 +378,7 @@ pub trait TypeStackImpl {
 
 impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
     fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>> {
-        if self.borrow().is_none() {
-            Rc::clone(self)
-        } else if i == 0 {
+        if i == 0 || self.borrow().is_none() {
             Rc::clone(self)
         } else {
             self.borrow().clone().unwrap().0.get(i - 1)
@@ -532,10 +531,9 @@ impl InputType {
     }
 
     pub fn least_restrictive_concrete_type(&self) -> InputType {
-        use InputType::*;
         match self.base_type() {
-            Union(a, _) => a.least_restrictive_concrete_type(),
-            a @ _ => a.clone(),
+            InputType::Union(a, _) => a.least_restrictive_concrete_type(),
+            other => other.clone(),
         }
     }
 
@@ -549,8 +547,6 @@ impl InputType {
         }
     }
 }
-
-type OutputType = Option<InputType>;
 
 impl IrOpcode {
     pub fn does_request_redraw(&self) -> bool {
@@ -1627,18 +1623,15 @@ impl IrBlockVec for Vec<IrBlock> {
                         let cast_stack = self.get_type_stack(Some(cast_pos));
                         let cast_block = IrBlock::new_with_stack_no_cast(
                             IrOpcode::hq_cast(
-                                {
-                                    let from = cast_stack
-                                        .borrow()
-                                        .clone()
-                                        .ok_or(make_hq_bug!(
-                                            "tried to cast to {:?} from empty type stack at {:?}",
-                                            cast_type.clone(),
-                                            op
-                                        ))?
-                                        .1;
-                                    from
-                                },
+                                cast_stack
+                                    .borrow()
+                                    .clone()
+                                    .ok_or(make_hq_bug!(
+                                        "tried to cast to {:?} from empty type stack at {:?}",
+                                        cast_type.clone(),
+                                        op
+                                    ))?
+                                    .1,
                                 cast_type.clone(),
                             ),
                             cast_stack,
@@ -1698,11 +1691,7 @@ pub fn step_from_top_block<'a>(
         {
             next_id = last_nexts.pop();
         } else {
-            next_id = next_block
-                .block_info()
-                .ok_or(make_hq_bug!(""))?
-                .next
-                .clone();
+            next_id.clone_from(next_block.block_info().ok_or(make_hq_bug!(""))?.next);
         }
         if ops.is_empty() {
             hq_bug!("assertion failed: !ops.is_empty()")

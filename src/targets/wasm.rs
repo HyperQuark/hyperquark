@@ -1394,10 +1394,7 @@ impl TryFrom<IrProject> for WasmProject {
             [ValType::I64],
         );
         types.function(
-            [
-                ValType::F64,
-                ValType::Ref(RefType::EXTERNREF),
-            ],
+            [ValType::F64, ValType::Ref(RefType::EXTERNREF)],
             [ValType::Ref(RefType::EXTERNREF)],
         );
 
