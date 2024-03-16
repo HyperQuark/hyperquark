@@ -419,11 +419,12 @@ impl IrBlock {
                 opcode,
             );
         }
+        let arity = expected_inputs.len();
         for i in 0..expected_inputs.len() {
             let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
-            let actual = &type_stack.get(i).borrow().clone().unwrap().1;
+            let actual = &type_stack.get(arity - 1 - i).borrow().clone().unwrap().1;
             if !expected.includes(actual) {
-                add_cast(i, expected);
+                add_cast(arity - 1 - i, expected);
             }
         }
         let output_stack = opcode.output(type_stack)?;
@@ -445,10 +446,11 @@ impl IrBlock {
                 type_stack.len()
             );
         }
+        let arity = expected_inputs.len();
         for i in 0..expected_inputs.len() {
             let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
             let actual = &type_stack
-                .get(i)
+                .get(arity - 1 - i)
                 .borrow()
                 .clone()
                 .ok_or(make_hq_bug!(""))?
@@ -623,9 +625,10 @@ impl IrOpcode {
                 type_stack.len()
             );
         }
+        let arity = expected_inputs.len();
         let get_input = |i| {
             Ok(type_stack
-                .get(i)
+                .get(arity - 1 - i)
                 .borrow()
                 .clone()
                 .ok_or(make_hq_bug!(""))?
@@ -1350,8 +1353,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                     ),
                                 )?);
                             }
-                            for op in condition_opcodes.iter()
-                            {
+                            for op in condition_opcodes.iter() {
                                 looper_opcodes.push(IrBlock::new_with_stack_no_cast(
                                     op.clone(),
                                     Rc::clone(
@@ -1390,11 +1392,12 @@ impl IrBlockVec for Vec<IrBlock> {
                             target_id.clone(),
                         )?;
                         for op in [
-                                IrOpcode::math_whole_number { NUM: 1.0 },
-                                IrOpcode::operator_lt,
-                            ]
-                            .into_iter()
-                            .chain(condition_opcodes.clone().into_iter()) {
+                            IrOpcode::math_whole_number { NUM: 1.0 },
+                            IrOpcode::operator_lt,
+                        ]
+                        .into_iter()
+                        .chain(condition_opcodes.clone().into_iter())
+                        {
                             opcodes.push(IrBlock::new_with_stack_no_cast(
                                 op,
                                 Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
@@ -1411,7 +1414,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::data_teevariable {
                                 VARIABLE: looper_id,
                             },
-                            IrOpcode::hq_cast(Unknown, ConcreteInteger),
+                            IrOpcode::hq_cast(Unknown, Float),
                             IrOpcode::math_number { NUM: 1.0 },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {
@@ -1502,7 +1505,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             steps,
                             target_id.clone(),
                         )?;
-                        for op in condition_opcodes.clone().into_iter() {
+                        for op in condition_opcodes.into_iter() {
                             opcodes.push(IrBlock::new_with_stack_no_cast(
                                 op,
                                 Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
@@ -1584,7 +1587,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         )?;
                         let mut opcodes = vec![];
                         //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                        for op in condition_opcodes.clone().into_iter() {
+                        for op in condition_opcodes.into_iter() {
                             opcodes.push(IrBlock::new_with_stack_no_cast(
                                 op,
                                 Rc::new(RefCell::new(None)),

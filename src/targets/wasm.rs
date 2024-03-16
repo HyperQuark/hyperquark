@@ -95,7 +95,7 @@ fn instructions(
         operator_divide => vec![F64Div],
         operator_multiply => vec![F64Mul], // todo: int opt
         operator_mod => vec![Call(func_indices::FMOD)], // todo: int opt
-        operator_round => vec![F64Nearest, I32TruncF64S],
+        operator_round => vec![F64Nearest, I64TruncF64S],
         math_number { NUM }
         | math_integer { NUM }
         | math_angle { NUM }
@@ -247,7 +247,7 @@ fn instructions(
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
         operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
-        operator_length => vec![Call(func_indices::OPERATOR_LENGTH)],
+        operator_length => vec![Call(func_indices::OPERATOR_LENGTH), I64ExtendI32S],
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
         operator_mathop { OPERATOR } => match OPERATOR.as_str() {
             "abs" => vec![F64Abs],
@@ -1224,6 +1224,8 @@ pub mod types {
     pub const F64x3F32x4_NORESULT: u32 = 37;
     pub const F64x5F32x4_NORESULT: u32 = 38;
     pub const EXTERNREFx2_EXTERNREF: u32 = 39;
+    pub const EXTERNREFx2_I64: u32 = 40;
+    pub const F64EXTERNREF_EXTERNREF: u32 = 41;
 }
 
 pub mod table_indices {
@@ -1377,7 +1379,27 @@ impl TryFrom<IrProject> for WasmProject {
             ],
             [],
         );
-        types.function([ValType::Ref(RefType::EXTERNREF), ValType::Ref(RefType::EXTERNREF)], [ValType::Ref(RefType::EXTERNREF)]);
+        types.function(
+            [
+                ValType::Ref(RefType::EXTERNREF),
+                ValType::Ref(RefType::EXTERNREF),
+            ],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
+        types.function(
+            [
+                ValType::Ref(RefType::EXTERNREF),
+                ValType::Ref(RefType::EXTERNREF),
+            ],
+            [ValType::I64],
+        );
+        types.function(
+            [
+                ValType::F64,
+                ValType::Ref(RefType::EXTERNREF),
+            ],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -1429,17 +1451,17 @@ impl TryFrom<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "operator_letterof",
-            EntityType::Function(types::F64I32I64_EXTERNREF),
+            EntityType::Function(types::F64EXTERNREF_EXTERNREF),
         );
         imports.import(
             "runtime",
             "operator_length",
-            EntityType::Function(types::EXTERNREF_F64),
+            EntityType::Function(types::EXTERNREF_I32),
         );
         imports.import(
             "runtime",
             "operator_contains",
-            EntityType::Function(types::I32I64I32I64_I64),
+            EntityType::Function(types::EXTERNREFx2_I64),
         );
         imports.import(
             "runtime",
@@ -1699,7 +1721,17 @@ impl TryFrom<IrProject> for WasmProject {
         any2float_func.instruction(&Instruction::LocalGet(1));
         any2float_func.instruction(&Instruction::F64ReinterpretI64);
         any2float_func.instruction(&Instruction::Else);
+        any2float_func.instruction(&Instruction::LocalGet(0));
+        any2float_func.instruction(&Instruction::I32Const(hq_value_types::INT64));
+        any2float_func.instruction(&Instruction::I32Eq);
+        any2float_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
+            types::NOPARAM_F64,
+        )));
+        any2float_func.instruction(&Instruction::LocalGet(1));
+        any2float_func.instruction(&Instruction::F64ConvertI64S);
+        any2float_func.instruction(&Instruction::Else);
         any2float_func.instruction(&Instruction::Unreachable);
+        any2float_func.instruction(&Instruction::End);
         any2float_func.instruction(&Instruction::End);
         any2float_func.instruction(&Instruction::End);
         any2float_func.instruction(&Instruction::End);

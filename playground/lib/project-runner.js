@@ -163,14 +163,14 @@ export default async (
         operator_join: (str1, str2) =>
           str1.toString() +
           str2.toString(),
-        operator_letterof: (idx, ty, val) =>
-          wasm_val_to_js(ty, val).toString()[idx - 1] ?? "",
+        operator_letterof: (idx, str) =>
+          str.toString()[idx - 1] ?? "",
         operator_length: (str) => str.length,
-        operator_contains: (ty1, val1, ty2, val2) =>
-          wasm_val_to_js(ty1, val1)
+        operator_contains: (str1, str2) =>
+          str1
             .toString()
             .toLowerCase()
-            .includes(wasm_val_to_js(ty2, val2).toString().toLowerCase()),
+            .includes(str2.toString().toLowerCase()),
         mathop_sin: (n) =>
           parseFloat(Math.sin((Math.PI * n) / 180).toFixed(10)),
         mathop_cos: (n) =>
@@ -285,7 +285,7 @@ export default async (
       cast: {
         stringtofloat: parseFloat,
         stringtobool: Boolean,
-        floattostring: Number.prototype.toString,
+        floattostring: (i) => i.toString(),
       },
     };
     try {
