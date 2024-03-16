@@ -533,7 +533,7 @@ impl InputType {
     pub fn least_restrictive_concrete_type(&self) -> InputType {
         match self.base_type() {
             InputType::Union(a, _) => a.least_restrictive_concrete_type(),
-            other => other.clone(),
+            other => other,
         }
     }
 
@@ -1392,7 +1392,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::operator_lt,
                         ]
                         .into_iter()
-                        .chain(condition_opcodes.clone().into_iter())
+                        .chain(condition_opcodes.into_iter())
                         {
                             opcodes.push(IrBlock::new_with_stack_no_cast(
                                 op,
@@ -1621,17 +1621,21 @@ impl IrBlockVec for Vec<IrBlock> {
                             .rposition(|b| b.type_stack.len() == type_stack.len() - j)
                             .ok_or(make_hq_bug!(""))?;
                         let cast_stack = self.get_type_stack(Some(cast_pos));
+                        #[allow(clippy::let_and_return)]
                         let cast_block = IrBlock::new_with_stack_no_cast(
                             IrOpcode::hq_cast(
-                                cast_stack
-                                    .borrow()
-                                    .clone()
-                                    .ok_or(make_hq_bug!(
-                                        "tried to cast to {:?} from empty type stack at {:?}",
-                                        cast_type.clone(),
-                                        op
-                                    ))?
-                                    .1,
+                                {
+                                    let from = cast_stack
+                                        .borrow()
+                                        .clone()
+                                        .ok_or(make_hq_bug!(
+                                            "tried to cast to {:?} from empty type stack at {:?}",
+                                            cast_type.clone(),
+                                            op
+                                        ))?
+                                        .1;
+                                    from
+                                },
                                 cast_type.clone(),
                             ),
                             cast_stack,
@@ -1691,7 +1695,7 @@ pub fn step_from_top_block<'a>(
         {
             next_id = last_nexts.pop();
         } else {
-            next_id.clone_from(next_block.block_info().ok_or(make_hq_bug!(""))?.next);
+            next_id.clone_from(&next_block.block_info().ok_or(make_hq_bug!(""))?.next);
         }
         if ops.is_empty() {
             hq_bug!("assertion failed: !ops.is_empty()")
