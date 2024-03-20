@@ -23,12 +23,14 @@ fn instructions(
     context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
     steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+    input_types: Vec<InputType>,
 ) -> Result<Vec<Instruction<'static>>, HQError> {
     use InputType::*;
     use Instruction::*;
     use IrOpcode::*;
     //let expected_output = *op.expected_output();
     //let mut actual_output = *op.actual_output();
+    //dbg!(&op.opcode(), op.type_stack.len());
     let mut instructions = match &op.opcode() {
         looks_think => {
             if context.dbg {
@@ -75,26 +77,42 @@ fn instructions(
             }
         }
         operator_add => {
-            if InputType::Integer.includes(&op.type_stack.get(0).borrow().clone().unwrap().1)
-                && InputType::Integer.includes(&op.type_stack.get(1).borrow().clone().unwrap().1)
+            if InputType::Integer.includes(&input_types.get(0).unwrap())
+                && InputType::Integer.includes(&input_types.get(1).unwrap())
             {
-                vec![I32Add]
+                vec![I64Add]
             } else {
                 vec![F64Add]
             }
         }
         operator_subtract => {
-            if InputType::Integer.includes(&op.type_stack.get(0).borrow().clone().unwrap().1)
-                && InputType::Integer.includes(&op.type_stack.get(1).borrow().clone().unwrap().1)
+            if InputType::Integer.includes(&input_types.get(0).unwrap())
+                && InputType::Integer.includes(&input_types.get(1).unwrap())
             {
-                vec![I32Sub]
+                vec![I64Sub]
             } else {
                 vec![F64Sub]
             }
         }
         operator_divide => vec![F64Div],
-        operator_multiply => vec![F64Mul], // todo: int opt
-        operator_mod => vec![Call(func_indices::FMOD)], // todo: int opt
+        operator_multiply => {
+            if InputType::Integer.includes(&input_types.get(0).unwrap())
+                && InputType::Integer.includes(&input_types.get(1).unwrap())
+            {
+                vec![I64Mul]
+            } else {
+                vec![F64Mul]
+            }
+        },
+        operator_mod => {
+            if InputType::Integer.includes(&input_types.get(0).unwrap())
+                && InputType::Integer.includes(&input_types.get(1).unwrap())
+            {
+                vec![I32RemS]
+            } else {
+                vec![Call(func_indices::FMOD)]
+            }
+        }
         operator_round => vec![F64Nearest, I64TruncF64S],
         math_number { NUM }
         | math_integer { NUM }
@@ -238,8 +256,32 @@ fn instructions(
                 LocalGet(step_func_locals::I64),
             ]
         }
-        operator_lt => vec![F64Lt, I64ExtendI32S],
-        operator_gt => vec![F64Gt, I64ExtendI32S],
+        operator_lt => {
+            if InputType::Integer.includes(&input_types.get(0).unwrap())
+                && InputType::Integer.includes(&input_types.get(1).unwrap())
+            {
+                vec![I32LtS, I64ExtendI32S]
+            } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
+                vec![F64ConvertI32S, F64Lt, I64ExtendI32S]
+            } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![LocalSet(step_func_locals::F64), F64ConvertI32S, LocalGet(step_func_locals::F64), F64Lt, I64ExtendI32S]
+            } else {
+                vec![F64Lt, I64ExtendI32S]
+            }
+        }
+        operator_gt => {
+            if InputType::Integer.includes(&input_types.get(0).unwrap())
+                && InputType::Integer.includes(&input_types.get(1).unwrap())
+            {
+                vec![I32GtS, I64ExtendI32S]
+            } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
+                vec![F64ConvertI32S, F64Gt, I64ExtendI32S]
+            } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![LocalSet(step_func_locals::F64), F64ConvertI32S, LocalGet(step_func_locals::F64), F64Gt, I64ExtendI32S]
+            } else {
+                vec![F64Gt, I64ExtendI32S]
+            }
+        }
         operator_and => vec![I64And],
         operator_or => vec![I64Or],
         operator_not => vec![I64Eqz, I64ExtendI32S],
@@ -247,7 +289,7 @@ fn instructions(
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
         operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
-        operator_length => vec![Call(func_indices::OPERATOR_LENGTH), I64ExtendI32S],
+        operator_length => vec![Call(func_indices::OPERATOR_LENGTH)],
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
         operator_mathop { OPERATOR } => match OPERATOR.as_str() {
             "abs" => vec![F64Abs],
@@ -1079,8 +1121,10 @@ impl CompileToWasm for (&(String, String), &Step) {
             ValType::F64,
         ];
         let mut func = Function::new_with_locals_types(locals);
-        for op in self.1.opcodes() {
-            let instrs = instructions(op, self.1.context(), string_consts, steps)?;
+        for (i, op) in self.1.opcodes().iter().enumerate() {
+            let arity = op.opcode().expected_inputs()?.len();
+            let input_types = (0..arity).into_iter().map(|j| self.1.opcodes().get(i - 1).unwrap().type_stack.get(arity - 1 - j).borrow().clone().unwrap().1).collect::<Vec<_>>();
+            let instrs = instructions(op, self.1.context(), string_consts, steps, input_types)?;
             for instr in instrs {
                 func.instruction(&instr);
             }
@@ -2401,17 +2445,18 @@ mod tests {
     use super::*;
     use std::process::{Command, Stdio};
 
-    /*#[test]
-    fn run_wasm() {
+    #[test]
+    fn make_wasm() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
-        let proj: Sb3Project = fs::read_to_string("./hq-test.project.json")
+        let proj: Sb3Project = fs::read_to_string("./benchmark (3.1).json")
             .expect("couldn't read hq-test.project.json")
             .try_into()
             .unwrap();
-        let ir: IrProject = proj.into();
-        let wasm: WasmProject = ir.into();
-        fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
+        let ir: IrProject = proj.try_into()?;
+        let wasm: WasmProject = ir.try_into()?;
+        Ok(())
+        /*fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");
         let output = Command::new("node")
             .arg("-e")
             .arg(format!(
@@ -2431,6 +2476,6 @@ mod tests {
         );
         if !output.status.success() {
             panic!("couldn't run wasm");
-        }
-    }*/
+        }*/
+    }
 }

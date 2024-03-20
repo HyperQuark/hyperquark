@@ -631,10 +631,9 @@ impl IrOpcode {
                 .1)
         };
         let output = match self {
-            data_teevariable { .. } => Ok(TypeStack::new_some(TypeStack(
-                Rc::clone(&type_stack.get(1)),
-                get_input(0)?,
-            ))),
+            data_teevariable { .. } => Ok(
+                Rc::clone(&type_stack),
+            ),
             hq_cast(_from, to) => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack.get(1)),
                 to.clone(),
@@ -668,7 +667,7 @@ impl IrOpcode {
                 ConcreteInteger,
             ))),
             operator_round => Ok(TypeStack::new_some(TypeStack(
-                Rc::clone(&type_stack.get(2)),
+                Rc::clone(&type_stack.get(1)),
                 ConcreteInteger,
             ))),
             operator_length => Ok(TypeStack::new_some(TypeStack(
