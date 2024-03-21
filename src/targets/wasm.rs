@@ -81,6 +81,15 @@ fn instructions(
                 && InputType::Integer.includes(&input_types.get(1).unwrap())
             {
                 vec![I64Add]
+            } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
+                vec![F64ConvertI32S, F64Add]
+            } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![
+                    LocalSet(step_func_locals::F64),
+                    F64ConvertI32S,
+                    LocalGet(step_func_locals::F64),
+                    F64Add,
+                ]
             } else {
                 vec![F64Add]
             }
@@ -90,6 +99,15 @@ fn instructions(
                 && InputType::Integer.includes(&input_types.get(1).unwrap())
             {
                 vec![I64Sub]
+            } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
+                vec![F64ConvertI32S, F64Sub]
+            } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![
+                    LocalSet(step_func_locals::F64),
+                    F64ConvertI32S,
+                    LocalGet(step_func_locals::F64),
+                    F64Sub,
+                ]
             } else {
                 vec![F64Sub]
             }
@@ -100,44 +118,52 @@ fn instructions(
                 && InputType::Integer.includes(&input_types.get(1).unwrap())
             {
                 vec![I64Mul]
+            } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
+                vec![F64ConvertI32S, F64Mul]
+            } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![
+                    LocalSet(step_func_locals::F64),
+                    F64ConvertI32S,
+                    LocalGet(step_func_locals::F64),
+                    F64Mul,
+                ]
             } else {
                 vec![F64Mul]
             }
-        },
+        }
         operator_mod => {
             if InputType::Integer.includes(&input_types.get(0).unwrap())
                 && InputType::Integer.includes(&input_types.get(1).unwrap())
             {
                 vec![I32RemS]
+            } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
+                vec![F64ConvertI32S, Call(func_indices::FMOD)]
+            } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![
+                    LocalSet(step_func_locals::F64),
+                    F64ConvertI32S,
+                    LocalGet(step_func_locals::F64),
+                    Call(func_indices::FMOD),
+                ]
             } else {
                 vec![Call(func_indices::FMOD)]
             }
         }
-        operator_round => vec![F64Nearest, I64TruncF64S],
-        math_number { NUM }
-        | math_integer { NUM }
+        operator_round => {
+            if InputType::Integer.includes(&input_types.get(0).unwrap()) {
+                vec![]
+            } else {
+                vec![F64Nearest, I32TruncF64S]
+            }
+        }
+        math_number { NUM } => {
+            vec![F64Const(*NUM)]
+        }
+        math_integer { NUM }
         | math_angle { NUM }
         | math_whole_number { NUM }
         | math_positive_number { NUM } => {
-            /* if expected_output == Text {
-                actual_output = Text;
-                instructions(
-                    &IrBlock::try_from(text {
-                        TEXT: format!("{}", NUM),
-                    })?,
-                    Rc::clone(&context),
-                    string_consts,
-                    steps,
-                )?
-            } else if expected_output == Any {
-                actual_output = Any;
-                vec![
-                    I32Const(hq_value_types::FLOAT64),
-                    I64Const((*NUM).to_bits() as i64),
-                ]
-            } else {*/
-            vec![F64Const(*NUM)]
-            //  }
+            vec![I32Const(*NUM)]
         }
         text { TEXT } => {
             /*if expected_output == Number {
@@ -264,7 +290,13 @@ fn instructions(
             } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Lt, I64ExtendI32S]
             } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
-                vec![LocalSet(step_func_locals::F64), F64ConvertI32S, LocalGet(step_func_locals::F64), F64Lt, I64ExtendI32S]
+                vec![
+                    LocalSet(step_func_locals::F64),
+                    F64ConvertI32S,
+                    LocalGet(step_func_locals::F64),
+                    F64Lt,
+                    I64ExtendI32S,
+                ]
             } else {
                 vec![F64Lt, I64ExtendI32S]
             }
@@ -277,7 +309,13 @@ fn instructions(
             } else if InputType::Integer.includes(&input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Gt, I64ExtendI32S]
             } else if InputType::Integer.includes(&input_types.get(0).unwrap()) {
-                vec![LocalSet(step_func_locals::F64), F64ConvertI32S, LocalGet(step_func_locals::F64), F64Gt, I64ExtendI32S]
+                vec![
+                    LocalSet(step_func_locals::F64),
+                    F64ConvertI32S,
+                    LocalGet(step_func_locals::F64),
+                    F64Gt,
+                    I64ExtendI32S,
+                ]
             } else {
                 vec![F64Gt, I64ExtendI32S]
             }
@@ -807,10 +845,9 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::F64),
+            LocalSet(step_func_locals::I32),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
-            I32TruncF64S,
+            LocalGet(step_func_locals::I32),
             I32Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -1054,6 +1091,7 @@ fn instructions(
                 I64ReinterpretF64,
             ],
             (ConcreteInteger, Unknown) => vec![
+                I64ExtendI32S,
                 LocalSet(step_func_locals::I64),
                 I32Const(hq_value_types::INT64),
                 LocalGet(step_func_locals::I64),
@@ -1123,7 +1161,21 @@ impl CompileToWasm for (&(String, String), &Step) {
         let mut func = Function::new_with_locals_types(locals);
         for (i, op) in self.1.opcodes().iter().enumerate() {
             let arity = op.opcode().expected_inputs()?.len();
-            let input_types = (0..arity).into_iter().map(|j| self.1.opcodes().get(i - 1).unwrap().type_stack.get(arity - 1 - j).borrow().clone().unwrap().1).collect::<Vec<_>>();
+            let input_types = (0..arity)
+                .into_iter()
+                .map(|j| {
+                    self.1
+                        .opcodes()
+                        .get(i - 1)
+                        .unwrap()
+                        .type_stack
+                        .get(arity - 1 - j)
+                        .borrow()
+                        .clone()
+                        .unwrap()
+                        .1
+                })
+                .collect::<Vec<_>>();
             let instrs = instructions(op, self.1.context(), string_consts, steps, input_types)?;
             for instr in instrs {
                 func.instruction(&instr);
@@ -1270,6 +1322,7 @@ pub mod types {
     pub const EXTERNREFx2_EXTERNREF: u32 = 39;
     pub const EXTERNREFx2_I64: u32 = 40;
     pub const F64EXTERNREF_EXTERNREF: u32 = 41;
+    pub const I32EXTERNREF_EXTERNREF: u32 = 42;
 }
 
 pub mod table_indices {
@@ -1441,6 +1494,10 @@ impl TryFrom<IrProject> for WasmProject {
             [ValType::F64, ValType::Ref(RefType::EXTERNREF)],
             [ValType::Ref(RefType::EXTERNREF)],
         );
+        types.function(
+            [ValType::I32, ValType::Ref(RefType::EXTERNREF)],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -1492,7 +1549,7 @@ impl TryFrom<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "operator_letterof",
-            EntityType::Function(types::F64EXTERNREF_EXTERNREF),
+            EntityType::Function(types::I32EXTERNREF_EXTERNREF),
         );
         imports.import(
             "runtime",

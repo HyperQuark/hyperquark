@@ -241,19 +241,19 @@ pub enum IrOpcode {
     looks_backdropnumbername,
     looks_backdrops,
     math_angle {
-        NUM: f64,
+        NUM: i32,
     },
     math_integer {
-        NUM: f64,
+        NUM: i32,
     },
     math_number {
         NUM: f64,
     },
     math_positive_number {
-        NUM: f64,
+        NUM: i32,
     },
     math_whole_number {
-        NUM: f64,
+        NUM: i32,
     },
     motion_movesteps,
     motion_gotoxy,
@@ -631,9 +631,7 @@ impl IrOpcode {
                 .1)
         };
         let output = match self {
-            data_teevariable { .. } => Ok(
-                Rc::clone(&type_stack),
-            ),
+            data_teevariable { .. } => Ok(Rc::clone(&type_stack)),
             hq_cast(_from, to) => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack.get(1)),
                 to.clone(),
@@ -908,10 +906,10 @@ impl IrBlockVec for Vec<IrBlock> {
             match block_arr {
                 BlockArray::NumberOrAngle(ty, value) => match ty {
                     4 => IrOpcode::math_number { NUM: *value },
-                    5 => IrOpcode::math_positive_number { NUM: *value },
-                    6 => IrOpcode::math_whole_number { NUM: *value },
-                    7 => IrOpcode::math_integer { NUM: *value },
-                    8 => IrOpcode::math_angle { NUM: *value },
+                    5 => IrOpcode::math_positive_number { NUM: *value as i32 },
+                    6 => IrOpcode::math_whole_number { NUM: *value as i32 },
+                    7 => IrOpcode::math_integer { NUM: *value as i32 },
+                    8 => IrOpcode::math_angle { NUM: *value as i32 },
                     _ => hq_bad_proj!("bad project json (block array of type ({}, u32))", ty),
                 },
                 BlockArray::ColorOrString(ty, value) => match ty {
@@ -1017,13 +1015,13 @@ impl IrBlockVec for Vec<IrBlock> {
                                hq_bad_proj!("invalid project.json - missing costume for COSTUME field");
                            };*/
                         let VarVal::String(name) = val.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null costume name for COSTUME field"
-                            ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - COSTUME field is not of type String"
-                                );
-                            };
+                            "invalid project.json - null costume name for COSTUME field"
+                        ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - COSTUME field is not of type String"
+                            );
+                        };
                         log(name.as_str());
                         let index = context
                             .costumes
@@ -1031,7 +1029,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             .position(|costume| costume.name == name)
                             .ok_or(make_hq_bad_proj!("missing costume with name {}", name))?;
                         log(format!("{}", index).as_str());
-                        vec![IrOpcode::math_whole_number { NUM: index as f64 }]
+                        vec![IrOpcode::math_whole_number { NUM: index as i32 }]
                     }
                     BlockOpcode::looks_switchbackdropto => {
                         vec![IrOpcode::looks_switchbackdropto]
@@ -1102,10 +1100,10 @@ impl IrBlockVec for Vec<IrBlock> {
                             "invalid project.json - null value for OPERATOR field"
                         ))?;
                         let VarVal::String(val) = val_varval else {
-                                hq_bad_proj!(
-                                    "invalid project.json - expected colorParam field to be string"
-                                );
-                            };
+                            hq_bad_proj!(
+                                "invalid project.json - expected colorParam field to be string"
+                            );
+                        };
                         vec![IrOpcode::text { TEXT: val }]
                     }
                     BlockOpcode::operator_mathop => {
@@ -1118,22 +1116,22 @@ impl IrBlockVec for Vec<IrBlock> {
                             "invalid project.json - null value for OPERATOR field"
                         ))?;
                         let VarVal::String(val) = val_varval else {
-                                hq_bad_proj!(
-                                    "invalid project.json - expected OPERATOR field to be string"
-                                );
-                            };
+                            hq_bad_proj!(
+                                "invalid project.json - expected OPERATOR field to be string"
+                            );
+                        };
                         vec![IrOpcode::operator_mathop { OPERATOR: val }]
                     }
                     BlockOpcode::data_variable => {
                         let Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
-                                    "invalid project.json - missing field VARIABLE"
-                                ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
                         let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
                             "invalid project.json - null variable id for VARIABLE field"
                         ))?;
@@ -1141,14 +1139,14 @@ impl IrBlockVec for Vec<IrBlock> {
                     }
                     BlockOpcode::data_setvariableto => {
                         let Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
-                                    "invalid project.json - missing field VARIABLE"
-                                ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
                         let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
                             "invalid project.json - null variable id for VARIABLE field"
                         ))?;
@@ -1156,14 +1154,14 @@ impl IrBlockVec for Vec<IrBlock> {
                     }
                     BlockOpcode::data_changevariableby => {
                         let Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
-                                    "invalid project.json - missing field VARIABLE"
-                                ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
                         let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
                             "invalid project.json - null id for VARIABLE field"
                         ))?;
@@ -1329,14 +1327,14 @@ impl IrBlockVec for Vec<IrBlock> {
                             )?];
                             for op in [
                                 IrOpcode::hq_cast(InputType::Unknown, InputType::Float), // todo: integer
-                                IrOpcode::math_whole_number { NUM: 1.0 },
+                                IrOpcode::math_whole_number { NUM: 1 },
                                 IrOpcode::operator_subtract,
                                 IrOpcode::hq_cast(Float, Unknown),
                                 IrOpcode::data_teevariable {
                                     VARIABLE: looper_id.clone(),
                                 },
                                 IrOpcode::hq_cast(Unknown, Float),
-                                IrOpcode::math_whole_number { NUM: 1.0 },
+                                IrOpcode::math_whole_number { NUM: 1 },
                                 IrOpcode::operator_lt,
                             ]
                             .into_iter()
@@ -1387,7 +1385,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             target_id.clone(),
                         )?;
                         for op in [
-                            IrOpcode::math_whole_number { NUM: 1.0 },
+                            IrOpcode::math_whole_number { NUM: 1 },
                             IrOpcode::operator_lt,
                         ]
                         .into_iter()
