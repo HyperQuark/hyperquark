@@ -72,6 +72,7 @@ If you experience runtime stack overflow errors in debug mode, try using the `-O
 | 0x00  |           float64         |        `f64`        |                            a float                               |
 | 0x01  |           bool64          |        `i64`        |   an integer - only the least significant bit is used   |
 | 0x02  | externref string (64 bit) |        `i64`        | wrapped to a 32 bit pointer to an `externref` value in the `anyref` table |
+| 0x03 | int64 | `i64` | an integer. may be too large to convert to a float |
 
 ### Memory layout guarantees
 

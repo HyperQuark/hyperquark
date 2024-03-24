@@ -41,7 +41,7 @@
         //console.log(file, data);
         return data;
       }
-      return await (await fetch(`https://assets.scratch.mit.edu/${md5ext}`)).text();
+      return await (await fetch(`https://assets.scratch.mit.edu/internalapi/asset/${md5ext}/get/`)).text();
     } catch (e) {
       error.value = `failed to load asset ${md5ext}\n${e.stack}`
     }
