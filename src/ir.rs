@@ -28,9 +28,18 @@ pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<RefCell<Vec<IrVar>>>,
     pub target_names: Vec<String>,
-    pub costumes: Vec<Vec<IrCostume>>, // (name, assetName)
+    pub costumes: Vec<Vec<IrCostume>>,
     pub steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     pub sb3: Sb3Project,
+}
+
+impl IrProject {
+    fn const_fold(&mut self) -> Result<(), HQError> {
+        for step in self.steps.values_mut() {
+            step.const_fold()?;
+        }
+        Ok(())
+    }
 }
 
 impl TryFrom<Sb3Project> for IrProject {
@@ -502,6 +511,12 @@ impl IrBlock {
     pub fn type_stack(&self) -> Rc<RefCell<Option<TypeStack>>> {
         Rc::clone(&self.type_stack)
     }
+
+    pub fn is_const(&self) -> bool {
+        use IrOpcode::*;
+        matches!(self.opcode(), math_number { .. } | math_whole_number { .. } | math_integer { .. } | math_angle { .. } | math_positive_number { .. } | text { .. })
+    }
+
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -781,6 +796,23 @@ impl Step {
     pub fn context(&self) -> Rc<ThreadContext> {
         Rc::clone(&self.context)
     }
+    pub fn const_fold(&mut self) -> Result<(), HQError> {
+        let mut value_stack: Vec<IrVal> = vec![];
+        
+        Ok(())
+    }
+}
+
+pub union ValueUnion<'a> {
+    int: i32,
+    float: f64,
+    boolean: bool,
+    string: &'a String,
+}
+
+pub struct IrVal<'a> {
+    tag: InputType,
+    value: ValueUnion<'a>
 }
 
 #[derive(Debug, Clone, PartialEq)]
