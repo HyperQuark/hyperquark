@@ -5,12 +5,14 @@ use crate::sb3::{
     VarVal, VariableInfo,
 };
 use crate::HQError;
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::hash::BuildHasherDefault;
+use core::fmt;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use uuid::Uuid;
@@ -27,9 +29,31 @@ pub struct IrProject {
     pub threads: Vec<Thread>,
     pub vars: Rc<RefCell<Vec<IrVar>>>,
     pub target_names: Vec<String>,
-    pub costumes: Vec<Vec<IrCostume>>, // (name, assetName)
+    pub costumes: Vec<Vec<IrCostume>>,
     pub steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     pub sb3: Sb3Project,
+}
+
+impl fmt::Display for IrProject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{\n\tthreads: {:?},\n\tvars: {:?},\n\t,target_names: {:?},\n\tcostumes: {:?},\n\tsteps: {:?}\n}}",
+            self.threads,
+            self.vars,
+            self.target_names,
+            self.costumes,
+            self.steps
+        )
+    }
+}
+
+
+impl IrProject {
+    pub fn const_fold(&mut self) -> Result<(), HQError> {
+        for step in self.steps.values_mut() {
+            step.const_fold()?;
+        }
+        Ok(())
+    }
 }
 
 impl TryFrom<Sb3Project> for IrProject {
@@ -143,6 +167,7 @@ impl TryFrom<Sb3Project> for IrProject {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrOpcode {
+    boolean { BOOL: bool },
     control_repeat,
     control_repeat_until,
     control_while,
@@ -204,7 +229,7 @@ pub enum IrOpcode {
     event_whenbackdropswitchesto,
     event_whengreaterthan,
     event_whenbroadcastreceived,
-    hq_cast(BlockType),
+    hq_cast(InputType, InputType),
     hq_drop(usize),
     hq_goto {
         step: Option<(String, String)>,
@@ -240,19 +265,19 @@ pub enum IrOpcode {
     looks_backdropnumbername,
     looks_backdrops,
     math_angle {
-        NUM: f64,
+        NUM: i32,
     },
     math_integer {
-        NUM: f64,
+        NUM: i32,
     },
     math_number {
         NUM: f64,
     },
     math_positive_number {
-        NUM: f64,
+        NUM: i32,
     },
     math_whole_number {
-        NUM: f64,
+        NUM: i32,
     },
     motion_movesteps,
     motion_gotoxy,
@@ -357,28 +382,120 @@ pub enum IrOpcode {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct IrBlock {
-    pub opcode: IrOpcode,
-    pub actual_output: BlockType,   // the output type the block produces
-    pub expected_output: BlockType, // the output type the parent block wants
-}
+#[derive(Clone)]
+pub struct TypeStack(pub Rc<RefCell<Option<TypeStack>>>, pub InputType);
 
-impl TryFrom<IrOpcode> for IrBlock {
-    type Error = HQError;
-
-    fn try_from(opcode: IrOpcode) -> Result<Self, HQError> {
-        let descriptor = opcode.descriptor()?;
-        let output = descriptor.output();
-        Ok(Self {
-            opcode,
-            actual_output: *output,
-            expected_output: *output,
-        })
+impl TypeStack {
+    pub fn new_some(prev: TypeStack) -> Rc<RefCell<Option<Self>>> {
+        Rc::new(RefCell::new(Some(prev)))
+    }
+    pub fn new(prev: Option<TypeStack>) -> Rc<RefCell<Option<Self>>> {
+        Rc::new(RefCell::new(prev))
     }
 }
 
+#[allow(clippy::len_without_is_empty)]
+pub trait TypeStackImpl {
+    fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>>;
+    fn len(&self) -> usize;
+}
+
+impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
+    fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>> {
+        if i == 0 || self.borrow().is_none() {
+            Rc::clone(self)
+        } else {
+            self.borrow().clone().unwrap().0.get(i - 1)
+        }
+    }
+
+    fn len(&self) -> usize {
+        if self.borrow().is_none() {
+            0
+        } else {
+            1 + self.borrow().clone().unwrap().0.len()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IrBlock {
+    pub opcode: IrOpcode,
+    pub type_stack: Rc<RefCell<Option<TypeStack>>>,
+}
+
 impl IrBlock {
+    pub fn new_with_stack<F>(
+        opcode: IrOpcode,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+        add_cast: &mut F,
+    ) -> Result<Self, HQError>
+    where
+        F: FnMut(usize, &InputType),
+    {
+        let expected_inputs = opcode.expected_inputs()?;
+        if type_stack.len() < expected_inputs.len() {
+            hq_bug!(
+                "expected {} inputs, got {} at {:?}",
+                expected_inputs.len(),
+                type_stack.len(),
+                opcode,
+            );
+        }
+        let arity = expected_inputs.len();
+        for i in 0..expected_inputs.len() {
+            let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
+            let actual = &type_stack.get(arity - 1 - i).borrow().clone().unwrap().1;
+            if !expected.includes(actual) {
+                add_cast(arity - 1 - i, expected);
+            }
+        }
+        let output_stack = opcode.output(type_stack)?;
+        Ok(IrBlock {
+            opcode,
+            type_stack: output_stack,
+        })
+    }
+
+    pub fn new_with_stack_no_cast(
+        opcode: IrOpcode,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+    ) -> Result<Self, HQError> {
+        let expected_inputs = opcode.expected_inputs()?;
+        if type_stack.len() < expected_inputs.len() {
+            hq_bug!(
+                "expected {} inputs, got {}",
+                expected_inputs.len(),
+                type_stack.len()
+            );
+        }
+        let arity = expected_inputs.len();
+        for i in 0..expected_inputs.len() {
+            let expected = expected_inputs.get(i).ok_or(make_hq_bug!(""))?;
+            let actual = &type_stack
+                .get(arity - 1 - i)
+                .borrow()
+                .clone()
+                .ok_or(make_hq_bug!(""))?
+                .1;
+
+            if !expected.includes(actual) {
+                hq_bug!(
+                    "cast needed at input position {:}, {:?} -> {:?}, but no casts were expected; at {:?}",
+                    i,
+                    actual,
+                    expected,
+                    opcode,
+                );
+            }
+        }
+        let output_stack = opcode.output(type_stack)?;
+        Ok(IrBlock {
+            opcode,
+            type_stack: output_stack,
+        })
+    }
+
     pub fn does_request_redraw(&self) -> bool {
         use IrOpcode::*;
         matches!(
@@ -392,6 +509,11 @@ impl IrBlock {
                 | motion_gotoxy
                 | pen_penDown
                 | pen_clear
+                | looks_switchcostumeto
+                | motion_turnleft
+                | motion_turnright
+                | looks_setsizeto
+                | looks_changesizeby
         )
     }
     pub fn is_hat(&self) -> bool {
@@ -401,45 +523,150 @@ impl IrBlock {
     pub fn opcode(&self) -> &IrOpcode {
         &self.opcode
     }
-    pub fn expected_output(&self) -> &BlockType {
-        &self.expected_output
+    pub fn type_stack(&self) -> Rc<RefCell<Option<TypeStack>>> {
+        Rc::clone(&self.type_stack)
     }
-    pub fn actual_output(&self) -> &BlockType {
-        &self.actual_output
+
+    pub fn is_const(&self) -> bool {
+        use IrOpcode::*;
+        matches!(self.opcode(), math_number { .. } | math_whole_number { .. } | math_integer { .. } | math_angle { .. } | math_positive_number { .. } | text { .. })
     }
-    pub fn set_expected_output(&mut self, ty: BlockType) {
-        self.expected_output = ty;
+    
+    pub fn const_value(&self, value_stack: &mut Vec<IrVal>) -> Result<Option<()>, HQError> {
+        use IrOpcode::*;
+        //dbg!(value_stack.len());
+        let arity = self.opcode().expected_inputs()?.len();
+        if arity > value_stack.len() {
+            return Ok(None)
+        }
+        match self.opcode() {
+            math_number { NUM } => value_stack.push(IrVal::Float(*NUM)),
+            math_positive_number { NUM } | math_integer { NUM } | math_angle { NUM } | math_whole_number { NUM } => value_stack.push(IrVal::Int(*NUM)),
+            text { TEXT } => value_stack.push(IrVal::String(TEXT.to_string())),
+            operator_add => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 + num2));
+            },
+            operator_subtract => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 - num2));
+            },
+            operator_multiply => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 * num2));
+            },
+            operator_divide => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 / num2));
+            },
+            operator_mod => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 % num2));
+            },
+            operator_lt => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Boolean(num1 < num2));
+            },
+            operator_gt => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Boolean(num1 > num2));
+            },
+            operator_and => {
+                let bool2 = value_stack.pop().unwrap().to_bool();
+                let bool1 = value_stack.pop().unwrap().to_bool();
+                value_stack.push(IrVal::Boolean(bool1 && bool2));
+            },
+            operator_or => {
+                let bool2 = value_stack.pop().unwrap().to_bool();
+                let bool1 = value_stack.pop().unwrap().to_bool();
+                value_stack.push(IrVal::Boolean(bool1 || bool2));
+            },
+            operator_join => {
+                let str2 = value_stack.pop().unwrap().to_string();
+                let str1 = value_stack.pop().unwrap().to_string();
+                value_stack.push(IrVal::String(str1 + &str2));
+            },
+            operator_length => {
+                let string = value_stack.pop().unwrap().to_string();
+                value_stack.push(IrVal::Int(string.len().try_into().unwrap()));
+            },
+            operator_not => {
+                let b = value_stack.pop().unwrap().to_bool();
+                value_stack.push(IrVal::Boolean(!b));
+            },
+            operator_round => {
+                let num = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Int(num as i32));
+            },
+            hq_cast(_from, to) => {
+                let val = value_stack.pop().unwrap();
+                let ty = to.least_restrictive_concrete_type();
+                match ty {
+                    InputType::ConcreteInteger => value_stack.push(IrVal::Int(val.to_i32())),
+                    InputType::Float => value_stack.push(IrVal::Float(val.to_f64())),
+                    InputType::String => value_stack.push(IrVal::String(val.to_string())),
+                    InputType::Boolean => value_stack.push(IrVal::Boolean(val.to_bool())),
+                    InputType::Unknown => {
+                        value_stack.push(val);
+                        return Ok(None)
+                    }
+                    _ => hq_bug!("unexpected non-concrete type {:?}", ty),
+                };
+            }
+            _ => return Ok(None),
+        };
+        Ok(Some(()))
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BlockType {
-    Text,
-    Number,
-    Boolean,
-    // `Any` could be any one of Text, Boolean or Number
-    // only to be used when the output type is unknown or needs to preserved,
-    // or where values are being passed to js (ie strings) or the type must be preserved (ie variables)
+#[derive(Clone, Debug, PartialEq)]
+pub enum InputType {
     Any,
-    // `Stack` is no output (a stack block) or the input of a branch (eg in an if/else block)
-    Stack,
+    String,
+    Number,
+    Float,
+    Integer,
+    Boolean,
+    ConcreteInteger,
+    Unknown,
+    Union(Box<InputType>, Box<InputType>),
 }
 
-#[derive(Debug, PartialEq)]
-pub struct BlockDescriptor {
-    inputs: Vec<BlockType>,
-    output: BlockType,
-}
+impl InputType {
+    pub fn base_type(&self) -> InputType {
+        use InputType::*;
+        // unions of types should be represented with the least restrictive type first, so that casting chooses the less restrictive type to cast to
+        match self {
+            Any => Union(Box::new(String), Box::new(Number)).base_type(),
+            Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
+            Integer => Union(Box::new(ConcreteInteger), Box::new(Boolean)).base_type(),
+            Union(a, b) => Union(Box::new(a.base_type()), Box::new(b.base_type())),
+            _ => self.clone(),
+        }
+    }
 
-impl BlockDescriptor {
-    pub fn new(inputs: Vec<BlockType>, output: BlockType) -> Self {
-        Self { inputs, output }
+    pub fn least_restrictive_concrete_type(&self) -> InputType {
+        match self.base_type() {
+            InputType::Union(a, _) => a.least_restrictive_concrete_type(),
+            other => other,
+        }
     }
-    pub fn inputs(&self) -> &Vec<BlockType> {
-        &self.inputs
-    }
-    pub fn output(&self) -> &BlockType {
-        &self.output
+
+    pub fn includes(&self, other: &Self) -> bool {
+        if self.base_type() == other.base_type() {
+            true
+        } else if let InputType::Union(a, b) = self.base_type() {
+            a.includes(other) || b.includes(other)
+        } else {
+            false
+        }
     }
 }
 
@@ -448,40 +675,42 @@ impl IrOpcode {
         use IrOpcode::*;
         matches!(self, looks_say | looks_think)
     }
-    pub fn descriptor(&self) -> Result<BlockDescriptor, HQError> {
-        use BlockType::*;
+
+    pub fn expected_inputs(&self) -> Result<Vec<InputType>, HQError> {
+        use InputType::*;
         use IrOpcode::*;
         Ok(match self {
             operator_add | operator_subtract | operator_multiply | operator_divide
-            | operator_mod | operator_random => BlockDescriptor::new(vec![Number, Number], Number),
-            operator_round | operator_mathop { .. } => BlockDescriptor::new(vec![Number], Number),
-            looks_say | looks_think | data_setvariableto { .. } => BlockDescriptor::new(vec![Any], Stack),
-            math_number { .. }
-            | math_integer { .. }
+            | operator_mod | operator_random => vec![Number, Number],
+            operator_round | operator_mathop { .. } => vec![Number],
+            looks_say | looks_think => vec![Unknown],
+            data_setvariableto { .. } | data_teevariable { .. } => vec![Unknown],
+            math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
             | math_positive_number { .. }
+            | math_number { .. }
             | sensing_timer
-            | looks_size => BlockDescriptor::new(vec![], Number),
-            data_variable { .. } => BlockDescriptor::new(vec![], Any),
-            text { .. } => BlockDescriptor::new(vec![], Text),
-            operator_lt | operator_gt => BlockDescriptor::new(vec![Number, Number], Boolean),
-            operator_equals | operator_contains => BlockDescriptor::new(vec![Any, Any], Boolean),
-            operator_and | operator_or => BlockDescriptor::new(vec![Boolean, Boolean], Boolean),
-            operator_not => BlockDescriptor::new(vec![Boolean], Boolean),
-            operator_join => BlockDescriptor::new(vec![Any, Any], Text),
-            operator_letter_of => BlockDescriptor::new(vec![Number, Any], Text),
-            operator_length => BlockDescriptor::new(vec![Any], Number),
+            | looks_size
+            | data_variable { .. }
+            | text { .. }
+            | boolean { .. } => vec![],
+            operator_lt | operator_gt => vec![Number, Number],
+            operator_equals => vec![Unknown, Unknown],
+            operator_and | operator_or => vec![Boolean, Boolean],
+            operator_not => vec![Boolean],
+            operator_join | operator_contains => vec![String, String],
+            operator_letter_of => vec![Number, String],
+            operator_length => vec![String],
             hq_goto { .. }
             | sensing_resettimer
             | pen_clear
             | pen_stamp
             | pen_penDown
-            | pen_penUp => BlockDescriptor::new(vec![], Stack),
-            hq_goto_if { .. } => BlockDescriptor::new(vec![Boolean], Stack),
-            hq_drop(n) => BlockDescriptor::new(vec![Any; *n], Stack),
-            hq_cast(ty) => BlockDescriptor::new(vec![*ty], *ty),
-            data_teevariable { .. } => BlockDescriptor::new(vec![Any], Any),
+            | pen_penUp => vec![],
+            hq_goto_if { .. } => vec![Boolean],
+            hq_drop(n) => vec![Any; *n],
+            hq_cast(from, _to) => vec![from.clone()],
             pen_setPenColorToColor
             | pen_changePenSizeBy
             | pen_setPenSizeTo
@@ -492,14 +721,135 @@ impl IrOpcode {
             | looks_setsizeto
             | looks_changesizeby
             | motion_turnleft
+            | motion_turnright => vec![Number],
             // todo: looks_switchcostumeto waiting on generic monomorphisation to work properly
-            | looks_switchcostumeto => BlockDescriptor::new(vec![Number], Stack),
-            pen_changePenColorParamBy | pen_setPenColorParamTo => {
-                BlockDescriptor::new(vec![Text, Number], Stack)
-            }
-            motion_gotoxy => BlockDescriptor::new(vec![Number, Number], Stack),
+            looks_switchcostumeto => vec![Any],
+            pen_changePenColorParamBy | pen_setPenColorParamTo => vec![String, Number],
+            motion_gotoxy => vec![Number, Number],
             _ => hq_todo!("{:?}", &self),
         })
+    }
+
+    pub fn output(
+        &self,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+    ) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError> {
+        use InputType::*;
+        use IrOpcode::*;
+        let expected_inputs = self.expected_inputs()?;
+        if type_stack.len() < expected_inputs.len() {
+            hq_bug!(
+                "expected {} inputs, got {}",
+                expected_inputs.len(),
+                type_stack.len()
+            );
+        }
+        let arity = expected_inputs.len();
+        let get_input = |i| {
+            Ok(type_stack
+                .get(arity - 1 - i)
+                .borrow()
+                .clone()
+                .ok_or(make_hq_bug!(""))?
+                .1)
+        };
+        let output = match self {
+            data_teevariable { .. } => Ok(Rc::clone(&type_stack)),
+            hq_cast(_from, to) => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(1)),
+                to.clone(),
+            ))),
+            operator_add | operator_subtract | operator_multiply | operator_random
+            | operator_mod => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(2)),
+                if Integer.includes(&get_input(0)?) && Integer.includes(&get_input(1)?) {
+                    ConcreteInteger
+                } else {
+                    Float
+                },
+            ))),
+            operator_divide => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(2)),
+                Float,
+            ))),
+            looks_size | sensing_timer | math_number { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                Float,
+            ))),
+            data_variable { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                Unknown,
+            ))),
+            math_integer { .. }
+            | math_angle { .. }
+            | math_whole_number { .. }
+            | math_positive_number { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                ConcreteInteger,
+            ))),
+            operator_round => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(1)),
+                ConcreteInteger,
+            ))),
+            operator_length => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(1)),
+                ConcreteInteger,
+            ))),
+            operator_mathop { OPERATOR } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(1)),
+                match OPERATOR.as_str() {
+                    "CEILING" | "FLOOR" => ConcreteInteger,
+                    _ => Float,
+                },
+            ))),
+            text { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                String,
+            ))),
+            boolean { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                Boolean,
+            ))),
+            operator_join | operator_letter_of => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(2)),
+                String,
+            ))),
+            operator_contains | operator_and | operator_or | operator_gt | operator_lt
+            | operator_equals => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(2)),
+                Boolean,
+            ))),
+            operator_not => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack.get(1)),
+                Boolean,
+            ))),
+            motion_gotoxy | pen_setPenColorParamTo => Ok(Rc::clone(&type_stack.get(2))),
+            data_setvariableto { .. }
+            | motion_turnleft
+            | motion_turnright
+            | looks_switchcostumeto
+            | looks_changesizeby
+            | looks_setsizeto
+            | looks_say
+            | looks_think
+            | pen_setPenColorToColor
+            | pen_changePenSizeBy
+            | pen_setPenSizeTo
+            | pen_setPenShadeToNumber
+            | pen_changePenShadeBy
+            | pen_setPenHueToNumber
+            | pen_changePenHueBy
+            | hq_goto_if { .. } => Ok(Rc::clone(&type_stack.get(1))),
+            hq_goto { .. }
+            | sensing_resettimer
+            | pen_clear
+            | pen_penUp
+            | pen_penDown
+            | pen_stamp => Ok(Rc::clone(&type_stack)),
+            hq_drop(n) => Ok(type_stack.get(*n)),
+            _ => hq_todo!("{:?}", &self),
+        };
+        output
     }
 }
 
@@ -539,10 +889,17 @@ pub enum ThreadStart {
     GreenFlag,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Step {
     opcodes: Vec<IrBlock>,
     context: Rc<ThreadContext>,
+}
+
+impl fmt::Debug for TypeStack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let this = Rc::new(RefCell::new(Some(self.clone())));
+        f.debug_list().entries((0..this.len()).rev().map(|i| this.get(this.len() - 1 - i).borrow().clone().unwrap().1)).finish()
+    }
 }
 
 impl Step {
@@ -557,6 +914,108 @@ impl Step {
     }
     pub fn context(&self) -> Rc<ThreadContext> {
         Rc::clone(&self.context)
+    }
+    pub fn const_fold(&mut self) -> Result<(), HQError> {
+        let mut value_stack: Vec<IrVal> = vec![];
+        let mut is_folding = false;
+        let mut fold_start = 0;
+        let mut to_splice/*: Vec<(Range, Vec<IrBlock>)>*/ = vec![];
+        for (i, opcode) in self.opcodes.iter().enumerate() {
+            if !is_folding {
+                if !opcode.is_const() {
+                    continue
+                }
+                is_folding = true;
+                fold_start = i;
+            }
+            let const_value = opcode.const_value(&mut value_stack)?;
+            if const_value.is_none() {
+                is_folding = false;
+                let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
+                for ty in value_stack.iter().map(|val| val.as_input_type()) {
+                    let prev_type_stack = Rc::clone(&type_stack);
+                    type_stack = TypeStack::new_some(TypeStack(prev_type_stack, ty));
+                }
+                //dbg!(&value_stack);
+                let folded_blocks: Result<Vec<_>, HQError> = value_stack.iter().enumerate().map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j))).collect();
+                to_splice.push((fold_start..i, folded_blocks?));
+                value_stack = vec![];
+            }
+        }
+        if is_folding {
+            let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
+            for ty in value_stack.iter().map(|val| val.as_input_type()) {
+                let prev_type_stack = Rc::clone(&type_stack);
+                type_stack = TypeStack::new_some(TypeStack(prev_type_stack, ty));
+            }
+            let folded_blocks: Result<Vec<_>, HQError> = value_stack.iter().enumerate().map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j))).collect();
+            to_splice.push((fold_start..self.opcodes().len(), folded_blocks?));
+        }
+        for (range, replace) in to_splice.into_iter().rev() {
+            self.opcodes.splice(range, replace);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum IrVal {
+    Int(i32),
+    Float(f64),
+    Boolean(bool),
+    String(String),
+}
+
+impl IrVal {
+    pub fn to_f64(self) -> f64 {
+        match self {
+            IrVal::Float(f) => f,
+            IrVal::Int(i) => i as f64,
+            IrVal::Boolean(b) => b as i32 as f64,
+            IrVal::String(s) => s.parse().unwrap_or(0.0)
+        }
+    }
+    pub fn to_i32(self) -> i32 {
+        match self {
+            IrVal::Float(f) => f as i32,
+            IrVal::Int(i) => i ,
+            IrVal::Boolean(b) => b as i32,
+            IrVal::String(s) => s.parse().unwrap_or(0)
+        }
+    }
+    #[allow(clippy::inherent_to_string)]
+    pub fn to_string(self) -> String {
+        match self {
+            IrVal::Float(f) => format!("{f}"),
+            IrVal::Int(i) => format!("{i}"),
+            IrVal::Boolean(b) => format!("{b}"),
+            IrVal::String(s) => s,
+        }
+    }
+    pub fn to_bool(self) -> bool {
+        match self {
+            IrVal::Boolean(b) => b,
+            _ => unreachable!(),
+        }
+    }
+    pub fn as_input_type(&self) -> InputType {
+        match self {
+            IrVal::Float(_) => InputType::Float,
+            IrVal::Int(_) => InputType::ConcreteInteger,
+            IrVal::String(_) => InputType::String,
+            IrVal::Boolean(_) => InputType::Boolean,
+        }
+    }
+    pub fn try_as_block(&self, type_stack: Rc<RefCell<Option<TypeStack>>>) -> Result<IrBlock, HQError> {
+        IrBlock::new_with_stack_no_cast(
+            match self {
+                IrVal::Int(num) => IrOpcode::math_integer { NUM :*num },
+                IrVal::Float(num) => IrOpcode::math_number { NUM: *num },
+                IrVal::String(text) => IrOpcode::text { TEXT: text.clone() },
+                IrVal::Boolean(b) => IrOpcode::boolean { BOOL: *b },
+            },
+            type_stack,
+        )
     }
 }
 
@@ -595,11 +1054,12 @@ trait IrBlockVec {
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
     ) -> Result<(), HQError>;
-    fn fixup_types(&mut self) -> Result<(), HQError>;
+    fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>>;
+    //fn fixup_types(&mut self) -> Result<(), HQError>;
 }
 
 impl IrBlockVec for Vec<IrBlock> {
-    fn fixup_types(&mut self) -> Result<(), HQError> {
+    /*fn fixup_types(&mut self) -> Result<(), HQError> {
         let mut type_stack: Vec<(usize, BlockType)> = vec![];
         let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
         for (index, op) in self.iter().enumerate() {
@@ -633,7 +1093,7 @@ impl IrBlockVec for Vec<IrBlock> {
                 .set_expected_output(ty);
         }
         Ok(())
-    }
+    }*/
     fn add_inputs(
         &mut self,
         inputs: &BTreeMap<String, Input>,
@@ -672,14 +1132,20 @@ impl IrBlockVec for Vec<IrBlock> {
         Ok(())
     }
     fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError> {
-        self.push(
+        let prev_block = self.last();
+        let type_stack = if let Some(block) = prev_block {
+            Rc::clone(&block.type_stack)
+        } else {
+            Rc::new(RefCell::new(None))
+        };
+        self.push(IrBlock::new_with_stack_no_cast(
             match block_arr {
                 BlockArray::NumberOrAngle(ty, value) => match ty {
                     4 => IrOpcode::math_number { NUM: *value },
-                    5 => IrOpcode::math_positive_number { NUM: *value },
-                    6 => IrOpcode::math_whole_number { NUM: *value },
-                    7 => IrOpcode::math_integer { NUM: *value },
-                    8 => IrOpcode::math_angle { NUM: *value },
+                    5 => IrOpcode::math_positive_number { NUM: *value as i32 },
+                    6 => IrOpcode::math_whole_number { NUM: *value as i32 },
+                    7 => IrOpcode::math_integer { NUM: *value as i32 },
+                    8 => IrOpcode::math_angle { NUM: *value as i32 },
                     _ => hq_bad_proj!("bad project json (block array of type ({}, u32))", ty),
                 },
                 BlockArray::ColorOrString(ty, value) => match ty {
@@ -716,10 +1182,22 @@ impl IrBlockVec for Vec<IrBlock> {
                     },
                     _ => hq_todo!(""),
                 },
-            }
-            .try_into()?,
-        );
+            },
+            type_stack,
+        )?);
         Ok(())
+    }
+    fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>> {
+        let prev_block = if let Some(j) = i {
+            self.get(j)
+        } else {
+            self.last()
+        };
+        if let Some(block) = prev_block {
+            Rc::clone(&block.type_stack)
+        } else {
+            Rc::new(RefCell::new(None))
+        }
     }
     fn add_block(
         &mut self,
@@ -730,6 +1208,7 @@ impl IrBlockVec for Vec<IrBlock> {
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
     ) -> Result<(), HQError> {
+        use InputType::*;
         let block = blocks.get(&block_id).ok_or(make_hq_bug!(""))?;
         match block {
             Block::Normal { block_info, .. } => {
@@ -740,566 +1219,677 @@ impl IrBlockVec for Vec<IrBlock> {
                     steps,
                     target_id.clone(),
                 )?;
-
-                self.append(
-                    &mut (match block_info.opcode {
-                        BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
-                        BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
-                        BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_resettimer],
-                        BlockOpcode::looks_say => vec![IrOpcode::looks_say],
-                        BlockOpcode::looks_think => vec![IrOpcode::looks_think],
-                        BlockOpcode::looks_show => vec![IrOpcode::looks_show],
-                        BlockOpcode::looks_hide => vec![IrOpcode::looks_hide],
-                        BlockOpcode::looks_hideallsprites => vec![IrOpcode::looks_hideallsprites],
-                        BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
-                        BlockOpcode::looks_costume => {
-                            let val = match block_info.fields.get("COSTUME").ok_or(
-                                make_hq_bad_proj!("invalid project.json - missing field COSTUME"),
-                            )? {
-                                Field::Value((val,)) => val,
-                                Field::ValueId(val, _) => val,
-                            }; /* else {
-                                   hq_bad_proj!("invalid project.json - missing costume for COSTUME field");
-                               };*/
-                            let VarVal::String(name) = val.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null costume name for COSTUME field"
-                            ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - COSTUME field is not of type String"
-                                );
-                            };
-                            log(name.as_str());
-                            let index = context
-                                .costumes
-                                .iter()
-                                .position(|costume| costume.name == name)
-                                .ok_or(make_hq_bad_proj!("missing costume with name {}", name))?;
-                            log(format!("{}", index).as_str());
-                            vec![IrOpcode::math_whole_number { NUM: index as f64 }]
-                        }
-                        BlockOpcode::looks_switchbackdropto => {
-                            vec![IrOpcode::looks_switchbackdropto]
-                        }
-                        BlockOpcode::looks_switchbackdroptoandwait => {
-                            vec![IrOpcode::looks_switchbackdroptoandwait]
-                        }
-                        BlockOpcode::looks_nextcostume => vec![IrOpcode::looks_nextcostume],
-                        BlockOpcode::looks_nextbackdrop => vec![IrOpcode::looks_nextbackdrop],
-                        BlockOpcode::looks_changeeffectby => vec![IrOpcode::looks_changeeffectby],
-                        BlockOpcode::looks_seteffectto => vec![IrOpcode::looks_seteffectto],
-                        BlockOpcode::looks_cleargraphiceffects => {
-                            vec![IrOpcode::looks_cleargraphiceffects]
-                        }
-                        BlockOpcode::looks_changesizeby => vec![IrOpcode::looks_changesizeby],
-                        BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
-                        BlockOpcode::motion_turnleft => vec![IrOpcode::motion_turnleft],
-                        BlockOpcode::looks_size => vec![IrOpcode::looks_size],
-                        BlockOpcode::operator_add => vec![IrOpcode::operator_add],
-                        BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
-                        BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
-                        BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
-                        BlockOpcode::operator_mod => vec![IrOpcode::operator_mod],
-                        BlockOpcode::operator_round => vec![IrOpcode::operator_round],
-                        BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
-                        BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
-                        BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
-                        BlockOpcode::operator_and => vec![IrOpcode::operator_and],
-                        BlockOpcode::operator_or => vec![IrOpcode::operator_or],
-                        BlockOpcode::operator_not => vec![IrOpcode::operator_not],
-                        BlockOpcode::operator_random => vec![IrOpcode::operator_random],
-                        BlockOpcode::operator_join => vec![IrOpcode::operator_join],
-                        BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
-                        BlockOpcode::operator_length => vec![IrOpcode::operator_length],
-                        BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
-                        BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
-                        BlockOpcode::pen_stamp => vec![IrOpcode::pen_stamp],
-                        BlockOpcode::pen_penDown => vec![IrOpcode::pen_penDown],
-                        BlockOpcode::pen_penUp => vec![IrOpcode::pen_penUp],
-                        BlockOpcode::pen_setPenColorToColor => {
-                            vec![IrOpcode::pen_setPenColorToColor]
-                        }
-                        BlockOpcode::pen_changePenColorParamBy => {
-                            vec![IrOpcode::pen_changePenColorParamBy]
-                        }
-                        BlockOpcode::pen_setPenColorParamTo => {
-                            vec![IrOpcode::pen_setPenColorParamTo]
-                        }
-                        BlockOpcode::pen_changePenSizeBy => vec![IrOpcode::pen_changePenSizeBy],
-                        BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setPenSizeTo],
-                        BlockOpcode::pen_setPenShadeToNumber => {
-                            vec![IrOpcode::pen_setPenShadeToNumber]
-                        }
-                        BlockOpcode::pen_changePenShadeBy => vec![IrOpcode::pen_changePenShadeBy],
-                        BlockOpcode::pen_setPenHueToNumber => vec![IrOpcode::pen_setPenHueToNumber],
-                        BlockOpcode::pen_changePenHueBy => vec![IrOpcode::pen_changePenHueBy],
-                        BlockOpcode::pen_menu_colorParam => {
-                            let maybe_val = match block_info.fields.get("colorParam").ok_or(
-                                make_hq_bad_proj!(
+                /*let type_stack = {
+                  let prev_block = self.last();
+                    if let Some(block) = prev_block {
+                        Rc::clone(&block.type_stack)
+                    } else {
+                        Rc::new(RefCell::new(None))
+                    }
+                };
+                let mut casts: BTreeMap<usize, InputType> = BTreeMap::new();
+                let mut add_cast = |i, ty: &InputType| {
+                    casts.insert(i, ty.clone());
+                };*/
+                let ops: Vec<_> = match block_info.opcode {
+                    BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
+                    BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                    BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_resettimer],
+                    BlockOpcode::looks_say => vec![IrOpcode::looks_say],
+                    BlockOpcode::looks_think => vec![IrOpcode::looks_think],
+                    BlockOpcode::looks_show => vec![IrOpcode::looks_show],
+                    BlockOpcode::looks_hide => vec![IrOpcode::looks_hide],
+                    BlockOpcode::looks_hideallsprites => vec![IrOpcode::looks_hideallsprites],
+                    BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+                    BlockOpcode::looks_costume => {
+                        let val = match block_info.fields.get("COSTUME").ok_or(
+                            make_hq_bad_proj!("invalid project.json - missing field COSTUME"),
+                        )? {
+                            Field::Value((val,)) => val,
+                            Field::ValueId(val, _) => val,
+                        }; /* else {
+                               hq_bad_proj!("invalid project.json - missing costume for COSTUME field");
+                           };*/
+                        let VarVal::String(name) = val.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null costume name for COSTUME field"
+                        ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - COSTUME field is not of type String"
+                            );
+                        };
+                        log(name.as_str());
+                        let index = context
+                            .costumes
+                            .iter()
+                            .position(|costume| costume.name == name)
+                            .ok_or(make_hq_bad_proj!("missing costume with name {}", name))?;
+                        log(format!("{}", index).as_str());
+                        vec![IrOpcode::math_whole_number { NUM: index as i32 }]
+                    }
+                    BlockOpcode::looks_switchbackdropto => {
+                        vec![IrOpcode::looks_switchbackdropto]
+                    }
+                    BlockOpcode::looks_switchbackdroptoandwait => {
+                        vec![IrOpcode::looks_switchbackdroptoandwait]
+                    }
+                    BlockOpcode::looks_nextcostume => vec![IrOpcode::looks_nextcostume],
+                    BlockOpcode::looks_nextbackdrop => vec![IrOpcode::looks_nextbackdrop],
+                    BlockOpcode::looks_changeeffectby => vec![IrOpcode::looks_changeeffectby],
+                    BlockOpcode::looks_seteffectto => vec![IrOpcode::looks_seteffectto],
+                    BlockOpcode::looks_cleargraphiceffects => {
+                        vec![IrOpcode::looks_cleargraphiceffects]
+                    }
+                    BlockOpcode::looks_changesizeby => vec![IrOpcode::looks_changesizeby],
+                    BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
+                    BlockOpcode::motion_turnleft => vec![IrOpcode::motion_turnleft],
+                    BlockOpcode::looks_size => vec![IrOpcode::looks_size],
+                    BlockOpcode::operator_add => vec![IrOpcode::operator_add],
+                    BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
+                    BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
+                    BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
+                    BlockOpcode::operator_mod => vec![IrOpcode::operator_mod],
+                    BlockOpcode::operator_round => vec![IrOpcode::operator_round],
+                    BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
+                    BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
+                    BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
+                    BlockOpcode::operator_and => vec![IrOpcode::operator_and],
+                    BlockOpcode::operator_or => vec![IrOpcode::operator_or],
+                    BlockOpcode::operator_not => vec![IrOpcode::operator_not],
+                    BlockOpcode::operator_random => vec![IrOpcode::operator_random],
+                    BlockOpcode::operator_join => vec![IrOpcode::operator_join],
+                    BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
+                    BlockOpcode::operator_length => vec![IrOpcode::operator_length],
+                    BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
+                    BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
+                    BlockOpcode::pen_stamp => vec![IrOpcode::pen_stamp],
+                    BlockOpcode::pen_penDown => vec![IrOpcode::pen_penDown],
+                    BlockOpcode::pen_penUp => vec![IrOpcode::pen_penUp],
+                    BlockOpcode::pen_setPenColorToColor => {
+                        vec![IrOpcode::pen_setPenColorToColor]
+                    }
+                    BlockOpcode::pen_changePenColorParamBy => {
+                        vec![IrOpcode::pen_changePenColorParamBy]
+                    }
+                    BlockOpcode::pen_setPenColorParamTo => {
+                        vec![IrOpcode::pen_setPenColorParamTo]
+                    }
+                    BlockOpcode::pen_changePenSizeBy => vec![IrOpcode::pen_changePenSizeBy],
+                    BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setPenSizeTo],
+                    BlockOpcode::pen_setPenShadeToNumber => {
+                        vec![IrOpcode::pen_setPenShadeToNumber]
+                    }
+                    BlockOpcode::pen_changePenShadeBy => vec![IrOpcode::pen_changePenShadeBy],
+                    BlockOpcode::pen_setPenHueToNumber => vec![IrOpcode::pen_setPenHueToNumber],
+                    BlockOpcode::pen_changePenHueBy => vec![IrOpcode::pen_changePenHueBy],
+                    BlockOpcode::pen_menu_colorParam => {
+                        let maybe_val =
+                            match block_info
+                                .fields
+                                .get("colorParam")
+                                .ok_or(make_hq_bad_proj!(
                                     "invalid project.json - missing field colorParam"
-                                ),
-                            )? {
+                                ))? {
                                 Field::Value((v,)) | Field::ValueId(v, _) => v,
                             };
-                            let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null value for OPERATOR field"
-                            ))?;
-                            let VarVal::String(val) = val_varval else {
-                                hq_bad_proj!(
-                                    "invalid project.json - expected colorParam field to be string"
-                                );
-                            };
-                            vec![IrOpcode::text { TEXT: val }]
+                        let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null value for OPERATOR field"
+                        ))?;
+                        let VarVal::String(val) = val_varval else {
+                            hq_bad_proj!(
+                                "invalid project.json - expected colorParam field to be string"
+                            );
+                        };
+                        vec![IrOpcode::text { TEXT: val }]
+                    }
+                    BlockOpcode::operator_mathop => {
+                        let maybe_val = match block_info.fields.get("OPERATOR").ok_or(
+                            make_hq_bad_proj!("invalid project.json - missing field OPERATOR"),
+                        )? {
+                            Field::Value((v,)) | Field::ValueId(v, _) => v,
+                        };
+                        let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null value for OPERATOR field"
+                        ))?;
+                        let VarVal::String(val) = val_varval else {
+                            hq_bad_proj!(
+                                "invalid project.json - expected OPERATOR field to be string"
+                            );
+                        };
+                        vec![IrOpcode::operator_mathop { OPERATOR: val }]
+                    }
+                    BlockOpcode::data_variable => {
+                        let Field::ValueId(_val, maybe_id) =
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null variable id for VARIABLE field"
+                        ))?;
+                        vec![IrOpcode::data_variable { VARIABLE: id }]
+                    }
+                    BlockOpcode::data_setvariableto => {
+                        let Field::ValueId(_val, maybe_id) =
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null variable id for VARIABLE field"
+                        ))?;
+                        vec![IrOpcode::data_setvariableto { VARIABLE: id }]
+                    }
+                    BlockOpcode::data_changevariableby => {
+                        let Field::ValueId(_val, maybe_id) =
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null id for VARIABLE field"
+                        ))?;
+                        vec![
+                            IrOpcode::data_variable {
+                                VARIABLE: id.to_string(),
+                            },
+                            IrOpcode::operator_add,
+                            IrOpcode::data_setvariableto { VARIABLE: id },
+                        ]
+                    }
+                    BlockOpcode::control_if => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info
+                            .inputs
+                            .get("SUBSTACK")
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        {
+                            id
+                        } else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let mut new_nexts = last_nexts.clone();
+                        if let Some(ref next) = block_info.next {
+                            new_nexts.push(next.clone());
                         }
-                        BlockOpcode::operator_mathop => {
-                            let maybe_val = match block_info.fields.get("OPERATOR").ok_or(
-                                make_hq_bad_proj!("invalid project.json - missing field OPERATOR"),
-                            )? {
-                                Field::Value((v,)) | Field::ValueId(v, _) => v,
-                            };
-                            let val_varval = maybe_val.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null value for OPERATOR field"
-                            ))?;
-                            let VarVal::String(val) = val_varval else {
-                                hq_bad_proj!(
-                                    "invalid project.json - expected OPERATOR field to be string"
-                                );
-                            };
-                            vec![IrOpcode::operator_mathop { OPERATOR: val }]
+                        step_from_top_block(
+                            substack_id.clone(),
+                            new_nexts,
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        step_from_top_block(
+                            block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                            last_nexts,
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        vec![
+                            IrOpcode::hq_goto_if {
+                                step: Some((target_id.clone(), substack_id)),
+                                does_yield: false,
+                            },
+                            IrOpcode::hq_goto {
+                                step: if block_info.next.is_some() {
+                                    Some((
+                                        target_id,
+                                        block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                    ))
+                                } else {
+                                    None
+                                },
+                                does_yield: false,
+                            },
+                        ]
+                    }
+                    BlockOpcode::control_if_else => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info
+                            .inputs
+                            .get("SUBSTACK")
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        {
+                            id
+                        } else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let substack2_id = if let BlockArrayOrId::Id(id) = block_info
+                            .inputs
+                            .get("SUBSTACK2")
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        {
+                            id
+                        } else {
+                            hq_bad_proj!("malformed SUBSTACK2 input")
+                        };
+                        let mut new_nexts = last_nexts;
+                        if let Some(ref next) = block_info.next {
+                            new_nexts.push(next.clone());
                         }
-                        BlockOpcode::data_variable => {
-                            let Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
-                                    "invalid project.json - missing field VARIABLE"
-                                ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null variable id for VARIABLE field"
-                            ))?;
-                            vec![IrOpcode::data_variable { VARIABLE: id }]
-                        }
-                        BlockOpcode::data_setvariableto => {
-                            let Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
-                                    "invalid project.json - missing field VARIABLE"
-                                ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null variable id for VARIABLE field"
-                            ))?;
-                            vec![IrOpcode::data_setvariableto { VARIABLE: id }]
-                        }
-                        BlockOpcode::data_changevariableby => {
-                            let Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
-                                    "invalid project.json - missing field VARIABLE"
-                                ))?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
-                                "invalid project.json - null id for VARIABLE field"
-                            ))?;
-                            vec![
+                        step_from_top_block(
+                            substack_id.clone(),
+                            new_nexts.clone(),
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        step_from_top_block(
+                            substack2_id.clone(),
+                            new_nexts.clone(),
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        vec![
+                            IrOpcode::hq_goto_if {
+                                step: Some((target_id.clone(), substack_id)),
+                                does_yield: false,
+                            },
+                            IrOpcode::hq_goto {
+                                step: Some((target_id, substack2_id)),
+                                does_yield: false,
+                            },
+                        ]
+                    }
+                    BlockOpcode::control_repeat => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info
+                            .inputs
+                            .get("SUBSTACK")
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        {
+                            id
+                        } else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let condition_opcodes = vec![
+                            IrOpcode::hq_goto_if {
+                                step: Some((
+                                    target_id.clone(),
+                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                )),
+                                does_yield: true,
+                            },
+                            IrOpcode::hq_goto {
+                                step: Some((target_id.clone(), substack_id.clone())),
+                                does_yield: true,
+                            },
+                        ];
+                        let looper_id = Uuid::new_v4().to_string();
+                        context.vars.borrow_mut().push(IrVar::new(
+                            looper_id.clone(),
+                            looper_id.clone(),
+                            VarVal::Float(0.0),
+                            false,
+                        ));
+                        if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
+                            let type_stack = Rc::new(RefCell::new(None));
+                            let mut looper_opcodes = vec![IrBlock::new_with_stack_no_cast(
                                 IrOpcode::data_variable {
-                                    VARIABLE: id.to_string(),
+                                    VARIABLE: looper_id.clone(),
                                 },
-                                IrOpcode::operator_add,
-                                IrOpcode::data_setvariableto { VARIABLE: id },
-                            ]
-                        }
-                        BlockOpcode::control_if => {
-                            let substack_id = if let BlockArrayOrId::Id(id) = block_info
-                                .inputs
-                                .get("SUBSTACK")
-                                .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                                .get_1()
-                                .ok_or(make_hq_bug!(""))?
-                                .clone()
-                                .ok_or(make_hq_bug!(""))?
-                            {
-                                id
-                            } else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let mut new_nexts = last_nexts.clone();
-                            if let Some(ref next) = block_info.next {
-                                new_nexts.push(next.clone());
-                            }
-                            step_from_top_block(
-                                substack_id.clone(),
-                                new_nexts,
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            step_from_top_block(
-                                block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                last_nexts,
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            vec![
-                                IrOpcode::hq_goto_if {
-                                    step: Some((target_id.clone(), substack_id)),
-                                    does_yield: false,
-                                },
-                                IrOpcode::hq_goto {
-                                    step: if block_info.next.is_some() {
-                                        Some((
-                                            target_id,
-                                            block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                        ))
-                                    } else {
-                                        None
-                                    },
-                                    does_yield: false,
-                                },
-                            ]
-                        }
-                        BlockOpcode::control_if_else => {
-                            let substack_id = if let BlockArrayOrId::Id(id) = block_info
-                                .inputs
-                                .get("SUBSTACK")
-                                .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                                .get_1()
-                                .ok_or(make_hq_bug!(""))?
-                                .clone()
-                                .ok_or(make_hq_bug!(""))?
-                            {
-                                id
-                            } else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let substack2_id = if let BlockArrayOrId::Id(id) = block_info
-                                .inputs
-                                .get("SUBSTACK2")
-                                .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                                .get_1()
-                                .ok_or(make_hq_bug!(""))?
-                                .clone()
-                                .ok_or(make_hq_bug!(""))?
-                            {
-                                id
-                            } else {
-                                hq_bad_proj!("malformed SUBSTACK2 input")
-                            };
-                            let mut new_nexts = last_nexts;
-                            if let Some(ref next) = block_info.next {
-                                new_nexts.push(next.clone());
-                            }
-                            step_from_top_block(
-                                substack_id.clone(),
-                                new_nexts.clone(),
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            step_from_top_block(
-                                substack2_id.clone(),
-                                new_nexts.clone(),
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            vec![
-                                IrOpcode::hq_goto_if {
-                                    step: Some((target_id.clone(), substack_id)),
-                                    does_yield: false,
-                                },
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id, substack2_id)),
-                                    does_yield: false,
-                                },
-                            ]
-                        }
-                        BlockOpcode::control_repeat => {
-                            let substack_id = if let BlockArrayOrId::Id(id) = block_info
-                                .inputs
-                                .get("SUBSTACK")
-                                .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                                .get_1()
-                                .ok_or(make_hq_bug!(""))?
-                                .clone()
-                                .ok_or(make_hq_bug!(""))?
-                            {
-                                id
-                            } else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let mut condition_opcodes = vec![
-                                IrOpcode::hq_goto_if {
-                                    step: Some((
-                                        target_id.clone(),
-                                        block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                    )),
-                                    does_yield: true,
-                                }
-                                .try_into()?,
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id.clone(), substack_id.clone())),
-                                    does_yield: true,
-                                }
-                                .try_into()?,
-                            ];
-                            let looper_id = Uuid::new_v4().to_string();
-                            context.vars.borrow_mut().push(IrVar::new(
-                                looper_id.clone(),
-                                looper_id.clone(),
-                                VarVal::Float(0.0),
-                                false,
-                            ));
-                            if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
-                                let mut looper_opcodes = vec![
-                                    IrOpcode::data_variable {
-                                        VARIABLE: looper_id.clone(),
-                                    }
-                                    .try_into()?,
-                                    IrOpcode::math_number { NUM: 1.0 }.try_into()?,
-                                    IrOpcode::operator_subtract.try_into()?,
-                                    IrOpcode::data_teevariable {
-                                        VARIABLE: looper_id.clone(),
-                                    }
-                                    .try_into()?,
-                                    IrOpcode::math_number { NUM: 1.0 }.try_into()?,
-                                    IrOpcode::operator_lt.try_into()?,
-                                ];
-                                //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                                looper_opcodes.append(&mut condition_opcodes.clone());
-                                looper_opcodes.fixup_types()?;
-                                steps.insert(
-                                    (target_id.clone(), looper_id.clone()),
-                                    Step::new(looper_opcodes, Rc::clone(&context)),
-                                );
-                            }
-                            step_from_top_block(
-                                block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                last_nexts,
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            step_from_top_block(
-                                substack_id.clone(),
-                                vec![looper_id.clone()],
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            let mut opcodes = vec![];
-                            opcodes.add_inputs(
-                                &block_info.inputs,
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            opcodes.append(&mut condition_opcodes);
-                            opcodes.fixup_types()?;
-                            steps.insert(
-                                (target_id.clone(), block_id.clone()),
-                                Step::new(opcodes.clone(), Rc::clone(&context)),
-                            );
-                            vec![
-                                IrOpcode::operator_round,
+                                type_stack,
+                            )?];
+                            for op in [
+                                IrOpcode::hq_cast(InputType::Unknown, InputType::Float), // todo: integer
+                                IrOpcode::math_whole_number { NUM: 1 },
+                                IrOpcode::operator_subtract,
+                                IrOpcode::hq_cast(Float, Unknown),
                                 IrOpcode::data_teevariable {
-                                    VARIABLE: looper_id,
+                                    VARIABLE: looper_id.clone(),
                                 },
-                                IrOpcode::math_number { NUM: 1.0 },
+                                IrOpcode::hq_cast(Unknown, Float),
+                                IrOpcode::math_whole_number { NUM: 1 },
                                 IrOpcode::operator_lt,
-                                IrOpcode::hq_goto_if {
-                                    step: Some((
-                                        target_id.clone(),
-                                        block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                    )),
-                                    does_yield: true,
-                                },
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id, substack_id)),
-                                    does_yield: false,
-                                },
                             ]
-                        }
-                        BlockOpcode::control_repeat_until => {
-                            let substack_id = if let BlockArrayOrId::Id(id) = block_info
-                                .inputs
-                                .get("SUBSTACK")
-                                .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                                .get_1()
-                                .ok_or(make_hq_bug!(""))?
-                                .clone()
-                                .ok_or(make_hq_bug!(""))?
+                            .into_iter()
                             {
-                                id
-                            } else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let mut condition_opcodes = vec![
-                                IrOpcode::hq_goto_if {
-                                    step: Some((
-                                        target_id.clone(),
-                                        block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                    )),
-                                    does_yield: true,
-                                }
-                                .try_into()?,
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id.clone(), substack_id.clone())),
-                                    does_yield: true,
-                                }
-                                .try_into()?,
-                            ];
-                            let looper_id = Uuid::new_v4().to_string();
-                            if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
-                                let mut looper_opcodes = vec![];
-                                looper_opcodes.add_inputs(
-                                    &block_info.inputs,
-                                    blocks,
-                                    Rc::clone(&context),
-                                    steps,
-                                    target_id.clone(),
-                                )?;
-                                looper_opcodes.append(&mut condition_opcodes.clone());
-                                looper_opcodes.fixup_types()?;
-                                steps.insert(
-                                    (target_id.clone(), looper_id.clone()),
-                                    Step::new(looper_opcodes, Rc::clone(&context)),
-                                );
+                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(
+                                    op,
+                                    Rc::clone(
+                                        &looper_opcodes.last().ok_or(make_hq_bug!(""))?.type_stack,
+                                    ),
+                                )?);
                             }
-                            step_from_top_block(
-                                block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                last_nexts,
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            step_from_top_block(
-                                substack_id.clone(),
-                                vec![looper_id],
-                                blocks,
-                                Rc::clone(&context),
-                                steps,
-                                target_id.clone(),
-                            )?;
-                            let mut opcodes = vec![];
-                            opcodes.add_inputs(
+                            for op in condition_opcodes.iter() {
+                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(
+                                    op.clone(),
+                                    Rc::clone(
+                                        &looper_opcodes.last().ok_or(make_hq_bug!(""))?.type_stack,
+                                    ),
+                                )?);
+                            }
+                            //looper_opcodes.fixup_types()?;
+                            steps.insert(
+                                (target_id.clone(), looper_id.clone()),
+                                Step::new(looper_opcodes, Rc::clone(&context)),
+                            );
+                        }
+                        step_from_top_block(
+                            block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                            last_nexts,
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        step_from_top_block(
+                            substack_id.clone(),
+                            vec![looper_id.clone()],
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        let mut opcodes = vec![];
+                        opcodes.add_inputs(
+                            &block_info.inputs,
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        for op in [
+                            IrOpcode::math_whole_number { NUM: 1 },
+                            IrOpcode::operator_lt,
+                        ]
+                        .into_iter()
+                        .chain(condition_opcodes.into_iter())
+                        {
+                            opcodes.push(IrBlock::new_with_stack_no_cast(
+                                op,
+                                Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
+                            )?);
+                        }
+                        //opcodes.fixup_types()?;
+                        steps.insert(
+                            (target_id.clone(), block_id.clone()),
+                            Step::new(opcodes.clone(), Rc::clone(&context)),
+                        );
+                        vec![
+                            IrOpcode::operator_round,
+                            IrOpcode::hq_cast(ConcreteInteger, Unknown),
+                            IrOpcode::data_teevariable {
+                                VARIABLE: looper_id,
+                            },
+                            IrOpcode::hq_cast(Unknown, Float),
+                            IrOpcode::math_number { NUM: 1.0 },
+                            IrOpcode::operator_lt,
+                            IrOpcode::hq_goto_if {
+                                step: Some((
+                                    target_id.clone(),
+                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                )),
+                                does_yield: true,
+                            },
+                            IrOpcode::hq_goto {
+                                step: Some((target_id, substack_id)),
+                                does_yield: false,
+                            },
+                        ]
+                    }
+                    BlockOpcode::control_repeat_until => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info
+                            .inputs
+                            .get("SUBSTACK")
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        {
+                            id
+                        } else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let condition_opcodes = vec![
+                            IrOpcode::hq_goto_if {
+                                step: Some((
+                                    target_id.clone(),
+                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                )),
+                                does_yield: true,
+                            },
+                            IrOpcode::hq_goto {
+                                step: Some((target_id.clone(), substack_id.clone())),
+                                does_yield: true,
+                            },
+                        ];
+                        let looper_id = Uuid::new_v4().to_string();
+                        if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
+                            let mut looper_opcodes = vec![];
+                            looper_opcodes.add_inputs(
                                 &block_info.inputs,
                                 blocks,
                                 Rc::clone(&context),
                                 steps,
                                 target_id.clone(),
                             )?;
-                            opcodes.append(&mut condition_opcodes);
-                            opcodes.fixup_types()?;
+                            for op in condition_opcodes.clone().into_iter() {
+                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(
+                                    op,
+                                    Rc::clone(
+                                        &looper_opcodes.last().ok_or(make_hq_bug!(""))?.type_stack,
+                                    ),
+                                )?);
+                            }
+                            //looper_opcodes.fixup_types()?;
                             steps.insert(
-                                (target_id.clone(), block_id.clone()),
-                                Step::new(opcodes.clone(), Rc::clone(&context)),
+                                (target_id.clone(), looper_id.clone()),
+                                Step::new(looper_opcodes, Rc::clone(&context)),
                             );
-                            vec![
-                                IrOpcode::hq_goto_if {
-                                    step: Some((
-                                        target_id.clone(),
-                                        block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                    )),
-                                    does_yield: true,
-                                },
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id, substack_id)),
-                                    does_yield: false,
-                                },
-                            ]
                         }
-                        BlockOpcode::control_forever => {
-                            let substack_id = if let BlockArrayOrId::Id(id) = block_info
-                                .inputs
-                                .get("SUBSTACK")
-                                .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                                .get_1()
-                                .ok_or(make_hq_bug!(""))?
-                                .clone()
-                                .ok_or(make_hq_bug!(""))?
-                            {
-                                id
-                            } else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let mut condition_opcodes = vec![
-                                //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true }.into(),
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id.clone(), substack_id.clone())),
-                                    does_yield: true,
-                                }
-                                .try_into()?,
-                            ];
-                            let looper_id = Uuid::new_v4().to_string();
-                            if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
-                                let mut looper_opcodes = vec![];
-                                //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                                looper_opcodes.append(&mut condition_opcodes.clone());
-                                looper_opcodes.fixup_types()?;
-                                steps.insert(
-                                    (target_id.clone(), looper_id.clone()),
-                                    Step::new(looper_opcodes, Rc::clone(&context)),
-                                );
-                            }
-                            if let Some(next) = block_info.next.clone() {
-                                step_from_top_block(
-                                    next,
-                                    last_nexts,
-                                    blocks,
-                                    Rc::clone(&context),
-                                    steps,
+                        step_from_top_block(
+                            block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                            last_nexts,
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        step_from_top_block(
+                            substack_id.clone(),
+                            vec![looper_id],
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        let mut opcodes = vec![];
+                        opcodes.add_inputs(
+                            &block_info.inputs,
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        for op in condition_opcodes.into_iter() {
+                            opcodes.push(IrBlock::new_with_stack_no_cast(
+                                op,
+                                Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
+                            )?);
+                        }
+                        //opcodes.fixup_types()?;
+                        steps.insert(
+                            (target_id.clone(), block_id.clone()),
+                            Step::new(opcodes.clone(), Rc::clone(&context)),
+                        );
+                        vec![
+                            IrOpcode::hq_goto_if {
+                                step: Some((
                                     target_id.clone(),
-                                )?;
+                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                )),
+                                does_yield: true,
+                            },
+                            IrOpcode::hq_goto {
+                                step: Some((target_id, substack_id)),
+                                does_yield: false,
+                            },
+                        ]
+                    }
+                    BlockOpcode::control_forever => {
+                        let substack_id = if let BlockArrayOrId::Id(id) = block_info
+                            .inputs
+                            .get("SUBSTACK")
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        {
+                            id
+                        } else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let condition_opcodes = vec![
+                            //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true }.into(),
+                            IrOpcode::hq_goto {
+                                step: Some((target_id.clone(), substack_id.clone())),
+                                does_yield: true,
+                            },
+                        ];
+                        let looper_id = Uuid::new_v4().to_string();
+                        if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
+                            let mut looper_opcodes = vec![];
+                            //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
+                            for op in condition_opcodes.clone().into_iter() {
+                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(
+                                    op,
+                                    Rc::new(RefCell::new(None)),
+                                )?);
                             }
+                            //looper_opcodes.fixup_types()?;
+                            steps.insert(
+                                (target_id.clone(), looper_id.clone()),
+                                Step::new(looper_opcodes, Rc::clone(&context)),
+                            );
+                        }
+                        if let Some(next) = block_info.next.clone() {
                             step_from_top_block(
-                                substack_id.clone(),
-                                vec![looper_id],
+                                next,
+                                last_nexts,
                                 blocks,
                                 Rc::clone(&context),
                                 steps,
                                 target_id.clone(),
                             )?;
-                            let mut opcodes = vec![];
-                            //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                            opcodes.append(&mut condition_opcodes);
-                            opcodes.fixup_types()?;
-                            steps.insert(
-                                (target_id.clone(), block_id.clone()),
-                                Step::new(opcodes.clone(), Rc::clone(&context)),
-                            );
-                            vec![
-                                //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true },
-                                IrOpcode::hq_goto {
-                                    step: Some((target_id, substack_id)),
-                                    does_yield: false,
-                                },
-                            ]
                         }
-                        ref other => hq_todo!("unknown block {:?}", other),
-                    })
-                    .into_iter()
-                    .map(IrBlock::try_from)
-                    .collect::<Result<_, _>>()?,
-                );
+                        step_from_top_block(
+                            substack_id.clone(),
+                            vec![looper_id],
+                            blocks,
+                            Rc::clone(&context),
+                            steps,
+                            target_id.clone(),
+                        )?;
+                        let mut opcodes = vec![];
+                        //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
+                        for op in condition_opcodes.into_iter() {
+                            opcodes.push(IrBlock::new_with_stack_no_cast(
+                                op,
+                                Rc::new(RefCell::new(None)),
+                            )?);
+                        }
+                        //opcodes.fixup_types()?;
+                        steps.insert(
+                            (target_id.clone(), block_id.clone()),
+                            Step::new(opcodes.clone(), Rc::clone(&context)),
+                        );
+                        vec![
+                            //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true },
+                            IrOpcode::hq_goto {
+                                step: Some((target_id, substack_id)),
+                                does_yield: false,
+                            },
+                        ]
+                    }
+                    ref other => hq_todo!("unknown block {:?}", other),
+                };
+                //.into_iter()
+                //.map(|opcode| IrBlock::new_with_stack(opcode, get_type_stack(), &mut add_cast))
+                //.collect::<Result<_, _>>()?;
+                for op in ops.into_iter() {
+                    let type_stack = self.get_type_stack(None);
+                    let mut casts: BTreeMap<usize, InputType> = BTreeMap::new();
+                    let mut add_cast = |i, ty: &InputType| {
+                        casts.insert(i, ty.clone());
+                    };
+                    let block =
+                        IrBlock::new_with_stack(op.clone(), Rc::clone(&type_stack), &mut add_cast)?;
+                    for (j, cast_type) in casts.iter() {
+                        let cast_pos = self
+                            .iter()
+                            .rposition(|b| b.type_stack.len() == type_stack.len() - j)
+                            .ok_or(make_hq_bug!(""))?;
+                        let cast_stack = self.get_type_stack(Some(cast_pos));
+                        #[allow(clippy::let_and_return)]
+                        let cast_block = IrBlock::new_with_stack_no_cast(
+                            IrOpcode::hq_cast(
+                                {
+                                    let from = cast_stack
+                                        .borrow()
+                                        .clone()
+                                        .ok_or(make_hq_bug!(
+                                            "tried to cast to {:?} from empty type stack at {:?}",
+                                            cast_type.clone(),
+                                            op
+                                        ))?
+                                        .1;
+                                    from
+                                },
+                                cast_type.clone(),
+                            ),
+                            cast_stack,
+                        )?;
+                        self.insert(cast_pos + 1, cast_block);
+                    }
+                    self.push(block);
+                    /*if let Some(ty) = casts.get(&(type_stack.len() - 1 - i) {
+                        let this_prev_block = self.last();
+                        let this_type_stack = if let Some(block) = this_prev_block {
+                            Rc::clone(&block.type_stack)
+                        } else {
+                            hq_bug!("tried to cast from an empty type stack")
+                            //Rc::new(RefCell::new(None))
+                        };
+                        self.push(IrBlock::new_with_stack_no_cast(
+                            IrOpcode::hq_cast({ let from = this_type_stack.borrow().clone().ok_or(make_hq_bug!("tried to cast to {:?} from empty type stack at {:?}", ty, op))?.1; from }, ty.clone()),
+                            this_type_stack,
+                        )?);
+                    }*/
+                }
             }
             Block::Special(a) => self.add_block_arr(a)?,
         };
@@ -1338,11 +1928,7 @@ pub fn step_from_top_block<'a>(
         {
             next_id = last_nexts.pop();
         } else {
-            next_id = next_block
-                .block_info()
-                .ok_or(make_hq_bug!(""))?
-                .next
-                .clone();
+            next_id.clone_from(&next_block.block_info().ok_or(make_hq_bug!(""))?.next);
         }
         if ops.is_empty() {
             hq_bug!("assertion failed: !ops.is_empty()")
@@ -1359,13 +1945,13 @@ pub fn step_from_top_block<'a>(
             next_block = block;
         } else if steps.contains_key(&(target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?))
         {
-            ops.push(
+            ops.push(IrBlock::new_with_stack_no_cast(
                 IrOpcode::hq_goto {
                     step: Some((target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?)),
                     does_yield: false,
-                }
-                .try_into()?,
-            );
+                },
+                Rc::clone(&ops.last().unwrap().type_stack),
+            )?);
             next_id = None;
             break;
         } else {
@@ -1380,9 +1966,9 @@ pub fn step_from_top_block<'a>(
             break;
         }
     }
-    ops.fixup_types()?;
+    //ops.fixup_types()?;
     let mut step = Step::new(ops.clone(), Rc::clone(&context));
-    step.opcodes_mut().push(if let Some(ref id) = next_id {
+    let goto = if let Some(ref id) = next_id {
         step_from_top_block(
             id.clone(),
             last_nexts,
@@ -1391,16 +1977,23 @@ pub fn step_from_top_block<'a>(
             steps,
             target_id.clone(),
         )?;
-        IrBlock::try_from(IrOpcode::hq_goto {
-            step: Some((target_id.clone(), id.clone())),
-            does_yield: true,
-        })?
+        IrBlock::new_with_stack_no_cast(
+            IrOpcode::hq_goto {
+                step: Some((target_id.clone(), id.clone())),
+                does_yield: true,
+            },
+            Rc::clone(&step.opcodes().last().unwrap().type_stack),
+        )?
     } else {
-        IrBlock::try_from(IrOpcode::hq_goto {
-            step: None,
-            does_yield: false,
-        })?
-    });
+        IrBlock::new_with_stack_no_cast(
+            IrOpcode::hq_goto {
+                step: None,
+                does_yield: false,
+            },
+            Rc::clone(&step.opcodes().last().unwrap().type_stack),
+        )?
+    };
+    step.opcodes_mut().push(goto);
     steps.insert((target_id.clone(), top_id.clone()), step);
     steps.get(&(target_id, top_id)).ok_or(make_hq_bug!(""))
 }
@@ -1472,7 +2065,36 @@ mod tests {
             .expect("couldn't read hq-test.project.json")
             .try_into()?;
         let ir: IrProject = proj.try_into()?;
-        println!("{:?}", ir);
+        println!("{}", ir);
         Ok(())
+    }
+    
+    #[test]
+    fn const_fold() -> Result<(), HQError> {
+        use crate::sb3::Sb3Project;
+        use std::fs;
+        let proj: Sb3Project = fs::read_to_string("./benchmark (3.1).json")
+            .expect("couldn't read hq-test.project.json")
+            .try_into()?;
+        let mut ir: IrProject = proj.try_into()?;
+        ir.const_fold()?;
+        println!("{}", ir);
+        Ok(())
+    }
+
+    #[test]
+    fn input_types() {
+        use InputType::*;
+        assert!(Number.includes(&Float));
+        assert!(Number.includes(&Integer));
+        assert!(Number.includes(&ConcreteInteger));
+        assert!(Number.includes(&Boolean));
+        assert!(Any.includes(&Float));
+        assert!(Any.includes(&Integer));
+        assert!(Any.includes(&ConcreteInteger));
+        assert!(Any.includes(&Boolean));
+        assert!(Any.includes(&Number));
+        assert!(Any.includes(&String));
+        assert!(!String.includes(&Float));
     }
 }
