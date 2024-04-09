@@ -77,13 +77,13 @@ fn instructions(
             }
         }
         operator_add => {
-            if InputType::Integer.includes(input_types.get(0).unwrap())
+            if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
                 vec![I64Add]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Add]
-            } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
@@ -95,13 +95,13 @@ fn instructions(
             }
         }
         operator_subtract => {
-            if InputType::Integer.includes(input_types.get(0).unwrap())
+            if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
                 vec![I64Sub]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Sub]
-            } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
@@ -114,13 +114,13 @@ fn instructions(
         }
         operator_divide => vec![F64Div],
         operator_multiply => {
-            if InputType::Integer.includes(input_types.get(0).unwrap())
+            if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
                 vec![I64Mul]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Mul]
-            } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
@@ -132,13 +132,13 @@ fn instructions(
             }
         }
         operator_mod => {
-            if InputType::Integer.includes(input_types.get(0).unwrap())
+            if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
                 vec![I32RemS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, Call(func_indices::FMOD)]
-            } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
@@ -150,7 +150,7 @@ fn instructions(
             }
         }
         operator_round => {
-            if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![]
             } else {
                 vec![F64Nearest, I32TruncF64S]
@@ -284,13 +284,13 @@ fn instructions(
             ]
         }
         operator_lt => {
-            if InputType::Integer.includes(input_types.get(0).unwrap())
+            if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
                 vec![I32LtS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Lt]
-            } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
@@ -302,13 +302,13 @@ fn instructions(
             }
         }
         operator_gt => {
-            if InputType::Integer.includes(input_types.get(0).unwrap())
+            if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
                 vec![I32GtS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
                 vec![F64ConvertI32S, F64Gt]
-            } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
+            } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,

@@ -929,7 +929,7 @@ impl Step {
                 fold_start = i;
             }
             let const_value = opcode.const_value(&mut value_stack)?;
-            if const_value == None {
+            if const_value.is_none() {
                 is_folding = false;
                 let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
                 for ty in value_stack.iter().map(|val| val.as_input_type()) {
@@ -972,10 +972,7 @@ impl IrVal {
             IrVal::Float(f) => f,
             IrVal::Int(i) => i as f64,
             IrVal::Boolean(b) => b as i32 as f64,
-            IrVal::String(s) => match s.parse() {
-                Ok(f) => f,
-                Err(_) => 0.0,
-            }
+            IrVal::String(s) => s.parse().unwrap_or(0.0)
         }
     }
     pub fn to_i32(self) -> i32 {
@@ -983,10 +980,7 @@ impl IrVal {
             IrVal::Float(f) => f as i32,
             IrVal::Int(i) => i ,
             IrVal::Boolean(b) => b as i32,
-            IrVal::String(s) => match s.parse() {
-                Ok(i) => i,
-                Err(_) => 0,
-            }
+            IrVal::String(s) => s.parse().unwrap_or(0)
         }
     }
     #[allow(clippy::inherent_to_string)]
@@ -1013,15 +1007,15 @@ impl IrVal {
         }
     }
     pub fn try_as_block(&self, type_stack: Rc<RefCell<Option<TypeStack>>>) -> Result<IrBlock, HQError> {
-        Ok(IrBlock::new_with_stack_no_cast(
+        IrBlock::new_with_stack_no_cast(
             match self {
-                IrVal::Int(NUM) => IrOpcode::math_integer { NUM :*NUM },
-                IrVal::Float(NUM) => IrOpcode::math_number { NUM: *NUM },
-                IrVal::String(TEXT) => IrOpcode::text { TEXT: TEXT.clone() },
-                IrVal::Boolean(BOOL) => IrOpcode::boolean { BOOL: *BOOL },
+                IrVal::Int(num) => IrOpcode::math_integer { NUM :*num },
+                IrVal::Float(num) => IrOpcode::math_number { NUM: *num },
+                IrVal::String(text) => IrOpcode::text { TEXT: text.clone() },
+                IrVal::Boolean(b) => IrOpcode::boolean { BOOL: *b },
             },
             type_stack,
-        )?)
+        )
     }
 }
 
