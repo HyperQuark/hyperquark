@@ -18,7 +18,7 @@ export default async (
     framerate: 30,
   }
 ) => {
-    window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
+    if (window.debug) window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
     let exit;
