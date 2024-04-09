@@ -165,6 +165,7 @@ fn instructions(
         | math_positive_number { NUM } => {
             vec![I32Const(*NUM)]
         }
+        boolean { BOOL } => vec![I32Const(*BOOL as i32)],
         text { TEXT } => {
             /*if expected_output == Number {
                 actual_output = Number;
@@ -286,43 +287,41 @@ fn instructions(
             if InputType::Integer.includes(input_types.get(0).unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
-                vec![I32LtS, I64ExtendI32S]
+                vec![I32LtS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Lt, I64ExtendI32S]
+                vec![F64ConvertI32S, F64Lt]
             } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
                     LocalGet(step_func_locals::F64),
                     F64Lt,
-                    I64ExtendI32S,
                 ]
             } else {
-                vec![F64Lt, I64ExtendI32S]
+                vec![F64Lt]
             }
         }
         operator_gt => {
             if InputType::Integer.includes(input_types.get(0).unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
-                vec![I32GtS, I64ExtendI32S]
+                vec![I32GtS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Gt, I64ExtendI32S]
+                vec![F64ConvertI32S, F64Gt]
             } else if InputType::Integer.includes(input_types.get(0).unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
                     F64ConvertI32S,
                     LocalGet(step_func_locals::F64),
                     F64Gt,
-                    I64ExtendI32S,
                 ]
             } else {
-                vec![F64Gt, I64ExtendI32S]
+                vec![F64Gt]
             }
         }
-        operator_and => vec![I64And],
-        operator_or => vec![I64Or],
-        operator_not => vec![I64Eqz, I64ExtendI32S],
+        operator_and => vec![I32And],
+        operator_or => vec![I32Or],
+        operator_not => vec![I32Eqz],
         operator_equals => vec![Call(func_indices::OPERATOR_EQUALS)],
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
@@ -969,7 +968,6 @@ fn instructions(
                 .try_into()
                 .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
             vec![
-                I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(0),
                 I32Const(threads_offset),
@@ -1028,7 +1026,6 @@ fn instructions(
                 .try_into()
                 .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
             vec![
-                I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(0),
                 I32Const(
@@ -1052,7 +1049,6 @@ fn instructions(
         } => {
             let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
-                I32WrapI64,
                 If(WasmBlockType::Empty),
                 LocalGet(step_func_locals::MEM_LOCATION),
                 Call(
@@ -1078,6 +1074,7 @@ fn instructions(
             (Boolean, Float) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
             (Boolean, String) => vec![Call(func_indices::CAST_BOOL_STRING)],
             (Boolean, Unknown) => vec![
+                I64ExtendI32S,
                 LocalSet(step_func_locals::I64),
                 I32Const(hq_value_types::BOOL64),
                 LocalGet(step_func_locals::I64),
@@ -1163,18 +1160,20 @@ impl CompileToWasm for (&(String, String), &Step) {
             let arity = op.opcode().expected_inputs()?.len();
             let input_types = (0..arity)
                 .map(|j| {
-                    self.1
+                    Ok(self.1
                         .opcodes()
                         .get(i - 1)
-                        .unwrap()
+                        .ok_or(make_hq_bug!(""))?
+                        //.unwrap()
                         .type_stack
                         .get(arity - 1 - j)
                         .borrow()
                         .clone()
-                        .unwrap()
-                        .1
+                        .ok_or(make_hq_bug!("{:?}", op.opcode()))?
+                        //.unwrap()
+                        .1)
                 })
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>, _>>()?;
             let instrs = instructions(op, self.1.context(), string_consts, steps, input_types)?;
             for instr in instrs {
                 func.instruction(&instr);
@@ -1309,7 +1308,7 @@ pub mod types {
     pub const I64_EXTERNREF: u32 = 27;
     pub const I32I64I32_NORESULT: u32 = 28;
     pub const I32I64_NORESULT: u32 = 29;
-    pub const I32I64I32I64_I64: u32 = 30;
+    pub const I32I64I32I64_I32: u32 = 30;
     pub const F64I32I64_EXTERNREF: u32 = 31;
     pub const I32I64I32I64_EXTERNREF: u32 = 32;
     pub const F64_F64: u32 = 33;
@@ -1319,9 +1318,11 @@ pub mod types {
     pub const F64x3F32x4_NORESULT: u32 = 37;
     pub const F64x5F32x4_NORESULT: u32 = 38;
     pub const EXTERNREFx2_EXTERNREF: u32 = 39;
-    pub const EXTERNREFx2_I64: u32 = 40;
+    pub const EXTERNREFx2_I32: u32 = 40;
     pub const F64EXTERNREF_EXTERNREF: u32 = 41;
     pub const I32EXTERNREF_EXTERNREF: u32 = 42;
+    pub const I32_EXTERNREF: u32 = 43;
+    pub const I32I64_I32: u32 = 44;
 }
 
 pub mod table_indices {
@@ -1432,7 +1433,7 @@ impl TryFrom<IrProject> for WasmProject {
         types.function([ValType::I32, ValType::I64], []);
         types.function(
             [ValType::I32, ValType::I64, ValType::I32, ValType::I64],
-            [ValType::I64],
+            [ValType::I32],
         );
         types.function(
             [ValType::F64, ValType::I32, ValType::I64],
@@ -1487,7 +1488,7 @@ impl TryFrom<IrProject> for WasmProject {
                 ValType::Ref(RefType::EXTERNREF),
                 ValType::Ref(RefType::EXTERNREF),
             ],
-            [ValType::I64],
+            [ValType::I32],
         );
         types.function(
             [ValType::F64, ValType::Ref(RefType::EXTERNREF)],
@@ -1496,6 +1497,14 @@ impl TryFrom<IrProject> for WasmProject {
         types.function(
             [ValType::I32, ValType::Ref(RefType::EXTERNREF)],
             [ValType::Ref(RefType::EXTERNREF)],
+        );
+        types.function(
+            [ValType::I32],
+            [ValType::Ref(RefType::EXTERNREF)],
+        );
+        types.function(
+            [ValType::I32, ValType::I64],
+            [ValType::I32],
         );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
@@ -1533,7 +1542,7 @@ impl TryFrom<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "operator_equals",
-            EntityType::Function(types::I32I64I32I64_I64),
+            EntityType::Function(types::I32I64I32I64_I32),
         );
         imports.import(
             "runtime",
@@ -1558,7 +1567,7 @@ impl TryFrom<IrProject> for WasmProject {
         imports.import(
             "runtime",
             "operator_contains",
-            EntityType::Function(types::EXTERNREFx2_I64),
+            EntityType::Function(types::EXTERNREFx2_I32),
         );
         imports.import(
             "runtime",
@@ -1720,27 +1729,25 @@ impl TryFrom<IrProject> for WasmProject {
         fmod_func.instruction(&Instruction::End);
         code.function(&fmod_func);
 
-        functions.function(types::F64_I64);
+        functions.function(types::F64_I32);
         let mut float2bool_func = Function::new(vec![]);
         float2bool_func.instruction(&Instruction::LocalGet(0));
         float2bool_func.instruction(&Instruction::F64Abs);
         float2bool_func.instruction(&Instruction::F64Const(0.0));
         float2bool_func.instruction(&Instruction::F64Eq);
-        float2bool_func.instruction(&Instruction::I64ExtendI32S);
         float2bool_func.instruction(&Instruction::End);
         code.function(&float2bool_func);
 
-        functions.function(types::I64_F64);
+        functions.function(types::I32_F64);
         let mut bool2float_func = Function::new(vec![]);
         bool2float_func.instruction(&Instruction::LocalGet(0));
-        bool2float_func.instruction(&Instruction::F64ConvertI64S);
+        bool2float_func.instruction(&Instruction::F64ConvertI32S);
         bool2float_func.instruction(&Instruction::End);
         code.function(&bool2float_func);
 
-        functions.function(types::I64_EXTERNREF);
+        functions.function(types::I32_EXTERNREF);
         let mut bool2string_func = Function::new(vec![]);
         bool2string_func.instruction(&Instruction::LocalGet(0));
-        bool2string_func.instruction(&Instruction::I32WrapI64);
         bool2string_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
         bool2string_func.instruction(&Instruction::End);
         code.function(&bool2string_func);
@@ -1754,6 +1761,7 @@ impl TryFrom<IrProject> for WasmProject {
             types::NOPARAM_EXTERNREF,
         )));
         any2string_func.instruction(&Instruction::LocalGet(1));
+        any2string_func.instruction(&Instruction::I32WrapI64);
         any2string_func.instruction(&Instruction::Call(func_indices::CAST_BOOL_STRING));
         any2string_func.instruction(&Instruction::Else);
         any2string_func.instruction(&Instruction::LocalGet(0));
@@ -1794,6 +1802,7 @@ impl TryFrom<IrProject> for WasmProject {
             types::NOPARAM_F64,
         )));
         any2float_func.instruction(&Instruction::LocalGet(1));
+        any2float_func.instruction(&Instruction::I32WrapI64);
         any2float_func.instruction(&Instruction::Call(func_indices::CAST_BOOL_FLOAT));
         any2float_func.instruction(&Instruction::Else);
         any2float_func.instruction(&Instruction::LocalGet(0));
@@ -1835,25 +1844,24 @@ impl TryFrom<IrProject> for WasmProject {
         any2float_func.instruction(&Instruction::End);
         code.function(&any2float_func);
 
-        functions.function(types::I32I64_I64);
+        functions.function(types::I32I64_I32);
         let mut any2bool_func = Function::new(vec![]);
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::EXTERN_STRING_REF64));
         any2bool_func.instruction(&Instruction::I32Eq);
         any2bool_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
-            types::NOPARAM_I64,
+            types::NOPARAM_I32,
         )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
         any2bool_func.instruction(&Instruction::I32WrapI64);
         any2bool_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
         any2bool_func.instruction(&Instruction::Call(func_indices::CAST_PRIMITIVE_STRING_BOOL));
-        any2bool_func.instruction(&Instruction::I64ExtendI32S);
         any2bool_func.instruction(&Instruction::Else);
         any2bool_func.instruction(&Instruction::LocalGet(0));
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::FLOAT64));
         any2bool_func.instruction(&Instruction::I32Eq);
         any2bool_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
-            types::NOPARAM_I64,
+            types::NOPARAM_I32,
         )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
         any2bool_func.instruction(&Instruction::F64ReinterpretI64);
@@ -1863,9 +1871,10 @@ impl TryFrom<IrProject> for WasmProject {
         any2bool_func.instruction(&Instruction::I32Const(hq_value_types::BOOL64));
         any2bool_func.instruction(&Instruction::I32Eq);
         any2bool_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
-            types::NOPARAM_I64,
+            types::NOPARAM_I32,
         )));
         any2bool_func.instruction(&Instruction::LocalGet(1));
+        any2bool_func.instruction(&Instruction::I32WrapI64);
         any2bool_func.instruction(&Instruction::Else);
         any2bool_func.instruction(&Instruction::Unreachable);
         any2bool_func.instruction(&Instruction::End);

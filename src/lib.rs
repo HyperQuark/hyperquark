@@ -23,5 +23,7 @@ extern "C" {
 
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str) -> Result<wasm::WasmProject, HQError> {
-    ir::IrProject::try_from(sb3::Sb3Project::try_from(proj)?)?.try_into()
+    let mut ir_proj = ir::IrProject::try_from(sb3::Sb3Project::try_from(proj)?)?;
+    ir_proj.const_fold()?;
+    ir_proj.try_into()
 }

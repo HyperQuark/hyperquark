@@ -12,6 +12,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::hash::BuildHasherDefault;
+use core::fmt;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use uuid::Uuid;
@@ -33,8 +34,21 @@ pub struct IrProject {
     pub sb3: Sb3Project,
 }
 
+impl fmt::Display for IrProject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{\n\tthreads: {:?},\n\tvars: {:?},\n\t,target_names: {:?},\n\tcostumes: {:?},\n\tsteps: {:?}\n}}",
+            self.threads,
+            self.vars,
+            self.target_names,
+            self.costumes,
+            self.steps
+        )
+    }
+}
+
+
 impl IrProject {
-    fn const_fold(&mut self) -> Result<(), HQError> {
+    pub fn const_fold(&mut self) -> Result<(), HQError> {
         for step in self.steps.values_mut() {
             step.const_fold()?;
         }
@@ -153,6 +167,7 @@ impl TryFrom<Sb3Project> for IrProject {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrOpcode {
+    boolean { BOOL: bool },
     control_repeat,
     control_repeat_until,
     control_while,
@@ -367,7 +382,7 @@ pub enum IrOpcode {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TypeStack(pub Rc<RefCell<Option<TypeStack>>>, pub InputType);
 
 impl TypeStack {
@@ -516,7 +531,99 @@ impl IrBlock {
         use IrOpcode::*;
         matches!(self.opcode(), math_number { .. } | math_whole_number { .. } | math_integer { .. } | math_angle { .. } | math_positive_number { .. } | text { .. })
     }
-
+    
+    pub fn const_value(&self, value_stack: &mut Vec<IrVal>) -> Result<Option<()>, HQError> {
+        use IrOpcode::*;
+        //dbg!(value_stack.len());
+        let arity = self.opcode().expected_inputs()?.len();
+        if arity > value_stack.len() {
+            return Ok(None)
+        }
+        match self.opcode() {
+            math_number { NUM } => value_stack.push(IrVal::Float(*NUM)),
+            math_positive_number { NUM } | math_integer { NUM } | math_angle { NUM } | math_whole_number { NUM } => value_stack.push(IrVal::Int(*NUM)),
+            text { TEXT } => value_stack.push(IrVal::String(TEXT.to_string())),
+            operator_add => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 + num2));
+            },
+            operator_subtract => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 - num2));
+            },
+            operator_multiply => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 * num2));
+            },
+            operator_divide => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 / num2));
+            },
+            operator_mod => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Float(num1 % num2));
+            },
+            operator_lt => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Boolean(num1 < num2));
+            },
+            operator_gt => {
+                let num2 = value_stack.pop().unwrap().to_f64();
+                let num1 = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Boolean(num1 > num2));
+            },
+            operator_and => {
+                let bool2 = value_stack.pop().unwrap().to_bool();
+                let bool1 = value_stack.pop().unwrap().to_bool();
+                value_stack.push(IrVal::Boolean(bool1 && bool2));
+            },
+            operator_or => {
+                let bool2 = value_stack.pop().unwrap().to_bool();
+                let bool1 = value_stack.pop().unwrap().to_bool();
+                value_stack.push(IrVal::Boolean(bool1 || bool2));
+            },
+            operator_join => {
+                let str2 = value_stack.pop().unwrap().to_string();
+                let str1 = value_stack.pop().unwrap().to_string();
+                value_stack.push(IrVal::String(str1 + &str2));
+            },
+            operator_length => {
+                let string = value_stack.pop().unwrap().to_string();
+                value_stack.push(IrVal::Int(string.len().try_into().unwrap()));
+            },
+            operator_not => {
+                let b = value_stack.pop().unwrap().to_bool();
+                value_stack.push(IrVal::Boolean(!b));
+            },
+            operator_round => {
+                let num = value_stack.pop().unwrap().to_f64();
+                value_stack.push(IrVal::Int(num as i32));
+            },
+            hq_cast(_from, to) => {
+                let val = value_stack.pop().unwrap();
+                let ty = to.least_restrictive_concrete_type();
+                match ty {
+                    InputType::ConcreteInteger => value_stack.push(IrVal::Int(val.to_i32())),
+                    InputType::Float => value_stack.push(IrVal::Float(val.to_f64())),
+                    InputType::String => value_stack.push(IrVal::String(val.to_string())),
+                    InputType::Boolean => value_stack.push(IrVal::Boolean(val.to_bool())),
+                    InputType::Unknown => {
+                        value_stack.push(val);
+                        return Ok(None)
+                    }
+                    _ => hq_bug!("unexpected non-concrete type {:?}", ty),
+                };
+            }
+            _ => return Ok(None),
+        };
+        Ok(Some(()))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -586,7 +693,8 @@ impl IrOpcode {
             | sensing_timer
             | looks_size
             | data_variable { .. }
-            | text { .. } => vec![],
+            | text { .. }
+            | boolean { .. } => vec![],
             operator_lt | operator_gt => vec![Number, Number],
             operator_equals => vec![Unknown, Unknown],
             operator_and | operator_or => vec![Boolean, Boolean],
@@ -698,6 +806,10 @@ impl IrOpcode {
                 Rc::clone(&type_stack),
                 String,
             ))),
+            boolean { .. } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                Boolean,
+            ))),
             operator_join | operator_letter_of => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack.get(2)),
                 String,
@@ -783,6 +895,13 @@ pub struct Step {
     context: Rc<ThreadContext>,
 }
 
+impl fmt::Debug for TypeStack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let this = Rc::new(RefCell::new(Some(self.clone())));
+        f.debug_list().entries((0..this.len()).rev().map(|i| this.get(this.len() - 1 - i).borrow().clone().unwrap().1)).finish()
+    }
+}
+
 impl Step {
     pub fn new(opcodes: Vec<IrBlock>, context: Rc<ThreadContext>) -> Step {
         Step { opcodes, context }
@@ -798,21 +917,112 @@ impl Step {
     }
     pub fn const_fold(&mut self) -> Result<(), HQError> {
         let mut value_stack: Vec<IrVal> = vec![];
-        
+        let mut is_folding = false;
+        let mut fold_start = 0;
+        let mut to_splice/*: Vec<(Range, Vec<IrBlock>)>*/ = vec![];
+        for (i, opcode) in self.opcodes.iter().enumerate() {
+            if !is_folding {
+                if !opcode.is_const() {
+                    continue
+                }
+                is_folding = true;
+                fold_start = i;
+            }
+            let const_value = opcode.const_value(&mut value_stack)?;
+            if const_value == None {
+                is_folding = false;
+                let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
+                for ty in value_stack.iter().map(|val| val.as_input_type()) {
+                    let prev_type_stack = Rc::clone(&type_stack);
+                    type_stack = TypeStack::new_some(TypeStack(prev_type_stack, ty));
+                }
+                //dbg!(&value_stack);
+                let folded_blocks: Result<Vec<_>, HQError> = value_stack.iter().enumerate().map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j))).collect();
+                to_splice.push((fold_start..i, folded_blocks?));
+                value_stack = vec![];
+            }
+        }
+        if is_folding {
+            let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
+            for ty in value_stack.iter().map(|val| val.as_input_type()) {
+                let prev_type_stack = Rc::clone(&type_stack);
+                type_stack = TypeStack::new_some(TypeStack(prev_type_stack, ty));
+            }
+            let folded_blocks: Result<Vec<_>, HQError> = value_stack.iter().enumerate().map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j))).collect();
+            to_splice.push((fold_start..self.opcodes().len(), folded_blocks?));
+        }
+        for (range, replace) in to_splice.into_iter().rev() {
+            self.opcodes.splice(range, replace);
+        }
         Ok(())
     }
 }
 
-pub union ValueUnion<'a> {
-    int: i32,
-    float: f64,
-    boolean: bool,
-    string: &'a String,
+#[derive(Debug)]
+pub enum IrVal {
+    Int(i32),
+    Float(f64),
+    Boolean(bool),
+    String(String),
 }
 
-pub struct IrVal<'a> {
-    tag: InputType,
-    value: ValueUnion<'a>
+impl IrVal {
+    pub fn to_f64(self) -> f64 {
+        match self {
+            IrVal::Float(f) => f,
+            IrVal::Int(i) => i as f64,
+            IrVal::Boolean(b) => b as i32 as f64,
+            IrVal::String(s) => match s.parse() {
+                Ok(f) => f,
+                Err(_) => 0.0,
+            }
+        }
+    }
+    pub fn to_i32(self) -> i32 {
+        match self {
+            IrVal::Float(f) => f as i32,
+            IrVal::Int(i) => i ,
+            IrVal::Boolean(b) => b as i32,
+            IrVal::String(s) => match s.parse() {
+                Ok(i) => i,
+                Err(_) => 0,
+            }
+        }
+    }
+    #[allow(clippy::inherent_to_string)]
+    pub fn to_string(self) -> String {
+        match self {
+            IrVal::Float(f) => format!("{f}"),
+            IrVal::Int(i) => format!("{i}"),
+            IrVal::Boolean(b) => format!("{b}"),
+            IrVal::String(s) => s,
+        }
+    }
+    pub fn to_bool(self) -> bool {
+        match self {
+            IrVal::Boolean(b) => b,
+            _ => unreachable!(),
+        }
+    }
+    pub fn as_input_type(&self) -> InputType {
+        match self {
+            IrVal::Float(_) => InputType::Float,
+            IrVal::Int(_) => InputType::ConcreteInteger,
+            IrVal::String(_) => InputType::String,
+            IrVal::Boolean(_) => InputType::Boolean,
+        }
+    }
+    pub fn try_as_block(&self, type_stack: Rc<RefCell<Option<TypeStack>>>) -> Result<IrBlock, HQError> {
+        Ok(IrBlock::new_with_stack_no_cast(
+            match self {
+                IrVal::Int(NUM) => IrOpcode::math_integer { NUM :*NUM },
+                IrVal::Float(NUM) => IrOpcode::math_number { NUM: *NUM },
+                IrVal::String(TEXT) => IrOpcode::text { TEXT: TEXT.clone() },
+                IrVal::Boolean(BOOL) => IrOpcode::boolean { BOOL: *BOOL },
+            },
+            type_stack,
+        )?)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1861,7 +2071,20 @@ mod tests {
             .expect("couldn't read hq-test.project.json")
             .try_into()?;
         let ir: IrProject = proj.try_into()?;
-        println!("{:?}", ir);
+        println!("{}", ir);
+        Ok(())
+    }
+    
+    #[test]
+    fn const_fold() -> Result<(), HQError> {
+        use crate::sb3::Sb3Project;
+        use std::fs;
+        let proj: Sb3Project = fs::read_to_string("./benchmark (3.1).json")
+            .expect("couldn't read hq-test.project.json")
+            .try_into()?;
+        let mut ir: IrProject = proj.try_into()?;
+        ir.const_fold()?;
+        println!("{}", ir);
         Ok(())
     }
 
