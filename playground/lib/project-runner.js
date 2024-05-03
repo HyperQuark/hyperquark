@@ -150,14 +150,14 @@ export default async (
         looks_think: (ty, val, targetIndex) => {
           targetOutput(targetIndex, "think", wasm_val_to_js(ty, val).toString());
         },
-        operator_equals: (ty1, val1, ty2, val2) => {
+        /*operator_equals: (ty1, val1, ty2, val2) => {
           if (ty1 === ty2 && val1 === val2) return true;
           let j1 = wasm_val_to_js(ty1, val1);
           let j2 = wasm_val_to_js(ty2, val2);
           if (typeof j1 === "string") j1 = j1.toLowerCase();
           if (typeof j2 === "string") j2 = j2.toLowerCase();
           return j1 == j2;
-        },
+        },*/
         operator_random: (lower, upper) =>
           Math.random() * (upper - lower) + lower,
         operator_join: (str1, str2) =>
@@ -287,9 +287,17 @@ export default async (
         stringtobool: Boolean,
         floattostring: (i) => i.toString(),
       },
+      // for if the string builtina proposal isn't available
+      "wasm:js-string": {
+        equals(a, b) {
+          return a === b;
+        }
+      }
     };
     try {
-      assert(WebAssembly.validate(wasm_bytes));
+      assert(WebAssembly.validate(wasm_bytes, {
+        builtins: ['js-string']
+      }));
     } catch {
       try {
         new WebAssembly.Module(wasm_bytes);
@@ -308,7 +316,9 @@ export default async (
         requestAnimationFrame(resolve);
       });
     }
-    WebAssembly.instantiate(wasm_bytes, importObject)
+    WebAssembly.instantiate(wasm_bytes, importObject, {
+      builtins: ['js-string']
+    })
       .then(async ({ instance }) => {
         const {
           green_flag,

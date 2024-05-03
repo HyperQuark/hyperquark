@@ -11,8 +11,8 @@ use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::RefCell;
-use core::hash::BuildHasherDefault;
 use core::fmt;
+use core::hash::BuildHasherDefault;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use uuid::Uuid;
@@ -45,7 +45,6 @@ impl fmt::Display for IrProject {
         )
     }
 }
-
 
 impl IrProject {
     pub fn const_fold(&mut self) -> Result<(), HQError> {
@@ -167,7 +166,9 @@ impl TryFrom<Sb3Project> for IrProject {
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrOpcode {
-    boolean { BOOL: bool },
+    boolean {
+        BOOL: bool,
+    },
     control_repeat,
     control_repeat_until,
     control_while,
@@ -529,82 +530,93 @@ impl IrBlock {
 
     pub fn is_const(&self) -> bool {
         use IrOpcode::*;
-        matches!(self.opcode(), math_number { .. } | math_whole_number { .. } | math_integer { .. } | math_angle { .. } | math_positive_number { .. } | text { .. })
+        matches!(
+            self.opcode(),
+            math_number { .. }
+                | math_whole_number { .. }
+                | math_integer { .. }
+                | math_angle { .. }
+                | math_positive_number { .. }
+                | text { .. }
+        )
     }
-    
+
     pub fn const_value(&self, value_stack: &mut Vec<IrVal>) -> Result<Option<()>, HQError> {
         use IrOpcode::*;
         //dbg!(value_stack.len());
         let arity = self.opcode().expected_inputs()?.len();
         if arity > value_stack.len() {
-            return Ok(None)
+            return Ok(None);
         }
         match self.opcode() {
             math_number { NUM } => value_stack.push(IrVal::Float(*NUM)),
-            math_positive_number { NUM } | math_integer { NUM } | math_angle { NUM } | math_whole_number { NUM } => value_stack.push(IrVal::Int(*NUM)),
+            math_positive_number { NUM }
+            | math_integer { NUM }
+            | math_angle { NUM }
+            | math_whole_number { NUM } => value_stack.push(IrVal::Int(*NUM)),
             text { TEXT } => value_stack.push(IrVal::String(TEXT.to_string())),
             operator_add => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Float(num1 + num2));
-            },
+            }
             operator_subtract => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Float(num1 - num2));
-            },
+            }
             operator_multiply => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Float(num1 * num2));
-            },
+            }
             operator_divide => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Float(num1 / num2));
-            },
+            }
             operator_mod => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Float(num1 % num2));
-            },
+            }
             operator_lt => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Boolean(num1 < num2));
-            },
+            }
             operator_gt => {
                 let num2 = value_stack.pop().unwrap().to_f64();
                 let num1 = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Boolean(num1 > num2));
-            },
+            }
             operator_and => {
                 let bool2 = value_stack.pop().unwrap().to_bool();
                 let bool1 = value_stack.pop().unwrap().to_bool();
                 value_stack.push(IrVal::Boolean(bool1 && bool2));
-            },
+            }
             operator_or => {
                 let bool2 = value_stack.pop().unwrap().to_bool();
                 let bool1 = value_stack.pop().unwrap().to_bool();
                 value_stack.push(IrVal::Boolean(bool1 || bool2));
-            },
+            }
             operator_join => {
                 let str2 = value_stack.pop().unwrap().to_string();
                 let str1 = value_stack.pop().unwrap().to_string();
                 value_stack.push(IrVal::String(str1 + &str2));
-            },
+            }
             operator_length => {
                 let string = value_stack.pop().unwrap().to_string();
                 value_stack.push(IrVal::Int(string.len().try_into().unwrap()));
-            },
+            }
             operator_not => {
                 let b = value_stack.pop().unwrap().to_bool();
                 value_stack.push(IrVal::Boolean(!b));
-            },
+            }
             operator_round => {
                 let num = value_stack.pop().unwrap().to_f64();
                 value_stack.push(IrVal::Int(num as i32));
-            },
+            }
             hq_cast(_from, to) => {
                 let val = value_stack.pop().unwrap();
                 let ty = to.least_restrictive_concrete_type();
@@ -615,7 +627,7 @@ impl IrBlock {
                     InputType::Boolean => value_stack.push(IrVal::Boolean(val.to_bool())),
                     InputType::Unknown => {
                         value_stack.push(val);
-                        return Ok(None)
+                        return Ok(None);
                     }
                     _ => hq_bug!("unexpected non-concrete type {:?}", ty),
                 };
@@ -626,6 +638,10 @@ impl IrBlock {
     }
 }
 
+/// represents an input (or output) type of a block.
+/// output types shpuld always be exactly known,
+/// so unions, or types that resolve to a union,
+/// should never be used as output types
 #[derive(Clone, Debug, PartialEq)]
 pub enum InputType {
     Any,
@@ -640,9 +656,12 @@ pub enum InputType {
 }
 
 impl InputType {
+    /// returns the base type that a type is aliased to, if present;
+    /// otherwise, returns a clone of itself
     pub fn base_type(&self) -> InputType {
         use InputType::*;
-        // unions of types should be represented with the least restrictive type first, so that casting chooses the less restrictive type to cast to
+        // unions of types should be represented with the least restrictive type first,
+        // so that casting chooses the less restrictive type to cast to
         match self {
             Any => Union(Box::new(String), Box::new(Number)).base_type(),
             Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
@@ -652,6 +671,9 @@ impl InputType {
         }
     }
 
+    /// when a type is a union type, returns the first concrete type in that union
+    /// (this assumes that the least restrictive type is placed first in the union).
+    /// otherwise, returns itself.
     pub fn least_restrictive_concrete_type(&self) -> InputType {
         match self.base_type() {
             InputType::Union(a, _) => a.least_restrictive_concrete_type(),
@@ -659,6 +681,7 @@ impl InputType {
         }
     }
 
+    /// determines whether a type is a superyype of another type
     pub fn includes(&self, other: &Self) -> bool {
         if self.base_type() == other.base_type() {
             true
@@ -667,6 +690,26 @@ impl InputType {
         } else {
             false
         }
+    }
+
+    /// attempts to promote a type to one of the ones provided.
+    /// none of the provided types should overlap with each other,
+    /// so that there is no ambiguity over which type it should be promoted to.
+    /// if there are no types that can be demoted to,
+    /// an `Err(HQError)` will be returned.
+    pub fn loosen_to<T>(&self, others: T) -> Result<Self, HQError>
+    where
+        T: IntoIterator<Item = InputType>,
+        T::IntoIter: ExactSizeIterator,
+    {
+        for other in others {
+            if other.includes(self) {
+                return Ok(other);
+            }
+        }
+        Err(make_hq_bug!(
+            "couldn't find any types that this type can be demoted to"
+        ))
     }
 }
 
@@ -696,7 +739,7 @@ impl IrOpcode {
             | text { .. }
             | boolean { .. } => vec![],
             operator_lt | operator_gt => vec![Number, Number],
-            operator_equals => vec![Unknown, Unknown],
+            operator_equals => vec![Any, Any],
             operator_and | operator_or => vec![Boolean, Boolean],
             operator_not => vec![Boolean],
             operator_join | operator_contains => vec![String, String],
@@ -898,7 +941,13 @@ pub struct Step {
 impl fmt::Debug for TypeStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let this = Rc::new(RefCell::new(Some(self.clone())));
-        f.debug_list().entries((0..this.len()).rev().map(|i| this.get(this.len() - 1 - i).borrow().clone().unwrap().1)).finish()
+        f.debug_list()
+            .entries(
+                (0..this.len())
+                    .rev()
+                    .map(|i| this.get(this.len() - 1 - i).borrow().clone().unwrap().1),
+            )
+            .finish()
     }
 }
 
@@ -923,7 +972,7 @@ impl Step {
         for (i, opcode) in self.opcodes.iter().enumerate() {
             if !is_folding {
                 if !opcode.is_const() {
-                    continue
+                    continue;
                 }
                 is_folding = true;
                 fold_start = i;
@@ -931,24 +980,34 @@ impl Step {
             let const_value = opcode.const_value(&mut value_stack)?;
             if const_value.is_none() {
                 is_folding = false;
-                let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
+                let mut type_stack =
+                    Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
                 for ty in value_stack.iter().map(|val| val.as_input_type()) {
                     let prev_type_stack = Rc::clone(&type_stack);
                     type_stack = TypeStack::new_some(TypeStack(prev_type_stack, ty));
                 }
                 //dbg!(&value_stack);
-                let folded_blocks: Result<Vec<_>, HQError> = value_stack.iter().enumerate().map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j))).collect();
+                let folded_blocks: Result<Vec<_>, HQError> = value_stack
+                    .iter()
+                    .enumerate()
+                    .map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j)))
+                    .collect();
                 to_splice.push((fold_start..i, folded_blocks?));
                 value_stack = vec![];
             }
         }
         if is_folding {
-            let mut type_stack = Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
+            let mut type_stack =
+                Rc::clone(&self.opcodes.get(fold_start).unwrap().type_stack.get(1));
             for ty in value_stack.iter().map(|val| val.as_input_type()) {
                 let prev_type_stack = Rc::clone(&type_stack);
                 type_stack = TypeStack::new_some(TypeStack(prev_type_stack, ty));
             }
-            let folded_blocks: Result<Vec<_>, HQError> = value_stack.iter().enumerate().map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j))).collect();
+            let folded_blocks: Result<Vec<_>, HQError> = value_stack
+                .iter()
+                .enumerate()
+                .map(|(j, val)| val.try_as_block(type_stack.get(value_stack.len() - j)))
+                .collect();
             to_splice.push((fold_start..self.opcodes().len(), folded_blocks?));
         }
         for (range, replace) in to_splice.into_iter().rev() {
@@ -972,15 +1031,15 @@ impl IrVal {
             IrVal::Float(f) => f,
             IrVal::Int(i) => i as f64,
             IrVal::Boolean(b) => b as i32 as f64,
-            IrVal::String(s) => s.parse().unwrap_or(0.0)
+            IrVal::String(s) => s.parse().unwrap_or(0.0),
         }
     }
     pub fn to_i32(self) -> i32 {
         match self {
             IrVal::Float(f) => f as i32,
-            IrVal::Int(i) => i ,
+            IrVal::Int(i) => i,
             IrVal::Boolean(b) => b as i32,
-            IrVal::String(s) => s.parse().unwrap_or(0)
+            IrVal::String(s) => s.parse().unwrap_or(0),
         }
     }
     #[allow(clippy::inherent_to_string)]
@@ -1006,10 +1065,13 @@ impl IrVal {
             IrVal::Boolean(_) => InputType::Boolean,
         }
     }
-    pub fn try_as_block(&self, type_stack: Rc<RefCell<Option<TypeStack>>>) -> Result<IrBlock, HQError> {
+    pub fn try_as_block(
+        &self,
+        type_stack: Rc<RefCell<Option<TypeStack>>>,
+    ) -> Result<IrBlock, HQError> {
         IrBlock::new_with_stack_no_cast(
             match self {
-                IrVal::Int(num) => IrOpcode::math_integer { NUM :*num },
+                IrVal::Int(num) => IrOpcode::math_integer { NUM: *num },
                 IrVal::Float(num) => IrOpcode::math_number { NUM: *num },
                 IrVal::String(text) => IrOpcode::text { TEXT: text.clone() },
                 IrVal::Boolean(b) => IrOpcode::boolean { BOOL: *b },
@@ -2068,7 +2130,7 @@ mod tests {
         println!("{}", ir);
         Ok(())
     }
-    
+
     #[test]
     fn const_fold() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;

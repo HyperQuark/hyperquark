@@ -322,7 +322,42 @@ fn instructions(
         operator_and => vec![I32And],
         operator_or => vec![I32Or],
         operator_not => vec![I32Eqz],
-        operator_equals => vec![Call(func_indices::OPERATOR_EQUALS)],
+        operator_equals => match (
+            input_types.first().unwrap().loosen_to([
+                InputType::Integer,
+                InputType::Float,
+                InputType::String,
+                InputType::Unknown,
+            ])?,
+            input_types.get(1).unwrap().loosen_to([
+                InputType::Integer,
+                InputType::Float,
+                InputType::String,
+                InputType::Unknown,
+            ])?,
+        ) {
+            (InputType::Integer, InputType::Integer) => vec![I32Eq],
+            (InputType::Float, InputType::Float) => vec![F64Eq],
+            (InputType::String, InputType::String) => vec![Call(func_indices::STRING_EQUALS)],
+            (InputType::Integer, InputType::Float) => vec![F64ConvertI32S, F64Eq],
+            (InputType::Float, InputType::Integer) => vec![
+                LocalSet(step_func_locals::F64),
+                F64ConvertI32S,
+                LocalGet(step_func_locals::F64),
+                F64Eq,
+            ],
+            (InputType::Unknown, InputType::String) => vec![
+                Call(func_indices::CAST_ANY_STRING),
+                Call(func_indices::STRING_EQUALS),
+            ],
+            (InputType::String, InputType::Unknown) => vec![
+                LocalSet(step_func_locals::EXTERNREF),
+                Call(func_indices::CAST_ANY_STRING),
+                LocalGet(step_func_locals::EXTERNREF),
+                Call(func_indices::STRING_EQUALS),
+            ],
+            (a, b) => hq_todo!("({:?}, {:?}) input types for operator_equals", a, b),
+        },
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
         operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
@@ -1160,7 +1195,8 @@ impl CompileToWasm for (&(String, String), &Step) {
             let arity = op.opcode().expected_inputs()?.len();
             let input_types = (0..arity)
                 .map(|j| {
-                    Ok(self.1
+                    Ok(self
+                        .1
                         .opcodes()
                         .get(i - 1)
                         .ok_or(make_hq_bug!(""))?
@@ -1226,7 +1262,7 @@ pub mod func_indices {
     pub const CAST_PRIMITIVE_STRING_FLOAT: u32 = 5;
     pub const CAST_PRIMITIVE_STRING_BOOL: u32 = 6;
     pub const DBG_LOGI32: u32 = 7;
-    pub const OPERATOR_EQUALS: u32 = 8;
+    pub const STRING_EQUALS: u32 = 8;
     pub const OPERATOR_RANDOM: u32 = 9;
     pub const OPERATOR_JOIN: u32 = 10;
     pub const OPERATOR_LETTEROF: u32 = 11;
@@ -1498,14 +1534,8 @@ impl TryFrom<IrProject> for WasmProject {
             [ValType::I32, ValType::Ref(RefType::EXTERNREF)],
             [ValType::Ref(RefType::EXTERNREF)],
         );
-        types.function(
-            [ValType::I32],
-            [ValType::Ref(RefType::EXTERNREF)],
-        );
-        types.function(
-            [ValType::I32, ValType::I64],
-            [ValType::I32],
-        );
+        types.function([ValType::I32], [ValType::Ref(RefType::EXTERNREF)]);
+        types.function([ValType::I32, ValType::I64], [ValType::I32]);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -1540,9 +1570,9 @@ impl TryFrom<IrProject> for WasmProject {
         );
         imports.import("dbg", "logi32", EntityType::Function(types::I32_I32));
         imports.import(
-            "runtime",
-            "operator_equals",
-            EntityType::Function(types::I32I64I32I64_I32),
+            "wasm:js-string",
+            "equals",
+            EntityType::Function(types::EXTERNREFx2_I32),
         );
         imports.import(
             "runtime",
