@@ -13,9 +13,6 @@ indexmap = { version = "2.0.0", default-features = false }
 hashers = "1.0.1"
 uuid = { version = "1.4.1", default-features = false, features = ["v4", "js"] }
 
-[patch.crates-io]
-wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen.git" }
-
 #[dev-dependencies]
 #reqwest = { version = "0.11", features = ["blocking"] }
 
