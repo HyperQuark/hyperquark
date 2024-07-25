@@ -293,8 +293,12 @@ pub struct BlockInfo {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum CostumeDataFormat {
+    png,
     svg,
-    bitmap,
+    jpeg,
+    jpg,
+    bmp,
+    gif,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
