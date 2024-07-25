@@ -6,6 +6,7 @@ Compile scratch projects to WASM
 ## Prerequisites
 
 - [Rust](https://rust-lang.org) (v1.65.0 or later)
+- the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
 - wasm-bindgen-cli (`cargo install -f wasm-bindgen-cli`)
 - wasm-opt (install binaryen using whatever package manager you use)
 
