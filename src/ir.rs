@@ -1605,12 +1605,10 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
+                        let next_step = block_info.next.as_ref().map(|next| (target_id.clone(), next.clone()));
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
-                                step: Some((
-                                    target_id.clone(),
-                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                )),
+                                step: next_step.clone(),
                                 does_yield: true,
                             },
                             IrOpcode::hq_goto {
@@ -1668,14 +1666,16 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Step::new(looper_opcodes, Rc::clone(&context)),
                             );
                         }
-                        step_from_top_block(
-                            block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                            last_nexts,
-                            blocks,
-                            Rc::clone(&context),
-                            steps,
-                            target_id.clone(),
-                        )?;
+                        if block_info.next.is_some() {
+                            step_from_top_block(
+                                block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                last_nexts,
+                                blocks,
+                                Rc::clone(&context),
+                                steps,
+                                target_id.clone(),
+                            )?;
+                        }
                         step_from_top_block(
                             substack_id.clone(),
                             vec![looper_id.clone()],
@@ -1710,7 +1710,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Step::new(opcodes.clone(), Rc::clone(&context)),
                         );
                         vec![
-                            IrOpcode::operator_round,
+                            IrOpcode::operator_round, // this is correct, scratch rounds rather than floor
                             IrOpcode::hq_cast(ConcreteInteger, Unknown),
                             IrOpcode::data_teevariable {
                                 VARIABLE: looper_id,
@@ -1719,10 +1719,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::math_number { NUM: 1.0 },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {
-                                step: Some((
-                                    target_id.clone(),
-                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                )),
+                                step: next_step,
                                 does_yield: true,
                             },
                             IrOpcode::hq_goto {
@@ -1745,12 +1742,10 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
+                        let next_step = block_info.next.as_ref().map(|next| (target_id.clone(), next.clone()));
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
-                                step: Some((
-                                    target_id.clone(),
-                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                )),
+                                step: next_step.clone(),
                                 does_yield: true,
                             },
                             IrOpcode::hq_goto {
@@ -1782,14 +1777,16 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Step::new(looper_opcodes, Rc::clone(&context)),
                             );
                         }
-                        step_from_top_block(
-                            block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                            last_nexts,
-                            blocks,
-                            Rc::clone(&context),
-                            steps,
-                            target_id.clone(),
-                        )?;
+                        if block_info.next.is_some() {
+                            step_from_top_block(
+                                block_info.next.clone().ok_or(make_hq_bug!(""))?,
+                                last_nexts,
+                                blocks,
+                                Rc::clone(&context),
+                                steps,
+                                target_id.clone(),
+                            )?;
+                        }
                         step_from_top_block(
                             substack_id.clone(),
                             vec![looper_id],
@@ -1812,17 +1809,13 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
                             )?);
                         }
-                        //opcodes.fixup_types()?;
                         steps.insert(
                             (target_id.clone(), block_id.clone()),
                             Step::new(opcodes.clone(), Rc::clone(&context)),
                         );
                         vec![
                             IrOpcode::hq_goto_if {
-                                step: Some((
-                                    target_id.clone(),
-                                    block_info.next.clone().ok_or(make_hq_bug!(""))?,
-                                )),
+                                step: next_step,
                                 does_yield: true,
                             },
                             IrOpcode::hq_goto {
@@ -1845,24 +1838,16 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let condition_opcodes = vec![
-                            //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true }.into(),
-                            IrOpcode::hq_goto {
-                                step: Some((target_id.clone(), substack_id.clone())),
-                                does_yield: true,
-                            },
-                        ];
+                        let goto_opcode = IrOpcode::hq_goto {
+                            step: Some((target_id.clone(), substack_id.clone())),
+                            does_yield: true,
+                        };
                         let looper_id = Uuid::new_v4().to_string();
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
-                            let mut looper_opcodes = vec![];
-                            //looper_opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                            for op in condition_opcodes.clone().into_iter() {
-                                looper_opcodes.push(IrBlock::new_with_stack_no_cast(
-                                    op,
-                                    Rc::new(RefCell::new(None)),
-                                )?);
-                            }
-                            //looper_opcodes.fixup_types()?;
+                            let looper_opcodes = vec![IrBlock::new_with_stack_no_cast(
+                                goto_opcode.clone(),
+                                Rc::new(RefCell::new(None)),
+                            )?];
                             steps.insert(
                                 (target_id.clone(), looper_id.clone()),
                                 Step::new(looper_opcodes, Rc::clone(&context)),
@@ -1886,21 +1871,15 @@ impl IrBlockVec for Vec<IrBlock> {
                             steps,
                             target_id.clone(),
                         )?;
-                        let mut opcodes = vec![];
-                        //opcodes.add_inputs(&block_info.inputs, blocks, Rc::clone(&context), steps, target_id.clone());
-                        for op in condition_opcodes.into_iter() {
-                            opcodes.push(IrBlock::new_with_stack_no_cast(
-                                op,
-                                Rc::new(RefCell::new(None)),
-                            )?);
-                        }
-                        //opcodes.fixup_types()?;
+                        let opcodes = vec![IrBlock::new_with_stack_no_cast(
+                            goto_opcode,
+                            Rc::new(RefCell::new(None)),
+                        )?];
                         steps.insert(
                             (target_id.clone(), block_id.clone()),
                             Step::new(opcodes.clone(), Rc::clone(&context)),
                         );
                         vec![
-                            //IrOpcode::hq_goto_if { step: Some((target_id.clone(), block_info.next.clone().map_err(|_| make_hq_bug!(""))?)), does_yield: true },
                             IrOpcode::hq_goto {
                                 step: Some((target_id, substack_id)),
                                 does_yield: false,
@@ -1909,9 +1888,7 @@ impl IrBlockVec for Vec<IrBlock> {
                     }
                     ref other => hq_todo!("unknown block {:?}", other),
                 };
-                //.into_iter()
-                //.map(|opcode| IrBlock::new_with_stack(opcode, get_type_stack(), &mut add_cast))
-                //.collect::<Result<_, _>>()?;
+
                 for op in ops.into_iter() {
                     let type_stack = self.get_type_stack(None);
                     let mut casts: BTreeMap<usize, InputType> = BTreeMap::new();
