@@ -8,6 +8,7 @@ import { RouterLink, RouterView } from 'vue-router'
       <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark</RouterLink>
       <RouterLink to="/about">About</RouterLink>
       <a href="https://github.com/hyperquark/">Github</a>
+      <RouterLink to="/settings">Settings</RouterLink>
     </nav>
   </div>
   <RouterView />

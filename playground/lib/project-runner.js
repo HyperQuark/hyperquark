@@ -1,3 +1,5 @@
+import { getSettings } from './settings.js';
+
 function createSkin(renderer, type, layer, ...params) {
   let drawableId = renderer.createDrawable(layer.toString());
   const realType = {
@@ -133,6 +135,10 @@ export default async (
     let updatePenColor;
     let start_time = 0;
     let sprite_info_offset = 0;
+
+    const settings = getSettings();
+    const builtins = [...(settings['js-string-builtins'] ? ['js-string'] : [])]
+
     const importObject = {
       dbg: {
         log: wasm_output,
@@ -298,7 +304,7 @@ export default async (
     };
     try {
       assert(WebAssembly.validate(wasm_bytes, {
-        builtins: ['js-string']
+        builtins
       }));
     } catch {
       try {
@@ -319,7 +325,7 @@ export default async (
       });
     }
     WebAssembly.instantiate(wasm_bytes, importObject, {
-      builtins: ['js-string']
+      builtins
     })
       .then(async ({ instance }) => {
         const {

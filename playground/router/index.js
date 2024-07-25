@@ -4,6 +4,7 @@ import Loading from '../components/Loading.vue';
 
 let componentCache = Object.setPrototypeOf({}, null);
 
+
 const view = (name) => ({
   setup() {
     let component = componentCache[name];
@@ -47,6 +48,11 @@ const router = createRouter({
       path: '/about',
       name: 'about',
       component: view('AboutView'),
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: view('Settings'),
     }
   ]
 })
