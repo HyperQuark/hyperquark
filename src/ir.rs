@@ -630,7 +630,6 @@ impl IrBlock {
                     InputType::Boolean => value_stack.push(IrVal::Boolean(val.to_bool())),
                     InputType::Unknown => {
                         value_stack.push(IrVal::Unknown(Box::new(val)));
-                        return Ok(None);
                     }
                     _ => hq_bug!("unexpected non-concrete type {:?}", ty),
                 };
