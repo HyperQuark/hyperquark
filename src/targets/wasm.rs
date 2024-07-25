@@ -1,5 +1,5 @@
 use crate::ir::{
-    InputType, IrBlock, IrOpcode, IrProject, Step, ThreadContext, ThreadStart, TypeStackImpl,
+    InputType, IrBlock, IrOpcode, IrProject, IrVal, Step, ThreadContext, ThreadStart, TypeStackImpl,
 };
 use crate::sb3::VarVal;
 use crate::HQError;
@@ -76,6 +76,30 @@ fn instructions(
                 ]
             }
         }
+        unknown_const { val } => match val {
+            IrVal::Unknown(_) => hq_bug!("unknown const inside of unknown const"),
+            IrVal::Int(i) => vec![I32Const(hq_value_types::INT64), I64Const(*i as i64)],
+            IrVal::Float(f) => vec![
+                I32Const(hq_value_types::FLOAT64),
+                I64Const(i64::from_le_bytes(f.to_le_bytes())),
+            ],
+            IrVal::Boolean(b) => vec![I32Const(hq_value_types::BOOL64), I64Const(*b as i64)],
+            IrVal::String(s) => vec![
+                I32Const(hq_value_types::EXTERN_STRING_REF64),
+                I64Const(
+                    {
+                        if let Some(idx) = string_consts.iter().position(|string| string == s) {
+                            idx
+                        } else {
+                            string_consts.push(s.clone());
+                            string_consts.len() - 1
+                        }
+                    }
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("string index out of bounds"))?,
+                ),
+            ],
+        },
         operator_add => {
             if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
@@ -346,11 +370,11 @@ fn instructions(
                 LocalGet(step_func_locals::F64),
                 F64Eq,
             ],
-            (InputType::Unknown, InputType::String) => vec![
+            (InputType::String, InputType::Unknown) => vec![
                 Call(func_indices::CAST_ANY_STRING),
                 Call(func_indices::STRING_EQUALS),
             ],
-            (InputType::String, InputType::Unknown) => vec![
+            (InputType::Unknown, InputType::String) => vec![
                 LocalSet(step_func_locals::EXTERNREF),
                 Call(func_indices::CAST_ANY_STRING),
                 LocalGet(step_func_locals::EXTERNREF),

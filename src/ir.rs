@@ -381,6 +381,9 @@ pub enum IrOpcode {
     text {
         TEXT: String,
     },
+    unknown_const {
+        val: IrVal,
+    },
 }
 
 #[derive(Clone)]
@@ -626,7 +629,7 @@ impl IrBlock {
                     InputType::String => value_stack.push(IrVal::String(val.to_string())),
                     InputType::Boolean => value_stack.push(IrVal::Boolean(val.to_bool())),
                     InputType::Unknown => {
-                        value_stack.push(val);
+                        value_stack.push(IrVal::Unknown(Box::new(val)));
                         return Ok(None);
                     }
                     _ => hq_bug!("unexpected non-concrete type {:?}", ty),
@@ -663,7 +666,7 @@ impl InputType {
         // unions of types should be represented with the least restrictive type first,
         // so that casting chooses the less restrictive type to cast to
         match self {
-            Any => Union(Box::new(String), Box::new(Number)).base_type(),
+            Any => Union(Box::new(Union(Box::new(Unknown), Box::new(String))), Box::new(Number)).base_type(),
             Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
             Integer => Union(Box::new(ConcreteInteger), Box::new(Boolean)).base_type(),
             Union(a, b) => Union(Box::new(a.base_type()), Box::new(b.base_type())),
@@ -737,7 +740,8 @@ impl IrOpcode {
             | looks_size
             | data_variable { .. }
             | text { .. }
-            | boolean { .. } => vec![],
+            | boolean { .. }
+            | unknown_const { .. } => vec![],
             operator_lt | operator_gt => vec![Number, Number],
             operator_equals => vec![Any, Any],
             operator_and | operator_or => vec![Boolean, Boolean],
@@ -819,7 +823,7 @@ impl IrOpcode {
                 Rc::clone(&type_stack),
                 Float,
             ))),
-            data_variable { .. } => Ok(TypeStack::new_some(TypeStack(
+            data_variable { .. } | unknown_const { .. } => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack),
                 Unknown,
             ))),
@@ -1017,17 +1021,19 @@ impl Step {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrVal {
     Int(i32),
     Float(f64),
     Boolean(bool),
     String(String),
+    Unknown(Box<IrVal>),
 }
 
 impl IrVal {
     pub fn to_f64(self) -> f64 {
         match self {
+            IrVal::Unknown(u) => u.to_f64(),
             IrVal::Float(f) => f,
             IrVal::Int(i) => i as f64,
             IrVal::Boolean(b) => b as i32 as f64,
@@ -1036,6 +1042,7 @@ impl IrVal {
     }
     pub fn to_i32(self) -> i32 {
         match self {
+            IrVal::Unknown(u) => u.to_i32(),
             IrVal::Float(f) => f as i32,
             IrVal::Int(i) => i,
             IrVal::Boolean(b) => b as i32,
@@ -1045,6 +1052,7 @@ impl IrVal {
     #[allow(clippy::inherent_to_string)]
     pub fn to_string(self) -> String {
         match self {
+            IrVal::Unknown(u) => u.to_string(),
             IrVal::Float(f) => format!("{f}"),
             IrVal::Int(i) => format!("{i}"),
             IrVal::Boolean(b) => format!("{b}"),
@@ -1053,12 +1061,14 @@ impl IrVal {
     }
     pub fn to_bool(self) -> bool {
         match self {
+            IrVal::Unknown(u) => u.to_bool(),
             IrVal::Boolean(b) => b,
             _ => unreachable!(),
         }
     }
     pub fn as_input_type(&self) -> InputType {
         match self {
+            IrVal::Unknown(_) => InputType::Unknown,
             IrVal::Float(_) => InputType::Float,
             IrVal::Int(_) => InputType::ConcreteInteger,
             IrVal::String(_) => InputType::String,
@@ -1075,6 +1085,7 @@ impl IrVal {
                 IrVal::Float(num) => IrOpcode::math_number { NUM: *num },
                 IrVal::String(text) => IrOpcode::text { TEXT: text.clone() },
                 IrVal::Boolean(b) => IrOpcode::boolean { BOOL: *b },
+                IrVal::Unknown(u) => IrOpcode::unknown_const { val: *u.clone() },
             },
             type_stack,
         )
