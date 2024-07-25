@@ -160,12 +160,8 @@ export default async (
         },*/
         operator_random: (lower, upper) =>
           Math.random() * (upper - lower) + lower,
-        operator_join: (str1, str2) =>
-          str1.toString() +
-          str2.toString(),
         operator_letterof: (idx, str) =>
           str.toString()[idx - 1] ?? "",
-        operator_length: (str) => str.length,
         operator_contains: (str1, str2) =>
           str1
             .toString()
@@ -291,6 +287,12 @@ export default async (
       "wasm:js-string": {
         equals(a, b) {
           return a === b;
+        },
+        length(a) {
+          return a.length;
+        },
+        concat(a, b){
+          return a.concat(b);
         }
       }
     };

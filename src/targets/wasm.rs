@@ -1383,6 +1383,7 @@ pub mod types {
     pub const I32EXTERNREF_EXTERNREF: u32 = 42;
     pub const I32_EXTERNREF: u32 = 43;
     pub const I32I64_I32: u32 = 44;
+    pub const EXTERNREFx2_REFEXTERN: u32 = 45;
 }
 
 pub mod table_indices {
@@ -1560,6 +1561,7 @@ impl TryFrom<IrProject> for WasmProject {
         );
         types.function([ValType::I32], [ValType::Ref(RefType::EXTERNREF)]);
         types.function([ValType::I32, ValType::I64], [ValType::I32]);
+        types.function([ValType::Ref(RefType::EXTERNREF), ValType::Ref(RefType::EXTERNREF)], [ValType::Ref(RefType::EXTERNREF)]);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -1604,9 +1606,9 @@ impl TryFrom<IrProject> for WasmProject {
             EntityType::Function(types::F64x2_F64),
         );
         imports.import(
-            "runtime",
-            "operator_join",
-            EntityType::Function(types::EXTERNREFx2_EXTERNREF),
+            "wasm:js-string",
+            "concat",
+            EntityType::Function(types::EXTERNREFx2_REFEXTERN),
         );
         imports.import(
             "runtime",
@@ -1614,8 +1616,8 @@ impl TryFrom<IrProject> for WasmProject {
             EntityType::Function(types::I32EXTERNREF_EXTERNREF),
         );
         imports.import(
-            "runtime",
-            "operator_length",
+            "wasm:js-string",
+            "length",
             EntityType::Function(types::EXTERNREF_I32),
         );
         imports.import(
