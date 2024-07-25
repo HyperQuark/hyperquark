@@ -14,8 +14,8 @@ use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, DataSection, ElementSection, Elements,
     EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
-    ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection,
-    TableType, TypeSection, ValType,
+    HeapType, ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType,
+    TableSection, TableType, TypeSection, ValType,
 };
 
 fn instructions(
@@ -1561,7 +1561,10 @@ impl TryFrom<IrProject> for WasmProject {
         );
         types.function([ValType::I32], [ValType::Ref(RefType::EXTERNREF)]);
         types.function([ValType::I32, ValType::I64], [ValType::I32]);
-        types.function([ValType::Ref(RefType::EXTERNREF), ValType::Ref(RefType::EXTERNREF)], [ValType::Ref(RefType::EXTERNREF)]);
+        types.function([ValType::Ref(RefType::EXTERNREF), ValType::Ref(RefType::EXTERNREF)], [ValType::Ref(RefType {
+            nullable: false,
+            heap_type: HeapType::Extern,
+        })]);
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
@@ -2534,7 +2537,6 @@ impl TryFrom<IrProject> for WasmProject {
         elements.active(
             Some(table_indices::STEP_FUNCS),
             &ConstExpr::i32_const(0),
-            RefType::FUNCREF,
             step_func_indices,
         );
 
