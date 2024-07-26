@@ -1131,45 +1131,9 @@ trait IrBlockVec {
         target_id: String,
     ) -> Result<(), HQError>;
     fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>>;
-    //fn fixup_types(&mut self) -> Result<(), HQError>;
 }
 
 impl IrBlockVec for Vec<IrBlock> {
-    /*fn fixup_types(&mut self) -> Result<(), HQError> {
-        let mut type_stack: Vec<(usize, BlockType)> = vec![];
-        let mut expected_outputs: Vec<(usize, BlockType)> = vec![];
-        for (index, op) in self.iter().enumerate() {
-            if type_stack.len() < op.opcode().descriptor()?.inputs().len() {
-                hq_bug!(
-                    "type stack not big enough (expected >={} items, got {})",
-                    op.opcode().descriptor()?.inputs().len(),
-                    type_stack.len()
-                )
-            };
-            for block_type in op.opcode().descriptor()?.inputs().iter().rev() {
-                let top_type = type_stack
-                    .pop()
-                    .ok_or(make_hq_bug!("couldn't pop from type stack"))?;
-                expected_outputs.push((top_type.0, *block_type))
-            }
-            if !matches!(op.opcode().descriptor()?.output(), BlockType::Stack) {
-                type_stack.push((index, (*op.opcode().descriptor()?.output())));
-            }
-        }
-        if !type_stack.is_empty() {
-            hq_bug!(
-                "type stack too big (expected 0 items at end of step, got {} ({:?}))",
-                type_stack.len(),
-                &type_stack,
-            )
-        };
-        for (index, ty) in expected_outputs {
-            self.get_mut(index)
-                .ok_or(make_hq_bug!("ir block doesn't exist"))?
-                .set_expected_output(ty);
-        }
-        Ok(())
-    }*/
     fn add_inputs(
         &mut self,
         inputs: &BTreeMap<String, Input>,
@@ -1295,18 +1259,6 @@ impl IrBlockVec for Vec<IrBlock> {
                     steps,
                     target_id.clone(),
                 )?;
-                /*let type_stack = {
-                  let prev_block = self.last();
-                    if let Some(block) = prev_block {
-                        Rc::clone(&block.type_stack)
-                    } else {
-                        Rc::new(RefCell::new(None))
-                    }
-                };
-                let mut casts: BTreeMap<usize, InputType> = BTreeMap::new();
-                let mut add_cast = |i, ty: &InputType| {
-                    casts.insert(i, ty.clone());
-                };*/
                 let ops: Vec<_> = match block_info.opcode {
                     BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
@@ -1323,9 +1275,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         )? {
                             Field::Value((val,)) => val,
                             Field::ValueId(val, _) => val,
-                        }; /* else {
-                               hq_bad_proj!("invalid project.json - missing costume for COSTUME field");
-                           };*/
+                        };
                         let VarVal::String(name) = val.clone().ok_or(make_hq_bad_proj!(
                             "invalid project.json - null costume name for COSTUME field"
                         ))?
@@ -1599,7 +1549,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info
                             .inputs
                             .get("SUBSTACK")
-                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input"))?
                             .get_1()
                             .ok_or(make_hq_bug!(""))?
                             .clone()
@@ -1609,10 +1559,12 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let next_step = block_info
+                        let next_step = match block_info
                             .next
-                            .as_ref()
-                            .map(|next| (target_id.clone(), next.clone()));
+                            .as_ref() {
+                                Some(next) => Some((target_id.clone(), next.clone())),
+                                None => last_nexts.first().map(|next| (target_id.clone(), next.clone())),
+                            };
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
@@ -1711,7 +1663,6 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Rc::clone(&opcodes.last().ok_or(make_hq_bug!(""))?.type_stack),
                             )?);
                         }
-                        //opcodes.fixup_types()?;
                         steps.insert(
                             (target_id.clone(), block_id.clone()),
                             Step::new(opcodes.clone(), Rc::clone(&context)),
@@ -1739,7 +1690,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         let substack_id = if let BlockArrayOrId::Id(id) = block_info
                             .inputs
                             .get("SUBSTACK")
-                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                            .ok_or(make_hq_bad_proj!("missing SUBSTACK input"))?
                             .get_1()
                             .ok_or(make_hq_bug!(""))?
                             .clone()
@@ -1749,10 +1700,12 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let next_step = block_info
+                        let next_step = match block_info
                             .next
-                            .as_ref()
-                            .map(|next| (target_id.clone(), next.clone()));
+                            .as_ref() {
+                                Some(next) => Some((target_id.clone(), next.clone())),
+                                None => last_nexts.first().map(|next| (target_id.clone(), next.clone())),
+                            };
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
@@ -1781,7 +1734,6 @@ impl IrBlockVec for Vec<IrBlock> {
                                     ),
                                 )?);
                             }
-                            //looper_opcodes.fixup_types()?;
                             steps.insert(
                                 (target_id.clone(), looper_id.clone()),
                                 Step::new(looper_opcodes, Rc::clone(&context)),
