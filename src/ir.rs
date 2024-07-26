@@ -193,12 +193,15 @@ pub enum IrOpcode {
     control_start_as_clone,
     data_variable {
         VARIABLE: String,
+        assume_type: Option<InputType>,
     },
     data_setvariableto {
         VARIABLE: String,
+        assume_type: Option<InputType>,
     },
     data_teevariable {
         VARIABLE: String,
+        assume_type: Option<InputType>,
     },
     data_hidevariable {
         VARIABLE: String,
@@ -701,7 +704,7 @@ impl InputType {
     /// attempts to promote a type to one of the ones provided.
     /// none of the provided types should overlap with each other,
     /// so that there is no ambiguity over which type it should be promoted to.
-    /// if there are no types that can be demoted to,
+    /// if there are no types that can be prpmoted to,
     /// an `Err(HQError)` will be returned.
     pub fn loosen_to<T>(&self, others: T) -> Result<Self, HQError>
     where
@@ -733,7 +736,20 @@ impl IrOpcode {
             | operator_mod | operator_random => vec![Number, Number],
             operator_round | operator_mathop { .. } => vec![Number],
             looks_say | looks_think => vec![Unknown],
-            data_setvariableto { .. } | data_teevariable { .. } => vec![Unknown],
+            data_setvariableto {
+                assume_type: None, ..
+            }
+            | data_teevariable {
+                assume_type: None, ..
+            } => vec![Unknown],
+            data_setvariableto {
+                assume_type: Some(ty),
+                ..
+            }
+            | data_teevariable {
+                assume_type: Some(ty),
+                ..
+            } => vec![ty.clone()],
             math_integer { .. }
             | math_angle { .. }
             | math_whole_number { .. }
@@ -826,9 +842,19 @@ impl IrOpcode {
                 Rc::clone(&type_stack),
                 Float,
             ))),
-            data_variable { .. } | unknown_const { .. } => Ok(TypeStack::new_some(TypeStack(
+            data_variable {
+                assume_type: None, ..
+            }
+            | unknown_const { .. } => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack),
                 Unknown,
+            ))),
+            data_variable {
+                assume_type: Some(ty),
+                ..
+            } => Ok(TypeStack::new_some(TypeStack(
+                Rc::clone(&type_stack),
+                ty.clone(),
             ))),
             math_integer { .. }
             | math_angle { .. }
@@ -1213,12 +1239,14 @@ impl IrBlockVec for Vec<IrBlock> {
                 BlockArray::Broadcast(ty, _name, id) => match ty {
                     12 => IrOpcode::data_variable {
                         VARIABLE: id.to_string(),
+                        assume_type: None,
                     },
                     _ => hq_todo!(""),
                 },
                 BlockArray::VariableOrList(ty, _name, id, _pos_x, _pos_y) => match ty {
                     12 => IrOpcode::data_variable {
                         VARIABLE: id.to_string(),
+                        assume_type: None,
                     },
                     _ => hq_todo!(""),
                 },
@@ -1248,7 +1276,6 @@ impl IrBlockVec for Vec<IrBlock> {
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
     ) -> Result<(), HQError> {
-        use InputType::*;
         let block = blocks.get(&block_id).ok_or(make_hq_bug!(""))?;
         match block {
             Block::Normal { block_info, .. } => {
@@ -1397,7 +1424,10 @@ impl IrBlockVec for Vec<IrBlock> {
                         let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
                             "invalid project.json - null variable id for VARIABLE field"
                         ))?;
-                        vec![IrOpcode::data_variable { VARIABLE: id }]
+                        vec![IrOpcode::data_variable {
+                            VARIABLE: id,
+                            assume_type: None,
+                        }]
                     }
                     BlockOpcode::data_setvariableto => {
                         let Field::ValueId(_val, maybe_id) =
@@ -1412,7 +1442,10 @@ impl IrBlockVec for Vec<IrBlock> {
                         let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
                             "invalid project.json - null variable id for VARIABLE field"
                         ))?;
-                        vec![IrOpcode::data_setvariableto { VARIABLE: id }]
+                        vec![IrOpcode::data_setvariableto {
+                            VARIABLE: id,
+                            assume_type: None,
+                        }]
                     }
                     BlockOpcode::data_changevariableby => {
                         let Field::ValueId(_val, maybe_id) =
@@ -1430,9 +1463,13 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![
                             IrOpcode::data_variable {
                                 VARIABLE: id.to_string(),
+                                assume_type: None,
                             },
                             IrOpcode::operator_add,
-                            IrOpcode::data_setvariableto { VARIABLE: id },
+                            IrOpcode::data_setvariableto {
+                                VARIABLE: id,
+                                assume_type: None,
+                            },
                         ]
                     }
                     BlockOpcode::control_if => {
@@ -1559,12 +1596,12 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let next_step = match block_info
-                            .next
-                            .as_ref() {
-                                Some(next) => Some((target_id.clone(), next.clone())),
-                                None => last_nexts.first().map(|next| (target_id.clone(), next.clone())),
-                            };
+                        let next_step = match block_info.next.as_ref() {
+                            Some(next) => Some((target_id.clone(), next.clone())),
+                            None => last_nexts
+                                .first()
+                                .map(|next| (target_id.clone(), next.clone())),
+                        };
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
@@ -1587,18 +1624,20 @@ impl IrBlockVec for Vec<IrBlock> {
                             let mut looper_opcodes = vec![IrBlock::new_with_stack_no_cast(
                                 IrOpcode::data_variable {
                                     VARIABLE: looper_id.clone(),
+                                    assume_type: Some(InputType::ConcreteInteger),
                                 },
                                 type_stack,
                             )?];
                             for op in [
-                                IrOpcode::hq_cast(InputType::Unknown, InputType::Float), // todo: integer
+                                //IrOpcode::hq_cast(InputType::Unknown, InputType::Float), // todo: integer
                                 IrOpcode::math_whole_number { NUM: 1 },
                                 IrOpcode::operator_subtract,
-                                IrOpcode::hq_cast(Float, Unknown),
+                                //IrOpcode::hq_cast(Float, Unknown),
                                 IrOpcode::data_teevariable {
                                     VARIABLE: looper_id.clone(),
+                                    assume_type: Some(InputType::ConcreteInteger),
                                 },
-                                IrOpcode::hq_cast(Unknown, Float),
+                                //IrOpcode::hq_cast(Unknown, Float),
                                 IrOpcode::math_whole_number { NUM: 1 },
                                 IrOpcode::operator_lt,
                             ]
@@ -1669,12 +1708,13 @@ impl IrBlockVec for Vec<IrBlock> {
                         );
                         vec![
                             IrOpcode::operator_round, // this is correct, scratch rounds rather than floor
-                            IrOpcode::hq_cast(ConcreteInteger, Unknown),
+                            //IrOpcode::hq_cast(ConcreteInteger, Unknown),
                             IrOpcode::data_teevariable {
                                 VARIABLE: looper_id,
+                                assume_type: Some(InputType::ConcreteInteger),
                             },
-                            IrOpcode::hq_cast(Unknown, Float),
-                            IrOpcode::math_number { NUM: 1.0 },
+                            //IrOpcode::hq_cast(Unknown, Float),
+                            IrOpcode::math_whole_number { NUM: 1 },
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {
                                 step: next_step,
@@ -1700,12 +1740,12 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let next_step = match block_info
-                            .next
-                            .as_ref() {
-                                Some(next) => Some((target_id.clone(), next.clone())),
-                                None => last_nexts.first().map(|next| (target_id.clone(), next.clone())),
-                            };
+                        let next_step = match block_info.next.as_ref() {
+                            Some(next) => Some((target_id.clone(), next.clone())),
+                            None => last_nexts
+                                .first()
+                                .map(|next| (target_id.clone(), next.clone())),
+                        };
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),

@@ -106,11 +106,11 @@ fn instructions(
             {
                 vec![I64Add]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Add]
+                vec![F64ConvertI64S, F64Add]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
-                    F64ConvertI32S,
+                    F64ConvertI64S,
                     LocalGet(step_func_locals::F64),
                     F64Add,
                 ]
@@ -124,11 +124,11 @@ fn instructions(
             {
                 vec![I64Sub]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Sub]
+                vec![F64ConvertI64S, F64Sub]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
-                    F64ConvertI32S,
+                    F64ConvertI64S,
                     LocalGet(step_func_locals::F64),
                     F64Sub,
                 ]
@@ -143,11 +143,11 @@ fn instructions(
             {
                 vec![I64Mul]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Mul]
+                vec![F64ConvertI64S, F64Mul]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
-                    F64ConvertI32S,
+                    F64ConvertI64S,
                     LocalGet(step_func_locals::F64),
                     F64Mul,
                 ]
@@ -159,13 +159,13 @@ fn instructions(
             if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
-                vec![I32RemS]
+                vec![I64RemS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, Call(func_indices::FMOD)]
+                vec![F64ConvertI64S, Call(func_indices::FMOD)]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
-                    F64ConvertI32S,
+                    F64ConvertI64S,
                     LocalGet(step_func_locals::F64),
                     Call(func_indices::FMOD),
                 ]
@@ -177,7 +177,7 @@ fn instructions(
             if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![]
             } else {
-                vec![F64Nearest, I32TruncF64S]
+                vec![F64Nearest, I64TruncF64S]
             }
         }
         math_number { NUM } => {
@@ -187,14 +187,10 @@ fn instructions(
         | math_angle { NUM }
         | math_whole_number { NUM }
         | math_positive_number { NUM } => {
-            vec![I32Const(*NUM)]
+            vec![I64Const(*NUM as i64)]
         }
         boolean { BOOL } => vec![I32Const(*BOOL as i32)],
         text { TEXT } => {
-            /*if expected_output == Number {
-                actual_output = Number;
-                vec![F64Const(TEXT.parse().unwrap_or(f64::NAN))]
-            } else {*/
             let str_idx: i32 = {
                 if let Some(idx) = string_consts.iter().position(|string| string == TEXT) {
                     idx
@@ -205,18 +201,12 @@ fn instructions(
             }
             .try_into()
             .map_err(|_| make_hq_bug!("string index out of bounds"))?;
-            /* if expected_output == Any {
-                actual_output = Any;
-                vec![
-                    I32Const(hq_value_types::EXTERN_STRING_REF64),
-                    I64Const(str_idx.into()),
-                ]
-            } else {*/
             vec![I32Const(str_idx), TableGet(table_indices::STRINGS)]
-            //}
-            //}
         }
-        data_variable { VARIABLE } => {
+        data_variable {
+            VARIABLE,
+            assume_type,
+        } => {
             let var_index = context
                 .vars
                 .borrow()
@@ -228,22 +218,68 @@ fn instructions(
                 + VAR_INFO_LEN as usize * var_index)
                 .try_into()
                 .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
-            vec![
-                I32Const(0),
-                I32Load(MemArg {
-                    offset: var_offset,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(0),
-                I64Load(MemArg {
-                    offset: var_offset + 8,
-                    align: 3,
-                    memory_index: 0,
-                }),
-            ]
+            if assume_type.is_none() {
+                vec![
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: var_offset,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    I64Load(MemArg {
+                        offset: var_offset + 8,
+                        align: 3,
+                        memory_index: 0,
+                    }),
+                ]
+            } else {
+                match assume_type
+                    .as_ref()
+                    .unwrap()
+                    .least_restrictive_concrete_type()
+                {
+                    InputType::Float => vec![
+                        I32Const(0),
+                        F64Load(MemArg {
+                            offset: var_offset + 8,
+                            align: 3,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::ConcreteInteger => vec![
+                        I32Const(0),
+                        I64Load(MemArg {
+                            offset: var_offset + 8,
+                            align: 3,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::Boolean => vec![
+                        I32Const(0),
+                        I32Load(MemArg {
+                            offset: var_offset + 8,
+                            align: 2,
+                            memory_index: 0,
+                        }), // here we can load an i32 directly because a boolean will never be signed
+                    ],
+                    InputType::String => vec![
+                        I32Const(0),
+                        I32Load(MemArg {
+                            offset: var_offset + 8,
+                            align: 2,
+                            memory_index: 0,
+                        }), // once again string indices are guaranteed to be unsigned
+                        TableGet(table_indices::STRINGS), // TODO: store guaranteed string variables in globals
+                    ],
+                    other => hq_bug!("unexpected concrete type {:?}", other),
+                }
+            }
         }
-        data_setvariableto { VARIABLE } => {
+        data_setvariableto {
+            VARIABLE,
+            assume_type,
+        } => {
             let var_index = context
                 .vars
                 .borrow()
@@ -255,26 +291,80 @@ fn instructions(
                 + VAR_INFO_LEN as usize * var_index)
                 .try_into()
                 .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
-            vec![
-                LocalSet(step_func_locals::I64),
-                LocalSet(step_func_locals::I32),
-                I32Const(0),
-                LocalGet(step_func_locals::I32),
-                I32Store(MemArg {
-                    offset: var_offset,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(0),
-                LocalGet(step_func_locals::I64),
-                I64Store(MemArg {
-                    offset: var_offset + 8,
-                    align: 3,
-                    memory_index: 0,
-                }),
-            ]
+            if assume_type.is_none() {
+                vec![
+                    LocalSet(step_func_locals::I64),
+                    LocalSet(step_func_locals::I32),
+                    I32Const(0),
+                    LocalGet(step_func_locals::I32),
+                    I32Store(MemArg {
+                        offset: var_offset,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    LocalGet(step_func_locals::I64),
+                    I64Store(MemArg {
+                        offset: var_offset + 8,
+                        align: 3,
+                        memory_index: 0,
+                    }),
+                ]
+            } else {
+                match assume_type
+                    .as_ref()
+                    .unwrap()
+                    .least_restrictive_concrete_type()
+                {
+                    InputType::Float => vec![
+                        LocalSet(step_func_locals::F64),
+                        I32Const(0),
+                        LocalGet(step_func_locals::F64),
+                        F64Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 3,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::Boolean => vec![
+                        LocalSet(step_func_locals::I32),
+                        I32Const(0),
+                        LocalGet(step_func_locals::I32),
+                        I32Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::ConcreteInteger => vec![
+                        LocalSet(step_func_locals::I64),
+                        I32Const(0),
+                        LocalGet(step_func_locals::I64),
+                        I64Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 3,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::String => vec![
+                        LocalSet(step_func_locals::EXTERNREF),
+                        I32Const(0),
+                        LocalGet(step_func_locals::EXTERNREF),
+                        Call(func_indices::TABLE_ADD_STRING),
+                        I32Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                    ],
+                    other => hq_bug!("unexpected concrete type {:?}", other),
+                }
+            }
         }
-        data_teevariable { VARIABLE } => {
+        data_teevariable {
+            VARIABLE,
+            assume_type,
+        } => {
             let var_index = context
                 .vars
                 .borrow()
@@ -286,38 +376,89 @@ fn instructions(
                 + VAR_INFO_LEN as usize * var_index)
                 .try_into()
                 .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
-            vec![
-                LocalSet(step_func_locals::I64),
-                LocalSet(step_func_locals::I32),
-                I32Const(0),
-                LocalGet(step_func_locals::I32),
-                I32Store(MemArg {
-                    offset: var_offset,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(0),
-                LocalGet(step_func_locals::I64),
-                I64Store(MemArg {
-                    offset: var_offset + 8,
-                    align: 3,
-                    memory_index: 0,
-                }),
-                LocalGet(step_func_locals::I32),
-                LocalGet(step_func_locals::I64),
-            ]
+            if assume_type.is_none() {
+                vec![
+                    LocalSet(step_func_locals::I64),
+                    LocalSet(step_func_locals::I32),
+                    I32Const(0),
+                    LocalGet(step_func_locals::I32),
+                    I32Store(MemArg {
+                        offset: var_offset,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    LocalGet(step_func_locals::I64),
+                    I64Store(MemArg {
+                        offset: var_offset + 8,
+                        align: 3,
+                        memory_index: 0,
+                    }),
+                    LocalGet(step_func_locals::I32),
+                    LocalGet(step_func_locals::I64),
+                ]
+            } else {
+                match assume_type
+                    .as_ref()
+                    .unwrap()
+                    .least_restrictive_concrete_type()
+                {
+                    InputType::Float => vec![
+                        LocalTee(step_func_locals::F64),
+                        I32Const(0),
+                        LocalGet(step_func_locals::F64),
+                        F64Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 3,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::Boolean => vec![
+                        LocalTee(step_func_locals::I32),
+                        I32Const(0),
+                        LocalGet(step_func_locals::I32),
+                        I32Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::ConcreteInteger => vec![
+                        LocalTee(step_func_locals::I64),
+                        I32Const(0),
+                        LocalGet(step_func_locals::I64),
+                        I64Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 3,
+                            memory_index: 0,
+                        }),
+                    ],
+                    InputType::String => vec![
+                        LocalTee(step_func_locals::EXTERNREF),
+                        I32Const(0),
+                        LocalGet(step_func_locals::EXTERNREF),
+                        Call(func_indices::TABLE_ADD_STRING),
+                        I32Store(MemArg {
+                            offset: var_offset + 8,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                    ],
+                    other => hq_bug!("unexpected concrete type {:?}", other),
+                }
+            }
         }
         operator_lt => {
             if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
-                vec![I32LtS]
+                vec![I64LtS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Lt]
+                vec![F64ConvertI64S, F64Lt]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
-                    F64ConvertI32S,
+                    F64ConvertI64S,
                     LocalGet(step_func_locals::F64),
                     F64Lt,
                 ]
@@ -329,13 +470,13 @@ fn instructions(
             if InputType::Integer.includes(input_types.first().unwrap())
                 && InputType::Integer.includes(input_types.get(1).unwrap())
             {
-                vec![I32GtS]
+                vec![I64GtS]
             } else if InputType::Integer.includes(input_types.get(1).unwrap()) {
-                vec![F64ConvertI32S, F64Gt]
+                vec![F64ConvertI64S, F64Gt]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
                     LocalSet(step_func_locals::F64),
-                    F64ConvertI32S,
+                    F64ConvertI64S,
                     LocalGet(step_func_locals::F64),
                     F64Gt,
                 ]
@@ -360,13 +501,13 @@ fn instructions(
                 InputType::Unknown,
             ])?,
         ) {
-            (InputType::Integer, InputType::Integer) => vec![I32Eq],
+            (InputType::Integer, InputType::Integer) => vec![I64Eq],
             (InputType::Float, InputType::Float) => vec![F64Eq],
             (InputType::String, InputType::String) => vec![Call(func_indices::STRING_EQUALS)],
-            (InputType::Integer, InputType::Float) => vec![F64ConvertI32S, F64Eq],
+            (InputType::Integer, InputType::Float) => vec![F64ConvertI64S, F64Eq],
             (InputType::Float, InputType::Integer) => vec![
                 LocalSet(step_func_locals::F64),
-                F64ConvertI32S,
+                F64ConvertI64S,
                 LocalGet(step_func_locals::F64),
                 F64Eq,
             ],
@@ -385,12 +526,12 @@ fn instructions(
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
         operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
-        operator_length => vec![Call(func_indices::OPERATOR_LENGTH)],
+        operator_length => vec![Call(func_indices::OPERATOR_LENGTH), I64ExtendI32U],
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
         operator_mathop { OPERATOR } => match OPERATOR.as_str() {
             "abs" => vec![F64Abs],
-            "floor" => vec![F64Floor],
-            "ceiling" => vec![F64Ceil],
+            "floor" => vec![F64Floor, I64TruncF64S],
+            "ceiling" => vec![F64Ceil, I64TruncF64S],
             "sqrt" => vec![F64Sqrt],
             "sin" => vec![Call(func_indices::MATHOP_SIN)],
             "cos" => vec![Call(func_indices::MATHOP_COS)],
@@ -1128,7 +1269,7 @@ fn instructions(
                 I32Const(hq_value_types::EXTERN_STRING_REF64),
                 LocalGet(step_func_locals::EXTERNREF),
                 Call(func_indices::TABLE_ADD_STRING),
-                I64ExtendI32S,
+                I64ExtendI32U,
             ],
             (Boolean, Float) => vec![Call(func_indices::CAST_BOOL_FLOAT)],
             (Boolean, String) => vec![Call(func_indices::CAST_BOOL_STRING)],
@@ -1147,7 +1288,7 @@ fn instructions(
                 I64ReinterpretF64,
             ],
             (ConcreteInteger, Unknown) => vec![
-                I64ExtendI32S,
+                //I64ExtendI32S,
                 LocalSet(step_func_locals::I64),
                 I32Const(hq_value_types::INT64),
                 LocalGet(step_func_locals::I64),
