@@ -665,7 +665,11 @@ impl InputType {
         // unions of types should be represented with the least restrictive type first,
         // so that casting chooses the less restrictive type to cast to
         match self {
-            Any => Union(Box::new(Union(Box::new(Unknown), Box::new(String))), Box::new(Number)).base_type(),
+            Any => Union(
+                Box::new(Union(Box::new(Unknown), Box::new(String))),
+                Box::new(Number),
+            )
+            .base_type(),
             Number => Union(Box::new(Float), Box::new(Integer)).base_type(),
             Integer => Union(Box::new(ConcreteInteger), Box::new(Boolean)).base_type(),
             Union(a, b) => Union(Box::new(a.base_type()), Box::new(b.base_type())),
@@ -1605,7 +1609,10 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let next_step = block_info.next.as_ref().map(|next| (target_id.clone(), next.clone()));
+                        let next_step = block_info
+                            .next
+                            .as_ref()
+                            .map(|next| (target_id.clone(), next.clone()));
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
@@ -1742,7 +1749,10 @@ impl IrBlockVec for Vec<IrBlock> {
                         } else {
                             hq_bad_proj!("malformed SUBSTACK input")
                         };
-                        let next_step = block_info.next.as_ref().map(|next| (target_id.clone(), next.clone()));
+                        let next_step = block_info
+                            .next
+                            .as_ref()
+                            .map(|next| (target_id.clone(), next.clone()));
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
@@ -1879,12 +1889,10 @@ impl IrBlockVec for Vec<IrBlock> {
                             (target_id.clone(), block_id.clone()),
                             Step::new(opcodes.clone(), Rc::clone(&context)),
                         );
-                        vec![
-                            IrOpcode::hq_goto {
-                                step: Some((target_id, substack_id)),
-                                does_yield: false,
-                            },
-                        ]
+                        vec![IrOpcode::hq_goto {
+                            step: Some((target_id, substack_id)),
+                            does_yield: false,
+                        }]
                     }
                     ref other => hq_todo!("unknown block {:?}", other),
                 };

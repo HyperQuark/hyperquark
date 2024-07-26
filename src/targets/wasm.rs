@@ -1561,10 +1561,16 @@ impl TryFrom<IrProject> for WasmProject {
         );
         types.function([ValType::I32], [ValType::Ref(RefType::EXTERNREF)]);
         types.function([ValType::I32, ValType::I64], [ValType::I32]);
-        types.function([ValType::Ref(RefType::EXTERNREF), ValType::Ref(RefType::EXTERNREF)], [ValType::Ref(RefType {
-            nullable: false,
-            heap_type: HeapType::Extern,
-        })]);
+        types.function(
+            [
+                ValType::Ref(RefType::EXTERNREF),
+                ValType::Ref(RefType::EXTERNREF),
+            ],
+            [ValType::Ref(RefType {
+                nullable: false,
+                heap_type: HeapType::Extern,
+            })],
+        );
 
         imports.import("dbg", "log", EntityType::Function(types::I32I64_NORESULT));
         imports.import(
