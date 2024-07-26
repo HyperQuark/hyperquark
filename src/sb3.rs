@@ -1,6 +1,3 @@
-#[cfg(feature = "buddy-alloc")]
-mod alloc;
-
 use crate::error::HQError;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -247,13 +244,6 @@ pub enum Input {
 pub enum Field {
     Value((Option<VarVal>,)),
     ValueId(Option<VarVal>, Option<String>),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
-enum StringOrBool {
-    String(String),
-    Bool(bool),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
