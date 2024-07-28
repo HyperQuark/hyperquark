@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 #[macro_use]
 mod error;
 pub mod ir;
+pub mod ir_opt;
 pub mod sb3;
 pub mod targets;
 
@@ -24,6 +25,6 @@ extern "C" {
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str) -> Result<wasm::WasmProject, HQError> {
     let mut ir_proj = ir::IrProject::try_from(sb3::Sb3Project::try_from(proj)?)?;
-    ir_proj.const_fold()?;
+    ir_proj.optimise()?;
     ir_proj.try_into()
 }

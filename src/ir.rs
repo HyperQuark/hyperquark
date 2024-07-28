@@ -46,15 +46,6 @@ impl fmt::Display for IrProject {
     }
 }
 
-impl IrProject {
-    pub fn const_fold(&mut self) -> Result<(), HQError> {
-        for step in self.steps.values_mut() {
-            step.const_fold()?;
-        }
-        Ok(())
-    }
-}
-
 impl TryFrom<Sb3Project> for IrProject {
     type Error = HQError;
 
@@ -647,7 +638,7 @@ impl IrBlock {
 /// output types shpuld always be exactly known,
 /// so unions, or types that resolve to a union,
 /// should never be used as output types
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub enum InputType {
     Any,
     String,

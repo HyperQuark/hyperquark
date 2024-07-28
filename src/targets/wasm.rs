@@ -12,7 +12,7 @@ use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
-    BlockType as WasmBlockType, CodeSection, ConstExpr, DataSection, ElementSection, Elements,
+    AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataSection, ElementSection, Elements,
     EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
     HeapType, ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType,
     TableSection, TableType, TypeSection, ValType,
@@ -504,8 +504,8 @@ fn instructions(
             (InputType::Integer, InputType::Integer) => vec![I64Eq],
             (InputType::Float, InputType::Float) => vec![F64Eq],
             (InputType::String, InputType::String) => vec![Call(func_indices::STRING_EQUALS)],
-            (InputType::Integer, InputType::Float) => vec![F64ConvertI64S, F64Eq],
-            (InputType::Float, InputType::Integer) => vec![
+            (InputType::Float, InputType::Integer) => vec![F64ConvertI64S, F64Eq],
+            (InputType::Integer, InputType::Float) => vec![
                 LocalSet(step_func_locals::F64),
                 F64ConvertI64S,
                 LocalGet(step_func_locals::F64),
@@ -530,8 +530,16 @@ fn instructions(
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
         operator_mathop { OPERATOR } => match OPERATOR.as_str() {
             "abs" => vec![F64Abs],
-            "floor" => vec![F64Floor, I64TruncF64S],
-            "ceiling" => vec![F64Ceil, I64TruncF64S],
+            "floor" => if InputType::Integer.includes(input_types.first().unwrap()) {
+                vec![]
+            } else {
+                vec![F64Floor, I64TruncF64S]
+            },
+            "ceiling" => if InputType::Integer.includes(input_types.first().unwrap()) {
+                vec![]
+            } else {
+                vec![F64Ceil, I64TruncF64S]
+            },
             "sqrt" => vec![F64Sqrt],
             "sin" => vec![Call(func_indices::MATHOP_SIN)],
             "cos" => vec![Call(func_indices::MATHOP_COS)],
@@ -1598,6 +1606,7 @@ impl TryFrom<IrProject> for WasmProject {
             maximum: None,
             memory64: false,
             shared: false,
+            page_size_log2: None,
         });
 
         types.function([ValType::F64], []);
@@ -1709,7 +1718,10 @@ impl TryFrom<IrProject> for WasmProject {
             ],
             [ValType::Ref(RefType {
                 nullable: false,
-                heap_type: HeapType::Extern,
+                heap_type: HeapType::Abstract {
+                    shared: false, // what does this even mean?!
+                    ty: AbstractHeapType::Extern,
+                },
             })],
         );
 
@@ -1992,7 +2004,20 @@ impl TryFrom<IrProject> for WasmProject {
         any2string_func.instruction(&Instruction::I32WrapI64);
         any2string_func.instruction(&Instruction::TableGet(table_indices::STRINGS));
         any2string_func.instruction(&Instruction::Else);
+        any2string_func.instruction(&Instruction::LocalGet(0));
+        any2string_func.instruction(&Instruction::I32Const(hq_value_types::INT64));
+        any2string_func.instruction(&Instruction::I32Eq);
+        any2string_func.instruction(&Instruction::If(WasmBlockType::FunctionType(
+            types::NOPARAM_EXTERNREF,
+        )));
+        any2string_func.instruction(&Instruction::LocalGet(1));
+        any2string_func.instruction(&Instruction::F64ConvertI32S); // just convert to a float and then to a string, seeing as all valid scratch integers are valid floats. hopefully it won't break.
+        any2string_func.instruction(&Instruction::Call(
+            func_indices::CAST_PRIMITIVE_FLOAT_STRING,
+        ));
+        any2string_func.instruction(&Instruction::Else);
         any2string_func.instruction(&Instruction::Unreachable);
+        any2string_func.instruction(&Instruction::End);
         any2string_func.instruction(&Instruction::End);
         any2string_func.instruction(&Instruction::End);
         any2string_func.instruction(&Instruction::End);
@@ -2528,8 +2553,8 @@ impl TryFrom<IrProject> for WasmProject {
                 memory_index: 0,
             }));
             tick_func.instruction(&Instruction::CallIndirect {
-                ty: types::I32_I32,
-                table: table_indices::STEP_FUNCS,
+                type_index: types::I32_I32,
+                table_index: table_indices::STEP_FUNCS,
             });
 
             tick_func.instruction(&Instruction::If(WasmBlockType::Empty));
@@ -2576,12 +2601,15 @@ impl TryFrom<IrProject> for WasmProject {
                     .try_into()
                     .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
             ),
+            table64: false,
+            shared: false,
         });
 
         globals.global(
             GlobalType {
                 val_type: ValType::I32,
                 mutable: false,
+                shared: false,
             },
             &ConstExpr::i32_const(byte_offset::REDRAW_REQUESTED),
         );
@@ -2589,6 +2617,7 @@ impl TryFrom<IrProject> for WasmProject {
             GlobalType {
                 val_type: ValType::I32,
                 mutable: false,
+                shared: false,
             },
             &ConstExpr::i32_const(byte_offset::THREAD_NUM),
         );
@@ -2596,6 +2625,7 @@ impl TryFrom<IrProject> for WasmProject {
             GlobalType {
                 val_type: ValType::I32,
                 mutable: false,
+                shared: false
             },
             &ConstExpr::i32_const(
                 project
@@ -2673,6 +2703,8 @@ impl TryFrom<IrProject> for WasmProject {
                 .try_into()
                 .map_err(|_| make_hq_bug!("string_consts len out of bounds"))?,
             maximum: None,
+            table64: false,
+            shared: false,
         });
 
         let step_indices = (BUILTIN_FUNCS
