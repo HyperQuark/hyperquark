@@ -385,7 +385,7 @@ export default async (
           const thisTickStartTime = Date.now();
           // @ts-ignore
           $innertickloop: while (
-            Date.now() - thisTickStartTime < 23 &&
+            Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
             new Uint8Array(memory.buffer)[rr_offset.value] === 0
           ){//for (const _ of [1]) {
             // @ts-ignore
