@@ -525,7 +525,7 @@ fn instructions(
         },
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
-        operator_letter_of => vec![Call(func_indices::OPERATOR_LETTEROF)],
+        operator_letter_of => vec![LocalSet(step_func_locals::EXTERNREF), I32WrapI64, LocalGet(step_func_locals::EXTERNREF), Call(func_indices::OPERATOR_LETTEROF)],
         operator_length => vec![Call(func_indices::OPERATOR_LENGTH), I64ExtendI32U],
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
         operator_mathop { OPERATOR } => match OPERATOR.as_str() {
@@ -1052,9 +1052,10 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::I32),
+            LocalSet(step_func_locals::I64),
             I32Const(0),
-            LocalGet(step_func_locals::I32),
+            LocalGet(step_func_locals::I64),
+            I32WrapI64,
             I32Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -2011,7 +2012,7 @@ impl TryFrom<IrProject> for WasmProject {
             types::NOPARAM_EXTERNREF,
         )));
         any2string_func.instruction(&Instruction::LocalGet(1));
-        any2string_func.instruction(&Instruction::F64ConvertI32S); // just convert to a float and then to a string, seeing as all valid scratch integers are valid floats. hopefully it won't break.
+        any2string_func.instruction(&Instruction::F64ConvertI64S); // just convert to a float and then to a string, seeing as all valid scratch integers are valid floats. hopefully it won't break.
         any2string_func.instruction(&Instruction::Call(
             func_indices::CAST_PRIMITIVE_FLOAT_STRING,
         ));

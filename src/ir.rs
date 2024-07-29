@@ -864,7 +864,7 @@ impl IrOpcode {
             ))),
             operator_mathop { OPERATOR } => Ok(TypeStack::new_some(TypeStack(
                 Rc::clone(&type_stack.get(1)),
-                match OPERATOR.as_str() {
+                match OPERATOR.as_str().to_uppercase().as_str() {
                     "CEILING" | "FLOOR" => ConcreteInteger,
                     _ => Float,
                 },
@@ -2113,7 +2113,7 @@ mod tests {
     fn const_fold() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
-        let proj: Sb3Project = fs::read_to_string("./benchmark (3.1).json")
+        let proj: Sb3Project = fs::read_to_string("./hq-test.project.json")
             .expect("couldn't read hq-test.project.json")
             .try_into()?;
         let mut ir: IrProject = proj.try_into()?;
