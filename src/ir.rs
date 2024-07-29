@@ -747,6 +747,7 @@ impl IrOpcode {
             | math_positive_number { .. }
             | math_number { .. }
             | sensing_timer
+            | sensing_dayssince2000
             | looks_size
             | data_variable { .. }
             | text { .. }
@@ -829,10 +830,9 @@ impl IrOpcode {
                 Rc::clone(&type_stack.get(2)),
                 Float,
             ))),
-            looks_size | sensing_timer | math_number { .. } => Ok(TypeStack::new_some(TypeStack(
-                Rc::clone(&type_stack),
-                Float,
-            ))),
+            looks_size | sensing_timer | sensing_dayssince2000 | math_number { .. } => Ok(
+                TypeStack::new_some(TypeStack(Rc::clone(&type_stack), Float)),
+            ),
             data_variable {
                 assume_type: None, ..
             }
@@ -1276,10 +1276,12 @@ impl IrBlockVec for Vec<IrBlock> {
                     Rc::clone(&context),
                     steps,
                     target_id.clone(),
+                    Rc::clone(&procedures),
                 )?;
                 let ops: Vec<_> = match block_info.opcode {
                     BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
                     BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                    BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                     BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_resettimer],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say],
                     BlockOpcode::looks_think => vec![IrOpcode::looks_think],

@@ -1451,37 +1451,38 @@ pub mod func_indices {
     pub const MATHOP_POW10: u32 = 23;
     pub const SENSING_TIMER: u32 = 24;
     pub const SENSING_RESETTIMER: u32 = 25;
-    pub const PEN_CLEAR: u32 = 26;
-    pub const PEN_DOWN: u32 = 27;
-    pub const PEN_LINETO: u32 = 28;
-    pub const PEN_SETCOLOR: u32 = 29;
-    pub const PEN_CHANGECOLORPARAM: u32 = 30;
-    pub const PEN_SETCOLORPARAM: u32 = 31;
-    pub const PEN_CHANGESIZE: u32 = 32;
-    pub const PEN_SETHUE: u32 = 33;
-    pub const PEN_CHANGEHUE: u32 = 34;
-    pub const EMIT_SPRITE_POS_CHANGE: u32 = 35;
-    pub const EMIT_SPRITE_SIZE_CHANGE: u32 = 36;
-    pub const EMIT_SPRITE_COSTUME_CHANGE: u32 = 37;
-    pub const EMIT_SPRITE_X_CHANGE: u32 = 38;
-    pub const EMIT_SPRITE_Y_CHANGE: u32 = 39;
-    pub const EMIT_SPRITE_ROTATION_CHANGE: u32 = 40;
-    pub const EMIT_SPRITE_VISIBILITY_CHANGE: u32 = 41;
+    pub const SENSING_DAYSSINCE2000: u32 = 26;
+    pub const PEN_CLEAR: u32 = 27;
+    pub const PEN_DOWN: u32 = 28;
+    pub const PEN_LINETO: u32 = 29;
+    pub const PEN_SETCOLOR: u32 = 30;
+    pub const PEN_CHANGECOLORPARAM: u32 = 31;
+    pub const PEN_SETCOLORPARAM: u32 = 32;
+    pub const PEN_CHANGESIZE: u32 = 33;
+    pub const PEN_SETHUE: u32 = 34;
+    pub const PEN_CHANGEHUE: u32 = 35;
+    pub const EMIT_SPRITE_POS_CHANGE: u32 = 36;
+    pub const EMIT_SPRITE_SIZE_CHANGE: u32 = 37;
+    pub const EMIT_SPRITE_COSTUME_CHANGE: u32 = 38;
+    pub const EMIT_SPRITE_X_CHANGE: u32 = 39;
+    pub const EMIT_SPRITE_Y_CHANGE: u32 = 40;
+    pub const EMIT_SPRITE_ROTATION_CHANGE: u32 = 41;
+    pub const EMIT_SPRITE_VISIBILITY_CHANGE: u32 = 42;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 42;
-    pub const CAST_FLOAT_BOOL: u32 = 43;
-    pub const CAST_BOOL_FLOAT: u32 = 44;
-    pub const CAST_BOOL_STRING: u32 = 45;
-    pub const CAST_ANY_STRING: u32 = 46;
-    pub const CAST_ANY_FLOAT: u32 = 47;
-    pub const CAST_ANY_BOOL: u32 = 48;
-    pub const CAST_ANY_INT: u32 = 49;
-    pub const TABLE_ADD_STRING: u32 = 50;
-    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 51;
+    pub const FMOD: u32 = 43;
+    pub const CAST_FLOAT_BOOL: u32 = 44;
+    pub const CAST_BOOL_FLOAT: u32 = 45;
+    pub const CAST_BOOL_STRING: u32 = 46;
+    pub const CAST_ANY_STRING: u32 = 47;
+    pub const CAST_ANY_FLOAT: u32 = 48;
+    pub const CAST_ANY_BOOL: u32 = 49;
+    pub const CAST_ANY_INT: u32 = 50;
+    pub const TABLE_ADD_STRING: u32 = 51;
+    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 52;
 }
-pub const BUILTIN_FUNCS: u32 = 52;
-pub const IMPORTED_FUNCS: u32 = 42;
+pub const BUILTIN_FUNCS: u32 = 53;
+pub const IMPORTED_FUNCS: u32 = 43;
 
 pub mod types {
     #![allow(non_upper_case_globals)]
@@ -1842,6 +1843,11 @@ impl TryFrom<IrProject> for WasmProject {
             "runtime",
             "sensing_resettimer",
             EntityType::Function(types::NOPARAM_NORESULT),
+        );
+        imports.import(
+            "runtime",
+            "sensing_dayssince2000",
+            EntityType::Function(types::NOPARAM_F64),
         );
         imports.import(
             "runtime",
