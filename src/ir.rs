@@ -15,6 +15,8 @@ use core::fmt;
 use core::hash::BuildHasherDefault;
 use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
+use lazy_regex::{lazy_regex, Lazy};
+use regex::Regex;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +34,7 @@ pub struct IrProject {
     pub costumes: Vec<Vec<IrCostume>>,
     pub steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     pub sb3: Sb3Project,
+    pub procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>, // maps a (target, proccode) tuple to a (target, top_block_id) tuple
 }
 
 impl fmt::Display for IrProject {
@@ -85,6 +88,8 @@ impl TryFrom<Sb3Project> for IrProject {
             })
             .collect();
 
+        let procedures = Rc::new(RefCell::new(BTreeMap::new()));
+
         let mut steps: IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>> =
             Default::default();
         // insert a noop step so that these step indices match up with the step function indices in the generated wasm
@@ -99,6 +104,7 @@ impl TryFrom<Sb3Project> for IrProject {
                     vars: Rc::new(RefCell::new(vec![])),
                     target_num: sb3.targets.len(),
                     costumes: vec![],
+                    warp: false,
                 }),
             ),
         );
@@ -126,6 +132,7 @@ impl TryFrom<Sb3Project> for IrProject {
                     vars: Rc::clone(&vars),
                     target_num: sb3.targets.len(),
                     costumes: costumes.get(target_index).ok_or(make_hq_bug!(""))?.clone(),
+                    warp: false, // custom blocks aren't compiled here (lazily compiled when needed) so never warped
                 });
                 let thread = Thread::from_hat(
                     block.clone(),
@@ -133,6 +140,7 @@ impl TryFrom<Sb3Project> for IrProject {
                     context,
                     &mut steps,
                     target.name.clone(),
+                    Rc::clone(&procedures),
                 )?;
                 threads.push(thread);
             }
@@ -149,8 +157,15 @@ impl TryFrom<Sb3Project> for IrProject {
             steps,
             costumes,
             sb3,
+            procedures,
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CallSite {
+    Caller,               // an arbitrary call site
+    Step(String, String), // a specific call site
 }
 
 #[allow(non_camel_case_types)]
@@ -233,6 +248,12 @@ pub enum IrOpcode {
     hq_goto_if {
         step: Option<(String, String)>,
         does_yield: bool,
+    },
+    hq_launch_procedure {
+        target_id: String,
+        proccode: String,
+        arg_types: Vec<InputType>,
+        return_to_caller: Option<CallSite>,
     },
     looks_say,
     looks_sayforsecs,
@@ -331,9 +352,6 @@ pub enum IrOpcode {
     pen_changePenShadeBy,
     pen_setPenHueToNumber,
     pen_changePenHueBy,
-    procedures_definition,
-    procedures_call,
-    procedures_prototype,
     argument_reporter_string_number,
     argument_reporter_boolean,
     sensing_touchingobject,
@@ -784,6 +802,7 @@ impl IrOpcode {
             looks_switchcostumeto => vec![Any],
             pen_changePenColorParamBy | pen_setPenColorParamTo => vec![String, Number],
             motion_gotoxy => vec![Number, Number],
+            hq_launch_procedure { arg_types, .. } => arg_types.clone(),
             _ => hq_todo!("{:?}", &self),
         })
     }
@@ -914,6 +933,7 @@ impl IrOpcode {
             | pen_penDown
             | pen_stamp => Ok(Rc::clone(&type_stack)),
             hq_drop(n) => Ok(type_stack.get(*n)),
+            hq_launch_procedure { arg_types, .. } => Ok(type_stack.get(arg_types.len())),
             _ => hq_todo!("{:?}", &self),
         };
         output
@@ -1119,6 +1139,7 @@ pub struct ThreadContext {
     pub vars: Rc<RefCell<Vec<IrVar>>>, // todo: fix variable id collisions between targets
     pub target_num: usize,
     pub costumes: Vec<IrCostume>,
+    pub warp: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1126,6 +1147,26 @@ pub struct Thread {
     start: ThreadStart,
     first_step: String,
     target_id: String,
+}
+
+static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"[^\\]%[nbs]"#);
+
+fn arg_types_from_proccode<'a>(proccode: String) -> Result<Vec<InputType>, HQError> {
+    // https://github.com/scratchfoundation/scratch-blocks/blob/abbfe93136fef57fdfb9a077198b0bc64726f012/blocks_vertical/procedures.js#L207-L215
+    (*ARG_REGEX)
+        .find_iter(proccode.as_str())
+        .map(|s| s.as_str().to_string().trim().to_string())
+        .filter(|s| s.as_str().chars().nth(0).unwrap() == '%')
+        .map(|s| (&s[..2]).to_string())
+        .map(|s| {
+            Ok(match s.as_str() {
+                "%n" => InputType::Number,
+                "%s" => InputType::String,
+                "%b" => InputType::Boolean,
+                other => hq_bug!("invalid proccode arg \"{other}\" found"),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
 }
 
 trait IrBlockVec {
@@ -1137,6 +1178,7 @@ trait IrBlockVec {
         last_nexts: Vec<String>,
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
+        procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>,
     ) -> Result<(), HQError>;
     fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError>;
     fn add_inputs(
@@ -1146,6 +1188,7 @@ trait IrBlockVec {
         context: Rc<ThreadContext>,
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
+        procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>,
     ) -> Result<(), HQError>;
     fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>>;
 }
@@ -1158,6 +1201,7 @@ impl IrBlockVec for Vec<IrBlock> {
         context: Rc<ThreadContext>,
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
+        procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>,
     ) -> Result<(), HQError> {
         for (name, input) in inputs {
             if name.starts_with("SUBSTACK") {
@@ -1177,6 +1221,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 vec![],
                                 steps,
                                 target_id.clone(),
+                                Rc::clone(&procedures),
                             )?;
                         }
                         BlockArrayOrId::Array(arr) => {
@@ -1266,6 +1311,7 @@ impl IrBlockVec for Vec<IrBlock> {
         last_nexts: Vec<String>,
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
+        procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>,
     ) -> Result<(), HQError> {
         let block = blocks.get(&block_id).ok_or(make_hq_bug!(""))?;
         match block {
@@ -1490,6 +1536,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         step_from_top_block(
                             block_info.next.clone().ok_or(make_hq_bug!(""))?,
@@ -1498,6 +1545,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         vec![
                             IrOpcode::hq_goto_if {
@@ -1555,6 +1603,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         step_from_top_block(
                             substack2_id.clone(),
@@ -1563,6 +1612,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         vec![
                             IrOpcode::hq_goto_if {
@@ -1665,6 +1715,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Rc::clone(&context),
                                 steps,
                                 target_id.clone(),
+                                Rc::clone(&procedures),
                             )?;
                         }
                         step_from_top_block(
@@ -1674,6 +1725,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         let mut opcodes = vec![];
                         opcodes.add_inputs(
@@ -1682,6 +1734,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         for op in [
                             IrOpcode::math_whole_number { NUM: 1 },
@@ -1758,6 +1811,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Rc::clone(&context),
                                 steps,
                                 target_id.clone(),
+                                Rc::clone(&procedures),
                             )?;
                             for op in condition_opcodes.clone().into_iter() {
                                 looper_opcodes.push(IrBlock::new_with_stack_no_cast(
@@ -1780,6 +1834,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Rc::clone(&context),
                                 steps,
                                 target_id.clone(),
+                                Rc::clone(&procedures),
                             )?;
                         }
                         step_from_top_block(
@@ -1789,6 +1844,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         let mut opcodes = vec![];
                         opcodes.add_inputs(
@@ -1797,6 +1853,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         for op in condition_opcodes.into_iter() {
                             opcodes.push(IrBlock::new_with_stack_no_cast(
@@ -1856,6 +1913,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 Rc::clone(&context),
                                 steps,
                                 target_id.clone(),
+                                Rc::clone(&procedures),
                             )?;
                         }
                         step_from_top_block(
@@ -1865,6 +1923,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             Rc::clone(&context),
                             steps,
                             target_id.clone(),
+                            Rc::clone(&procedures),
                         )?;
                         let opcodes = vec![IrBlock::new_with_stack_no_cast(
                             goto_opcode,
@@ -1877,6 +1936,21 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![IrOpcode::hq_goto {
                             step: Some((target_id, substack_id)),
                             does_yield: false,
+                        }]
+                    }
+                    BlockOpcode::procedures_call => {
+                        let serde_json::Value::String(proccode) =
+                            block_info.mutation.mutations.get("proccode").ok_or(
+                                make_hq_bad_proj!("missing proccode mutation in procedures_call"),
+                            )?
+                        else {
+                            hq_bad_proj!("non-string proccode mutation")
+                        };
+                        vec![IrOpcode::hq_launch_procedure {
+                            target_id,
+                            proccode: proccode.clone(),
+                            arg_types: arg_types_from_proccode(proccode.clone())?,
+                            return_to_caller: Some(CallSite::Caller),
                         }]
                     }
                     ref other => hq_todo!("unknown block {:?}", other),
@@ -1946,6 +2020,7 @@ pub fn step_from_top_block<'a>(
     context: Rc<ThreadContext>,
     steps: &'a mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
     target_id: String,
+    procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>,
 ) -> Result<&'a Step, HQError> {
     if steps.contains_key(&(target_id.clone(), top_id.clone())) {
         return steps.get(&(target_id, top_id)).ok_or(make_hq_bug!(""));
@@ -1961,6 +2036,7 @@ pub fn step_from_top_block<'a>(
             last_nexts.clone(),
             steps,
             target_id.clone(),
+            Rc::clone(&procedures),
         )?;
         if next_block
             .block_info()
@@ -2018,6 +2094,7 @@ pub fn step_from_top_block<'a>(
             Rc::clone(&context),
             steps,
             target_id.clone(),
+            Rc::clone(&procedures),
         )?;
         IrBlock::new_with_stack_no_cast(
             IrOpcode::hq_goto {
@@ -2063,6 +2140,7 @@ impl Thread {
         context: Rc<ThreadContext>,
         steps: &mut IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
         target_id: String,
+        procedures: Rc<RefCell<BTreeMap<(String, String), (String, String)>>>,
     ) -> Result<Thread, HQError> {
         let (first_step_id, _first_step) = if let Block::Normal { block_info, .. } = &hat {
             if let Some(next_id) = &block_info.next {
@@ -2075,6 +2153,7 @@ impl Thread {
                         Rc::clone(&context),
                         steps,
                         target_id.clone(),
+                        Rc::clone(&procedures),
                     )?,
                 )
             } else {
