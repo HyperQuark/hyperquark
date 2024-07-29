@@ -10,7 +10,7 @@ use core::cell::RefCell;
 impl IrProject {
     pub fn optimise(&mut self) -> Result<(), HQError> {
         self.const_fold()?;
-        //self.variable_types()?;
+        self.variable_types()?;
         Ok(())
     }
     pub fn variable_types(&mut self) -> Result<(), HQError> {
