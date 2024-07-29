@@ -263,15 +263,11 @@ fn instructions(
                             memory_index: 0,
                         }), // here we can load an i32 directly because a boolean will never be signed
                     ],
-                    InputType::String => vec![
-                        I32Const(0),
-                        I32Load(MemArg {
-                            offset: var_offset + 8,
-                            align: 2,
-                            memory_index: 0,
-                        }), // once again string indices are guaranteed to be unsigned
-                        TableGet(table_indices::STRINGS), // TODO: store guaranteed string variables in globals
-                    ],
+                    InputType::String => vec![GlobalGet(
+                        BUILTIN_GLOBALS
+                            + TryInto::<u32>::try_into(var_index)
+                                .map_err(|_| make_hq_bug!("var index out of bounds"))?,
+                    )],
                     other => hq_bug!("unexpected concrete type {:?}", other),
                 }
             }
@@ -346,17 +342,11 @@ fn instructions(
                             memory_index: 0,
                         }),
                     ],
-                    InputType::String => vec![
-                        LocalSet(step_func_locals::EXTERNREF),
-                        I32Const(0),
-                        LocalGet(step_func_locals::EXTERNREF),
-                        Call(func_indices::TABLE_ADD_STRING),
-                        I32Store(MemArg {
-                            offset: var_offset + 8,
-                            align: 2,
-                            memory_index: 0,
-                        }),
-                    ],
+                    InputType::String => vec![GlobalSet(
+                        BUILTIN_GLOBALS
+                            + TryInto::<u32>::try_into(var_index)
+                                .map_err(|_| make_hq_bug!("var index out of bounds"))?,
+                    )],
                     other => hq_bug!("unexpected concrete type {:?}", other),
                 }
             }
@@ -435,14 +425,12 @@ fn instructions(
                     ],
                     InputType::String => vec![
                         LocalTee(step_func_locals::EXTERNREF),
-                        I32Const(0),
+                        GlobalSet(
+                            BUILTIN_GLOBALS
+                                + TryInto::<u32>::try_into(var_index)
+                                    .map_err(|_| make_hq_bug!("var index out of bounds"))?,
+                        ),
                         LocalGet(step_func_locals::EXTERNREF),
-                        Call(func_indices::TABLE_ADD_STRING),
-                        I32Store(MemArg {
-                            offset: var_offset + 8,
-                            align: 2,
-                            memory_index: 0,
-                        }),
                     ],
                     other => hq_bug!("unexpected concrete type {:?}", other),
                 }
@@ -1595,6 +1583,8 @@ pub mod var_info_offsets {
     pub const VAR_VAL: i32 = 8;
 }
 
+pub const BUILTIN_GLOBALS: u32 = 3;
+
 impl TryFrom<IrProject> for WasmProject {
     type Error = HQError;
 
@@ -2646,6 +2636,20 @@ impl TryFrom<IrProject> for WasmProject {
                     .map_err(|_| make_hq_bug!("vars length out of bounds"))?,
             ),
         );
+        for _ in 0..project.vars.borrow().len() {
+            // TODO: only create globals for variables that are at some point assumed to be strings
+            globals.global(
+                GlobalType {
+                    val_type: ValType::Ref(RefType::EXTERNREF),
+                    mutable: true,
+                    shared: false,
+                },
+                &ConstExpr::ref_null(HeapType::Abstract {
+                    shared: false,
+                    ty: AbstractHeapType::Extern,
+                }),
+            );
+        }
 
         exports.export("step_funcs", ExportKind::Table, table_indices::STEP_FUNCS);
         exports.export("strings", ExportKind::Table, table_indices::STRINGS);
