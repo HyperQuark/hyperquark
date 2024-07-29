@@ -15,6 +15,7 @@ impl IrProject {
     }
     pub fn variable_types(&mut self) -> Result<(), HQError> {
         let mut var_map: BTreeMap<String, BTreeSet<InputType>> = BTreeMap::new();
+        #[allow(clippy::type_complexity)]
         let mut block_swaps: BTreeMap<
             String,
             BTreeMap<
