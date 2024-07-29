@@ -552,6 +552,7 @@ fn instructions(
         },
         sensing_timer => vec![Call(func_indices::SENSING_TIMER)],
         sensing_resettimer => vec![Call(func_indices::SENSING_RESETTIMER)],
+        sensing_dayssince2000 => vec![Call(func_indices::SENSING_DAYSSINCE2000)],
         pen_clear => vec![Call(func_indices::PEN_CLEAR)],
         pen_stamp => hq_todo!(""),
         pen_penDown => vec![
