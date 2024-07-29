@@ -12,10 +12,10 @@ use hashers::fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
-    AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataSection, ElementSection, Elements,
-    EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
-    HeapType, ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType,
-    TableSection, TableType, TypeSection, ValType,
+    AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataSection,
+    ElementSection, Elements, EntityType, ExportKind, ExportSection, Function, FunctionSection,
+    GlobalSection, GlobalType, HeapType, ImportSection, Instruction, MemArg, MemorySection,
+    MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
 fn instructions(
@@ -525,21 +525,30 @@ fn instructions(
         },
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
-        operator_letter_of => vec![LocalSet(step_func_locals::EXTERNREF), I32WrapI64, LocalGet(step_func_locals::EXTERNREF), Call(func_indices::OPERATOR_LETTEROF)],
+        operator_letter_of => vec![
+            LocalSet(step_func_locals::EXTERNREF),
+            I32WrapI64,
+            LocalGet(step_func_locals::EXTERNREF),
+            Call(func_indices::OPERATOR_LETTEROF),
+        ],
         operator_length => vec![Call(func_indices::OPERATOR_LENGTH), I64ExtendI32U],
         operator_contains => vec![Call(func_indices::OPERATOR_CONTAINS)],
         operator_mathop { OPERATOR } => match OPERATOR.as_str() {
             "abs" => vec![F64Abs],
-            "floor" => if InputType::Integer.includes(input_types.first().unwrap()) {
-                vec![]
-            } else {
-                vec![F64Floor, I64TruncF64S]
-            },
-            "ceiling" => if InputType::Integer.includes(input_types.first().unwrap()) {
-                vec![]
-            } else {
-                vec![F64Ceil, I64TruncF64S]
-            },
+            "floor" => {
+                if InputType::Integer.includes(input_types.first().unwrap()) {
+                    vec![]
+                } else {
+                    vec![F64Floor, I64TruncF64S]
+                }
+            }
+            "ceiling" => {
+                if InputType::Integer.includes(input_types.first().unwrap()) {
+                    vec![]
+                } else {
+                    vec![F64Ceil, I64TruncF64S]
+                }
+            }
             "sqrt" => vec![F64Sqrt],
             "sin" => vec![Call(func_indices::MATHOP_SIN)],
             "cos" => vec![Call(func_indices::MATHOP_COS)],
@@ -2626,7 +2635,7 @@ impl TryFrom<IrProject> for WasmProject {
             GlobalType {
                 val_type: ValType::I32,
                 mutable: false,
-                shared: false
+                shared: false,
             },
             &ConstExpr::i32_const(
                 project

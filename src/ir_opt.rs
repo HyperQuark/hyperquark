@@ -68,7 +68,9 @@ impl IrProject {
                                         .entry(step_identifier.clone())
                                         .or_default()
                                         .push((
-                                            (i - 1).try_into().map_err(|_| make_hq_bug!("i32 out of range for usize"))?,
+                                            (i - 1).try_into().map_err(|_| {
+                                                make_hq_bug!("i32 out of range for usize")
+                                            })?,
                                             Some((
                                                 IrOpcode::math_integer { NUM: *i },
                                                 Rc::new(RefCell::new(Some(TypeStack(
@@ -153,7 +155,10 @@ impl IrProject {
                                     .opcodes_mut()
                                     .get_mut(*index)
                                     .ok_or(make_hq_bug!("swap index out of range")))? =
-                                    IrBlock::new_with_stack_no_cast(opcode.clone(), type_stack.clone())?
+                                    IrBlock::new_with_stack_no_cast(
+                                        opcode.clone(),
+                                        type_stack.clone(),
+                                    )?
                             } else {
                                 step.opcodes_mut().remove(*index);
                             }
