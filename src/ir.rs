@@ -1276,7 +1276,6 @@ impl IrBlockVec for Vec<IrBlock> {
                     Rc::clone(&context),
                     steps,
                     target_id.clone(),
-                    Rc::clone(&procedures),
                 )?;
                 let ops: Vec<_> = match block_info.opcode {
                     BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
