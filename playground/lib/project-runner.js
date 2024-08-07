@@ -391,17 +391,17 @@ export default async (
           renderer.draw();
           const thisTickStartTime = Date.now();
           // @ts-ignore
-          $innertickloop: while (
-            Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
-            new Uint8Array(memory.buffer)[rr_offset.value] === 0
-          ){//for (const _ of [1]) {
+          $innertickloop: do {//for (const _ of [1]) {
             // @ts-ignore
             tick();
             // @ts-ignore
             if (new Uint32Array(memory.buffer)[thn_offset.value / 4] === 0) {
               break $outertickloop;
             }
-          }
+          } while (
+            Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
+            new Uint8Array(memory.buffer)[rr_offset.value] === 0
+          )
           // @ts-ignore
           new Uint8Array(memory.buffer)[rr_offset.value] = 0;
           if (framerate_wait > 0) {
