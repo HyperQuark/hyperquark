@@ -1733,11 +1733,11 @@ impl IrBlockVec for Vec<IrBlock> {
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
-                                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id.clone(), substack_id.clone())),
-                                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                             },
                         ];
                         let looper_id = Uuid::new_v4().to_string();
@@ -1849,7 +1849,7 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {
                                 step: next_step,
-                                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id, substack_id)),
@@ -1880,11 +1880,11 @@ impl IrBlockVec for Vec<IrBlock> {
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
-                                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id.clone(), substack_id.clone())),
-                                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                             },
                         ];
                         let looper_id = Uuid::new_v4().to_string();
@@ -1953,7 +1953,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step,
-                                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id, substack_id)),
@@ -1977,7 +1977,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         };
                         let goto_opcode = IrOpcode::hq_goto {
                             step: Some((target_id.clone(), substack_id.clone())),
-                            does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                            does_yield: !context.proc.clone().is_some_and(|p| p.warp),
                         };
                         let looper_id = Uuid::new_v4().to_string();
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
@@ -2207,7 +2207,7 @@ pub fn step_from_top_block<'a>(
         IrBlock::new_with_stack_no_cast(
             IrOpcode::hq_goto {
                 step: Some((target_id.clone(), id.clone())),
-                does_yield: context.proc.clone().is_some_and(|p| !p.warp),
+                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
             },
             Rc::clone(&step.opcodes().last().unwrap().type_stack),
         )?

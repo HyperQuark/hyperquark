@@ -1177,12 +1177,11 @@ fn instructions(
             let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
                 LocalGet(local!(MEM_LOCATION)),
-                Call(
+                ReturnCall(
                     BUILTIN_FUNCS
                         + u32::try_from(next_step_index)
                             .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
                 ),
-                Return,
             ]
         }
         hq_goto_if { step: None, .. } => {
@@ -1276,12 +1275,11 @@ fn instructions(
             vec![
                 If(WasmBlockType::Empty),
                 LocalGet(local!(MEM_LOCATION)),
-                Call(
+                ReturnCall(
                     BUILTIN_FUNCS
                         + u32::try_from(next_step_index)
                             .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
                 ),
-                Return,
                 End,
             ]
         }
