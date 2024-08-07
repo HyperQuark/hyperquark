@@ -1471,18 +1471,19 @@ pub mod func_indices {
     pub const EMIT_SPRITE_VISIBILITY_CHANGE: u32 = 42;
 
     /* wasm funcs */
-    pub const FMOD: u32 = 43;
-    pub const CAST_FLOAT_BOOL: u32 = 44;
-    pub const CAST_BOOL_FLOAT: u32 = 45;
-    pub const CAST_BOOL_STRING: u32 = 46;
-    pub const CAST_ANY_STRING: u32 = 47;
-    pub const CAST_ANY_FLOAT: u32 = 48;
-    pub const CAST_ANY_BOOL: u32 = 49;
-    pub const CAST_ANY_INT: u32 = 50;
-    pub const TABLE_ADD_STRING: u32 = 51;
-    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 52;
+    pub const UNREACHABLE: u32 = 43;
+    pub const FMOD: u32 = 44;
+    pub const CAST_FLOAT_BOOL: u32 = 45;
+    pub const CAST_BOOL_FLOAT: u32 = 46;
+    pub const CAST_BOOL_STRING: u32 = 47;
+    pub const CAST_ANY_STRING: u32 = 48;
+    pub const CAST_ANY_FLOAT: u32 = 49;
+    pub const CAST_ANY_BOOL: u32 = 50;
+    pub const CAST_ANY_INT: u32 = 51;
+    pub const TABLE_ADD_STRING: u32 = 52;
+    pub const SPRITE_UPDATE_PEN_COLOR: u32 = 53;
 }
-pub const BUILTIN_FUNCS: u32 = 53;
+pub const BUILTIN_FUNCS: u32 = 54;
 pub const IMPORTED_FUNCS: u32 = 43;
 
 pub mod types {
@@ -1929,6 +1930,18 @@ impl TryFrom<IrProject> for WasmProject {
             "runtime",
             "emit_sprite_visibility_change",
             EntityType::Function(types::I32_NORESULT),
+        );
+        
+        // used to expose the wasm module to devtools
+        functions.function(types::NOPARAM_NORESULT);
+        let mut unreachable_func = Function::new(vec![]);
+        unreachable_func.instruction(&Instruction::Unreachable);
+        unreachable_func.instruction(&Instruction::End);
+        code.function(&unreachable_func);
+        exports.export(
+            "unreachable_dbg",
+            ExportKind::Func,
+            func_indices::UNREACHABLE,
         );
 
         functions.function(types::F64x2_F64);

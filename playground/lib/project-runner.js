@@ -348,6 +348,7 @@ export default async (
           rr_offset,
           thn_offset,
           upc,
+          unreachable_dbg
         } = instance.exports;
         for (const [i, str] of Object.entries(string_consts)) {
           // @ts-ignore
@@ -376,6 +377,12 @@ export default async (
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 40, 1, true);
           dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 44, 1, true);
           dv.setFloat64(sprite_info_offset + i * spriteInfoLen + 48, 1, true);
+        }
+        try {
+          // expose the module to devtools
+          unreachable_dbg(); 
+        } catch (error) {
+          console.info('synthetic error to exose wasm modulee to devtools:', error)
         }
         green_flag();
         start_time = Date.now();
