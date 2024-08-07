@@ -31,20 +31,31 @@ fn instructions(
     use IrOpcode::*;
     let locals_shift = match context.proc {
         None => 0,
-        Some(Procedure { warp, ref arg_types, .. }) => {
+        Some(Procedure {
+            warp,
+            ref arg_types,
+            ..
+        }) => {
             if !warp {
                 hq_todo!("non-warp procedure")
             } else {
-                i32::try_from(arg_types.len()).map_err(|_| make_hq_bug!("arg types len out of bounds"))?
+                i32::try_from(arg_types.len())
+                    .map_err(|_| make_hq_bug!("arg types len out of bounds"))?
             }
         }
     };
     macro_rules! local {
         ($id:ident) => {{
             u32::try_from(
-                i32::try_from(step_func_locals::$id).map_err(|_| make_hq_bug!(""))? + locals_shift
-            ).map_err(|_| make_hq_bug!("shifted local from {:} out of bounds", step_func_locals::$id))?
-        }}
+                i32::try_from(step_func_locals::$id).map_err(|_| make_hq_bug!(""))? + locals_shift,
+            )
+            .map_err(|_| {
+                make_hq_bug!(
+                    "shifted local from {:} out of bounds",
+                    step_func_locals::$id
+                )
+            })?
+        }};
     }
     //let expected_output = *op.expected_output();
     //let mut actual_output = *op.actual_output();
@@ -1328,12 +1339,14 @@ fn instructions(
                 .get_index_of(&step_tuple)
                 .ok_or(make_hq_bug!("couldn't find step"))?;
             if procedure.warp {
-                vec![LocalGet(local!(MEM_LOCATION)),
-                Call(
-                    BUILTIN_FUNCS
-                        + u32::try_from(step_idx)
-                            .map_err(|_| make_hq_bug!("step_idx out of bounds"))?,
-                )]
+                vec![
+                    LocalGet(local!(MEM_LOCATION)),
+                    Call(
+                        BUILTIN_FUNCS
+                            + u32::try_from(step_idx)
+                                .map_err(|_| make_hq_bug!("step_idx out of bounds"))?,
+                    ),
+                ]
             } else {
                 hq_todo!("non-warping procedure")
             }
@@ -1966,7 +1979,7 @@ impl TryFrom<IrProject> for WasmProject {
             "emit_sprite_visibility_change",
             EntityType::Function(types::I32_NORESULT),
         );
-        
+
         // used to expose the wasm module to devtools
         functions.function(types::NOPARAM_NORESULT);
         let mut unreachable_func = Function::new(vec![]);
@@ -2521,7 +2534,9 @@ impl TryFrom<IrProject> for WasmProject {
                 {
                     None => types::I32_I32,
                     Some(Procedure {
-                        warp, ref arg_types, ..
+                        warp,
+                        ref arg_types,
+                        ..
                     }) => {
                         if !warp {
                             hq_todo!("non-warp procedure")

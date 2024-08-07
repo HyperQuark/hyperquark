@@ -1183,23 +1183,31 @@ fn add_procedure(
     let arg_types = arg_types_from_proccode(proccode.clone())?;
     let Some(prototype_block) = blocks.values().find(|block| {
         let Some(info) = block.block_info() else {
-            return false
+            return false;
         };
         return info.opcode == BlockOpcode::procedures_prototype
             && (match info.mutation.mutations.get("proccode") {
                 None => false,
-                Some(p) => if let serde_json::Value::String(ref s) = p {
-                    log(s.as_str());
-                    *s == proccode
-                } else {
-                    false
-                },
-            })
+                Some(p) => {
+                    if let serde_json::Value::String(ref s) = p {
+                        log(s.as_str());
+                        *s == proccode
+                    } else {
+                        false
+                    }
+                }
+            });
     }) else {
         hq_bad_proj!("no prototype found for {proccode} in {target_id}")
     };
-    let Some(def_block) = blocks.get(&prototype_block.block_info().unwrap().parent.clone().ok_or(make_hq_bad_proj!("prototype block without parent"))?) 
-    else {
+    let Some(def_block) = blocks.get(
+        &prototype_block
+            .block_info()
+            .unwrap()
+            .parent
+            .clone()
+            .ok_or(make_hq_bad_proj!("prototype block without parent"))?,
+    ) else {
         hq_bad_proj!("no definition found for {proccode} in {target_id}")
     };
     if let Some(warp_val) = prototype_block
@@ -2031,13 +2039,9 @@ impl IrBlockVec for Vec<IrBlock> {
                         else {
                             hq_bad_proj!("non-string proccode mutation")
                         };
-                        let warp = match block_info
-                                .mutation
-                                .mutations
-                                .get("warp")
-                                .ok_or(make_hq_bad_proj!(
-                                    "missing warp mutation in procedures_call"
-                                ))? {
+                        let warp = match block_info.mutation.mutations.get("warp").ok_or(
+                            make_hq_bad_proj!("missing warp mutation in procedures_call"),
+                        )? {
                             serde_json::Value::Bool(w) => *w,
                             serde_json::Value::String(wstr) => match wstr.as_str() {
                                 "true" => true,
