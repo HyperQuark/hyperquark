@@ -17,9 +17,15 @@ pub use error::{HQError, HQErrorType};
 
 use targets::wasm;
 
+#[cfg(not(test))]
 #[wasm_bindgen(js_namespace=console)]
 extern "C" {
     pub fn log(s: &str);
+}
+
+#[cfg(test)]
+pub fn log(s: &str) {
+    println!("{s}")
 }
 
 #[wasm_bindgen]

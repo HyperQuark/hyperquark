@@ -1,5 +1,6 @@
 use crate::ir::{
-    InputType, IrBlock, IrOpcode, IrProject, IrVal, Step, ThreadContext, ThreadStart, TypeStackImpl,
+    InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, ThreadContext, ThreadStart,
+    TypeStackImpl,
 };
 use crate::sb3::VarVal;
 use crate::HQError;
@@ -28,6 +29,23 @@ fn instructions(
     use InputType::*;
     use Instruction::*;
     use IrOpcode::*;
+    let locals_shift = match context.proc {
+        None => 0,
+        Some(Procedure { warp, ref arg_types, .. }) => {
+            if !warp {
+                hq_todo!("non-warp procedure")
+            } else {
+                i32::try_from(arg_types.len()).map_err(|_| make_hq_bug!("arg types len out of bounds"))?
+            }
+        }
+    };
+    macro_rules! local {
+        ($id:ident) => {{
+            u32::try_from(
+                i32::try_from(step_func_locals::$id).map_err(|_| make_hq_bug!(""))? + locals_shift
+            ).map_err(|_| make_hq_bug!("shifted local from {:} out of bounds", step_func_locals::$id))?
+        }}
+    }
     //let expected_output = *op.expected_output();
     //let mut actual_output = *op.actual_output();
     //dbg!(&op.opcode(), op.type_stack.len());
@@ -109,9 +127,9 @@ fn instructions(
                 vec![F64ConvertI64S, F64Add]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
-                    LocalSet(step_func_locals::F64),
+                    LocalSet(local!(F64)),
                     F64ConvertI64S,
-                    LocalGet(step_func_locals::F64),
+                    LocalGet(local!(F64)),
                     F64Add,
                 ]
             } else {
@@ -127,9 +145,9 @@ fn instructions(
                 vec![F64ConvertI64S, F64Sub]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
-                    LocalSet(step_func_locals::F64),
+                    LocalSet(local!(F64)),
                     F64ConvertI64S,
-                    LocalGet(step_func_locals::F64),
+                    LocalGet(local!(F64)),
                     F64Sub,
                 ]
             } else {
@@ -146,9 +164,9 @@ fn instructions(
                 vec![F64ConvertI64S, F64Mul]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
-                    LocalSet(step_func_locals::F64),
+                    LocalSet(local!(F64)),
                     F64ConvertI64S,
-                    LocalGet(step_func_locals::F64),
+                    LocalGet(local!(F64)),
                     F64Mul,
                 ]
             } else {
@@ -164,9 +182,9 @@ fn instructions(
                 vec![F64ConvertI64S, Call(func_indices::FMOD)]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
-                    LocalSet(step_func_locals::F64),
+                    LocalSet(local!(F64)),
                     F64ConvertI64S,
-                    LocalGet(step_func_locals::F64),
+                    LocalGet(local!(F64)),
                     Call(func_indices::FMOD),
                 ]
             } else {
@@ -289,17 +307,17 @@ fn instructions(
                 .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             if assume_type.is_none() {
                 vec![
-                    LocalSet(step_func_locals::I64),
-                    LocalSet(step_func_locals::I32),
+                    LocalSet(local!(I64)),
+                    LocalSet(local!(I32)),
                     I32Const(0),
-                    LocalGet(step_func_locals::I32),
+                    LocalGet(local!(I32)),
                     I32Store(MemArg {
                         offset: var_offset,
                         align: 2,
                         memory_index: 0,
                     }),
                     I32Const(0),
-                    LocalGet(step_func_locals::I64),
+                    LocalGet(local!(I64)),
                     I64Store(MemArg {
                         offset: var_offset + 8,
                         align: 3,
@@ -313,9 +331,9 @@ fn instructions(
                     .least_restrictive_concrete_type()
                 {
                     InputType::Float => vec![
-                        LocalSet(step_func_locals::F64),
+                        LocalSet(local!(F64)),
                         I32Const(0),
-                        LocalGet(step_func_locals::F64),
+                        LocalGet(local!(F64)),
                         F64Store(MemArg {
                             offset: var_offset + 8,
                             align: 3,
@@ -323,9 +341,9 @@ fn instructions(
                         }),
                     ],
                     InputType::Boolean => vec![
-                        LocalSet(step_func_locals::I32),
+                        LocalSet(local!(I32)),
                         I32Const(0),
-                        LocalGet(step_func_locals::I32),
+                        LocalGet(local!(I32)),
                         I32Store(MemArg {
                             offset: var_offset + 8,
                             align: 2,
@@ -333,9 +351,9 @@ fn instructions(
                         }),
                     ],
                     InputType::ConcreteInteger => vec![
-                        LocalSet(step_func_locals::I64),
+                        LocalSet(local!(I64)),
                         I32Const(0),
-                        LocalGet(step_func_locals::I64),
+                        LocalGet(local!(I64)),
                         I64Store(MemArg {
                             offset: var_offset + 8,
                             align: 3,
@@ -368,24 +386,24 @@ fn instructions(
                 .map_err(|_| make_hq_bug!("variable offset out of bounds"))?;
             if assume_type.is_none() {
                 vec![
-                    LocalSet(step_func_locals::I64),
-                    LocalSet(step_func_locals::I32),
+                    LocalSet(local!(I64)),
+                    LocalSet(local!(I32)),
                     I32Const(0),
-                    LocalGet(step_func_locals::I32),
+                    LocalGet(local!(I32)),
                     I32Store(MemArg {
                         offset: var_offset,
                         align: 2,
                         memory_index: 0,
                     }),
                     I32Const(0),
-                    LocalGet(step_func_locals::I64),
+                    LocalGet(local!(I64)),
                     I64Store(MemArg {
                         offset: var_offset + 8,
                         align: 3,
                         memory_index: 0,
                     }),
-                    LocalGet(step_func_locals::I32),
-                    LocalGet(step_func_locals::I64),
+                    LocalGet(local!(I32)),
+                    LocalGet(local!(I64)),
                 ]
             } else {
                 match assume_type
@@ -394,9 +412,9 @@ fn instructions(
                     .least_restrictive_concrete_type()
                 {
                     InputType::Float => vec![
-                        LocalTee(step_func_locals::F64),
+                        LocalTee(local!(F64)),
                         I32Const(0),
-                        LocalGet(step_func_locals::F64),
+                        LocalGet(local!(F64)),
                         F64Store(MemArg {
                             offset: var_offset + 8,
                             align: 3,
@@ -404,9 +422,9 @@ fn instructions(
                         }),
                     ],
                     InputType::Boolean => vec![
-                        LocalTee(step_func_locals::I32),
+                        LocalTee(local!(I32)),
                         I32Const(0),
-                        LocalGet(step_func_locals::I32),
+                        LocalGet(local!(I32)),
                         I32Store(MemArg {
                             offset: var_offset + 8,
                             align: 2,
@@ -414,9 +432,9 @@ fn instructions(
                         }),
                     ],
                     InputType::ConcreteInteger => vec![
-                        LocalTee(step_func_locals::I64),
+                        LocalTee(local!(I64)),
                         I32Const(0),
-                        LocalGet(step_func_locals::I64),
+                        LocalGet(local!(I64)),
                         I64Store(MemArg {
                             offset: var_offset + 8,
                             align: 3,
@@ -424,13 +442,13 @@ fn instructions(
                         }),
                     ],
                     InputType::String => vec![
-                        LocalTee(step_func_locals::EXTERNREF),
+                        LocalTee(local!(EXTERNREF)),
                         GlobalSet(
                             BUILTIN_GLOBALS
                                 + TryInto::<u32>::try_into(var_index)
                                     .map_err(|_| make_hq_bug!("var index out of bounds"))?,
                         ),
-                        LocalGet(step_func_locals::EXTERNREF),
+                        LocalGet(local!(EXTERNREF)),
                     ],
                     other => hq_bug!("unexpected concrete type {:?}", other),
                 }
@@ -445,9 +463,9 @@ fn instructions(
                 vec![F64ConvertI64S, F64Lt]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
-                    LocalSet(step_func_locals::F64),
+                    LocalSet(local!(F64)),
                     F64ConvertI64S,
-                    LocalGet(step_func_locals::F64),
+                    LocalGet(local!(F64)),
                     F64Lt,
                 ]
             } else {
@@ -463,9 +481,9 @@ fn instructions(
                 vec![F64ConvertI64S, F64Gt]
             } else if InputType::Integer.includes(input_types.first().unwrap()) {
                 vec![
-                    LocalSet(step_func_locals::F64),
+                    LocalSet(local!(F64)),
                     F64ConvertI64S,
-                    LocalGet(step_func_locals::F64),
+                    LocalGet(local!(F64)),
                     F64Gt,
                 ]
             } else {
@@ -494,9 +512,9 @@ fn instructions(
             (InputType::String, InputType::String) => vec![Call(func_indices::STRING_EQUALS)],
             (InputType::Float, InputType::Integer) => vec![F64ConvertI64S, F64Eq],
             (InputType::Integer, InputType::Float) => vec![
-                LocalSet(step_func_locals::F64),
+                LocalSet(local!(F64)),
                 F64ConvertI64S,
-                LocalGet(step_func_locals::F64),
+                LocalGet(local!(F64)),
                 F64Eq,
             ],
             (InputType::String, InputType::Unknown) => vec![
@@ -504,9 +522,9 @@ fn instructions(
                 Call(func_indices::STRING_EQUALS),
             ],
             (InputType::Unknown, InputType::String) => vec![
-                LocalSet(step_func_locals::EXTERNREF),
+                LocalSet(local!(EXTERNREF)),
                 Call(func_indices::CAST_ANY_STRING),
-                LocalGet(step_func_locals::EXTERNREF),
+                LocalGet(local!(EXTERNREF)),
                 Call(func_indices::STRING_EQUALS),
             ],
             (a, b) => hq_todo!("({:?}, {:?}) input types for operator_equals", a, b),
@@ -514,9 +532,9 @@ fn instructions(
         operator_random => vec![Call(func_indices::OPERATOR_RANDOM)],
         operator_join => vec![Call(func_indices::OPERATOR_JOIN)],
         operator_letter_of => vec![
-            LocalSet(step_func_locals::EXTERNREF),
+            LocalSet(local!(EXTERNREF)),
             I32WrapI64,
-            LocalGet(step_func_locals::EXTERNREF),
+            LocalGet(local!(EXTERNREF)),
             Call(func_indices::OPERATOR_LETTEROF),
         ],
         operator_length => vec![Call(func_indices::OPERATOR_LENGTH), I64ExtendI32U],
@@ -660,8 +678,8 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::F64),   // y
-            LocalSet(step_func_locals::F64_2), // x
+            LocalSet(local!(F64)),   // y
+            LocalSet(local!(F64_2)), // x
             I32Const(0),
             I32Load8S(MemArg {
                 offset: (context.target_index - 1) as u64
@@ -707,8 +725,8 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            LocalGet(step_func_locals::F64_2),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64_2)),
+            LocalGet(local!(F64)),
             I32Const(0),
             F32Load(MemArg {
                 offset: (context.target_index - 1) as u64
@@ -756,7 +774,7 @@ fn instructions(
             Call(func_indices::PEN_LINETO),
             End,
             I32Const(0),
-            LocalGet(step_func_locals::F64_2),
+            LocalGet(local!(F64_2)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -768,7 +786,7 @@ fn instructions(
                 memory_index: 0,
             }),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -838,9 +856,9 @@ fn instructions(
             Call(func_indices::PEN_CHANGESIZE),
         ],
         pen_setPenSizeTo => vec![
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -892,9 +910,9 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -921,7 +939,7 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
             F64Load(MemArg {
                 offset: (context.target_index - 1) as u64
@@ -933,11 +951,11 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Sub,
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -964,7 +982,7 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
             F64Load(MemArg {
                 offset: (context.target_index - 1) as u64
@@ -976,11 +994,11 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Add,
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -1007,7 +1025,7 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
             F64Load(MemArg {
                 offset: (context.target_index - 1) as u64
@@ -1019,11 +1037,11 @@ fn instructions(
                 align: 3,
                 memory_index: 0,
             }),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Add,
-            LocalSet(step_func_locals::F64),
+            LocalSet(local!(F64)),
             I32Const(0),
-            LocalGet(step_func_locals::F64),
+            LocalGet(local!(F64)),
             F64Store(MemArg {
                 offset: (context.target_index - 1) as u64
                     * u64::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
@@ -1050,9 +1068,9 @@ fn instructions(
                 align: 0,
                 memory_index: 0,
             }),
-            LocalSet(step_func_locals::I64),
+            LocalSet(local!(I64)),
             I32Const(0),
-            LocalGet(step_func_locals::I64),
+            LocalGet(local!(I64)),
             I32WrapI64,
             I32Store(MemArg {
                 offset: (context.target_index - 1) as u64
@@ -1158,7 +1176,7 @@ fn instructions(
         } => {
             let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
-                LocalGet(step_func_locals::MEM_LOCATION),
+                LocalGet(local!(MEM_LOCATION)),
                 Call(
                     BUILTIN_FUNCS
                         + u32::try_from(next_step_index)
@@ -1257,7 +1275,7 @@ fn instructions(
             let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
             vec![
                 If(WasmBlockType::Empty),
-                LocalGet(step_func_locals::MEM_LOCATION),
+                LocalGet(local!(MEM_LOCATION)),
                 Call(
                     BUILTIN_FUNCS
                         + u32::try_from(next_step_index)
@@ -1272,9 +1290,9 @@ fn instructions(
             (String, Float) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_FLOAT)],
             (String, Boolean) => vec![Call(func_indices::CAST_PRIMITIVE_STRING_BOOL)],
             (String, Unknown) => vec![
-                LocalSet(step_func_locals::EXTERNREF),
+                LocalSet(local!(EXTERNREF)),
                 I32Const(hq_value_types::EXTERN_STRING_REF64),
-                LocalGet(step_func_locals::EXTERNREF),
+                LocalGet(local!(EXTERNREF)),
                 Call(func_indices::TABLE_ADD_STRING),
                 I64ExtendI32U,
             ],
@@ -1282,23 +1300,23 @@ fn instructions(
             (Boolean, String) => vec![Call(func_indices::CAST_BOOL_STRING)],
             (Boolean, Unknown) => vec![
                 I64ExtendI32S,
-                LocalSet(step_func_locals::I64),
+                LocalSet(local!(I64)),
                 I32Const(hq_value_types::BOOL64),
-                LocalGet(step_func_locals::I64),
+                LocalGet(local!(I64)),
             ],
             (Float, String) => vec![Call(func_indices::CAST_PRIMITIVE_FLOAT_STRING)],
             (Float, Boolean) => vec![Call(func_indices::CAST_FLOAT_BOOL)],
             (Float, Unknown) => vec![
-                LocalSet(step_func_locals::F64),
+                LocalSet(local!(F64)),
                 I32Const(hq_value_types::FLOAT64),
-                LocalGet(step_func_locals::F64),
+                LocalGet(local!(F64)),
                 I64ReinterpretF64,
             ],
             (ConcreteInteger, Unknown) => vec![
                 //I64ExtendI32S,
-                LocalSet(step_func_locals::I64),
+                LocalSet(local!(I64)),
                 I32Const(hq_value_types::INT64),
-                LocalGet(step_func_locals::I64),
+                LocalGet(local!(I64)),
             ],
             (Unknown, String) => vec![Call(func_indices::CAST_ANY_STRING)],
             (Unknown, Float) => vec![Call(func_indices::CAST_ANY_FLOAT)],
@@ -1306,9 +1324,28 @@ fn instructions(
             (Unknown, ConcreteInteger) => vec![Call(func_indices::CAST_ANY_INT)],
             _ => hq_todo!("unimplemented cast: {:?} -> {:?} at {:?}", from, to, op),
         },
+        hq_launch_procedure(procedure) => {
+            let step_tuple = (procedure.target_id.clone(), procedure.first_step.clone());
+            let step_idx = steps
+                .get_index_of(&step_tuple)
+                .ok_or(make_hq_bug!("couldn't find step"))?;
+            if procedure.warp {
+                vec![LocalGet(local!(MEM_LOCATION)),
+                Call(
+                    BUILTIN_FUNCS
+                        + u32::try_from(step_idx)
+                            .map_err(|_| make_hq_bug!("step_idx out of bounds"))?,
+                )]
+            } else {
+                hq_todo!("non-warping procedure")
+            }
+        }
         other => hq_todo!("missing WASM impl for {:?}", other),
     };
-    if op.does_request_redraw() && !(*op.opcode() == looks_say && context.dbg) {
+    if op.does_request_redraw()
+        && !context.proc.clone().is_some_and(|p| p.warp)
+        && !(*op.opcode() == looks_say && context.dbg)
+    {
         instructions.append(&mut vec![
             I32Const(byte_offset::REDRAW_REQUESTED),
             I32Const(1),
@@ -2457,9 +2494,35 @@ impl TryFrom<IrProject> for WasmProject {
             };
         }
 
-        for (_step, func) in &step_funcs {
-            functions.function(types::I32_I32);
+        for (maybe_step, func) in &step_funcs {
             code.function(func);
+            if maybe_step.is_none() {
+                functions.function(types::I32_I32);
+                continue;
+            }
+            functions.function(
+                match project
+                    .steps
+                    .get(&maybe_step.clone().unwrap())
+                    .ok_or(make_hq_bug!("missing step"))?
+                    .context
+                    .proc
+                {
+                    None => types::I32_I32,
+                    Some(Procedure {
+                        warp, ref arg_types, ..
+                    }) => {
+                        if !warp {
+                            hq_todo!("non-warp procedure")
+                        } else {
+                            if arg_types.len() > 0 {
+                                hq_todo!("proc args")
+                            }
+                            types::I32_I32
+                        }
+                    }
+                },
+            );
         }
 
         for (start_type, index) in thread_indices {
