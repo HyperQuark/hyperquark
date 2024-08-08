@@ -164,6 +164,14 @@ impl TryFrom<Sb3Project> for IrProject {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum GotoMethod {
+    Inline,
+    LoopBranch,
+    ScheduleCall,
+    TailCall,
+}
+
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, PartialEq)]
@@ -239,11 +247,11 @@ pub enum IrOpcode {
     hq_drop(usize),
     hq_goto {
         step: Option<(String, String)>,
-        does_yield: bool,
+        goto_method: GotoMethod,
     },
     hq_goto_if {
         step: Option<(String, String)>,
-        does_yield: bool,
+        goto_method: GotoMethod,
     },
     hq_launch_procedure(Procedure),
     looks_say,
@@ -510,7 +518,7 @@ impl IrBlock {
             looks_say
                 | looks_think
                 | hq_goto {
-                    does_yield: true,
+                    goto_method: GotoMethod::ScheduleCall,
                     ..
                 }
                 | motion_gotoxy
@@ -1643,7 +1651,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![
                             IrOpcode::hq_goto_if {
                                 step: Some((target_id.clone(), substack_id)),
-                                does_yield: false,
+                                goto_method: GotoMethod::TailCall, //Inline
                             },
                             IrOpcode::hq_goto {
                                 step: if block_info.next.is_some() {
@@ -1654,7 +1662,7 @@ impl IrBlockVec for Vec<IrBlock> {
                                 } else {
                                     None
                                 },
-                                does_yield: false,
+                                goto_method: GotoMethod::TailCall, //Inline
                             },
                         ]
                     }
@@ -1710,11 +1718,11 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![
                             IrOpcode::hq_goto_if {
                                 step: Some((target_id.clone(), substack_id)),
-                                does_yield: false,
+                                goto_method: GotoMethod::TailCall, //Inline
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id, substack2_id)),
-                                does_yield: false,
+                                goto_method: GotoMethod::TailCall, //Inline
                             },
                         ]
                     }
@@ -1741,11 +1749,19 @@ impl IrBlockVec for Vec<IrBlock> {
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
-                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                    GotoMethod::TailCall //Inline
+                                } else {
+                                    GotoMethod::ScheduleCall
+                                },
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id.clone(), substack_id.clone())),
-                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                    GotoMethod::TailCall //LoopBranch
+                                } else {
+                                    GotoMethod::ScheduleCall
+                                },
                             },
                         ];
                         let looper_id = Uuid::new_v4().to_string();
@@ -1857,11 +1873,15 @@ impl IrBlockVec for Vec<IrBlock> {
                             IrOpcode::operator_lt,
                             IrOpcode::hq_goto_if {
                                 step: next_step,
-                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                    GotoMethod::TailCall //Inline
+                                } else {
+                                    GotoMethod::ScheduleCall
+                                },
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id, substack_id)),
-                                does_yield: false,
+                                goto_method: GotoMethod::TailCall, //Inline
                             },
                         ]
                     }
@@ -1888,11 +1908,19 @@ impl IrBlockVec for Vec<IrBlock> {
                         let condition_opcodes = vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step.clone(),
-                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                    GotoMethod::TailCall //Inline
+                                } else {
+                                    GotoMethod::ScheduleCall
+                                },
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id.clone(), substack_id.clone())),
-                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                    GotoMethod::TailCall //LoopBranch
+                                } else {
+                                    GotoMethod::ScheduleCall
+                                },
                             },
                         ];
                         let looper_id = Uuid::new_v4().to_string();
@@ -1961,11 +1989,15 @@ impl IrBlockVec for Vec<IrBlock> {
                         vec![
                             IrOpcode::hq_goto_if {
                                 step: next_step,
-                                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                    GotoMethod::TailCall //Inline
+                                } else {
+                                    GotoMethod::ScheduleCall
+                                },
                             },
                             IrOpcode::hq_goto {
                                 step: Some((target_id, substack_id)),
-                                does_yield: false,
+                                goto_method: GotoMethod::TailCall, //Inline
                             },
                         ]
                     }
@@ -1985,7 +2017,11 @@ impl IrBlockVec for Vec<IrBlock> {
                         };
                         let goto_opcode = IrOpcode::hq_goto {
                             step: Some((target_id.clone(), substack_id.clone())),
-                            does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                            goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                                GotoMethod::TailCall //LoopBranch
+                            } else {
+                                GotoMethod::ScheduleCall
+                            },
                         };
                         let looper_id = Uuid::new_v4().to_string();
                         if !steps.contains_key(&(target_id.clone(), looper_id.clone())) {
@@ -2028,7 +2064,7 @@ impl IrBlockVec for Vec<IrBlock> {
                         );
                         vec![IrOpcode::hq_goto {
                             step: Some((target_id, substack_id)),
-                            does_yield: false,
+                            goto_method: GotoMethod::TailCall, //Inline
                         }]
                     }
                     BlockOpcode::procedures_call => {
@@ -2177,7 +2213,7 @@ pub fn step_from_top_block<'a>(
             ops.push(IrBlock::new_with_stack_no_cast(
                 IrOpcode::hq_goto {
                     step: Some((target_id.clone(), next_id.clone().ok_or(make_hq_bug!(""))?)),
-                    does_yield: false,
+                    goto_method: GotoMethod::TailCall, //Inline
                 },
                 Rc::clone(&ops.last().unwrap().type_stack),
             )?);
@@ -2211,7 +2247,11 @@ pub fn step_from_top_block<'a>(
         IrBlock::new_with_stack_no_cast(
             IrOpcode::hq_goto {
                 step: Some((target_id.clone(), id.clone())),
-                does_yield: !context.proc.clone().is_some_and(|p| p.warp),
+                goto_method: if context.proc.clone().is_some_and(|p| p.warp) {
+                    GotoMethod::TailCall //Inline
+                } else {
+                    GotoMethod::ScheduleCall
+                },
             },
             Rc::clone(&step.opcodes().last().unwrap().type_stack),
         )?
@@ -2219,7 +2259,7 @@ pub fn step_from_top_block<'a>(
         IrBlock::new_with_stack_no_cast(
             IrOpcode::hq_goto {
                 step: None,
-                does_yield: false,
+                goto_method: GotoMethod::TailCall, //Inline
             },
             Rc::clone(&step.opcodes().last().unwrap().type_stack),
         )?

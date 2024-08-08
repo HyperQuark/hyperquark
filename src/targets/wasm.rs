@@ -1,6 +1,6 @@
 use crate::ir::{
-    InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, ThreadContext, ThreadStart,
-    TypeStackImpl,
+    GotoMethod, InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, ThreadContext,
+    ThreadStart, TypeStackImpl,
 };
 use crate::sb3::VarVal;
 use crate::HQError;
@@ -1156,44 +1156,43 @@ fn instructions(
         }
         hq_goto {
             step: Some(next_step_id),
-            does_yield: true,
+            goto_method,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
-            let threads_offset: u64 = (byte_offset::VARS as usize
-                + VAR_INFO_LEN as usize * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                    * (context.target_num - 1))
-                .try_into()
-                .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
-            vec![
-                LocalGet(0),
-                I32Const(
-                    next_step_index
+            match goto_method {
+                GotoMethod::ScheduleCall => {
+                    let threads_offset: u64 = (byte_offset::VARS as usize
+                        + VAR_INFO_LEN as usize * context.vars.borrow().len()
+                        + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                            * (context.target_num - 1))
                         .try_into()
-                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
-                ),
-                I32Store(MemArg {
-                    offset: threads_offset,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(1),
-                Return,
-            ]
-        }
-        hq_goto {
-            step: Some(next_step_id),
-            does_yield: false,
-        } => {
-            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
-            vec![
-                LocalGet(local!(MEM_LOCATION)),
-                ReturnCall(
-                    BUILTIN_FUNCS
-                        + u32::try_from(next_step_index)
-                            .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
-                ),
-            ]
+                        .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
+                    vec![
+                        LocalGet(0),
+                        I32Const(
+                            next_step_index
+                                .try_into()
+                                .map_err(|_| make_hq_bug!("step index out of bounds"))?,
+                        ),
+                        I32Store(MemArg {
+                            offset: threads_offset,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                        I32Const(1),
+                        Return,
+                    ]
+                }
+                GotoMethod::TailCall => vec![
+                    LocalGet(local!(MEM_LOCATION)),
+                    ReturnCall(
+                        BUILTIN_FUNCS
+                            + u32::try_from(next_step_index)
+                                .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
+                    ),
+                ],
+                _ => hq_todo!(""),
+            }
         }
         hq_goto_if { step: None, .. } => {
             let threads_offset: i32 = (byte_offset::VARS as usize
@@ -1251,48 +1250,47 @@ fn instructions(
         }
         hq_goto_if {
             step: Some(next_step_id),
-            does_yield: true,
+            goto_method,
         } => {
             let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
-            let threads_offset: u64 = (byte_offset::VARS as usize
-                + VAR_INFO_LEN as usize * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                    * (context.target_num - 1))
-                .try_into()
-                .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
-            vec![
-                If(WasmBlockType::Empty),
-                LocalGet(0),
-                I32Const(
-                    next_step_index
+            match goto_method {
+                GotoMethod::ScheduleCall => {
+                    let threads_offset: u64 = (byte_offset::VARS as usize
+                        + VAR_INFO_LEN as usize * context.vars.borrow().len()
+                        + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                            * (context.target_num - 1))
                         .try_into()
-                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
-                ),
-                I32Store(MemArg {
-                    offset: threads_offset,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(1),
-                Return,
-                End,
-            ]
-        }
-        hq_goto_if {
-            step: Some(next_step_id),
-            does_yield: false,
-        } => {
-            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
-            vec![
-                If(WasmBlockType::Empty),
-                LocalGet(local!(MEM_LOCATION)),
-                ReturnCall(
-                    BUILTIN_FUNCS
-                        + u32::try_from(next_step_index)
-                            .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
-                ),
-                End,
-            ]
+                        .map_err(|_| make_hq_bug!("threads_offset length out of bounds"))?;
+                    vec![
+                        If(WasmBlockType::Empty),
+                        LocalGet(0),
+                        I32Const(
+                            next_step_index
+                                .try_into()
+                                .map_err(|_| make_hq_bug!("step index out of bounds"))?,
+                        ),
+                        I32Store(MemArg {
+                            offset: threads_offset,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                        I32Const(1),
+                        Return,
+                        End,
+                    ]
+                }
+                GotoMethod::TailCall => vec![
+                    If(WasmBlockType::Empty),
+                    LocalGet(local!(MEM_LOCATION)),
+                    ReturnCall(
+                        BUILTIN_FUNCS
+                            + u32::try_from(next_step_index)
+                                .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
+                    ),
+                    End,
+                ],
+                _ => hq_todo!(""),
+            }
         }
         hq_cast(from, to) => match (from.clone(), to.least_restrictive_concrete_type()) {
             // cast from type should always be a concrete type
