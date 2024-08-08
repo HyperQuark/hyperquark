@@ -1,5 +1,5 @@
 use crate::ir::{
-    GotoMethod, InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, ThreadContext,
+    GotoMethod, InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, StepMap, ThreadContext,
     ThreadStart, TypeStackImpl,
 };
 use crate::sb3::VarVal;
@@ -19,12 +19,19 @@ use wasm_encoder::{
     MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
+type StepFuncMap = IndexMap<
+            Option<(String, String)>,
+            (Function, Vec<Instruction<'static>>),
+            BuildHasherDefault<FNV1aHasher64>,
+        >;
+
 fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
-    steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+    steps: &StepMap,
     input_types: Vec<InputType>,
+    step_funcs: &mut StepFuncMap,
 ) -> Result<Vec<Instruction<'static>>, HQError> {
     use InputType::*;
     use Instruction::*;
@@ -1158,7 +1165,7 @@ fn instructions(
             step: Some(next_step_id),
             goto_method,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
+            let next_step_index = (next_step_id, steps.get(next_step_id).ok_or(make_hq_bug!(""))?).compile_wasm(step_funcs, string_consts, steps)?;
             match goto_method {
                 GotoMethod::ScheduleCall => {
                     let threads_offset: u64 = (byte_offset::VARS as usize
@@ -1252,7 +1259,7 @@ fn instructions(
             step: Some(next_step_id),
             goto_method,
         } => {
-            let next_step_index = steps.get_index_of(next_step_id).ok_or(make_hq_bug!(""))?;
+            let next_step_index = (next_step_id, steps.get(next_step_id).ok_or(make_hq_bug!(""))?).compile_wasm(step_funcs, string_consts, steps)?;
             match goto_method {
                 GotoMethod::ScheduleCall => {
                     let threads_offset: u64 = (byte_offset::VARS as usize
@@ -1333,9 +1340,9 @@ fn instructions(
         },
         hq_launch_procedure(procedure) => {
             let step_tuple = (procedure.target_id.clone(), procedure.first_step.clone());
-            let step_idx = steps
-                .get_index_of(&step_tuple)
-                .ok_or(make_hq_bug!("couldn't find step"))?;
+            let step_idx = (&step_tuple, steps
+                .get(&step_tuple)
+                .ok_or(make_hq_bug!("couldn't find step"))?).compile_wasm(step_funcs, string_consts, steps)?;
             if procedure.warp {
                 vec![
                     LocalGet(local!(MEM_LOCATION)),
@@ -1371,26 +1378,18 @@ fn instructions(
 pub trait CompileToWasm {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<
-            Option<(String, String)>,
-            Function,
-            BuildHasherDefault<FNV1aHasher64>,
-        >,
+        step_funcs: &mut StepFuncMap,
         string_consts: &mut Vec<String>,
-        steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &StepMap,
     ) -> Result<u32, HQError>;
 }
 
 impl CompileToWasm for (&(String, String), &Step) {
     fn compile_wasm(
         &self,
-        step_funcs: &mut IndexMap<
-            Option<(String, String)>,
-            Function,
-            BuildHasherDefault<FNV1aHasher64>,
-        >,
+        step_funcs: &mut StepFuncMap,
         string_consts: &mut Vec<String>,
-        steps: &IndexMap<(String, String), Step, BuildHasherDefault<FNV1aHasher64>>,
+        steps: &StepMap,
     ) -> Result<u32, HQError> {
         if step_funcs.contains_key(&Some(self.0.clone())) {
             return u32::try_from(
@@ -1409,6 +1408,7 @@ impl CompileToWasm for (&(String, String), &Step) {
             ValType::F64,
         ];
         let mut func = Function::new_with_locals_types(locals);
+        let mut all_instrs = vec![];
         for (i, op) in self.1.opcodes().iter().enumerate() {
             let arity = op.opcode().expected_inputs()?.len();
             let input_types = (0..arity)
@@ -1428,13 +1428,14 @@ impl CompileToWasm for (&(String, String), &Step) {
                         .1)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let instrs = instructions(op, self.1.context(), string_consts, steps, input_types)?;
+            let instrs = instructions(op, self.1.context(), string_consts, steps, input_types, step_funcs)?;
+            all_instrs.append(&mut instrs.clone());
             for instr in instrs {
                 func.instruction(&instr);
             }
         }
         func.instruction(&Instruction::End);
-        step_funcs.insert(Some(self.0.clone()), func);
+        step_funcs.insert(Some(self.0.clone()), (func, all_instrs));
         u32::try_from(step_funcs.len() - 1)
             .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))
     }
@@ -2485,8 +2486,8 @@ impl TryFrom<IrProject> for WasmProject {
 
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
-        let mut step_funcs: IndexMap<Option<(String, String)>, Function, _> = Default::default();
-        step_funcs.insert(None, noop_func);
+        let mut step_funcs: StepFuncMap = Default::default();
+        step_funcs.insert(None, (noop_func, vec![]));
 
         for step in &project.steps {
             // make sure to skip the 0th (noop) step because we've added the noop step function 3 lines above
@@ -2516,7 +2517,7 @@ impl TryFrom<IrProject> for WasmProject {
             };
         }
 
-        for (maybe_step, func) in &step_funcs {
+        for (maybe_step, (func, _)) in &step_funcs {
             code.function(func);
             if maybe_step.is_none() {
                 functions.function(types::I32_I32);
