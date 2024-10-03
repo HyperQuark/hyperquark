@@ -2541,7 +2541,7 @@ impl TryFrom<IrProject> for WasmProject {
                         if !warp {
                             hq_todo!("non-warp procedure")
                         } else {
-                            if arg_types.len() > 0 {
+                            if !arg_types.is_empty() {
                                 hq_todo!("proc args")
                             }
                             types::I32_I32
