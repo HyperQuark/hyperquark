@@ -1,6 +1,6 @@
 use crate::ir::{
-    GotoMethod, InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, StepMap, ThreadContext,
-    ThreadStart, TypeStackImpl,
+    GotoMethod, InputType, IrBlock, IrOpcode, IrProject, IrVal, Procedure, Step, StepMap,
+    ThreadContext, ThreadStart, TypeStackImpl,
 };
 use crate::sb3::VarVal;
 use crate::HQError;
@@ -20,10 +20,10 @@ use wasm_encoder::{
 };
 
 type StepFuncMap = IndexMap<
-            Option<(String, String)>,
-            (Function, Vec<Instruction<'static>>),
-            BuildHasherDefault<FNV1aHasher64>,
-        >;
+    Option<(String, String)>,
+    Option<(Function, Vec<Instruction<'static>>)>,
+    BuildHasherDefault<FNV1aHasher64>,
+>;
 
 fn instructions(
     op: &IrBlock,
@@ -1110,62 +1110,73 @@ fn instructions(
         ],
         hq_drop(n) => vec![Drop; 2 * *n],
         hq_goto { step: None, .. } => {
-            let threads_offset: i32 = (byte_offset::VARS as usize
-                + VAR_INFO_LEN as usize * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                    * (context.target_num - 1))
-                .try_into()
-                .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
-            vec![
-                LocalGet(0),
-                I32Const(threads_offset),
-                I32Add, // destination (= current thread pos in memory)
-                LocalGet(0),
-                I32Const(threads_offset + 4),
-                I32Add, // source (= current thread pos + 4)
-                I32Const(0),
-                I32Load(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(4),
-                I32Mul,
-                LocalGet(0),
-                I32Sub, // length (threadnum * 4 - current thread pos)
-                MemoryCopy {
-                    src_mem: 0,
-                    dst_mem: 0,
-                },
-                I32Const(0),
-                I32Const(0),
-                I32Load(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(1),
-                I32Sub,
-                I32Store(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(0),
-                Return,
-            ]
+            if context.proc.is_some() {
+                vec![
+                    I32Const(0),
+                    Return
+                ]
+            } else {
+                let threads_offset: i32 = (byte_offset::VARS as usize
+                    + VAR_INFO_LEN as usize * context.vars.borrow().len()
+                    + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                        * (context.target_num - 1))
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
+                vec![
+                    LocalGet(0),
+                    I32Const(threads_offset),
+                    I32Add, // destination (= current thread pos in memory)
+                    LocalGet(0),
+                    I32Const(threads_offset + 4),
+                    I32Add, // source (= current thread pos + 4)
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(4),
+                    I32Mul,
+                    LocalGet(0),
+                    I32Sub, // length (threadnum * 4 - current thread pos)
+                    MemoryCopy {
+                        src_mem: 0,
+                        dst_mem: 0,
+                    },
+                    I32Const(0),
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    I32Sub,
+                    I32Store(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    Return,
+                ]
+            }
         }
         hq_goto {
             step: Some(next_step_id),
             goto_method,
         } => {
-            let next_step_index = (next_step_id, steps.get(next_step_id).ok_or(make_hq_bug!(""))?).compile_wasm(step_funcs, string_consts, steps)?;
+            let next_step_index = (
+                next_step_id,
+                steps.get(next_step_id).ok_or(make_hq_bug!(""))?,
+            )
+                .compile_wasm(step_funcs, string_consts, steps)?;
             match goto_method {
                 GotoMethod::ScheduleCall => {
                     let threads_offset: u64 = (byte_offset::VARS as usize
@@ -1198,68 +1209,82 @@ fn instructions(
                                 .map_err(|_| make_hq_bug!("next_step_index out of bounds"))?,
                     ),
                 ],
+                GotoMethod::Inline => hq_bug!("inline gotos should be removed during IR optimisation"),
                 _ => hq_todo!(""),
             }
         }
         hq_goto_if { step: None, .. } => {
-            let threads_offset: i32 = (byte_offset::VARS as usize
-                + VAR_INFO_LEN as usize * context.vars.borrow().len()
-                + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                    * (context.target_num - 1))
-                .try_into()
-                .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
-            vec![
-                If(WasmBlockType::Empty),
-                LocalGet(0),
-                I32Const(threads_offset),
-                I32Add, // destination (= current thread pos in memory)
-                LocalGet(0),
-                I32Const(threads_offset + 4),
-                I32Add, // source (= current thread pos + 4)
-                I32Const(0),
-                I32Load(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(4),
-                I32Mul,
-                LocalGet(0),
-                I32Sub, // length (threadnum * 4 - current thread pos)
-                MemoryCopy {
-                    src_mem: 0,
-                    dst_mem: 0,
-                },
-                I32Const(0),
-                I32Const(0),
-                I32Load(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(1),
-                I32Sub,
-                I32Store(MemArg {
-                    offset: byte_offset::THREAD_NUM
-                        .try_into()
-                        .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                    align: 2,
-                    memory_index: 0,
-                }),
-                I32Const(0),
-                Return,
-                End,
-            ]
+            if context.proc.is_some() {
+                vec![
+                    If(WasmBlockType::Empty),
+                    I32Const(0),
+                    Return,
+                    End
+                ]
+            } else {
+                let threads_offset: i32 = (byte_offset::VARS as usize
+                    + VAR_INFO_LEN as usize * context.vars.borrow().len()
+                    + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
+                        * (context.target_num - 1))
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("thread_offset out of bounds"))?;
+                vec![
+                    If(WasmBlockType::Empty),
+                    LocalGet(0),
+                    I32Const(threads_offset),
+                    I32Add, // destination (= current thread pos in memory)
+                    LocalGet(0),
+                    I32Const(threads_offset + 4),
+                    I32Add, // source (= current thread pos + 4)
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(4),
+                    I32Mul,
+                    LocalGet(0),
+                    I32Sub, // length (threadnum * 4 - current thread pos)
+                    MemoryCopy {
+                        src_mem: 0,
+                        dst_mem: 0,
+                    },
+                    I32Const(0),
+                    I32Const(0),
+                    I32Load(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(1),
+                    I32Sub,
+                    I32Store(MemArg {
+                        offset: byte_offset::THREAD_NUM
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    I32Const(0),
+                    Return,
+                    End,
+                ]
+            }
         }
         hq_goto_if {
             step: Some(next_step_id),
             goto_method,
         } => {
-            let next_step_index = (next_step_id, steps.get(next_step_id).ok_or(make_hq_bug!(""))?).compile_wasm(step_funcs, string_consts, steps)?;
+            let next_step_index = (
+                next_step_id,
+                steps.get(next_step_id).ok_or(make_hq_bug!(""))?,
+            )
+                .compile_wasm(step_funcs, string_consts, steps)?;
             match goto_method {
                 GotoMethod::ScheduleCall => {
                     let threads_offset: u64 = (byte_offset::VARS as usize
@@ -1296,6 +1321,7 @@ fn instructions(
                     ),
                     End,
                 ],
+                GotoMethod::Inline => hq_bug!("inline gotos should be removed during IR optimisation"),
                 _ => hq_todo!(""),
             }
         }
@@ -1340,9 +1366,13 @@ fn instructions(
         },
         hq_launch_procedure(procedure) => {
             let step_tuple = (procedure.target_id.clone(), procedure.first_step.clone());
-            let step_idx = (&step_tuple, steps
-                .get(&step_tuple)
-                .ok_or(make_hq_bug!("couldn't find step"))?).compile_wasm(step_funcs, string_consts, steps)?;
+            let step_idx = (
+                &step_tuple,
+                steps
+                    .get(&step_tuple)
+                    .ok_or(make_hq_bug!("couldn't find step"))?,
+            )
+                .compile_wasm(step_funcs, string_consts, steps)?;
             if procedure.warp {
                 vec![
                     LocalGet(local!(MEM_LOCATION)),
@@ -1391,6 +1421,7 @@ impl CompileToWasm for (&(String, String), &Step) {
         string_consts: &mut Vec<String>,
         steps: &StepMap,
     ) -> Result<u32, HQError> {
+        crate::log(format!("{:?}", self.0).as_str());
         if step_funcs.contains_key(&Some(self.0.clone())) {
             return u32::try_from(
                 step_funcs
@@ -1399,6 +1430,8 @@ impl CompileToWasm for (&(String, String), &Step) {
             )
             .map_err(|_| make_hq_bug!("IndexMap index out of bounds"));
         }
+        // insert something into the map to avoid recursion issues
+        step_funcs.insert(Some(self.0.clone()), None);
         let locals = vec![
             ValType::Ref(RefType::EXTERNREF),
             ValType::F64,
@@ -1428,14 +1461,21 @@ impl CompileToWasm for (&(String, String), &Step) {
                         .1)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let instrs = instructions(op, self.1.context(), string_consts, steps, input_types, step_funcs)?;
+            let mut instrs = instructions(
+                op,
+                self.1.context(),
+                string_consts,
+                steps,
+                input_types,
+                step_funcs,
+            )?;
             all_instrs.append(&mut instrs.clone());
             for instr in instrs {
                 func.instruction(&instr);
             }
         }
         func.instruction(&Instruction::End);
-        step_funcs.insert(Some(self.0.clone()), (func, all_instrs));
+        step_funcs.insert(Some(self.0.clone()), Some((func, all_instrs)));
         u32::try_from(step_funcs.len() - 1)
             .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))
     }
@@ -2487,15 +2527,7 @@ impl TryFrom<IrProject> for WasmProject {
         let mut string_consts = vec![String::from("false"), String::from("true")];
 
         let mut step_funcs: StepFuncMap = Default::default();
-        step_funcs.insert(None, (noop_func, vec![]));
-
-        for step in &project.steps {
-            // make sure to skip the 0th (noop) step because we've added the noop step function 3 lines above
-            if step.0 == &("".into(), "".into()) {
-                continue;
-            };
-            step.compile_wasm(&mut step_funcs, &mut string_consts, &project.steps)?;
-        }
+        step_funcs.insert(None, Some((noop_func, vec![])));
 
         for thread in project.threads {
             let first_idx = project
@@ -2505,6 +2537,11 @@ impl TryFrom<IrProject> for WasmProject {
                 .try_into()
                 .map_err(|_| make_hq_bug!("step index out of bounds"))?;
             thread_indices.push((thread.start().clone(), first_idx));
+            let step_tuple = (thread.target_id().clone(), thread.first_step().clone());
+            (&step_tuple, project.steps
+                .get(&step_tuple)
+                .ok_or(make_hq_bug!("couldn't find step"))?
+            ).compile_wasm(&mut step_funcs, &mut string_consts, &project.steps)?;
         }
 
         let mut thread_start_counts: BTreeMap<ThreadStart, u32> = Default::default();
@@ -2517,7 +2554,10 @@ impl TryFrom<IrProject> for WasmProject {
             };
         }
 
-        for (maybe_step, (func, _)) in &step_funcs {
+        for (maybe_step, maybe_func) in &step_funcs {
+            let Some((func, _)) = maybe_func else {
+                hq_bug!("step func is None");
+            };
             code.function(func);
             if maybe_step.is_none() {
                 functions.function(types::I32_I32);
@@ -2860,11 +2900,12 @@ mod tests {
     fn make_wasm() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
-        let proj: Sb3Project = fs::read_to_string("./benchmark (3.1).json")
+        let proj: Sb3Project = fs::read_to_string("./project.json")
             .expect("couldn't read hq-test.project.json")
             .try_into()
             .unwrap();
-        let ir: IrProject = proj.try_into()?;
+        let mut ir: IrProject = proj.try_into()?;
+        ir.optimise()?;
         let wasm: WasmProject = ir.try_into()?;
         Ok(())
         /*fs::write("./bad.wasm", wasm.wasm_bytes()).expect("failed to write to bad.wasm");

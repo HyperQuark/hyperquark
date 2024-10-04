@@ -22,7 +22,8 @@ usage()
   echo "  -W     build wasm"
   echo "  -w     do not build wasm"
   echo "  -o     do not run wasm-opt"
-  echo "  -O     run wasm-opt"
+  echo "  -s     run wasm-opt with -Os"
+  echo "  -z     run wasm-opt with -Os"
   exit 1
 }
 
@@ -41,7 +42,7 @@ set_variable()
 
 unset PROD VITE WASM
 QUIET=1
-while getopts 'dpwvoWVOhi' c
+while getopts 'dpwvoWVszhi' c
 do
   case $c in
     d) set_variable PROD 0 ;;
@@ -51,7 +52,8 @@ do
     V) set_variable VITE 1 ;;
     W) set_variable WASM 1 ;;
     o) set_variable WOPT 0 ;;
-    O) set_variable WOPT 1 ;;
+    s) set_variable WOPT 1 ;;
+    z) set_variable WOPT 2 ;;
     i) unset QUIET ;;
     h|?) usage ;;
   esac
@@ -84,7 +86,11 @@ if [ $WASM = "1" ]; then
 fi
 if [ $WOPT = "1" ]; then
   echo running wasm-opt...
-  wasm-opt -Oz js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
+  wasm-opt -Os -g js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
+fi
+if [ $WOPT = "2" ]; then
+  echo running wasm-opt...
+  wasm-opt -Oz -g js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
 fi
 if [ $VITE = "1" ]; then
   echo running npm build...

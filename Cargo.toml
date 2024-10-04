@@ -25,7 +25,7 @@ crate-type = ["cdylib", "rlib"]
 lto = true
 opt-level = "z"
 
-[target.wasm32-unknown-unknown]
-rustflags = [
-  "-C", "link-args=-z stack-size=1500000",
-]
+# [target.wasm32-unknown-unknown]
+# rustflags = [
+#   "-C", "link-args=-z stack-size=2000000",
+# ]

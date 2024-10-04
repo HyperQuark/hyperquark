@@ -13,6 +13,9 @@ impl IrProject {
         self.variable_types()?;
         Ok(())
     }
+    pub fn inline_steps(&mut self) -> Result<(), HQError> {
+      hq_todo!("")
+    }
     pub fn variable_types(&mut self) -> Result<(), HQError> {
         let mut var_map: BTreeMap<String, BTreeSet<InputType>> = BTreeMap::new();
         #[allow(clippy::type_complexity)]
