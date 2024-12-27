@@ -1,0 +1,49 @@
+---
+-
+  opcode: operator_add
+  inputs:
+    - Number
+    - Number
+  output_depends: [QuasiInteger,]
+  output: >
+      if QuasiInteger.contains(I1) && QuasiInteger.contains(I2) {
+        if (I1|I2) & (BooleanTrue | IntPos) != 0 { IntPos } else { none() }
+        | if (I1|I2) & (BooleanTrue | IntNeg) != 0 { IntNeg } else { none() }
+        | if (I1 & (BooleanTrue | IntPos) != 0) && I2 & IntNeg != 0) || (I2 & (BooleanTrue | IntPos) != 0 && I1 & IntNeg != 0) || (IntZero & I1 != 0 && IntZero & I2 != 0)) { IntZero } else { none() }
+      } else {
+        if FloatPosInf & (I1|I2) != 0 { FloatPosInf } else { none() }
+        | if FloatNegInf & (I1|I2) != 0 { FloatNegInf } else { none() }
+        | if (FloatPosInf & I1 != 0 && FloatNegInf & I2 != 0) || (FloatPosInf & I2 != 0 && FloatNegInf & I2 != 0) { FloatNan } else { none() }
+        | if (FloatPosReal | IntPos) & (I1|I2) != 0 { if FloatPosFrac & (I1|I2) != 0 { FloatPosReal } else { FloatPosInt } } else { none() }
+        | if (FloatNegReal | IntNeg) & (I1|I2) != { if FloatNegFrac & (I1|I2) != 0 { FloatNegReal } else { FloatNegInt } } else { none() }
+        | if ((FloatPosReal | IntPos) & I1 != 0 && (FloatNegReal | IntNeg) & I2 != 0) || ((FloatPosReal | IntPos) & I1 != 0 && (FloatNegReal | IntNeg) & I2 != 0) || (FloatPosZero | IntZero) & (I1&I2) != 0 || (FloatPosZero & I1 != 0 && FloatNegZero & I2 != 0) || (FloatPosZero & I2 != 0 && FloatNegZero & I1 != 0) { FloatPosZero } else { none() }
+        | if FloatNegZero & (I1&I2) != 0 { FloatNegZero } else { none() }
+      }
+  wasm: |
+      #IF I2 & FloatNan != 0
+        local.get $I1
+        local.get $I1
+        f64.ne
+        if
+          0
+          local.set $I1
+        end
+      #ENDIF
+      #IF I2 & FloatNan != 0
+        local.get $I2
+        local.get $I2
+        f64.ne
+        if
+          0
+          local.set $I2
+        end
+      #ENDIF
+      #IF I1 & QuasiInteger != 0 && I1 & Float == 0
+        local.get $I1
+
+      #ENDIF
+      local.get $I1
+      local.get $I2
+
+
+...

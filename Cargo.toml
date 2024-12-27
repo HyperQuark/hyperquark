@@ -15,6 +15,8 @@ hashers = "1.0.1"
 uuid = { version = "1.4.1", default-features = false, features = ["v4", "js"] }
 regex = "1.10.5"
 lazy-regex = "3.2.0"
+bitmask-enum = "2.2.5"
+itertools = { version = "0.13.0", default-features = false }
 
 #[dev-dependencies]
 #reqwest = { version = "0.11", features = ["blocking"] }
