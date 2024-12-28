@@ -1,5 +1,6 @@
 use bitmask_enum::bitmask;
 
+/// a bitmask of possible IR types
 #[bitmask(u32)]
 #[bitmask_config(vec_debug, flags_iter)]
 pub enum Type {

@@ -1,3 +1,8 @@
+//! 1-1 representation of `project.json` or `sprite.json` files
+//! in the `sb3` format. `sb` or `sb2` files must be converted first;
+//! `sb3` files must be unzipped first. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format>
+//! for a loose informal specification.
+
 use crate::error::HQError;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -6,6 +11,7 @@ use enum_field_getter::EnumFieldGetter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// A scratch project
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Sb3Project {
     pub targets: Vec<Target>,
@@ -14,6 +20,7 @@ pub struct Sb3Project {
     pub meta: Meta,
 }
 
+/// A comment, possibly attached to a block
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Comment {
@@ -26,6 +33,9 @@ pub struct Comment {
     pub text: String,
 }
 
+/// A possible block opcode, encompassing the default block pallette, the pen extension,
+/// and a few hidden but non-obsolete blocks. A block being listed here does not imply that
+/// it is supported by HyperQuark.
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum BlockOpcode {
@@ -201,6 +211,7 @@ pub enum BlockOpcode {
     // other,
 }
 
+/// A scratch block - either special or not
 #[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Block {
@@ -216,15 +227,18 @@ pub enum Block {
     Special(BlockArray),
 }
 
+/// A special representation of a scratch block.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BlockArray {
     NumberOrAngle(u32, f64),
     ColorOrString(u32, String),
-    Broadcast(u32, String, String), // might also be variable or list if not top level?
+    /// This might also represent a variable or list if the block is not top-level, in theory
+    Broadcast(u32, String, String),
     VariableOrList(u32, String, String, f64, f64),
 }
 
+/// Either a block array or a block id
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BlockArrayOrId {
@@ -232,6 +246,7 @@ pub enum BlockArrayOrId {
     Array(BlockArray),
 }
 
+/// Possible inputs (round or predicate) in a block
 #[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Input {
@@ -239,6 +254,7 @@ pub enum Input {
     NoShadow(u32, Option<BlockArrayOrId>),
 }
 
+/// Possible fields (rectangular) in a block
 #[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Field {
@@ -246,10 +262,13 @@ pub enum Field {
     ValueId(Option<VarVal>, Option<String>),
 }
 
+/// Represents a mutation on a block. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format#Mutations>
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Mutation {
+    /// ignored - should always be "mutation"
     pub tag_name: String,
+    /// ignored - should always be []
     #[serde(default)]
     pub children: Vec<()>,
     #[serde(flatten)]
@@ -266,6 +285,7 @@ impl Default for Mutation {
     }
 }
 
+/// Represents a non-special block
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockInfo {
@@ -280,6 +300,7 @@ pub struct BlockInfo {
     pub mutation: Mutation,
 }
 
+/// the data format of a costume
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum CostumeDataFormat {
@@ -291,6 +312,7 @@ pub enum CostumeDataFormat {
     gif,
 }
 
+/// A costume
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Costume {
@@ -304,17 +326,19 @@ pub struct Costume {
     pub rotation_center_y: f64,
 }
 
+/// A sound
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Sound {
     pub asset_id: String,
     pub name: String,
     pub md5ext: String,
-    pub data_format: String,
+    pub data_format: String, // TODO: enumerate
     pub rate: f64,
     pub sample_count: f64,
 }
 
+/// The (default) value of a variable
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VarVal {
@@ -323,6 +347,7 @@ pub enum VarVal {
     String(String),
 }
 
+/// Represents a variable
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VariableInfo {
@@ -330,6 +355,7 @@ pub enum VariableInfo {
     LocalVar(String, VarVal),
 }
 
+/// A target (sprite or stage)
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
@@ -372,6 +398,7 @@ pub struct Target {
     pub unknown: BTreeMap<String, Value>,
 }
 
+/// The value of a list monitor
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ListMonitorValue {
@@ -379,13 +406,15 @@ pub enum ListMonitorValue {
     String(String),
 }
 
+/// A monitor
 #[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum Monitor {
     #[serde(rename_all = "camelCase")]
     ListMonitor {
         id: String,
-        mode: String, // The name of the monitor's mode: "default", "large", "slider", or "list" - should be "list"
+        /// The name of the monitor's mode: "default", "large", "slider", or "list" - should be "list"
+        mode: String,
         opcode: String,
         params: BTreeMap<String, String>,
         sprite_name: Option<String>,
@@ -399,7 +428,8 @@ pub enum Monitor {
     #[serde(rename_all = "camelCase")]
     VarMonitor {
         id: String,
-        mode: String, // The name of the monitor's mode: "default", "large", "slider", or "list".
+        /// The name of the monitor's mode: "default", "large", "slider", or "list".
+        mode: String,
         opcode: String,
         params: BTreeMap<String, String>,
         sprite_name: Option<String>,
@@ -415,6 +445,7 @@ pub enum Monitor {
     },
 }
 
+/// metadata about a scratch project - only included here for completeness
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Meta {
     pub semver: String,

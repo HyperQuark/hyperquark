@@ -3,7 +3,9 @@ use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, ValType};
 
-pub fn wasm(func: &StepFunc, t1: IrType, t2: IrType) -> HQResult<Vec<Instruction<'static>>> {
+pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+    let t1 = inputs[0];
+    let t2 = inputs[1];
     Ok(if IrType::QuasiInt.contains(t1) {
         if IrType::QuasiInt.contains(t2) {
             vec![Instruction::I64Add]
@@ -37,7 +39,9 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 }
 
 // TODO: nan
-pub fn output_type(t1: IrType, t2: IrType) -> HQResult<IrType> {
+pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<IrType> {
+    let t1 = inputs[0];
+    let t2 = inputs[1];
     Ok(if IrType::QuasiInt.contains(t1.or(t2)) {
         IrType::QuasiInt
     } else if (IrType::QuasiInt.contains(t1) && IrType::Float.contains(t2))

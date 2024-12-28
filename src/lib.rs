@@ -1,4 +1,6 @@
 #![cfg_attr(not(test), no_std)]
+#![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
+#![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 
 #[macro_use]
 extern crate alloc;
@@ -15,6 +17,7 @@ pub mod wasm;
 #[macro_use]
 pub mod instructions;
 
+#[doc(inline)]
 pub use error::{HQError, HQErrorType, HQResult};
 
 // use wasm::wasm;
@@ -27,7 +30,6 @@ extern "C" {
 
 #[cfg(test)]
 pub fn log(s: &str) {
-    let a = ir::types::Type::flags().map(|(_, ty)| *ty);
     println!("{s}")
 }
 
