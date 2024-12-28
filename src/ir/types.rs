@@ -47,10 +47,13 @@ pub enum Type {
 
     Number = Self::QuasiInt.or(Self::Float).bits,
 
-    StringNumber, // a string which can be interpreted as a non-nan number
+    StringNumber,  // a string which can be interpreted as a non-nan number
     StringBoolean, // "true" or "false"
-    StringNan, // some other string which can only be interpreted as NaN
-    String = Self::StringNumber.or(Self::StringBoolean).or(Self::StringNan).bits,
+    StringNan,     // some other string which can only be interpreted as NaN
+    String = Self::StringNumber
+        .or(Self::StringBoolean)
+        .or(Self::StringNan)
+        .bits,
 
     QuasiBoolean = Self::Boolean.or(Self::StringBoolean).bits,
     QuasiNumber = Self::Number.or(Self::StringNumber).bits,

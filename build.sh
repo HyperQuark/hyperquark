@@ -18,13 +18,11 @@ usage()
   echo "  -d     build for development"
   echo "  -p     build for production"
   echo "  -V     build the website with vite"
-  echo "  -v     do not build the website with vite"
   echo "  -W     build wasm"
-  echo "  -w     do not build wasm"
   echo "  -o     do not run wasm-opt"
   echo "  -O     run wasm-opt"
   echo "  -s     run wasm-opt with -Os"
-  echo "  -z     run wasm-opt with -Os"
+  echo "  -z     run wasm-opt with -Oz"
   exit 1
 }
 
@@ -41,20 +39,16 @@ set_variable()
   fi
 }
 
-unset PROD VITE WASM
-QUIET=1
-while getopts 'dpwvoWVOhi' c
+unset VITE WASM PROD;
+QUIET=1;
 while getopts 'dpwvoWVszhi' c
 do
   case $c in
     d) set_variable PROD 0 ;;
     p) set_variable PROD 1 ;;
-    v) set_variable VITE 0 ;;
-    w) set_variable WASM 0 ;;
     V) set_variable VITE 1 ;;
     W) set_variable WASM 1 ;;
     o) set_variable WOPT 0 ;;
-    O) set_variable WOPT 1 ;;
     s) set_variable WOPT 1 ;;
     z) set_variable WOPT 2 ;;
     i) unset QUIET ;;
@@ -62,12 +56,14 @@ do
   esac
 done
 
-[ -z $PROD ] && usage
-[ -z $VITE ] && usage
-[ -z $WASM ] && usage
+[ -z $WASM ] && set_variable WASM 0;
+[ -z $VITE ] && set_variable VITE 0;
+
+[ -z $PROD ] && usage;
+
 if [ -z $WOPT ]; then
   if [ $PROD = "1" ]; then
-    set_variable WOPT 1;
+    set_variable WOPT 2;
   else
     set_variable WOPT 0;
   fi
@@ -88,15 +84,15 @@ if [ $WASM = "1" ]; then
   fi
 fi
 if [ $WOPT = "1" ]; then
-  echo running wasm-opt...
-  wasm-opt -Oz js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
+  echo running wasm-opt -Os...
   wasm-opt -Os -g js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
 fi
 if [ $WOPT = "2" ]; then
-  echo running wasm-opt...
+  echo running wasm-opt -Oz...
   wasm-opt -Oz -g js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
 fi
 if [ $VITE = "1" ]; then
   echo running npm build...
   npm run build
 fi
+echo finished!

@@ -11,7 +11,7 @@ mod error;
 pub mod ir;
 // pub mod ir_opt;
 pub mod sb3;
-// pub mod wasm;
+pub mod wasm;
 #[macro_use]
 pub mod instructions;
 
@@ -27,6 +27,7 @@ extern "C" {
 
 #[cfg(test)]
 pub fn log(s: &str) {
+    let a = ir::types::Type::flags().map(|(_, ty)| *ty);
     println!("{s}")
 }
 
