@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use proc_macro::TokenStream;
 use proc_macro_error::{abort_call_site, emit_warning, proc_macro_error};
 use quote::{format_ident, quote};
@@ -5,6 +7,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
 use std::collections::{HashMap, HashSet};
 
+/// See top-level crate documentation.
 #[proc_macro_error]
 #[proc_macro_derive(EnumFieldGetter)]
 pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
