@@ -33,16 +33,15 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
     })
 }
 
-#[allow(non_upper_case_globals)]
 pub fn acceptable_inputs() -> Rc<[IrType]> {
     Rc::new([IrType::Number, IrType::Number])
 }
 
 // TODO: nan
-pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<IrType> {
+pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     let t1 = inputs[0];
     let t2 = inputs[1];
-    Ok(if IrType::QuasiInt.contains(t1.or(t2)) {
+    Ok(Some(if IrType::QuasiInt.contains(t1.or(t2)) {
         IrType::QuasiInt
     } else if (IrType::QuasiInt.contains(t1) && IrType::Float.contains(t2))
         || (IrType::QuasiInt.contains(t2) && IrType::Float.contains(t1))
@@ -51,7 +50,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<IrType> {
         IrType::Float
     } else {
         hq_todo!() //IrType::Number
-    })
+    }))
 }
 
 crate::instructions_test!(t1, t2);

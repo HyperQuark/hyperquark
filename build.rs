@@ -6,7 +6,7 @@ use std::path::Path;
 // and to allow me to continue to procrastinate about learning how to do i/o stuff in rust.
 
 fn main() {
-    println!("cargo::rerun-if-changed=src/instructions/**/*");
+    println!("cargo::rerun-if-changed=src/instructions/**/*.rs");
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("ir-opcodes.rs");
@@ -25,10 +25,18 @@ fn main() {
                         .filter_map(|comp| comp.as_os_str().to_str())
                         .collect();
 
-                    if components.len() == 2 {
+                    if components.len() == 2 && components[1].ends_with(".rs") {
                         paths.push((
-                            format!("{}::{}", components[0], components[1].trim_end_matches(".rs")),
-                            format!("{}_{}", components[0], components[1].trim_end_matches(".rs")),
+                            format!(
+                                "{}::{}",
+                                components[0],
+                                components[1].trim_end_matches(".rs")
+                            ),
+                            format!(
+                                "{}_{}",
+                                components[0],
+                                components[1].trim_end_matches(".rs")
+                            ),
                         ));
                     }
                 }
@@ -60,7 +68,7 @@ fn main() {
         }}
         
         /// maps an opcode to its output type
-        pub fn output_type(opcode: IrOpcode, inputs: Rc<[crate::ir::Type]>) -> HQResult<crate::ir::Type> {{
+        pub fn output_type(opcode: IrOpcode, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
             match opcode {{
                 {}
             }}

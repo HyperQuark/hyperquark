@@ -1,4 +1,5 @@
 use alloc::string::String;
+#[cfg(target_family = "wasm")]
 use wasm_bindgen::JsValue;
 
 pub type HQResult<T> = Result<T, HQError>;
@@ -18,6 +19,7 @@ pub enum HQErrorType {
     Unimplemented,
 }
 
+#[cfg(target_family = "wasm")]
 impl From<HQError> for JsValue {
     fn from(val: HQError) -> JsValue {
         JsValue::from_str(match val.err_type {

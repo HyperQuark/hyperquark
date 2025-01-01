@@ -6,6 +6,7 @@
 extern crate alloc;
 extern crate enum_field_getter;
 
+#[cfg(target_family = "wasm")]
 use wasm_bindgen::prelude::*;
 
 #[macro_use]
@@ -22,8 +23,8 @@ pub use error::{HQError, HQErrorType, HQResult};
 
 // use wasm::wasm;
 
-#[cfg(not(test))]
-#[wasm_bindgen(js_namespace=console)]
+#[cfg(target_family = "wasm")]
+#[cfg_attr(target_family = "wasm", wasm_bindgen(js_namespace=console))]
 extern "C" {
     pub fn log(s: &str);
 }
@@ -50,4 +51,10 @@ pub mod prelude {
     pub use alloc::vec::Vec;
     pub use core::cell::RefCell;
     pub use core::fmt;
+
+    use core::hash::BuildHasherDefault;
+    use hashers::fnv::FNV1aHasher64;
+    use indexmap;
+    pub type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasherDefault<FNV1aHasher64>>;
+    pub type IndexSet<T> = indexmap::IndexSet<T, BuildHasherDefault<FNV1aHasher64>>;
 }
