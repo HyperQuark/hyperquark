@@ -1,4 +1,4 @@
-use crate::ir::types::Type as IrType;
+use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, ValType};
@@ -53,4 +53,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     }))
 }
 
-crate::instructions_test!(t1, t2);
+#[cfg(test)]
+mod tests {
+    crate::instructions_test!{test; t1, t2}
+}

@@ -5,6 +5,7 @@ use crate::prelude::*;
 
 mod looks;
 mod operator;
+mod math;
 #[macro_use]
 mod utilities;
 pub use utilities::{file_block_category, file_block_name, file_opcode};

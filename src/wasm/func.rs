@@ -53,8 +53,11 @@ impl StepFunc {
     }
 
     /// Returns the index of the `n`th local of the specified type in this function,
-    /// adding some if necessary
+    /// adding some if necessary. `n` should be greater than 0.
     pub fn get_local(&self, val_type: ValType, n: u32) -> HQResult<u32> {
+        if n == 0 {
+            hq_bug!("can't have a 0 amount of locals; n should be >0 for get_local")
+        }
         let existing_count = self
             .locals
             .borrow()
@@ -69,12 +72,17 @@ impl StepFunc {
             }
             self.locals.borrow().len() - 1
         } else {
-            // TODO: return nth rather than last
             self.locals
                 .borrow()
                 .iter()
-                .rposition(|ty| *ty == val_type)
-                .unwrap()
+                .enumerate()
+                .filter(|(_, ty)| **ty == val_type)
+                .map(|(i, _)| i)
+                .nth(n as usize - 1)
+                .ok_or(make_hq_bug!(
+                    "couldn't find nth local of type {:?}",
+                    val_type
+                ))?
         })
         .map_err(|_| make_hq_bug!("local index was out of bounds"))?
             + self.param_count)
@@ -92,5 +100,52 @@ impl StepFunc {
         }
         func.instruction(&Instruction::End);
         func
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StepFunc;
+    use wasm_encoder::ValType;
+
+    #[test]
+    fn get_local_works_with_valid_inputs_with_1_param() {
+        let func = StepFunc::new(Default::default(), Default::default());
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 1);
+
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 1);
+
+        assert_eq!(func.get_local(ValType::F64, 1).unwrap(), 2);
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 1);
+
+        assert_eq!(func.get_local(ValType::I32, 2).unwrap(), 3);
+        assert_eq!(func.get_local(ValType::F64, 1).unwrap(), 2);
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 1);
+
+        assert_eq!(func.get_local(ValType::F64, 4).unwrap(), 6);
+    }
+
+    #[test]
+    fn get_local_fails_when_n_is_0() {
+        let func = StepFunc::new(Default::default(), Default::default());
+        assert!(func.get_local(ValType::I32, 0).is_err());
+    }
+
+    #[test]
+    fn get_local_works_with_valid_inputs_with_3_params() {
+        let func =
+            StepFunc::new_with_param_count(3, Default::default(), Default::default()).unwrap();
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 3);
+
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 3);
+
+        assert_eq!(func.get_local(ValType::F64, 1).unwrap(), 4);
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 3);
+
+        assert_eq!(func.get_local(ValType::I32, 2).unwrap(), 5);
+        assert_eq!(func.get_local(ValType::F64, 1).unwrap(), 4);
+        assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 3);
+
+        assert_eq!(func.get_local(ValType::F64, 4).unwrap(), 8);
     }
 }

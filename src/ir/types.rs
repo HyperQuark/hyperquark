@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use bitmask_enum::bitmask;
 
 /// a bitmask of possible IR types
@@ -63,3 +64,5 @@ pub enum Type {
 
     Color,
 }
+
+pub type TypeStack = Vec<Type>;

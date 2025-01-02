@@ -34,3 +34,6 @@ crate-type = ["cdylib", "rlib"]
 [profile.release]
 lto = true
 opt-level = "z"
+
+[build-dependencies]
+convert_case = "0.6.0"

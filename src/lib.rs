@@ -49,6 +49,7 @@ pub mod prelude {
     pub use alloc::rc::Rc;
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;
+    pub use core::borrow::Borrow;
     pub use core::cell::RefCell;
     pub use core::fmt;
 

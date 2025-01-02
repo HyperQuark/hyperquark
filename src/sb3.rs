@@ -355,6 +355,8 @@ pub enum VariableInfo {
     LocalVar(String, VarVal),
 }
 
+pub type BlockMap = BTreeMap<String, Block>;
+
 /// A target (sprite or stage)
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -365,7 +367,7 @@ pub struct Target {
     pub lists: BTreeMap<String, (String, Vec<VarVal>)>,
     #[serde(default)]
     pub broadcasts: BTreeMap<String, String>,
-    pub blocks: BTreeMap<String, Block>,
+    pub blocks: BlockMap,
     pub comments: BTreeMap<String, Comment>,
     pub current_costume: u32,
     pub costumes: Vec<Costume>,

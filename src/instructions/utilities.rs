@@ -40,51 +40,55 @@ pub mod tests {
     }
 }
 
-/// generates unit tests for instructions files
+/// generates unit tests for instructions files. Takes a optional comma-separated list of arbitrary identifiers
+/// corresponding to the number of inputs the block takes, optionally followed by a semicolon and an expression
+/// for a sensible default for any fields; if multiple field values need to be tested, the macro can be repeated.
+/// Must be used *inside* a `mod test` block, after `instructions_test_setup!(...)`.
 #[macro_export]
 macro_rules! instructions_test {
-    ($($type_arg:ident $(,)?)+) => {
-        #[cfg(test)]
-        pub mod tests {
-            use super::{wasm, output_type, acceptable_inputs};
-            use $crate::prelude::*;
-            use $crate::ir::Type as IrType;
-            use wasm_encoder::ValType;
+    {$module:ident; $($type_arg:ident $(,)?)* $(; $fields:expr)?} => {
+    mod $module {
+        use super::super::{wasm, output_type, acceptable_inputs};
+        use $crate::prelude::*;
+        use $crate::ir::Type as IrType;
+        use wasm_encoder::ValType;
 
-            macro_rules! ident_as_irtype {
-                ( $_:ident ) => { IrType };
-            }
+        macro_rules! ident_as_irtype {
+            ( $_:ident ) => { IrType };
+        }
 
-            fn types_iter() -> impl Iterator<Item=($(ident_as_irtype!($type_arg),)+)> {
-                // we need to collect this iterator into a Vec because it doesn't implement clone for some reason,
-                // which makes itertools angry
-                $(let $type_arg = IrType::flags().map(|(_, ty)| *ty).collect::<Vec<_>>();)+
-                itertools::iproduct!($($type_arg,)+).filter(|($($type_arg,)+)| {
-                    for (i, input) in [$($type_arg,)+].into_iter().enumerate() {
-                        // invalid input types should be handled by a wrapper function somewhere
-                        // so we won't test those here.
-                        if !acceptable_inputs()[i].contains(*input) {
-                            return false;
-                        }
+        fn types_iter() -> impl Iterator<Item=($(ident_as_irtype!($type_arg),)*)> {
+            // we need to collect this iterator into a Vec because it doesn't implement clone for some reason,
+            // which makes itertools angry
+            $(let $type_arg = IrType::flags().map(|(_, ty)| *ty).collect::<Vec<_>>();)*
+            itertools::iproduct!($($type_arg,)*).filter(|($($type_arg,)*)| {
+                let types: &[&IrType] = &[$($type_arg,)*];
+                for (i, input) in (*types).into_iter().enumerate() {
+                    // invalid input types should be handled by a wrapper function somewhere
+                    // so we won't test those here.
+                    if !acceptable_inputs()[i].contains(**input) {
+                        return false;
                     }
-                    true
-                })
-            }
+                }
+                true
+            })
+        }
 
             #[test]
             fn output_type_fails_when_wasm_fails() {
                 use $crate::wasm::{StepFunc, TypeRegistry, ExternalFunctionMap};
-                for ($($type_arg,)+) in types_iter() {
-                    let output_type_result = output_type(Rc::new([$($type_arg,)+]));
+                for ($($type_arg,)*) in types_iter() {
+                    let output_type_result = output_type(Rc::new([$($type_arg,)*]));
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
-                    let step_func = StepFunc::new_with_param_count([$($type_arg,)+].len(), type_registry.clone(), external_functions.clone()).unwrap();
-                    let wasm_result = wasm(&step_func, Rc::new([$($type_arg,)+]));
+                    let types: &[IrType] = &[$($type_arg,)*];
+                    let step_func = StepFunc::new_with_param_count(types.len(), type_registry.clone(), external_functions.clone()).unwrap();
+                    let wasm_result = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
-                        (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)+), output_type_result, wasm_result),
+                        (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
                         (Err(HQError { err_type: e1, .. }), Err(HQError { err_type: e2, .. })) => {
                             if e1 != e2 {
-                                panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)+), output_type_result, wasm_result);
+                                panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result);
                             }
                         }
                         _ => continue,
@@ -100,8 +104,8 @@ macro_rules! instructions_test {
                 use $crate::wasm::{StepFunc, TypeRegistry, ExternalFunctionMap};
                 use $crate::prelude::Rc;
 
-                for ($($type_arg,)+) in types_iter() {
-                    let output_type = match output_type(Rc::new([$($type_arg,)+])) {
+                for ($($type_arg,)*) in types_iter() {
+                    let output_type = match output_type(Rc::new([$($type_arg,)*])) {
                         Ok(a) => a,
                         Err(_) => {
                             println!("skipping failed output_type");
@@ -110,15 +114,16 @@ macro_rules! instructions_test {
                     };
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
-                    let step_func = StepFunc::new_with_param_count([$($type_arg,)+].len(), type_registry.clone(), external_functions.clone())?;
-                    let wasm = match wasm(&step_func, Rc::new([$($type_arg,)+])) {
+                    let types: &[IrType] = &[$($type_arg,)*];
+                    let step_func = StepFunc::new_with_param_count(types.len(), type_registry.clone(), external_functions.clone())?;
+                    let wasm = match wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?) {
                         Ok(a) => a,
                         Err(_) => {
                             println!("skipping failed wasm");
                             continue;
                         }
                     };
-                    for (i, _) in [$($type_arg,)+].iter().enumerate() {
+                    for (i, _) in types.iter().enumerate() {
                         step_func.add_instructions([Instruction::LocalGet(i.try_into().unwrap())])
                     }
                     step_func.add_instructions(wasm);
@@ -133,7 +138,7 @@ macro_rules! instructions_test {
                     Rc::unwrap_or_clone(external_functions).finish(&mut imports, type_registry.clone())?;
 
                     let mut types = TypeSection::new();
-                    let params = [$($type_arg,)+].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty)).collect::<HQResult<Vec<_>>>()?;
+                    let params = [$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty)).collect::<HQResult<Vec<_>>>()?;
                     let results = match output_type {
                       Some(output) => vec![wasm_proj.ir_type_to_wasm(output)?],
                       None => vec![],
@@ -154,7 +159,7 @@ macro_rules! instructions_test {
 
                     let wasm_bytes = module.finish();
 
-                    wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($type_arg,)+), err.message()))?;
+                    wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($type_arg,)*), err.message()))?;
                 }
                 Ok(())
             }
@@ -173,11 +178,11 @@ macro_rules! instructions_test {
                 use std::path::{Path, PathBuf};
                 use std::fs;
 
-                for ($($type_arg,)+) in types_iter() {
+                for ($($type_arg,)*) in types_iter() {
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
                     let step_func = StepFunc::new(type_registry.clone(), external_functions.clone());
-                    if wasm(&step_func, Rc::new([$($type_arg,)+])).is_err() {
+                    if wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?).is_err() {
                         println!("skipping failed wasm");
                         continue;
                     };
@@ -188,7 +193,8 @@ macro_rules! instructions_test {
                         } else {
                             wasm_to_js_type(results[1])
                         };
-                        let ins = [$(stringify!($type_arg),)+].into_iter().enumerate().map(|(i, t)| {
+                        let type_strs: &[&str] = &[$(stringify!($type_arg),)*];
+                        let ins = type_strs.into_iter().enumerate().map(|(i, t)| {
                             format!(
                                 "{}: {}",
                                 t,
@@ -196,7 +202,7 @@ macro_rules! instructions_test {
                                     $crate::wasm::WasmProject::new(
                                         Default::default(),
                                         crate::wasm::ExternalEnvironment::WebBrowser
-                                    ).ir_type_to_wasm([$($type_arg,)+][i]).unwrap()
+                                    ).ir_type_to_wasm([$($type_arg,)*][i]).unwrap()
                                 )
                             )
                         }).collect::<Vec<_>>().join(", ");
@@ -207,7 +213,7 @@ macro_rules! instructions_test {
                                 let test_string = format!("function _({ins}): {out} {{
                                   {func}
                                   return {name}{ts};
-                                }}", ins=ins, out=out, func=func_string, name=name, ts=stringify!(($($type_arg,)+)));
+                                }}", ins=ins, out=out, func=func_string, name=name, ts=stringify!(($($type_arg,)*)));
                                 println!("{}", test_string.clone());
                                 Some(test_string.as_str().as_bytes().into_iter().map(|&u| u).collect::<Vec<_>>())
                             },
