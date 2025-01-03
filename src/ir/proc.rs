@@ -1,4 +1,4 @@
-use super::{Step, StepContext, TargetContext, Type as IrType};
+use super::{Step, StepContext, Target, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::{BlockMap, BlockOpcode};
 use lazy_regex::{lazy_regex, Lazy};
@@ -6,14 +6,14 @@ use regex::Regex;
 
 #[derive(Clone, Debug)]
 pub struct ProcedureContext {
-    arg_ids: Box<[String]>,
+    arg_ids: Box<[Box<str>]>,
     arg_types: Box<[IrType]>,
     warp: bool,
-    target_context: Box<TargetContext>,
+    target: Rc<Target>,
 }
 
 impl ProcedureContext {
-    pub fn arg_ids(&self) -> &[String] {
+    pub fn arg_ids(&self) -> &[Box<str>] {
         self.arg_ids.borrow()
     }
 
@@ -25,8 +25,8 @@ impl ProcedureContext {
         self.warp
     }
 
-    pub fn target_context(&self) -> &TargetContext {
-        self.target_context.borrow()
+    pub fn target_context(&self) -> &Target {
+        self.target.borrow()
     }
 }
 
@@ -48,10 +48,10 @@ impl Proc {
 
 static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"[^\\]%[nbs]"#);
 
-fn arg_types_from_proccode(proccode: String) -> Result<Box<[IrType]>, HQError> {
+fn arg_types_from_proccode(proccode: Box<str>) -> Result<Box<[IrType]>, HQError> {
     // https://github.com/scratchfoundation/scratch-blocks/blob/abbfe93136fef57fdfb9a077198b0bc64726f012/blocks_vertical/procedures.js#L207-L215
     (*ARG_REGEX)
-        .find_iter(proccode.as_str())
+        .find_iter(&*proccode)
         .map(|s| s.as_str().to_string().trim().to_string())
         .filter(|s| s.as_str().starts_with('%'))
         .map(|s| s[..2].to_string())
@@ -68,9 +68,9 @@ fn arg_types_from_proccode(proccode: String) -> Result<Box<[IrType]>, HQError> {
 
 impl Proc {
     pub fn from_proccode(
-        proccode: String,
+        proccode: Box<str>,
         blocks: &BlockMap,
-        target_context: TargetContext,
+        target: Rc<Target>,
         expect_warp: bool,
     ) -> HQResult<Self> {
         let arg_types = arg_types_from_proccode(proccode.clone())?;
@@ -80,10 +80,8 @@ impl Proc {
             };
             info.opcode == BlockOpcode::procedures_prototype
                 && (match info.mutation.mutations.get("proccode") {
-                    Some(serde_json::Value::String(ref s)) => {
-                        *s == proccode
-                    }
-                    _ => false
+                    Some(serde_json::Value::String(ref s)) => **s == *proccode,
+                    _ => false,
                 })
         }) else {
             hq_bad_proj!("no prototype found for {proccode} in")
@@ -132,7 +130,7 @@ impl Proc {
             serde_json::Value::Array(values) => values
                 .iter()
                 .map(|val| match val {
-                    serde_json::Value::String(s) => Ok(s.clone()),
+                    serde_json::Value::String(s) => Ok(Into::<Box<str>>::into(s.clone())),
                     _ => hq_bad_proj!("non-string argumentids member in {proccode}"),
                 })
                 .collect::<HQResult<Box<[_]>>>()?,
@@ -142,10 +140,10 @@ impl Proc {
             warp: expect_warp,
             arg_types,
             arg_ids,
-            target_context: Box::new(target_context),
+            target: Rc::clone(&target),
         };
         let step_context = StepContext {
-            target_context,
+            target,
             proc_context: Some(context.clone()),
         };
         let first_step = match &def_block.block_info().unwrap().next {
@@ -165,7 +163,7 @@ impl Proc {
     }
 }
 
-pub type ProcMap = IndexMap<String, Rc<Proc>>;
+pub type ProcMap = IndexMap<Box<str>, Rc<Proc>>;
 
 #[derive(Clone, Default)]
 pub struct ProcRegistry(RefCell<ProcMap>);
@@ -182,9 +180,9 @@ impl ProcRegistry {
     /// get the `Proc` for the specified proccode, creating it if it doesn't already exist
     pub fn proc(
         &self,
-        proccode: String,
+        proccode: Box<str>,
         blocks: &BlockMap,
-        target_context: TargetContext,
+        target: Rc<Target>,
         expect_warp: bool,
     ) -> HQResult<Rc<Proc>> {
         Ok(Rc::clone(
@@ -194,7 +192,7 @@ impl ProcRegistry {
                 .or_insert(Rc::new(Proc::from_proccode(
                     proccode,
                     blocks,
-                    target_context,
+                    target,
                     expect_warp,
                 )?)),
         ))

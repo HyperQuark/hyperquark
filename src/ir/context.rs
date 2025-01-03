@@ -1,11 +1,8 @@
-use super::ProcedureContext;
+use super::{ProcedureContext, Target};
+use crate::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
-pub struct TargetContext {
-    pub target: u32,
-}
 #[derive(Debug, Clone)]
 pub struct StepContext {
-    pub target_context: TargetContext,
+    pub target: Rc<Target>,
     pub proc_context: Option<ProcedureContext>,
 }

@@ -1,12 +1,14 @@
 use super::ExternalEnvironment;
-use crate::ir::Type as IrType;
+use crate::ir::{IrProject, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{StepFunc, WasmFlags};
 use wasm_encoder::ValType;
 
+/// A respresntation of a WASM representation of a project. Cannot be created directly;
+/// use `TryFrom<IrProject>`.
 pub struct WasmProject {
     flags: WasmFlags,
-    step_funcs: RefCell<Vec<StepFunc>>,
+    step_funcs: Box<[StepFunc]>,
     environment: ExternalEnvironment,
 }
 
@@ -14,7 +16,7 @@ impl WasmProject {
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         WasmProject {
             flags,
-            step_funcs: RefCell::new(vec![]),
+            step_funcs: Box::new([]),
             environment,
         }
     }
@@ -27,6 +29,10 @@ impl WasmProject {
         self.environment
     }
 
+    pub fn step_funcs(&self) -> &[StepFunc] {
+        self.step_funcs.borrow()
+    }
+
     /// maps a broad IR type to a WASM type
     pub fn ir_type_to_wasm(&self, ir_type: IrType) -> HQResult<ValType> {
         Ok(if IrType::Float.contains(ir_type) {
@@ -36,17 +42,25 @@ impl WasmProject {
         } else if IrType::String.contains(ir_type) {
             ValType::EXTERNREF
         } else if IrType::Color.contains(ir_type) {
-            hq_todo!(); //ValType::V128 // f32x4
+            hq_todo!() //ValType::V128 // f32x4
         } else {
             ValType::I64 // NaN boxed value... let's worry about colors later
         })
     }
 
-    pub fn add_step_func(&self, step_func: StepFunc) {
-        self.step_funcs.borrow_mut().push(step_func);
-    }
-
     pub fn finish(self) -> HQResult<Vec<u8>> {
-        hq_todo!();
+        hq_todo!()
+    }
+}
+
+impl TryFrom<IrProject> for WasmProject {
+    type Error = HQError;
+
+    fn try_from(ir_project: IrProject) -> HQResult<WasmProject> {
+        let mut steps: Vec<StepFunc> = vec![];
+        for thread in ir_project.threads() {
+            
+        }
+        hq_todo!()
     }
 }

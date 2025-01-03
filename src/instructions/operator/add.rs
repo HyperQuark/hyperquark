@@ -26,7 +26,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
         } else if IrType::QuasiInt.contains(t2) {
             vec![Instruction::F64ConvertI64S, Instruction::F64Add]
         } else {
-            hq_todo!();
+            hq_todo!()
         }
     } else {
         hq_todo!()

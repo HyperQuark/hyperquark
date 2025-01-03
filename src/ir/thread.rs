@@ -1,4 +1,4 @@
-use super::{Event, Step, StepContext, TargetContext};
+use super::{Event, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode};
 
@@ -6,6 +6,7 @@ use crate::sb3::{Block, BlockMap, BlockOpcode};
 pub struct Thread {
     event: Event,
     first_step: Box<Step>,
+    target: Rc<Target>,
 }
 
 impl Thread {
@@ -17,12 +18,16 @@ impl Thread {
         self.first_step.borrow()
     }
 
+    pub fn target(&self) -> Rc<Target> {
+        Rc::clone(&self.target)
+    }
+
     /// tries to construct a thread from a top-level block.
     /// Returns Ok(None) if the top-level block is not a valid event or if there is no next block.
     pub fn try_from_top_block(
         block: &Block,
         blocks: &BlockMap,
-        target_context: TargetContext,
+        target: Rc<Target>,
     ) -> HQResult<Option<Self>> {
         let block_info = block
             .block_info()
@@ -52,10 +57,11 @@ impl Thread {
                 next,
                 blocks,
                 StepContext {
-                    target_context,
+                    target: Rc::clone(&target),
                     proc_context: None,
                 },
             )?),
+            target,
         }))
     }
 }

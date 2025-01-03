@@ -3,10 +3,7 @@
 //! `sb3` files must be unzipped first. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format>
 //! for a loose informal specification.
 
-use crate::error::HQError;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use crate::prelude::*;
 use enum_field_getter::EnumFieldGetter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -16,7 +13,7 @@ use serde_json::Value;
 pub struct Sb3Project {
     pub targets: Vec<Target>,
     pub monitors: Vec<Monitor>,
-    pub extensions: Vec<String>,
+    pub extensions: Vec<Box<str>>,
     pub meta: Meta,
 }
 
@@ -24,13 +21,13 @@ pub struct Sb3Project {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Comment {
-    pub block_id: Option<String>,
+    pub block_id: Option<Box<str>>,
     pub x: Option<f64>,
     pub y: Option<f64>,
     pub width: f64,
     pub height: f64,
     pub minimized: bool,
-    pub text: String,
+    pub text: Box<str>,
 }
 
 /// A possible block opcode, encompassing the default block pallette, the pen extension,
@@ -232,17 +229,17 @@ pub enum Block {
 #[serde(untagged)]
 pub enum BlockArray {
     NumberOrAngle(u32, f64),
-    ColorOrString(u32, String),
+    ColorOrString(u32, Box<str>),
     /// This might also represent a variable or list if the block is not top-level, in theory
-    Broadcast(u32, String, String),
-    VariableOrList(u32, String, String, f64, f64),
+    Broadcast(u32, Box<str>, Box<str>),
+    VariableOrList(u32, Box<str>, Box<str>, f64, f64),
 }
 
 /// Either a block array or a block id
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BlockArrayOrId {
-    Id(String),
+    Id(Box<str>),
     Array(BlockArray),
 }
 
@@ -259,7 +256,7 @@ pub enum Input {
 #[serde(untagged)]
 pub enum Field {
     Value((Option<VarVal>,)),
-    ValueId(Option<VarVal>, Option<String>),
+    ValueId(Option<VarVal>, Option<Box<str>>),
 }
 
 /// Represents a mutation on a block. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format#Mutations>
@@ -267,18 +264,18 @@ pub enum Field {
 #[serde(rename_all = "camelCase")]
 pub struct Mutation {
     /// ignored - should always be "mutation"
-    pub tag_name: String,
+    pub tag_name: Box<str>,
     /// ignored - should always be []
     #[serde(default)]
     pub children: Vec<()>,
     #[serde(flatten)]
-    pub mutations: BTreeMap<String, Value>,
+    pub mutations: BTreeMap<Box<str>, Value>,
 }
 
 impl Default for Mutation {
     fn default() -> Self {
         Mutation {
-            tag_name: String::from("mutation"),
+            tag_name: "mutation".into(),
             children: Default::default(),
             mutations: BTreeMap::new(),
         }
@@ -290,10 +287,10 @@ impl Default for Mutation {
 #[serde(rename_all = "camelCase")]
 pub struct BlockInfo {
     pub opcode: BlockOpcode,
-    pub next: Option<String>,
-    pub parent: Option<String>,
-    pub inputs: BTreeMap<String, Input>,
-    pub fields: BTreeMap<String, Field>,
+    pub next: Option<Box<str>>,
+    pub parent: Option<Box<str>>,
+    pub inputs: BTreeMap<Box<str>, Input>,
+    pub fields: BTreeMap<Box<str>, Field>,
     pub shadow: bool,
     pub top_level: bool,
     #[serde(default)]
@@ -316,9 +313,9 @@ pub enum CostumeDataFormat {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Costume {
-    pub asset_id: String,
-    pub name: String,
-    pub md5ext: String,
+    pub asset_id: Box<str>,
+    pub name: Box<str>,
+    pub md5ext: Box<str>,
     pub data_format: CostumeDataFormat,
     #[serde(default)]
     pub bitmap_resolution: f64,
@@ -330,10 +327,10 @@ pub struct Costume {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Sound {
-    pub asset_id: String,
-    pub name: String,
-    pub md5ext: String,
-    pub data_format: String, // TODO: enumerate
+    pub asset_id: Box<str>,
+    pub name: Box<str>,
+    pub md5ext: Box<str>,
+    pub data_format: Box<str>, // TODO: enumerate
     pub rate: f64,
     pub sample_count: f64,
 }
@@ -344,31 +341,31 @@ pub struct Sound {
 pub enum VarVal {
     Float(f64),
     Bool(bool),
-    String(String),
+    String(Box<str>),
 }
 
 /// Represents a variable
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VariableInfo {
-    CloudVar(String, VarVal, bool),
-    LocalVar(String, VarVal),
+    CloudVar(Box<str>, VarVal, bool),
+    LocalVar(Box<str>, VarVal),
 }
 
-pub type BlockMap = BTreeMap<String, Block>;
+pub type BlockMap = BTreeMap<Box<str>, Block>;
 
 /// A target (sprite or stage)
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
     pub is_stage: bool,
-    pub name: String,
-    pub variables: BTreeMap<String, VariableInfo>,
-    pub lists: BTreeMap<String, (String, Vec<VarVal>)>,
+    pub name: Box<str>,
+    pub variables: BTreeMap<Box<str>, VariableInfo>,
+    pub lists: BTreeMap<Box<str>, (Box<str>, Vec<VarVal>)>,
     #[serde(default)]
-    pub broadcasts: BTreeMap<String, String>,
+    pub broadcasts: BTreeMap<Box<str>, Box<str>>,
     pub blocks: BlockMap,
-    pub comments: BTreeMap<String, Comment>,
+    pub comments: BTreeMap<Box<str>, Comment>,
     pub current_costume: u32,
     pub costumes: Vec<Costume>,
     pub sounds: Vec<Sound>,
@@ -377,11 +374,11 @@ pub struct Target {
     #[serde(default)]
     pub tempo: f64,
     #[serde(default)]
-    pub video_state: Option<String>,
+    pub video_state: Option<Box<str>>,
     #[serde(default)]
     pub video_transparency: f64,
     #[serde(default)]
-    pub text_to_speech_language: Option<String>,
+    pub text_to_speech_language: Option<Box<str>>,
     #[serde(default)]
     pub visible: bool,
     #[serde(default)]
@@ -395,9 +392,9 @@ pub struct Target {
     #[serde(default)]
     pub draggable: bool,
     #[serde(default)]
-    pub rotation_style: String,
+    pub rotation_style: Box<str>,
     #[serde(flatten)]
-    pub unknown: BTreeMap<String, Value>,
+    pub unknown: BTreeMap<Box<str>, Value>,
 }
 
 /// The value of a list monitor
@@ -405,7 +402,7 @@ pub struct Target {
 #[serde(untagged)]
 pub enum ListMonitorValue {
     List(Vec<VarVal>),
-    String(String),
+    String(Box<str>),
 }
 
 /// A monitor
@@ -414,12 +411,12 @@ pub enum ListMonitorValue {
 pub enum Monitor {
     #[serde(rename_all = "camelCase")]
     ListMonitor {
-        id: String,
+        id: Box<str>,
         /// The name of the monitor's mode: "default", "large", "slider", or "list" - should be "list"
-        mode: String,
-        opcode: String,
-        params: BTreeMap<String, String>,
-        sprite_name: Option<String>,
+        mode: Box<str>,
+        opcode: Box<str>,
+        params: BTreeMap<Box<str>, Box<str>>,
+        sprite_name: Option<Box<str>>,
         width: f64,
         height: f64,
         x: f64,
@@ -429,12 +426,12 @@ pub enum Monitor {
     },
     #[serde(rename_all = "camelCase")]
     VarMonitor {
-        id: String,
+        id: Box<str>,
         /// The name of the monitor's mode: "default", "large", "slider", or "list".
-        mode: String,
-        opcode: String,
-        params: BTreeMap<String, String>,
-        sprite_name: Option<String>,
+        mode: Box<str>,
+        opcode: Box<str>,
+        params: BTreeMap<Box<str>, Box<str>>,
+        sprite_name: Option<Box<str>>,
         value: VarVal,
         width: f64,
         height: f64,
@@ -450,9 +447,9 @@ pub enum Monitor {
 /// metadata about a scratch project - only included here for completeness
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Meta {
-    pub semver: String,
-    pub vm: String,
-    pub agent: String,
+    pub semver: Box<str>,
+    pub vm: Box<str>,
+    pub agent: Box<str>,
 }
 
 impl TryFrom<String> for Sb3Project {
