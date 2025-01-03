@@ -17,9 +17,13 @@ impl Thread {
         self.first_step.borrow()
     }
 
-    /// tries to construct a thread from a top-level block. 
+    /// tries to construct a thread from a top-level block.
     /// Returns Ok(None) if the top-level block is not a valid event or if there is no next block.
-    pub fn try_from_top_block(block: &Block, blocks: &BlockMap, target_context: TargetContext) -> HQResult<Option<Self>> {
+    pub fn try_from_top_block(
+        block: &Block,
+        blocks: &BlockMap,
+        target_context: TargetContext,
+    ) -> HQResult<Option<Self>> {
         let block_info = block
             .block_info()
             .ok_or(make_hq_bug!("top-level block is a special block"))?;
@@ -36,16 +40,22 @@ impl Thread {
             }
             _ => return Ok(None),
         };
-        let next = blocks.get(match &block_info.next {
-            Some(next) => next,
-            None => return Ok(None),
-        }).ok_or(make_hq_bug!("block not found in BlockMap"))?;
+        let next = blocks
+            .get(match &block_info.next {
+                Some(next) => next,
+                None => return Ok(None),
+            })
+            .ok_or(make_hq_bug!("block not found in BlockMap"))?;
         Ok(Some(Thread {
             event,
-            first_step: Box::new(Step::from_block(next, blocks, StepContext {
-                target_context,
-                proc_context: None,
-            })?)
+            first_step: Box::new(Step::from_block(
+                next,
+                blocks,
+                StepContext {
+                    target_context,
+                    proc_context: None,
+                },
+            )?),
         }))
     }
 }

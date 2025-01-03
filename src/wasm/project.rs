@@ -23,6 +23,10 @@ impl WasmProject {
         &self.flags
     }
 
+    pub fn environment(&self) -> ExternalEnvironment {
+        self.environment
+    }
+
     /// maps a broad IR type to a WASM type
     pub fn ir_type_to_wasm(&self, ir_type: IrType) -> HQResult<ValType> {
         Ok(if IrType::Float.contains(ir_type) {

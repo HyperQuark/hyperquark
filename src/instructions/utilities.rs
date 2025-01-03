@@ -1,5 +1,3 @@
-use crate::prelude::*;
-
 mod file_opcode {
     //! instruction module paths look something like
     //! hyperquark::instructions::category::block
@@ -40,19 +38,20 @@ pub mod tests {
     }
 }
 
-/// generates unit tests for instructions files. Takes a optional comma-separated list of arbitrary identifiers
+/// generates unit tests for instructions files. Takes a module name, followed by a semicolon, followed by an optional comma-separated list of arbitrary identifiers
 /// corresponding to the number of inputs the block takes, optionally followed by a semicolon and an expression
 /// for a sensible default for any fields; if multiple field values need to be tested, the macro can be repeated.
-/// Must be used *inside* a `mod test` block, after `instructions_test_setup!(...)`.
 #[macro_export]
 macro_rules! instructions_test {
     {$module:ident; $($type_arg:ident $(,)?)* $(; $fields:expr)?} => {
+    #[cfg(test)]
     mod $module {
-        use super::super::{wasm, output_type, acceptable_inputs};
+        use super::{wasm, output_type, acceptable_inputs};
         use $crate::prelude::*;
         use $crate::ir::Type as IrType;
         use wasm_encoder::ValType;
 
+        #[allow(unused)]
         macro_rules! ident_as_irtype {
             ( $_:ident ) => { IrType };
         }
@@ -78,7 +77,7 @@ macro_rules! instructions_test {
             fn output_type_fails_when_wasm_fails() {
                 use $crate::wasm::{StepFunc, TypeRegistry, ExternalFunctionMap};
                 for ($($type_arg,)*) in types_iter() {
-                    let output_type_result = output_type(Rc::new([$($type_arg,)*]));
+                    let output_type_result = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?);
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -105,7 +104,7 @@ macro_rules! instructions_test {
                 use $crate::prelude::Rc;
 
                 for ($($type_arg,)*) in types_iter() {
-                    let output_type = match output_type(Rc::new([$($type_arg,)*])) {
+                    let output_type = match output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) {
                         Ok(a) => a,
                         Err(_) => {
                             println!("skipping failed output_type");
@@ -129,7 +128,7 @@ macro_rules! instructions_test {
                     step_func.add_instructions(wasm);
                     let func = step_func.finish();
 
-                    let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), crate::wasm::ExternalEnvironment::WebBrowser);
+                    let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), $crate::wasm::ExternalEnvironment::WebBrowser);
 
                     let mut module = Module::new();
 
@@ -166,7 +165,9 @@ macro_rules! instructions_test {
 
             fn wasm_to_js_type(ty: ValType) -> &'static str {
                 match ty {
-                    ValType::I64 | ValType::F64 => "number",
+                    ValType::I64 => "Integer",
+                    ValType::F64 => "number",
+                    ValType::EXTERNREF => "string",
                     _ => todo!("unknown js type for wasm type {:?}", ty)
                 }
             }
@@ -193,18 +194,13 @@ macro_rules! instructions_test {
                         } else {
                             wasm_to_js_type(results[1])
                         };
-                        let type_strs: &[&str] = &[$(stringify!($type_arg),)*];
-                        let ins = type_strs.into_iter().enumerate().map(|(i, t)| {
+                        let arg_idents: Vec<String> = params.iter().enumerate().map(|(i, _)| format!("_{i}")).collect();
+                        let ins = arg_idents.iter().enumerate().map(|(i, ident)| {
                             format!(
                                 "{}: {}",
-                                t,
-                                wasm_to_js_type(
-                                    $crate::wasm::WasmProject::new(
-                                        Default::default(),
-                                        crate::wasm::ExternalEnvironment::WebBrowser
-                                    ).ir_type_to_wasm([$($type_arg,)*][i]).unwrap()
+                                ident,
+                                wasm_to_js_type(*params.get(i).unwrap())
                                 )
-                            )
                         }).collect::<Vec<_>>().join(", ");
                         let diagnostics = check_js(
                             vec![PathBuf::from(format!("src/instructions/{}/{}.ts", module, name))],
@@ -212,8 +208,8 @@ macro_rules! instructions_test {
                                 let func_string = fs::read_to_string(path).ok()?;
                                 let test_string = format!("function _({ins}): {out} {{
                                   {func}
-                                  return {name}{ts};
-                                }}", ins=ins, out=out, func=func_string, name=name, ts=stringify!(($($type_arg,)*)));
+                                  return {name}({ts});
+                                }}", ins=ins, out=out, func=func_string, name=name, ts=arg_idents.join(", "));
                                 println!("{}", test_string.clone());
                                 Some(test_string.as_str().as_bytes().into_iter().map(|&u| u).collect::<Vec<_>>())
                             },

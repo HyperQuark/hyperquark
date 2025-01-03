@@ -22,12 +22,10 @@ pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<Opt
     Ok(Some(match val {
         0.0 => IrType::FloatZero,
         f64::INFINITY => IrType::FloatPosInf,
-        f64::NEG_INFINITY => IrType::FloatNegInf,
         nan if f64::is_nan(nan) => IrType::FloatNan,
         int if int % 1.0 == 0.0 && int > 0.0 => IrType::FloatPosInt,
-        int if int % 1.0 == 0.0 && int < 0.0 => IrType::FloatNegInt,
         frac if frac > 0.0 => IrType::FloatPosFrac,
-        frac if frac < 0.0 => IrType::FloatNegFrac,
+        neg if neg < 0.0 => hq_bad_proj!("negative number in math_positive_number"),
         _ => unreachable!(),
     }))
 }

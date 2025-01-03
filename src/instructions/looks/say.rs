@@ -1,4 +1,3 @@
-use crate::instructions::{file_block_category, file_block_name};
 use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
@@ -6,21 +5,21 @@ use wasm_encoder::{Instruction, ValType};
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
-      let func_index = func.external_functions().function_index(
-          "looks",
-          "say_int",
-          vec![ValType::I64],
-          vec![],
-      )?;
-      vec![Instruction::Call(func_index)]
+        let func_index = func.external_functions().function_index(
+            "looks",
+            "say_int",
+            vec![ValType::I64],
+            vec![],
+        )?;
+        vec![Instruction::Call(func_index)]
     } else if IrType::Float.contains(inputs[0]) {
         let func_index = func.external_functions().function_index(
-          "looks",
-          "say_float",
-          vec![ValType::F64],
-          vec![],
-      )?;
-      vec![Instruction::Call(func_index)]
+            "looks",
+            "say_float",
+            vec![ValType::F64],
+            vec![],
+        )?;
+        vec![Instruction::Call(func_index)]
     } else {
         hq_todo!()
     })
@@ -37,7 +36,4 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(None)
 }
 
-#[cfg(test)]
-mod tests {
-    crate::instructions_test!{test; t}
-}
+crate::instructions_test! {tests; t}

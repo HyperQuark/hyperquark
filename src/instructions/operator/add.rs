@@ -53,7 +53,4 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     }))
 }
 
-#[cfg(test)]
-mod tests {
-    crate::instructions_test!{test; t1, t2}
-}
+crate::instructions_test! {tests; t1, t2}

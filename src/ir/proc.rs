@@ -1,6 +1,6 @@
 use super::{Step, StepContext, TargetContext, Type as IrType};
 use crate::prelude::*;
-use crate::sb3::{Block, BlockMap, BlockOpcode};
+use crate::sb3::{BlockMap, BlockOpcode};
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
 
@@ -23,6 +23,10 @@ impl ProcedureContext {
 
     pub fn warp(&self) -> bool {
         self.warp
+    }
+
+    pub fn target_context(&self) -> &TargetContext {
+        self.target_context.borrow()
     }
 }
 
@@ -76,14 +80,10 @@ impl Proc {
             };
             info.opcode == BlockOpcode::procedures_prototype
                 && (match info.mutation.mutations.get("proccode") {
-                    None => false,
-                    Some(p) => {
-                        if let serde_json::Value::String(ref s) = p {
-                            *s == proccode
-                        } else {
-                            false
-                        }
+                    Some(serde_json::Value::String(ref s)) => {
+                        *s == proccode
                     }
+                    _ => false
                 })
         }) else {
             hq_bad_proj!("no prototype found for {proccode} in")
@@ -160,7 +160,7 @@ impl Proc {
         };
         Ok(Proc {
             first_step: Box::new(first_step),
-            context
+            context,
         })
     }
 }

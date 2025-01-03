@@ -1,7 +1,7 @@
 use convert_case::{Case, Casing};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // I hate to admit this, but a fair bit of this file was written by chatgpt to speed things up
 // and to allow me to continue to procrastinate about learning how to do i/o stuff in rust.
@@ -31,10 +31,9 @@ fn main() {
                         let category = components[0];
                         let opcode = components[1].trim_end_matches(".rs");
                         println!("src/instructions/{category}/{opcode}.rs");
-                        let contents = fs::read_to_string(
-                            format!("src/instructions/{category}/{opcode}.rs")
-                        )
-                        .unwrap();
+                        let contents =
+                            fs::read_to_string(format!("src/instructions/{category}/{opcode}.rs"))
+                                .unwrap();
                         let fields = contents.contains("pub struct Fields");
                         let fields_name =
                             format!("{}_{}_fields", category, opcode).to_case(Case::Pascal);
@@ -82,8 +81,11 @@ fn main() {
                 }}
             }}
         }}
-
-        {}
+        pub mod fields {{
+            use super::*;
+            {}
+        }}
+        pub use fields::*;
         ",
             paths.iter().map(|(_, id, fields, fields_name)| {
                 if *fields {
@@ -108,13 +110,13 @@ fn main() {
             }).collect::<Vec<_>>().join("\n"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(_) => {}::output_type(inputs),", id, path)
+                    format!("IrOpcode::{}(fields) => {}::output_type(inputs, fields),", id, path)
                 } else {
                     format!("IrOpcode::{} => {}::output_type(inputs),", id, path)
                 }
             }).collect::<Vec<_>>().join("\n"),
             paths.iter().filter(|(_, _, fields, _)| *fields)
-            .map(|(path, id, _, fields_name)|
+            .map(|(path, _, _, fields_name)|
                 format!("pub use {}::Fields as {};", path, fields_name)
             ).collect::<Vec<_>>().join("\n"),
     ))

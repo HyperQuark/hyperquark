@@ -1,5 +1,4 @@
 use super::{ExternalFunctionMap, TypeRegistry};
-use crate::ir::Type as IrType;
 use crate::prelude::*;
 use wasm_encoder::{Function, Instruction, ValType};
 
