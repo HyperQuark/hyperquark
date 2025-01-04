@@ -58,9 +58,7 @@ impl TryFrom<IrProject> for WasmProject {
 
     fn try_from(ir_project: IrProject) -> HQResult<WasmProject> {
         let mut steps: Vec<StepFunc> = vec![];
-        for thread in ir_project.threads() {
-            
-        }
+        for thread in ir_project.threads().borrow().iter() {}
         hq_todo!()
     }
 }

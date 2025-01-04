@@ -1,12 +1,12 @@
-use super::{Event, Step, StepContext, Target};
+use super::{Event, IrProject, RcStep, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Thread {
     event: Event,
-    first_step: Box<Step>,
-    target: Rc<Target>,
+    first_step: RcStep,
+    target: Weak<Target>,
 }
 
 impl Thread {
@@ -14,12 +14,12 @@ impl Thread {
         self.event
     }
 
-    pub fn first_step(&self) -> &Step {
-        self.first_step.borrow()
+    pub fn first_step(&self) -> &RcStep {
+        &self.first_step
     }
 
-    pub fn target(&self) -> Rc<Target> {
-        Rc::clone(&self.target)
+    pub fn target(&self) -> Weak<Target> {
+        Weak::clone(&self.target)
     }
 
     /// tries to construct a thread from a top-level block.
@@ -27,7 +27,8 @@ impl Thread {
     pub fn try_from_top_block(
         block: &Block,
         blocks: &BlockMap,
-        target: Rc<Target>,
+        target: Weak<Target>,
+        project: Weak<IrProject>,
     ) -> HQResult<Option<Self>> {
         let block_info = block
             .block_info()
@@ -45,22 +46,26 @@ impl Thread {
             }
             _ => return Ok(None),
         };
+        let next_id = match &block_info.next {
+            Some(next) => next,
+            None => return Ok(None),
+        };
         let next = blocks
-            .get(match &block_info.next {
-                Some(next) => next,
-                None => return Ok(None),
-            })
+            .get(next_id)
             .ok_or(make_hq_bug!("block not found in BlockMap"))?;
+        let first_step = Step::from_block(
+            next,
+            next_id.clone(),
+            blocks,
+            StepContext {
+                target: Weak::clone(&target),
+                proc_context: None,
+            },
+            Weak::clone(&project),
+        )?;
         Ok(Some(Thread {
             event,
-            first_step: Box::new(Step::from_block(
-                next,
-                blocks,
-                StepContext {
-                    target: Rc::clone(&target),
-                    proc_context: None,
-                },
-            )?),
+            first_step,
             target,
         }))
     }

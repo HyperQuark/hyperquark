@@ -12,7 +12,7 @@ pub use context::StepContext;
 pub use event::Event;
 pub use proc::{Proc, ProcMap, ProcRegistry, ProcedureContext};
 pub use project::IrProject;
-pub use step::Step;
+pub use step::{Step, RcStep};
 pub use target::Target;
 pub use thread::Thread;
 pub use types::{Type, TypeStack};

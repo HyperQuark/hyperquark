@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Target {
     name: Box<str>,
     is_stage: bool,

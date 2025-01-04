@@ -2,6 +2,8 @@
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 
+#![allow(clippy::new_without_default)]
+
 #[macro_use]
 extern crate alloc;
 extern crate enum_field_getter;
@@ -46,7 +48,7 @@ pub mod prelude {
     pub use crate::{HQError, HQResult};
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
-    pub use alloc::rc::Rc;
+    pub use alloc::rc::{Rc, Weak};
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;
     pub use core::borrow::Borrow;

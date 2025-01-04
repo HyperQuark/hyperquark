@@ -1,4 +1,4 @@
-use super::{Step, StepContext, Target, Type as IrType};
+use super::{IrProject, RcStep, Step, StepContext, Target, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::{BlockMap, BlockOpcode};
 use lazy_regex::{lazy_regex, Lazy};
@@ -9,7 +9,7 @@ pub struct ProcedureContext {
     arg_ids: Box<[Box<str>]>,
     arg_types: Box<[IrType]>,
     warp: bool,
-    target: Rc<Target>,
+    target: Weak<Target>,
 }
 
 impl ProcedureContext {
@@ -25,20 +25,20 @@ impl ProcedureContext {
         self.warp
     }
 
-    pub fn target_context(&self) -> &Target {
-        self.target.borrow()
+    pub fn target(&self) -> Weak<Target> {
+        Weak::clone(&self.target)
     }
 }
 
 #[derive(Clone)]
 pub struct Proc {
-    first_step: Box<Step>,
+    first_step: RcStep,
     context: ProcedureContext,
 }
 
 impl Proc {
-    pub fn first_step(&self) -> &Step {
-        self.first_step.borrow()
+    pub fn first_step(&self) -> &RcStep {
+        &self.first_step
     }
 
     pub fn context(&self) -> &ProcedureContext {
@@ -51,7 +51,7 @@ static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"[^\\]%[nbs]"#);
 fn arg_types_from_proccode(proccode: Box<str>) -> Result<Box<[IrType]>, HQError> {
     // https://github.com/scratchfoundation/scratch-blocks/blob/abbfe93136fef57fdfb9a077198b0bc64726f012/blocks_vertical/procedures.js#L207-L215
     (*ARG_REGEX)
-        .find_iter(&*proccode)
+        .find_iter(&proccode)
         .map(|s| s.as_str().to_string().trim().to_string())
         .filter(|s| s.as_str().starts_with('%'))
         .map(|s| s[..2].to_string())
@@ -70,8 +70,9 @@ impl Proc {
     pub fn from_proccode(
         proccode: Box<str>,
         blocks: &BlockMap,
-        target: Rc<Target>,
+        target: Weak<Target>,
         expect_warp: bool,
+        project: Weak<IrProject>,
     ) -> HQResult<Self> {
         let arg_types = arg_types_from_proccode(proccode.clone())?;
         let Some(prototype_block) = blocks.values().find(|block| {
@@ -140,7 +141,7 @@ impl Proc {
             warp: expect_warp,
             arg_types,
             arg_ids,
-            target: Rc::clone(&target),
+            target: Weak::clone(&target),
         };
         let step_context = StepContext {
             target,
@@ -151,13 +152,15 @@ impl Proc {
                 blocks
                     .get(next_id)
                     .ok_or(make_hq_bad_proj!("specified next block does not exist"))?,
+                next_id.clone(),
                 blocks,
                 step_context,
+                project,
             )?,
-            None => Step::new(step_context, Box::new([])),
+            None => RcStep::new(Rc::new(Step::new(None, step_context, Box::new([]), project))),
         };
         Ok(Proc {
-            first_step: Box::new(first_step),
+            first_step,
             context,
         })
     }
@@ -182,8 +185,9 @@ impl ProcRegistry {
         &self,
         proccode: Box<str>,
         blocks: &BlockMap,
-        target: Rc<Target>,
+        target: Weak<Target>,
         expect_warp: bool,
+        project: Weak<IrProject>,
     ) -> HQResult<Rc<Proc>> {
         Ok(Rc::clone(
             self.get_map()
@@ -194,6 +198,7 @@ impl ProcRegistry {
                     blocks,
                     target,
                     expect_warp,
+                    project,
                 )?)),
         ))
     }

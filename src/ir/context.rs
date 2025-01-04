@@ -3,6 +3,6 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct StepContext {
-    pub target: Rc<Target>,
+    pub target: Weak<Target>,
     pub proc_context: Option<ProcedureContext>,
 }
