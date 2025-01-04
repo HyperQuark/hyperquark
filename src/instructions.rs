@@ -3,8 +3,8 @@
 
 use crate::prelude::*;
 
+mod hq;
 mod looks;
-mod math;
 mod operator;
 #[macro_use]
 mod utilities;

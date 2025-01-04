@@ -1,6 +1,6 @@
 use crate::instructions::{fields, IrOpcode};
 use crate::prelude::*;
-use crate::sb3::{Block, BlockArray, BlockInfo, BlockMap, BlockOpcode};
+use crate::sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 use fields::*;
 
 pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
@@ -10,35 +10,71 @@ pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>>
     })
 }
 
-fn from_normal_block(block_info: &BlockInfo, _blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
-    Ok(match &block_info.opcode {
-        BlockOpcode::operator_add => [IrOpcode::operator_add].into_iter(),
-        BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
-        other => hq_todo!("unimplemented block: {:?}", other),
+pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
+    Ok(match opcode {
+        BlockOpcode::looks_say => vec!["MESSAGE"],
+        BlockOpcode::operator_add => vec!["NUM1", "NUM2"],
+        other => hq_todo!("unimplemented input_names for {:?}", other),
     }
+    .into_iter()
+    .map(String::from)
     .collect())
+}
+
+pub fn inputs(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Vec<IrOpcode>> {
+    Ok(input_names(block_info.opcode.clone())?
+        .into_iter()
+        .map(|name| -> HQResult<Vec<IrOpcode>> {
+            match block_info
+                .inputs
+                .get((*name).into())
+                .ok_or(make_hq_bad_proj!("missing input {}", name))?
+            {
+                Input::NoShadow(_, Some(block)) | Input::Shadow(_, Some(block), _) => match block {
+                    BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr)?]),
+                    BlockArrayOrId::Id(id) => match blocks
+                        .get(id)
+                        .ok_or(make_hq_bad_proj!("block for input {} doesn't exist", name))?
+                    {
+                        Block::Normal { block_info, .. } => {
+                            Ok(from_normal_block(block_info, blocks)?.into())
+                        }
+                        Block::Special(block_array) => Ok(vec![from_special_block(block_array)?]),
+                    },
+                },
+                _ => hq_bad_proj!("missing input block for {}", name),
+            }
+        })
+        .collect::<HQResult<Vec<_>>>()?
+        .iter()
+        .flatten()
+        .cloned()
+        .collect())
+}
+
+fn from_normal_block(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
+    Ok(inputs(block_info, blocks)?
+        .into_iter()
+        .chain(match &block_info.opcode {
+            BlockOpcode::operator_add => [IrOpcode::operator_add].into_iter(),
+            BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
+            other => hq_todo!("unimplemented block: {:?}", other),
+        })
+        .collect())
 }
 
 fn from_special_block(block_array: &BlockArray) -> HQResult<IrOpcode> {
     Ok(match block_array {
         BlockArray::NumberOrAngle(ty, value) => match ty {
-            4 | 8 => IrOpcode::math_number(MathNumberFields(*value)),
-            5 => IrOpcode::math_positive_number(MathPositiveNumberFields(*value)),
-            6 => IrOpcode::math_whole_number(MathWholeNumberFields(*value as i64)),
-            7 => IrOpcode::math_integer(MathIntegerFields(*value as i64)),
+            4 | 5 | 8 => IrOpcode::hq_float(HqFloatFields(*value)),
+            6 | 7 => IrOpcode::hq_integer(HqIntegerFields(*value as i64)),
             _ => hq_bad_proj!("bad project json (block array of type ({}, f64))", ty),
         },
         BlockArray::ColorOrString(ty, value) => match ty {
-            4 | 8 => IrOpcode::math_number(MathNumberFields(
-                value.parse().map_err(|_| make_hq_bug!(""))?,
-            )),
-            5 => IrOpcode::math_positive_number(MathPositiveNumberFields(
-                value.parse().map_err(|_| make_hq_bug!(""))?,
-            )),
-            6 => IrOpcode::math_whole_number(MathWholeNumberFields(
-                value.parse().map_err(|_| make_hq_bug!(""))?,
-            )),
-            7 => IrOpcode::math_integer(MathIntegerFields(
+            4 | 5 | 8 => {
+                IrOpcode::hq_float(HqFloatFields(value.parse().map_err(|_| make_hq_bug!(""))?))
+            }
+            6 | 7 => IrOpcode::hq_integer(HqIntegerFields(
                 value.parse().map_err(|_| make_hq_bug!(""))?,
             )),
             9 => hq_todo!(""),

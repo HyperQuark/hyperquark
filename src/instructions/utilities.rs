@@ -81,7 +81,7 @@ macro_rules! instructions_test {
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let step_func = StepFunc::new_with_param_count(types.len(), type_registry.clone(), external_functions.clone()).unwrap();
+                    let step_func = StepFunc::new(type_registry.clone(), external_functions.clone());
                     let wasm_result = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
@@ -113,8 +113,14 @@ macro_rules! instructions_test {
                     };
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
+                    let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), $crate::wasm::ExternalEnvironment::WebBrowser);
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let step_func = StepFunc::new_with_param_count(types.len(), type_registry.clone(), external_functions.clone())?;
+                    let params = [$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty)).collect::<HQResult<Vec<_>>>()?;
+                    let result = match output_type {
+                        Some(output) => Some(wasm_proj.ir_type_to_wasm(output)?),
+                        None => None,
+                      };
+                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&type_registry), external_functions.clone())?;
                     let wasm = match wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?) {
                         Ok(a) => a,
                         Err(_) => {
@@ -126,34 +132,22 @@ macro_rules! instructions_test {
                         step_func.add_instructions([Instruction::LocalGet(i.try_into().unwrap())])
                     }
                     step_func.add_instructions(wasm);
-                    let func = step_func.finish();
-
-                    let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), $crate::wasm::ExternalEnvironment::WebBrowser);
 
                     let mut module = Module::new();
 
                     let mut imports = ImportSection::new();
+                    let mut types = TypeSection::new();
+                    let mut functions = FunctionSection::new();
+                    let mut codes = CodeSection::new();
+
 
                     Rc::unwrap_or_clone(external_functions).finish(&mut imports, type_registry.clone())?;
-
-                    let mut types = TypeSection::new();
-                    let params = [$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty)).collect::<HQResult<Vec<_>>>()?;
-                    let results = match output_type {
-                      Some(output) => vec![wasm_proj.ir_type_to_wasm(output)?],
-                      None => vec![],
-                    };
-                    let step_type_index = type_registry.type_index(params, results)?;
+                    step_func.finish(&mut functions, &mut codes)?;
                     Rc::unwrap_or_clone(type_registry).finish(&mut types);
+
                     module.section(&types);
-
                     module.section(&imports);
-
-                    let mut functions = FunctionSection::new();
-                    functions.function(step_type_index);
                     module.section(&functions);
-
-                    let mut codes = CodeSection::new();
-                    codes.function(&func);
                     module.section(&codes);
 
                     let wasm_bytes = module.finish();

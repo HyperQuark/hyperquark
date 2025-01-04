@@ -1,7 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
-
 #![allow(clippy::new_without_default)]
 
 #[macro_use]
@@ -23,26 +22,6 @@ pub mod instructions;
 #[doc(inline)]
 pub use error::{HQError, HQErrorType, HQResult};
 
-// use wasm::wasm;
-
-#[cfg(target_family = "wasm")]
-#[cfg_attr(target_family = "wasm", wasm_bindgen(js_namespace=console))]
-extern "C" {
-    pub fn log(s: &str);
-}
-
-#[cfg(test)]
-pub fn log(s: &str) {
-    println!("{s}")
-}
-
-// #[wasm_bindgen]
-// pub fn sb3_to_wasm(proj: &str) -> Result<wasm::WasmProject, HQError> {
-//     let mut ir_proj = ir::IrProject::try_from(sb3::Sb3Project::try_from(proj)?)?;
-//     ir_proj.optimise()?;
-//     ir_proj.try_into()
-// }
-
 /// commonly used _things_ which would be nice not to have to type out every time
 pub mod prelude {
     pub use crate::{HQError, HQResult};
@@ -60,4 +39,26 @@ pub mod prelude {
     use indexmap;
     pub type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasherDefault<FNV1aHasher64>>;
     pub type IndexSet<T> = indexmap::IndexSet<T, BuildHasherDefault<FNV1aHasher64>>;
+}
+
+use prelude::*;
+
+// use wasm::wasm;
+
+#[cfg(target_family = "wasm")]
+#[cfg_attr(target_family = "wasm", wasm_bindgen(js_namespace=console))]
+extern "C" {
+    pub fn log(s: &str);
+}
+
+#[cfg(test)]
+pub fn log(s: &str) {
+    println!("{s}")
+}
+
+#[cfg_attr(target_family = "wasm", wasm_bindgen)]
+pub fn sb3_to_wasm(proj: &str) -> HQResult<Vec<u8>> {
+    let sb3_proj = sb3::Sb3Project::try_from(proj)?;
+    let ir_proj: Rc<ir::IrProject> = sb3_proj.try_into()?;
+    wasm::WasmProject::try_from(ir_proj)?.finish()
 }

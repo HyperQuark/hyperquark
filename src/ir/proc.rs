@@ -157,7 +157,12 @@ impl Proc {
                 step_context,
                 project,
             )?,
-            None => RcStep::new(Rc::new(Step::new(None, step_context, Box::new([]), project))),
+            None => RcStep::new(Rc::new(Step::new(
+                None,
+                step_context,
+                Box::new([]),
+                project,
+            ))),
         };
         Ok(Proc {
             first_step,

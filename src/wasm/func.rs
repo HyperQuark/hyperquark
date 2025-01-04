@@ -1,12 +1,14 @@
 use super::{ExternalFunctionMap, TypeRegistry};
 use crate::prelude::*;
-use wasm_encoder::{Function, Instruction, ValType};
+use wasm_encoder::{CodeSection, Function, FunctionSection, Instruction, ValType};
 
 /// representation of a step's function
+#[derive(Clone)]
 pub struct StepFunc {
     locals: RefCell<Vec<ValType>>,
     instructions: RefCell<Vec<Instruction<'static>>>,
-    param_count: u32,
+    params: Box<[ValType]>,
+    output: Option<ValType>,
     type_registry: Rc<TypeRegistry>,
     external_functions: Rc<ExternalFunctionMap>,
 }
@@ -28,7 +30,8 @@ impl StepFunc {
         StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
-            param_count: 1,
+            params: Box::new([ValType::I32]),
+            output: None,
             type_registry,
             external_functions,
         }
@@ -36,16 +39,17 @@ impl StepFunc {
 
     /// creates a new step function with the specified amount of paramters.
     /// currently only used in testing to validate types
-    pub fn new_with_param_count(
-        count: usize,
+    pub fn new_with_types(
+        params: Box<[ValType]>,
+        output: Option<ValType>,
         type_registry: Rc<TypeRegistry>,
         external_functions: Rc<ExternalFunctionMap>,
     ) -> HQResult<Self> {
         Ok(StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
-            param_count: u32::try_from(count)
-                .map_err(|_| make_hq_bug!("param count out of bounds"))?,
+            params,
+            output,
             type_registry,
             external_functions,
         })
@@ -63,28 +67,29 @@ impl StepFunc {
             .iter()
             .filter(|ty| **ty == val_type)
             .count();
-        Ok(u32::try_from(if existing_count < (n as usize) {
-            {
+        u32::try_from(
+            if existing_count < (n as usize) {
+                {
+                    self.locals
+                        .borrow_mut()
+                        .extend([val_type].repeat(n as usize - existing_count));
+                }
+                self.locals.borrow().len() - 1
+            } else {
                 self.locals
-                    .borrow_mut()
-                    .extend([val_type].repeat(n as usize - existing_count));
-            }
-            self.locals.borrow().len() - 1
-        } else {
-            self.locals
-                .borrow()
-                .iter()
-                .enumerate()
-                .filter(|(_, ty)| **ty == val_type)
-                .map(|(i, _)| i)
-                .nth(n as usize - 1)
-                .ok_or(make_hq_bug!(
-                    "couldn't find nth local of type {:?}",
-                    val_type
-                ))?
-        })
-        .map_err(|_| make_hq_bug!("local index was out of bounds"))?
-            + self.param_count)
+                    .borrow()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, ty)| **ty == val_type)
+                    .map(|(i, _)| i)
+                    .nth(n as usize - 1)
+                    .ok_or(make_hq_bug!(
+                        "couldn't find nth local of type {:?}",
+                        val_type
+                    ))?
+            } + self.params.len(),
+        )
+        .map_err(|_| make_hq_bug!("local index was out of bounds"))
     }
 
     pub fn add_instructions(&self, instructions: impl IntoIterator<Item = Instruction<'static>>) {
@@ -92,13 +97,23 @@ impl StepFunc {
     }
 
     /// Takes ownership of the function and returns the backing `wasm_encoder` `Function`
-    pub fn finish(self) -> Function {
+    pub fn finish(self, funcs: &mut FunctionSection, code: &mut CodeSection) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions.take() {
             func.instruction(&instruction);
         }
         func.instruction(&Instruction::End);
-        func
+        let type_index = self.type_registry.type_index(
+            self.params.into(),
+            if let Some(output) = self.output {
+                vec![output]
+            } else {
+                vec![]
+            },
+        )?;
+        funcs.function(type_index);
+        code.function(&func);
+        Ok(())
     }
 }
 
@@ -132,8 +147,13 @@ mod tests {
 
     #[test]
     fn get_local_works_with_valid_inputs_with_3_params() {
-        let func =
-            StepFunc::new_with_param_count(3, Default::default(), Default::default()).unwrap();
+        let func = StepFunc::new_with_types(
+            [ValType::I32, ValType::F64, ValType::EXTERNREF].into(), // these are just arbitrary types
+            None,
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
         assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 3);
 
         assert_eq!(func.get_local(ValType::I32, 1).unwrap(), 3);
