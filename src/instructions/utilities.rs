@@ -80,7 +80,6 @@ macro_rules! instructions_test {
                     let output_type_result = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?);
                     let type_registry = Rc::new(TypeRegistry::new());
                     let external_functions = Rc::new(ExternalFunctionMap::new());
-                    let types: &[IrType] = &[$($type_arg,)*];
                     let step_func = StepFunc::new(type_registry.clone(), external_functions.clone());
                     let wasm_result = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {

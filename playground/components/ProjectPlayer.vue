@@ -19,7 +19,7 @@
 
 <script setup>
   import Loading from './Loading.vue';
-  import { sb3_to_wasm, WasmProject, /*set_attr*/ } from '@/../js/hyperquark.js';
+  import { sb3_to_wasm, /*set_attr*/ } from '@/../js/hyperquark.js';
   import runProject from '@/lib/project-runner.js';
   import { ref, onMounted, nextTick } from 'vue';
   const Renderer = window.ScratchRender;
@@ -52,17 +52,28 @@
   //set_attr('load_asset', load_asset);
   try {
     wasmProject = sb3_to_wasm(JSON.stringify(props.json));
-    if (!wasmProject instanceof WasmProject) {
+    if (!wasmProject instanceof Uint8Array) {
       throw new Error("unknown error occurred when compiling project");
     }
+    let assert = (bool) => {
+        if (!bool) {
+          throw new AssertionError("Assertion failed");
+        }
+      };
+    assert(WebAssembly.validate(wasmProject));
+    WebAssembly.instantiate(wasmProject, {
+      looks: {
+        say_float: console.log
+      }
+    }).then(inst => window.wasm = inst);
   } catch (e) {
     error.value = e.toString();
     if (e.stack) {
       error.value += '\n' + e.stack;
     }
   }
-  
-  Promise.all(
+  loaded.value = true;
+  /*Promise.all(
     props.json.targets.map(
       target => new Promise(
         r1 => Promise.all(
@@ -77,7 +88,7 @@
   ).then(result => {
     assets = Object.fromEntries(result.flat());
     loaded.value = true;
-  });
+  });*/
   function greenFlag() {
     runProject({
       framerate: turbo ? Infinity : 30,

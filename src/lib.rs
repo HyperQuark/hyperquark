@@ -57,8 +57,8 @@ pub fn log(s: &str) {
 }
 
 #[cfg_attr(target_family = "wasm", wasm_bindgen)]
-pub fn sb3_to_wasm(proj: &str) -> HQResult<Vec<u8>> {
+pub fn sb3_to_wasm(proj: &str) -> HQResult<Box<[u8]>> {
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
     let ir_proj: Rc<ir::IrProject> = sb3_proj.try_into()?;
-    wasm::WasmProject::try_from(ir_proj)?.finish()
+    Ok(wasm::WasmProject::try_from(ir_proj)?.finish()?.into_boxed_slice())
 }

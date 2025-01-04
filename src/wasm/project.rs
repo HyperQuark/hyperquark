@@ -101,7 +101,7 @@ fn compile_step(
     for opcode in step.opcodes() {
         let inputs = type_stack
             .splice(
-                (type_stack.len() - 1 - opcode.acceptable_inputs().len())..,
+                (type_stack.len() - opcode.acceptable_inputs().len())..,
                 [],
             )
             .collect();
