@@ -97,7 +97,7 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 use wasm_encoder::{
-                    CodeSection, FunctionSection, ImportSection, Instruction, Module, TypeSection,
+                    CodeSection, FunctionSection, ImportSection, Instruction, Module, TypeSection, MemorySection, MemoryType
                 };
                 use $crate::wasm::{StepFunc, TypeRegistry, ExternalFunctionMap};
                 use $crate::prelude::Rc;
@@ -114,7 +114,7 @@ macro_rules! instructions_test {
                     let external_functions = Rc::new(ExternalFunctionMap::new());
                     let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), $crate::wasm::ExternalEnvironment::WebBrowser);
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let params = [$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty)).collect::<HQResult<Vec<_>>>()?;
+                    let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
                         Some(output) => Some(wasm_proj.ir_type_to_wasm(output)?),
                         None => None,
@@ -128,7 +128,7 @@ macro_rules! instructions_test {
                         }
                     };
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([Instruction::LocalGet(i.try_into().unwrap())])
+                        step_func.add_instructions([Instruction::LocalGet((i + 1).try_into().unwrap())])
                     }
                     step_func.add_instructions(wasm);
 
@@ -138,7 +138,15 @@ macro_rules! instructions_test {
                     let mut types = TypeSection::new();
                     let mut functions = FunctionSection::new();
                     let mut codes = CodeSection::new();
+                    let mut memories = MemorySection::new();
 
+                    memories.memory(MemoryType {
+                        minimum: 1,
+                        maximum: None,
+                        memory64: false,
+                        shared: false,
+                        page_size_log2: None,
+                    });
 
                     Rc::unwrap_or_clone(external_functions).finish(&mut imports, type_registry.clone())?;
                     step_func.finish(&mut functions, &mut codes)?;
@@ -147,6 +155,7 @@ macro_rules! instructions_test {
                     module.section(&types);
                     module.section(&imports);
                     module.section(&functions);
+                    module.section(&memories);
                     module.section(&codes);
 
                     let wasm_bytes = module.finish();

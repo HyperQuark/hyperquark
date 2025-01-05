@@ -5,7 +5,29 @@ use fields::*;
 
 pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
     Ok(match block {
-        Block::Normal { block_info, .. } => from_normal_block(block_info, blocks)?,
+        Block::Normal { block_info, .. } => {
+            if let Some(next_id) = &block_info.next {
+                from_normal_block(block_info, blocks)?
+                    .iter()
+                    .chain(
+                        from_block(
+                            blocks
+                                .get(next_id)
+                                .ok_or(make_hq_bad_proj!("specified next block missing"))?,
+                            blocks,
+                        )?
+                        .iter(),
+                    )
+                    .cloned()
+                    .collect()
+            } else {
+                from_normal_block(block_info, blocks)?
+                    .iter()
+                    .chain([IrOpcode::hq__yield(HqYieldFields(None))].iter())
+                    .cloned()
+                    .collect()
+            }
+        }
         Block::Special(block_array) => Box::new([from_special_block(block_array)?]),
     })
 }

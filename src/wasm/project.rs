@@ -9,7 +9,7 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
-mod byte_offset {
+pub mod byte_offset {
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
     pub const THREADS: i32 = 8;
@@ -204,7 +204,7 @@ impl WasmProject {
     fn finish_event(
         &self,
         export_name: &str,
-        indices: &Vec<u32>,
+        indices: &[u32],
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
@@ -216,7 +216,7 @@ impl WasmProject {
             // TODO: can we run miri or something on this to make sure it's actually safe? Not that I
             // don't trust that person on SO, but it's best to be sure.
             core::slice::from_raw_parts(
-                (&indices[..]).as_ptr() as *const u8,
+                indices.as_ptr() as *const u8,
                 indices.len() * core::mem::size_of::<i32>(),
             )
         }));
@@ -414,7 +414,7 @@ impl TryFrom<Rc<IrProject>> for WasmProject {
                 Rc::clone(&type_registry),
                 Rc::clone(&external_functions),
             )?;
-            events.entry(thread.event()).or_insert(vec![]).push(
+            events.entry(thread.event()).or_default().push(
                 u32::try_from(
                     ir_project
                         .steps()
