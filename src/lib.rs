@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(target_family = "wasm", no_std)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![allow(clippy::new_without_default)]
@@ -51,7 +51,7 @@ extern "C" {
     pub fn log(s: &str);
 }
 
-#[cfg(test)]
+#[cfg(not(target_family = "wasm"))]
 pub fn log(s: &str) {
     println!("{s}")
 }
@@ -60,5 +60,7 @@ pub fn log(s: &str) {
 pub fn sb3_to_wasm(proj: &str) -> HQResult<Box<[u8]>> {
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
     let ir_proj: Rc<ir::IrProject> = sb3_proj.try_into()?;
-    Ok(wasm::WasmProject::try_from(ir_proj)?.finish()?.into_boxed_slice())
+    Ok(wasm::WasmProject::try_from(ir_proj)?
+        .finish()?
+        .into_boxed_slice())
 }

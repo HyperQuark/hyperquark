@@ -4,7 +4,10 @@
 /bad.mjs
 /bad.wat
 /wabt*
-/js/
+/js/*.js
+/js/*.ts
+/js/*.wasm
+!/js/imports.ts
 /node_modules/
 /package-lock.json
 /playground/dist/

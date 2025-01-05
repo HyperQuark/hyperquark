@@ -196,13 +196,15 @@ macro_rules! instructions_test {
                                 )
                         }).collect::<Vec<_>>().join(", ");
                         let diagnostics = check_js(
-                            vec![PathBuf::from(format!("src/instructions/{}/{}.ts", module, name))],
+                            vec![PathBuf::from(format!("js/{}/{}.ts", module, name))],
                             &|path: &Path| {
                                 let func_string = fs::read_to_string(path).ok()?;
-                                let test_string = format!("function _({ins}): {out} {{
-                                  {func}
-                                  return {name}({ts});
-                                }}", ins=ins, out=out, func=func_string, name=name, ts=arg_idents.join(", "));
+                                let test_string = format!("
+{func};
+function _({ins}): {out} {{
+    return {name}({ts});
+}}
+                                ", ins=ins, out=out, func=func_string, name=name, ts=arg_idents.join(", "));
                                 println!("{}", test_string.clone());
                                 Some(test_string.as_str().as_bytes().into_iter().map(|&u| u).collect::<Vec<_>>())
                             },

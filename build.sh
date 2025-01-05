@@ -82,6 +82,7 @@ if [ $WASM = "1" ]; then
     echo running wasm-bindgen...
     wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js
   fi
+  mv $(cargo outdir --no-names --quiet)/imports.ts js/imports.ts
 fi
 if [ $WOPT = "1" ]; then
   echo running wasm-opt -Os...

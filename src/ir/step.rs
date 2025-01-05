@@ -56,6 +56,19 @@ impl Step {
         }
     }
 
+    pub fn new_empty() -> Self {
+        Step {
+            id: "".into(),
+            context: StepContext {
+                target: Weak::new(),
+                proc_context: None,
+            },
+            opcodes: Box::new([]),
+            inlined: RefCell::new(false),
+            project: Weak::new(),
+        }
+    }
+
     pub fn from_block(
         block: &Block,
         block_id: Box<str>,

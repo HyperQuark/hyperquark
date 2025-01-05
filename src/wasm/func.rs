@@ -31,7 +31,7 @@ impl StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params: Box::new([ValType::I32]),
-            output: None,
+            output: Some(ValType::I32),
             type_registry,
             external_functions,
         }

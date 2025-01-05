@@ -22,6 +22,7 @@
   import { sb3_to_wasm, /*set_attr*/ } from '@/../js/hyperquark.js';
   import runProject from '@/lib/project-runner.js';
   import { ref, onMounted, nextTick } from 'vue';
+  import {imports} from '@/lib/imports.js';
   const Renderer = window.ScratchRender;
   const props = defineProps(['json', 'title', 'author', 'assets', 'zip']);
   let error = ref(null);
@@ -55,25 +56,13 @@
     if (!wasmProject instanceof Uint8Array) {
       throw new Error("unknown error occurred when compiling project");
     }
-    let assert = (bool) => {
-        if (!bool) {
-          throw new AssertionError("Assertion failed");
-        }
-      };
-    assert(WebAssembly.validate(wasmProject));
-    WebAssembly.instantiate(wasmProject, {
-      looks: {
-        say_float: console.log
-      }
-    }).then(inst => window.wasm = inst);
   } catch (e) {
     error.value = e.toString();
     if (e.stack) {
       error.value += '\n' + e.stack;
     }
   }
-  loaded.value = true;
-  /*Promise.all(
+  Promise.all(
     props.json.targets.map(
       target => new Promise(
         r1 => Promise.all(
@@ -88,14 +77,14 @@
   ).then(result => {
     assets = Object.fromEntries(result.flat());
     loaded.value = true;
-  });*/
+  });
   function greenFlag() {
     runProject({
       framerate: turbo ? Infinity : 30,
       renderer,
-      wasm_bytes: wasmProject.wasm_bytes,
-      string_consts: wasmProject.string_consts,
-      target_names: wasmProject.target_names,
+      wasm_bytes: wasmProject,//.wasm_bytes,
+      string_consts: [],//wasmProject.string_consts,
+      target_names: [],//wasmProject.target_names,
       project_json: props.json,
       assets
     }).catch(e => {
