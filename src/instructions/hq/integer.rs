@@ -4,14 +4,14 @@ use crate::wasm::StepFunc;
 use wasm_encoder::Instruction;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Fields(pub i64);
+pub struct Fields(pub i32);
 
 pub fn wasm(
     _func: &StepFunc,
     _inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<Instruction<'static>>> {
-    Ok(vec![Instruction::I64Const(fields.0)])
+    Ok(vec![Instruction::I32Const(fields.0)])
 }
 
 pub fn acceptable_inputs() -> Rc<[IrType]> {

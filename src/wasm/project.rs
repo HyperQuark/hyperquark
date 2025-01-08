@@ -70,7 +70,7 @@ impl WasmProject {
         Ok(if IrType::Float.contains(ir_type) {
             ValType::F64
         } else if IrType::QuasiInt.contains(ir_type) {
-            ValType::I64
+            ValType::I32
         } else if IrType::String.contains(ir_type) {
             ValType::EXTERNREF
         } else if IrType::Color.contains(ir_type) {
@@ -140,6 +140,8 @@ impl WasmProject {
 
         self.finish_events(&mut functions, &mut codes, &mut exports, &mut data)?;
 
+        self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
+
         Rc::unwrap_or_clone(self.type_registry()).finish(&mut types);
 
         let data_count = DataCountSection { count: data.len() };
@@ -195,9 +197,28 @@ impl WasmProject {
                 type_stack.push(output);
             }
         }
-        instrs.push(Instruction::I32Const(0)); // TEMPORARY
         step_func.add_instructions(instrs);
         steps.borrow_mut().insert(step, step_func);
+        Ok(())
+    }
+
+    fn unreachable_dbg_func(
+        &self,
+        functions: &mut FunctionSection,
+        codes: &mut CodeSection,
+        exports: &mut ExportSection,
+    ) -> HQResult<()> {
+        let mut func = Function::new(vec![]);
+        func.instruction(&Instruction::Unreachable);
+        func.instruction(&Instruction::End);
+        codes.function(&func);
+        functions.function(self.type_registry().type_index(vec![], vec![])?);
+        exports.export(
+            "unreachable_dbg",
+            ExportKind::Func,
+            self.imported_func_count()? + functions.len() - 1,
+        );
+
         Ok(())
     }
 

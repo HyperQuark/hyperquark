@@ -89,7 +89,7 @@ fn from_special_block(block_array: &BlockArray) -> HQResult<IrOpcode> {
     Ok(match block_array {
         BlockArray::NumberOrAngle(ty, value) => match ty {
             4 | 5 | 8 => IrOpcode::hq_float(HqFloatFields(*value)),
-            6 | 7 => IrOpcode::hq_integer(HqIntegerFields(*value as i64)),
+            6 | 7 => IrOpcode::hq_integer(HqIntegerFields(*value as i32)),
             _ => hq_bad_proj!("bad project json (block array of type ({}, f64))", ty),
         },
         BlockArray::ColorOrString(ty, value) => match ty {

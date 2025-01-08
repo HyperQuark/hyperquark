@@ -147,7 +147,7 @@ export default async (
         }*/
         try {
           // expose the module to devtools
-          //unreachable_dbg(); 
+          unreachable_dbg(); 
         } catch (error) {
           console.info('synthetic error to exose wasm modulee to devtools:', error)
         }

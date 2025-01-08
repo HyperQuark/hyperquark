@@ -8,7 +8,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
         let func_index = func.external_functions().function_index(
             "looks",
             "say_int",
-            vec![ValType::I64],
+            vec![ValType::I32],
             vec![],
         )?;
         vec![Instruction::Call(func_index)]

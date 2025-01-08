@@ -8,12 +8,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
     let t2 = inputs[1];
     Ok(if IrType::QuasiInt.contains(t1) {
         if IrType::QuasiInt.contains(t2) {
-            vec![Instruction::I64Add]
+            vec![Instruction::I32Add]
         } else if IrType::Float.contains(t2) {
             let f64_local = func.get_local(ValType::F64, 1)?;
             vec![
                 Instruction::LocalSet(f64_local),
-                Instruction::F64ConvertI64S,
+                Instruction::F64ConvertI32S,
                 Instruction::LocalGet(f64_local),
                 Instruction::F64Add,
             ]
@@ -24,7 +24,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
         if IrType::Float.contains(t2) {
             vec![Instruction::F64Add]
         } else if IrType::QuasiInt.contains(t2) {
-            vec![Instruction::F64ConvertI64S, Instruction::F64Add]
+            vec![Instruction::F64ConvertI32S, Instruction::F64Add]
         } else {
             hq_todo!()
         }

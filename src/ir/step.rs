@@ -63,7 +63,9 @@ impl Step {
                 target: Weak::new(),
                 proc_context: None,
             },
-            opcodes: Box::new([]),
+            opcodes: Box::new([IrOpcode::hq_integer(crate::instructions::HqIntegerFields(
+                0,
+            ))]),
             inlined: RefCell::new(false),
             project: Weak::new(),
         }

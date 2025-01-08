@@ -167,7 +167,7 @@ macro_rules! instructions_test {
 
             fn wasm_to_js_type(ty: ValType) -> &'static str {
                 match ty {
-                    ValType::I64 => "Integer",
+                    ValType::I32 => "Integer",
                     ValType::F64 => "number",
                     ValType::EXTERNREF => "string",
                     _ => todo!("unknown js type for wasm type {:?}", ty)
