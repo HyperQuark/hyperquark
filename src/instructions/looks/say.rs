@@ -5,20 +5,16 @@ use wasm_encoder::{Instruction, ValType};
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
-        let func_index = func.external_functions().function_index(
-            "looks",
-            "say_int",
-            vec![ValType::I32],
-            vec![],
-        )?;
+        let func_index = func
+            .registries()
+            .external_functions()
+            .register(("looks", "say_int"), (vec![ValType::I32], vec![]))?;
         vec![Instruction::Call(func_index)]
     } else if IrType::Float.contains(inputs[0]) {
-        let func_index = func.external_functions().function_index(
-            "looks",
-            "say_float",
-            vec![ValType::F64],
-            vec![],
-        )?;
+        let func_index = func
+            .registries()
+            .external_functions()
+            .register(("looks", "say_float"), (vec![ValType::F64], vec![]))?;
         vec![Instruction::Call(func_index)]
     } else {
         hq_todo!()

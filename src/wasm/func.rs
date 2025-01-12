@@ -1,4 +1,4 @@
-use super::{ExternalFunctionMap, TypeRegistry};
+use super::{Registries, WasmFlags};
 use crate::prelude::*;
 use wasm_encoder::{CodeSection, Function, FunctionSection, Instruction, ValType};
 
@@ -9,31 +9,28 @@ pub struct StepFunc {
     instructions: RefCell<Vec<Instruction<'static>>>,
     params: Box<[ValType]>,
     output: Option<ValType>,
-    type_registry: Rc<TypeRegistry>,
-    external_functions: Rc<ExternalFunctionMap>,
+    registries: Rc<Registries>,
+    flags: WasmFlags,
 }
 
 impl StepFunc {
-    pub fn type_registry(&self) -> Rc<TypeRegistry> {
-        self.type_registry.clone()
+    pub fn registries(&self) -> Rc<Registries> {
+        Rc::clone(&self.registries)
     }
 
-    pub fn external_functions(&self) -> Rc<ExternalFunctionMap> {
-        self.external_functions.clone()
+    pub fn flags(&self) -> WasmFlags {
+        self.flags
     }
 
     /// creates a new step function, with one paramter
-    pub fn new(
-        type_registry: Rc<TypeRegistry>,
-        external_functions: Rc<ExternalFunctionMap>,
-    ) -> Self {
+    pub fn new(registries: Rc<Registries>, flags: WasmFlags) -> Self {
         StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params: Box::new([ValType::I32]),
             output: Some(ValType::I32),
-            type_registry,
-            external_functions,
+            registries,
+            flags,
         }
     }
 
@@ -42,16 +39,16 @@ impl StepFunc {
     pub fn new_with_types(
         params: Box<[ValType]>,
         output: Option<ValType>,
-        type_registry: Rc<TypeRegistry>,
-        external_functions: Rc<ExternalFunctionMap>,
+        registries: Rc<Registries>,
+        flags: WasmFlags,
     ) -> HQResult<Self> {
         Ok(StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params,
             output,
-            type_registry,
-            external_functions,
+            registries,
+            flags,
         })
     }
 
@@ -103,14 +100,14 @@ impl StepFunc {
             func.instruction(&instruction);
         }
         func.instruction(&Instruction::End);
-        let type_index = self.type_registry.type_index(
+        let type_index = self.registries().types().register_default((
             self.params.into(),
             if let Some(output) = self.output {
                 vec![output]
             } else {
                 vec![]
             },
-        )?;
+        ))?;
         funcs.function(type_index);
         code.function(&func);
         Ok(())

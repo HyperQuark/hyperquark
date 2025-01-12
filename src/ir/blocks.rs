@@ -3,6 +3,8 @@ use crate::prelude::*;
 use crate::sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 use fields::*;
 
+// TODO: insert casts in relevant places
+
 pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
     Ok(match block {
         Block::Normal { block_info, .. } => {

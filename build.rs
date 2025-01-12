@@ -59,6 +59,9 @@ fn main() {
 
                     if components.len() == 2 {
                         let category = components[0];
+                        if category == "compiler" || category == "no-compiler" {
+                            return;
+                        }
                         let func = components[1].trim_end_matches(".ts");
                         ts_paths.push((category.to_string(), func.to_string()));
                     }

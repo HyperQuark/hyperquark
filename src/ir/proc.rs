@@ -1,5 +1,6 @@
 use super::{IrProject, RcStep, Step, StepContext, Target, Type as IrType};
 use crate::prelude::*;
+use crate::registry::MapRegistry;
 use crate::sb3::{BlockMap, BlockOpcode};
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
@@ -171,20 +172,9 @@ impl Proc {
     }
 }
 
-pub type ProcMap = IndexMap<Box<str>, Rc<Proc>>;
-
-#[derive(Clone, Default)]
-pub struct ProcRegistry(RefCell<ProcMap>);
+pub type ProcRegistry = MapRegistry<Box<str>, Rc<Proc>>;
 
 impl ProcRegistry {
-    pub fn new() -> Self {
-        ProcRegistry(RefCell::new(Default::default()))
-    }
-
-    pub(crate) fn get_map(&self) -> &RefCell<ProcMap> {
-        &self.0
-    }
-
     /// get the `Proc` for the specified proccode, creating it if it doesn't already exist
     pub fn proc(
         &self,
@@ -194,17 +184,24 @@ impl ProcRegistry {
         expect_warp: bool,
         project: Weak<IrProject>,
     ) -> HQResult<Rc<Proc>> {
+        let idx = self.register(
+            proccode.clone(),
+            Rc::new(Proc::from_proccode(
+                proccode,
+                blocks,
+                target,
+                expect_warp,
+                project,
+            )?),
+        )?;
         Ok(Rc::clone(
-            self.get_map()
-                .borrow_mut()
-                .entry(proccode.clone())
-                .or_insert(Rc::new(Proc::from_proccode(
-                    proccode,
-                    blocks,
-                    target,
-                    expect_warp,
-                    project,
-                )?)),
+            self.registry()
+                .borrow()
+                .get_index(idx)
+                .ok_or(make_hq_bug!(
+                    "recently inserted proc not found in ProcRegistry"
+                ))?
+                .1,
         ))
     }
 }

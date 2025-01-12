@@ -72,15 +72,23 @@ fi
 
 if [ $WASM = "1" ]; then
   if [ $PROD = "1" ]; then
-    echo building hyperquark for production...
+    echo "building hyperquark (compiler) for production..."
     cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js
+    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/compiler
+    echo "building hyperquark (no compiler) for production..."
+    cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} --no-default-features
+    echo running wasm-bindgen...
+    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/no-compiler
   else
-    echo building hyperquark for development...
+    echo "building hyperquark (compiler) for development..."
     cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js
+    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/compiler
+    echo "building hyperquark (no compiler) for development..."
+    cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet} --no-default-features
+    echo running wasm-bindgen...
+    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/no-compiler
   fi
   mv $(cargo outdir --no-names --quiet)/imports.ts js/imports.ts
 fi

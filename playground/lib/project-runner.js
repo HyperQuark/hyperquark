@@ -149,7 +149,7 @@ export default async (
           // expose the module to devtools
           unreachable_dbg(); 
         } catch (error) {
-          console.info('synthetic error to exose wasm modulee to devtools:', error)
+          console.info('synthetic error to expose wasm modulee to devtools:', error)
         }
         flag_clicked();
         start_time = Date.now();

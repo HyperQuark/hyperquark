@@ -7,23 +7,25 @@
 extern crate alloc;
 extern crate enum_field_getter;
 
-#[cfg(target_family = "wasm")]
 use wasm_bindgen::prelude::*;
 
 #[macro_use]
 mod error;
-pub mod ir;
+mod ir;
 // pub mod ir_opt;
-pub mod sb3;
-pub mod wasm;
+mod sb3;
+mod wasm;
 #[macro_use]
-pub mod instructions;
+mod instructions;
 
 #[doc(inline)]
 pub use error::{HQError, HQErrorType, HQResult};
 
+mod registry;
+
 /// commonly used _things_ which would be nice not to have to type out every time
 pub mod prelude {
+    pub use crate::registry::{Registry, RegistryDefault};
     pub use crate::{HQError, HQResult};
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
@@ -46,7 +48,7 @@ use prelude::*;
 // use wasm::wasm;
 
 #[cfg(target_family = "wasm")]
-#[cfg_attr(target_family = "wasm", wasm_bindgen(js_namespace=console))]
+#[wasm_bindgen(js_namespace=console)]
 extern "C" {
     pub fn log(s: &str);
 }
@@ -56,11 +58,10 @@ pub fn log(s: &str) {
     println!("{s}")
 }
 
-#[cfg_attr(target_family = "wasm", wasm_bindgen)]
-pub fn sb3_to_wasm(proj: &str) -> HQResult<Box<[u8]>> {
+#[cfg(feature = "compiler")]
+#[wasm_bindgen]
+pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::FinishedWasm> {
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
     let ir_proj: Rc<ir::IrProject> = sb3_proj.try_into()?;
-    Ok(wasm::WasmProject::try_from(ir_proj)?
-        .finish()?
-        .into_boxed_slice())
+    wasm::WasmProject::from_ir(ir_proj, flags)?.finish()
 }

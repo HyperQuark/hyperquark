@@ -1,51 +1,18 @@
-mod file_opcode {
-    //! instruction module paths look something like
-    //! hyperquark::instructions::category::block
-    //! so if we split it by ':', we end up with 7 chunks
-
-    use crate::prelude::*;
-    use split_exact::SplitExact;
-
-    pub fn file_block_category(path: &'static str) -> &'static str {
-        path.split_exact::<7>(|c| c == ':')[4].unwrap()
-    }
-
-    pub fn file_block_name(path: &'static str) -> &'static str {
-        path.split_exact::<7>(|c| c == ':')[6].unwrap()
-    }
-
-    pub fn file_opcode(path: &'static str) -> String {
-        format!("{}_{}", file_block_category(path), file_block_name(path))
-    }
-}
-pub use file_opcode::*;
-
-#[cfg(test)]
-pub mod tests {
-    #[test]
-    fn file_block_category() {
-        assert_eq!(super::file_block_category(module_path!()), "utilities");
-    }
-
-    #[test]
-    fn file_block_name() {
-        assert_eq!(super::file_block_name(module_path!()), "tests");
-    }
-
-    #[test]
-    fn file_opcode() {
-        assert_eq!(super::file_opcode(module_path!()), "utilities_tests");
-    }
-}
-
 /// generates unit tests for instructions files. Takes a module name, followed by a semicolon, followed by an optional comma-separated list of arbitrary identifiers
 /// corresponding to the number of inputs the block takes, optionally followed by a semicolon and an expression
 /// for a sensible default for any fields; if multiple field values need to be tested, the macro can be repeated.
 #[macro_export]
 macro_rules! instructions_test {
-    {$module:ident; $($type_arg:ident $(,)?)* $(; $fields:expr)?} => {
+    {$module:ident; $($type_arg:ident $(,)?)* $(@$fields:expr)? $(;)?} => {
+        $crate::instructions_test!{$module; $($type_arg,)* $(@$fields)? ; Default::default()}
+    };
+    {$module:ident; $($type_arg:ident $(,)?)* $(@ $fields:expr)? ; $flags:expr} => {
     #[cfg(test)]
     mod $module {
+        fn flags() -> $crate::wasm::WasmFlags {
+            $flags
+        }
+
         use super::{wasm, output_type, acceptable_inputs};
         use $crate::prelude::*;
         use $crate::ir::Type as IrType;
@@ -75,12 +42,11 @@ macro_rules! instructions_test {
 
             #[test]
             fn output_type_fails_when_wasm_fails() {
-                use $crate::wasm::{StepFunc, TypeRegistry, ExternalFunctionMap};
+                use $crate::wasm::{StepFunc, Registries};
                 for ($($type_arg,)*) in types_iter() {
                     let output_type_result = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?);
-                    let type_registry = Rc::new(TypeRegistry::new());
-                    let external_functions = Rc::new(ExternalFunctionMap::new());
-                    let step_func = StepFunc::new(type_registry.clone(), external_functions.clone());
+                    let registries = Rc::new(Registries::default());
+                    let step_func = StepFunc::new(Rc::clone(&registries), flags());
                     let wasm_result = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
@@ -97,9 +63,9 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 use wasm_encoder::{
-                    CodeSection, FunctionSection, ImportSection, Instruction, Module, TypeSection, MemorySection, MemoryType
+                    CodeSection, FunctionSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType
                 };
-                use $crate::wasm::{StepFunc, TypeRegistry, ExternalFunctionMap};
+                use $crate::wasm::{StepFunc, Registries};
                 use $crate::prelude::Rc;
 
                 for ($($type_arg,)*) in types_iter() {
@@ -110,8 +76,7 @@ macro_rules! instructions_test {
                             continue;
                         }
                     };
-                    let type_registry = Rc::new(TypeRegistry::new());
-                    let external_functions = Rc::new(ExternalFunctionMap::new());
+                    let registries = Rc::new(Registries::default());
                     let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), $crate::wasm::ExternalEnvironment::WebBrowser);
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
@@ -119,7 +84,7 @@ macro_rules! instructions_test {
                         Some(output) => Some(wasm_proj.ir_type_to_wasm(output)?),
                         None => None,
                       };
-                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&type_registry), external_functions.clone())?;
+                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), flags())?;
                     let wasm = match wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?) {
                         Ok(a) => a,
                         Err(_) => {
@@ -136,6 +101,7 @@ macro_rules! instructions_test {
 
                     let mut imports = ImportSection::new();
                     let mut types = TypeSection::new();
+                    let mut tables = TableSection::new();
                     let mut functions = FunctionSection::new();
                     let mut codes = CodeSection::new();
                     let mut memories = MemorySection::new();
@@ -148,13 +114,15 @@ macro_rules! instructions_test {
                         page_size_log2: None,
                     });
 
-                    Rc::unwrap_or_clone(external_functions).finish(&mut imports, type_registry.clone())?;
+                    registries.external_functions().clone().finish(&mut imports, registries.types())?;
                     step_func.finish(&mut functions, &mut codes)?;
-                    Rc::unwrap_or_clone(type_registry).finish(&mut types);
+                    registries.types().clone().finish(&mut types);
+                    registries.tables().clone().finish(& mut tables);
 
                     module.section(&types);
                     module.section(&imports);
                     module.section(&functions);
+                    module.section(&tables);
                     module.section(&memories);
                     module.section(&codes);
 
@@ -176,20 +144,19 @@ macro_rules! instructions_test {
 
             #[test]
             fn js_functions_match_declared_types() {
-                use $crate::wasm::{ExternalFunctionMap, StepFunc, TypeRegistry};
+                use $crate::wasm::{Registries, StepFunc,};
                 use ezno_lib::{check as check_js, Diagnostic};
                 use std::path::{Path, PathBuf};
                 use std::fs;
 
                 for ($($type_arg,)*) in types_iter() {
-                    let type_registry = Rc::new(TypeRegistry::new());
-                    let external_functions = Rc::new(ExternalFunctionMap::new());
-                    let step_func = StepFunc::new(type_registry.clone(), external_functions.clone());
+                    let registries = Rc::new(Registries::default());
+                    let step_func = StepFunc::new(Rc::clone(&registries), flags());
                     if wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?).is_err() {
                         println!("skipping failed wasm");
                         continue;
                     };
-                    for ((module, name), (params, results)) in external_functions.get_map().borrow().iter() {
+                    for ((module, name), (params, results)) in registries.external_functions().registry().borrow().iter() {
                         assert!(results.len() < 1, "external function {}::{} registered as returning multiple results", module, name);
                         let out = if results.len() == 0 {
                           "void"

@@ -27,4 +27,4 @@ pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<Opt
     }))
 }
 
-crate::instructions_test! {tests;; super::Fields(0)}
+crate::instructions_test! {tests;@ super::Fields(0)}

@@ -7,7 +7,6 @@ mod hq;
 mod looks;
 mod operator;
 #[macro_use]
-mod utilities;
-pub use utilities::{file_block_category, file_block_name, file_opcode};
+mod tests;
 
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));

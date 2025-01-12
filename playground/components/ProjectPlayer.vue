@@ -19,10 +19,10 @@
 
 <script setup>
   import Loading from './Loading.vue';
-  import { sb3_to_wasm, /*set_attr*/ } from '@/../js/hyperquark.js';
-  import runProject from '@/lib/project-runner.js';
+  import { sb3_to_wasm, FinishedWasm, WasmFlags } from '../../js/compiler/hyperquark.js';
+  import runProject from '../lib/project-runner.js';
   import { ref, onMounted, nextTick } from 'vue';
-  import {imports} from '@/lib/imports.js';
+  import { getSettings } from '../lib/settings.js';
   const Renderer = window.ScratchRender;
   const props = defineProps(['json', 'title', 'author', 'assets', 'zip']);
   let error = ref(null);
@@ -52,8 +52,10 @@
   });
   //set_attr('load_asset', load_asset);
   try {
-    wasmProject = sb3_to_wasm(JSON.stringify(props.json));
-    if (!wasmProject instanceof Uint8Array) {
+    // we need to convert settings to and from a JsValue because the WasmFlags exported from the
+    // no-compiler version is not the same as that exported by the compiler... because reasons
+    wasmProject = sb3_to_wasm(JSON.stringify(props.json), WasmFlags.from_js(getSettings().to_js()));
+    if (!wasmProject instanceof FinishedWasm) {
       throw new Error("unknown error occurred when compiling project");
     }
   } catch (e) {
@@ -82,8 +84,8 @@
     runProject({
       framerate: turbo ? Infinity : 30,
       renderer,
-      wasm_bytes: wasmProject,//.wasm_bytes,
-      string_consts: [],//wasmProject.string_consts,
+      wasm_bytes: wasmProject.wasm_bytes,
+      string_consts: wasmProject.strings,
       target_names: [],//wasmProject.target_names,
       project_json: props.json,
       assets

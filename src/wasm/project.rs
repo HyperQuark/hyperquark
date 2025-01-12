@@ -1,7 +1,8 @@
-use super::{ExternalEnvironment, ExternalFunctionMap};
+use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, Step, Type as IrType};
 use crate::prelude::*;
-use crate::wasm::{StepFunc, TypeRegistry, WasmFlags};
+use crate::wasm::{StepFunc, WasmFlags};
+use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection, DataSection,
     ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection, ImportSection,
@@ -15,11 +16,6 @@ pub mod byte_offset {
     pub const THREADS: i32 = 8;
 }
 
-mod table_indices {
-    pub const STEP_FUNCS: u32 = 0;
-    pub const STRINGS: u32 = 1;
-}
-
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
 pub struct WasmProject {
@@ -28,8 +24,7 @@ pub struct WasmProject {
     /// maps an event to a list of *step_func* indices (NOT function indices) which are
     /// triggered by that event.
     events: BTreeMap<Event, Vec<u32>>,
-    type_registry: Rc<TypeRegistry>,
-    external_functions: Rc<ExternalFunctionMap>,
+    registries: Rc<Registries>,
     environment: ExternalEnvironment,
 }
 
@@ -40,21 +35,12 @@ impl WasmProject {
             step_funcs: Box::new([]),
             events: Default::default(),
             environment,
-            type_registry: Rc::new(TypeRegistry::new()),
-            external_functions: Rc::new(ExternalFunctionMap::new()),
+            registries: Rc::new(Registries::default()),
         }
     }
 
-    pub fn type_registry(&self) -> Rc<TypeRegistry> {
-        Rc::clone(&self.type_registry)
-    }
-
-    pub fn external_functions(&self) -> Rc<ExternalFunctionMap> {
-        Rc::clone(&self.external_functions)
-    }
-
-    pub fn flags(&self) -> &WasmFlags {
-        &self.flags
+    pub fn registries(&self) -> Rc<Registries> {
+        Rc::clone(&self.registries)
     }
 
     pub fn environment(&self) -> ExternalEnvironment {
@@ -80,7 +66,7 @@ impl WasmProject {
         })
     }
 
-    pub fn finish(self) -> HQResult<Vec<u8>> {
+    pub fn finish(self) -> HQResult<FinishedWasm> {
         let mut module = Module::new();
 
         let mut memories = MemorySection::new();
@@ -92,23 +78,6 @@ impl WasmProject {
         let mut exports = ExportSection::new();
         let mut elements = ElementSection::new();
         let mut data = DataSection::new();
-
-        tables.table(TableType {
-            element_type: RefType::FUNCREF,
-            minimum: self
-                .step_funcs()
-                .len()
-                .try_into()
-                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
-            maximum: Some(
-                self.step_funcs()
-                    .len()
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?,
-            ),
-            table64: false,
-            shared: false,
-        });
 
         memories.memory(MemoryType {
             minimum: 1,
@@ -123,15 +92,25 @@ impl WasmProject {
                 .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?
                 + self.imported_func_count()?))
             .collect::<Vec<_>>();
+        let step_func_table_idx = self.registries().tables().register(
+            "step_funcs".into(),
+            (
+                RefType::FUNCREF,
+                u64::try_from(step_indices.len())
+                    .map_err(|_| make_hq_bug!("step indices length out of bounds"))?,
+            ),
+        )?;
         let step_func_indices = Elements::Functions(step_indices.into());
         elements.active(
-            Some(table_indices::STEP_FUNCS),
+            Some(step_func_table_idx),
             &ConstExpr::i32_const(0),
             step_func_indices,
         );
 
-        Rc::unwrap_or_clone(self.external_functions())
-            .finish(&mut imports, self.type_registry())?;
+        self.registries()
+            .external_functions()
+            .clone()
+            .finish(&mut imports, self.registries().types())?;
         for step_func in self.step_funcs().iter().cloned() {
             step_func.finish(&mut functions, &mut codes)?;
         }
@@ -142,7 +121,9 @@ impl WasmProject {
 
         self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
 
-        Rc::unwrap_or_clone(self.type_registry()).finish(&mut types);
+        self.registries().types().clone().finish(&mut types);
+
+        self.registries().tables().clone().finish(&mut tables);
 
         let data_count = DataCountSection { count: data.len() };
 
@@ -164,12 +145,16 @@ impl WasmProject {
 
         let wasm_bytes = module.finish();
 
-        Ok(wasm_bytes)
+        Ok(FinishedWasm {
+            wasm_bytes: wasm_bytes.into_boxed_slice(),
+            strings: self.registries().strings().clone().finish(),
+        })
     }
 
     fn imported_func_count(&self) -> HQResult<u32> {
-        self.external_functions()
-            .get_map()
+        self.registries()
+            .external_functions()
+            .registry()
             .borrow()
             .len()
             .try_into()
@@ -179,13 +164,13 @@ impl WasmProject {
     fn compile_step(
         step: Rc<Step>,
         steps: &RefCell<IndexMap<Rc<Step>, StepFunc>>,
-        type_registry: Rc<TypeRegistry>,
-        external_funcs: Rc<ExternalFunctionMap>,
+        registries: Rc<Registries>,
+        flags: WasmFlags,
     ) -> HQResult<()> {
         if steps.borrow().contains_key(&step) {
             return Ok(());
         }
-        let step_func = StepFunc::new(type_registry, external_funcs);
+        let step_func = StepFunc::new(registries, flags);
         let mut instrs = vec![];
         let mut type_stack = vec![];
         for opcode in step.opcodes() {
@@ -212,7 +197,11 @@ impl WasmProject {
         func.instruction(&Instruction::Unreachable);
         func.instruction(&Instruction::End);
         codes.function(&func);
-        functions.function(self.type_registry().type_index(vec![], vec![])?);
+        functions.function(
+            self.registries()
+                .types()
+                .register_default((vec![], vec![]))?,
+        );
         exports.export(
             "unreachable_dbg",
             ExportKind::Func,
@@ -299,7 +288,11 @@ impl WasmProject {
             func.instruction(&instruction);
         }
 
-        funcs.function(self.type_registry().type_index(vec![], vec![])?);
+        funcs.function(
+            self.registries()
+                .types()
+                .register_default((vec![], vec![]))?,
+        );
         codes.function(&func);
         exports.export(
             export_name,
@@ -377,9 +370,13 @@ impl WasmProject {
             }),
             Instruction::CallIndirect {
                 type_index: self
-                    .type_registry()
-                    .type_index(vec![ValType::I32], vec![ValType::I32])?,
-                table_index: table_indices::STEP_FUNCS,
+                    .registries()
+                    .types()
+                    .register_default((vec![ValType::I32], vec![ValType::I32]))?,
+                table_index: self
+                    .registries()
+                    .tables()
+                    .register("step_funcs".into(), (RefType::FUNCREF, 0))?,
             },
             Instruction::If(WasmBlockType::Empty),
             Instruction::LocalGet(0),
@@ -402,7 +399,11 @@ impl WasmProject {
             tick_func.instruction(&instr);
         }
         tick_func.instruction(&Instruction::End);
-        funcs.function(self.type_registry().type_index(vec![], vec![])?);
+        funcs.function(
+            self.registries()
+                .types()
+                .register_default((vec![], vec![]))?,
+        );
         codes.function(&tick_func);
         exports.export(
             "tick",
@@ -411,30 +412,20 @@ impl WasmProject {
         );
         Ok(())
     }
-}
 
-impl TryFrom<Rc<IrProject>> for WasmProject {
-    type Error = HQError;
-
-    fn try_from(ir_project: Rc<IrProject>) -> HQResult<WasmProject> {
+    pub fn from_ir(ir_project: Rc<IrProject>, flags: WasmFlags) -> HQResult<WasmProject> {
         let steps: RefCell<IndexMap<Rc<Step>, StepFunc>> = Default::default();
-        let type_registry = Rc::new(TypeRegistry::new());
-        let external_functions = Rc::new(ExternalFunctionMap::new());
+        let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = Default::default();
         WasmProject::compile_step(
             Rc::new(Step::new_empty()),
             &steps,
-            Rc::clone(&type_registry),
-            Rc::clone(&external_functions),
+            Rc::clone(&registries),
+            flags,
         )?;
         for thread in ir_project.threads().borrow().iter() {
             let step = thread.first_step().get_rc();
-            WasmProject::compile_step(
-                step,
-                &steps,
-                Rc::clone(&type_registry),
-                Rc::clone(&external_functions),
-            )?;
+            WasmProject::compile_step(step, &steps, Rc::clone(&registries), flags)?;
             events.entry(thread.event()).or_default().push(
                 u32::try_from(
                     ir_project
@@ -450,47 +441,53 @@ impl TryFrom<Rc<IrProject>> for WasmProject {
             );
         }
         Ok(WasmProject {
-            flags: Default::default(),
+            flags,
             step_funcs: steps.take().values().cloned().collect(),
             events,
-            type_registry,
-            external_functions,
+            registries,
             environment: ExternalEnvironment::WebBrowser,
         })
     }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct FinishedWasm {
+    #[wasm_bindgen(getter_with_clone)]
+    pub wasm_bytes: Box<[u8]>,
+    #[wasm_bindgen(getter_with_clone)]
+    pub strings: Vec<String>,
 }
 
 #[cfg(test)]
 mod tests {
     use wasm_encoder::Instruction;
 
-    use super::WasmProject;
+    use super::{Registries, WasmProject};
     use crate::ir::Event;
     use crate::prelude::*;
-    use crate::wasm::{ExternalEnvironment, ExternalFunctionMap, StepFunc, TypeRegistry};
+    use crate::wasm::{ExternalEnvironment, StepFunc};
 
     #[test]
     fn empty_project_is_valid_wasm() {
         let proj = WasmProject::new(Default::default(), ExternalEnvironment::WebBrowser);
-        let wasm_bytes = proj.finish().unwrap();
+        let wasm_bytes = proj.finish().unwrap().wasm_bytes;
         wasmparser::validate(&wasm_bytes).unwrap();
     }
 
     #[test]
     fn project_with_one_empty_step_is_valid_wasm() {
-        let types = Rc::new(TypeRegistry::new());
-        let external_funcs = Rc::new(ExternalFunctionMap::new());
-        let step_func = StepFunc::new(Rc::clone(&types), Rc::clone(&external_funcs));
+        let registries = Rc::new(Registries::default());
+        let step_func = StepFunc::new(Rc::clone(&registries), Default::default());
         step_func.add_instructions(vec![Instruction::I32Const(0)]); // this is handled by compile_step in a non-test environment
         let project = WasmProject {
             flags: Default::default(),
             step_funcs: Box::new([step_func]),
             events: BTreeMap::from_iter(vec![(Event::FlagCLicked, vec![0])].into_iter()),
             environment: ExternalEnvironment::WebBrowser,
-            type_registry: types,
-            external_functions: external_funcs,
+            registries,
         };
-        let wasm_bytes = project.finish().unwrap();
+        let wasm_bytes = project.finish().unwrap().wasm_bytes;
         wasmparser::validate(&wasm_bytes).unwrap();
     }
 }
