@@ -10,7 +10,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
         if IrType::QuasiInt.contains(t2) {
             vec![Instruction::I32Add]
         } else if IrType::Float.contains(t2) {
-            let f64_local = func.get_local(ValType::F64, 1)?;
+            let f64_local = func.local(ValType::F64)?;
             vec![
                 Instruction::LocalSet(f64_local),
                 Instruction::F64ConvertI32S,

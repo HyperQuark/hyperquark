@@ -70,4 +70,4 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
     Ok(None)
 }
 
-crate::instructions_test! {tests;@ super::Fields(None)}
+crate::instructions_test! {none;@ super::Fields(None)}

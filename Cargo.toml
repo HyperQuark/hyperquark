@@ -25,7 +25,8 @@ wasmparser = "0.222.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-ezno = { git = "https://github.com/hyperquark/ezno.git", branch = "wasm-bindgen-version-patch" }
+#ezno = { git = "https://github.com/hyperquark/ezno.git", branch = "wasm-bindgen-version-patch" }
+ezno-checker = { git = "https://github.com/hyperquark/ezno.git", branch = "wasm-bindgen-version-patch" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

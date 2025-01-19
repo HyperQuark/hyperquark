@@ -16,7 +16,10 @@ macro_rules! instructions_test {
         use super::{wasm, output_type, acceptable_inputs};
         use $crate::prelude::*;
         use $crate::ir::Type as IrType;
-        use wasm_encoder::ValType;
+        use wasm_encoder::{
+            CodeSection, FunctionSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
+        };
+        use $crate::wasm::{StepFunc, Registries, WasmProject, ExternalEnvironment};
 
         #[allow(unused)]
         macro_rules! ident_as_irtype {
@@ -42,7 +45,6 @@ macro_rules! instructions_test {
 
             #[test]
             fn output_type_fails_when_wasm_fails() {
-                use $crate::wasm::{StepFunc, Registries};
                 for ($($type_arg,)*) in types_iter() {
                     let output_type_result = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
@@ -62,12 +64,6 @@ macro_rules! instructions_test {
 
             #[test]
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
-                use wasm_encoder::{
-                    CodeSection, FunctionSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType
-                };
-                use $crate::wasm::{StepFunc, Registries};
-                use $crate::prelude::Rc;
-
                 for ($($type_arg,)*) in types_iter() {
                     let output_type = match output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) {
                         Ok(a) => a,
@@ -77,11 +73,11 @@ macro_rules! instructions_test {
                         }
                     };
                     let registries = Rc::new(Registries::default());
-                    let wasm_proj = $crate::wasm::WasmProject::new(Default::default(), $crate::wasm::ExternalEnvironment::WebBrowser);
+                    let wasm_proj = WasmProject::new(Default::default(), ExternalEnvironment::WebBrowser);
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| wasm_proj.ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
+                    let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
-                        Some(output) => Some(wasm_proj.ir_type_to_wasm(output)?),
+                        Some(output) => Some(WasmProject::ir_type_to_wasm(output)?),
                         None => None,
                       };
                     let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), flags())?;
@@ -144,8 +140,7 @@ macro_rules! instructions_test {
 
             #[test]
             fn js_functions_match_declared_types() {
-                use $crate::wasm::{Registries, StepFunc,};
-                use ezno_lib::{check as check_js, Diagnostic};
+                use ezno_checker::{check_project as check_js, Diagnostic, INTERNAL_DEFINITION_FILE_PATH as ts_defs};
                 use std::path::{Path, PathBuf};
                 use std::fs;
 
@@ -157,11 +152,11 @@ macro_rules! instructions_test {
                         continue;
                     };
                     for ((module, name), (params, results)) in registries.external_functions().registry().borrow().iter() {
-                        assert!(results.len() < 1, "external function {}::{} registered as returning multiple results", module, name);
+                        assert!(results.len() <= 1, "external function {}::{} registered as returning multiple results", module, name);
                         let out = if results.len() == 0 {
                           "void"
                         } else {
-                            wasm_to_js_type(results[1])
+                            wasm_to_js_type(results[0])
                         };
                         let arg_idents: Vec<String> = params.iter().enumerate().map(|(i, _)| format!("_{i}")).collect();
                         let ins = arg_idents.iter().enumerate().map(|(i, ident)| {
@@ -171,8 +166,9 @@ macro_rules! instructions_test {
                                 wasm_to_js_type(*params.get(i).unwrap())
                                 )
                         }).collect::<Vec<_>>().join(", ");
-                        let diagnostics = check_js(
+                        let diagnostics = check_js::<_, ezno_checker::synthesis::EznoParser>(
                             vec![PathBuf::from(format!("js/{}/{}.ts", module, name))],
+                            vec![ts_defs.into()],
                             &|path: &Path| {
                                 let func_string = fs::read_to_string(path).ok()?;
                                 let test_string = format!("
@@ -184,8 +180,9 @@ function _({ins}): {out} {{
                                 println!("{}", test_string.clone());
                                 Some(test_string.as_str().as_bytes().into_iter().map(|&u| u).collect::<Vec<_>>())
                             },
-                            None,
                             Default::default(),
+                            (),
+                            None,
                         )
                         .diagnostics;
                         if diagnostics.contains_error() {

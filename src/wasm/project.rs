@@ -52,7 +52,7 @@ impl WasmProject {
     }
 
     /// maps a broad IR type to a WASM type
-    pub fn ir_type_to_wasm(&self, ir_type: IrType) -> HQResult<ValType> {
+    pub fn ir_type_to_wasm(ir_type: IrType) -> HQResult<ValType> {
         Ok(if IrType::Float.contains(ir_type) {
             ValType::F64
         } else if IrType::QuasiInt.contains(ir_type) {

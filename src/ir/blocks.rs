@@ -1,7 +1,6 @@
-use crate::instructions::{fields, IrOpcode};
+use crate::instructions::{fields::*, IrOpcode};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
-use fields::*;
 
 // TODO: insert casts in relevant places
 
@@ -102,9 +101,7 @@ fn from_special_block(block_array: &BlockArray) -> HQResult<IrOpcode> {
                 value.parse().map_err(|_| make_hq_bug!(""))?,
             )),
             9 => hq_todo!(""),
-            10 => hq_todo!(), /*IrOpcode::text {
-            TEXT: value.to_string(),
-            },*/
+            10 => IrOpcode::hq_text(HqTextFields(value.clone())),
             _ => hq_bad_proj!("bad project json (block array of type ({}, string))", ty),
         },
         BlockArray::Broadcast(ty, _name, _id)
