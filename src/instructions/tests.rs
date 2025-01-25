@@ -73,7 +73,6 @@ macro_rules! instructions_test {
                         }
                     };
                     let registries = Rc::new(Registries::default());
-                    let wasm_proj = WasmProject::new(Default::default(), ExternalEnvironment::WebBrowser);
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
@@ -88,6 +87,7 @@ macro_rules! instructions_test {
                             continue;
                         }
                     };
+                    println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
                         step_func.add_instructions([Instruction::LocalGet((i + 1).try_into().unwrap())])
                     }

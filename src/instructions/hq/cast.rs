@@ -1,10 +1,8 @@
-use core::result;
-
 use crate::ir::{Step, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{byte_offset, StepFunc, WasmProject};
 use wasm_encoder::Instruction::{self, *};
-use wasm_encoder::{BlockType, MemArg, ValType};
+use wasm_encoder::{BlockType, MemArg, RefType, ValType};
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub IrType);
@@ -23,26 +21,26 @@ pub fn wasm(
     // float needs to be the last input type we check, as I don't think there's a direct way of checking
     // if a value is *not* boxed
     let base_types = [IrType::QuasiInt, IrType::String, IrType::Float];
-    let possible_input_types = base_types
+    let casts = base_types
         .into_iter()
         .filter(|&ty| from.intersects(ty))
         .map(|ty| Ok((ty, cast_instructions(ty, to, func)?)))
         .collect::<HQResult<Vec<_>>>()?;
-    Ok(match possible_input_types.len() {
+    Ok(match casts.len() {
         0 => hq_bug!("empty input type for hq_cast"),
-        1 => possible_input_types[0].1.clone(),
+        1 => casts[0].1.clone(),
         _ => {
             let result_type = WasmProject::ir_type_to_wasm(to)?;
             let box_local = func.local(ValType::I64)?;
-            let possible_types_num = possible_input_types.len() - 1;
+            let possible_types_num = casts.len();
             [LocalSet(box_local)]
                 .into_iter()
                 .chain(
-                    possible_input_types
+                    casts
                         .into_iter()
                         .enumerate()
                         .map(|(i, (ty, instrs))| {
-                            [
+                            Ok([
                                 if i == 0 {
                                     match ty {
                                         IrType::QuasiInt => vec![
@@ -64,7 +62,7 @@ pub fn wasm(
                                         // float guaranteed to be last so no need to check
                                         _ => unreachable!(),
                                     }
-                                } else if i == possible_types_num {
+                                } else if i == possible_types_num - 1 {
                                     vec![Else]
                                 } else {
                                     match ty {
@@ -91,14 +89,32 @@ pub fn wasm(
                                     }
                                 },
                                 vec![LocalGet(box_local)],
+                                if IrType::QuasiInt.contains(ty) {
+                                    vec![I32WrapI64]
+                                } else if IrType::Float.contains(ty) {
+                                    vec![F64ReinterpretI64]
+                                } else if IrType::String.contains(ty) {
+                                    let table_index = func
+                                        .registries()
+                                        .tables()
+                                        .register("strings".into(), (RefType::EXTERNREF, 0))?;
+                                    vec![I32WrapI64, TableGet(table_index)]
+                                } else {
+                                    vec![]
+                                },
                                 instrs.clone(),
                             ]
                             .into_iter()
-                            .flatten()
+                            .flatten())
                         })
+                        .collect::<HQResult<Vec<_>>>()?
+                        .into_iter()
                         .flatten(),
                 )
-                .chain(std::iter::repeat_n(Instruction::End, possible_types_num))
+                .chain(std::iter::repeat_n(
+                    Instruction::End,
+                    possible_types_num - 1, // the last else doesn't need an additional `end` instruction
+                ))
                 .collect::<Vec<_>>()
         }
     })

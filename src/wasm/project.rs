@@ -107,6 +107,14 @@ impl WasmProject {
             step_func_indices,
         );
 
+        self.registries().tables().register::<usize>(
+            "strings".into(),
+            (
+                RefType::EXTERNREF,
+                0, // filled in by js (for now...); TODO: use js string imports
+            ),
+        )?;
+
         self.registries()
             .external_functions()
             .clone()
