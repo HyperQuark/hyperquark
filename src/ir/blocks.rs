@@ -1,11 +1,37 @@
 use crate::instructions::{fields::*, IrOpcode};
+use crate::ir::{Type as IrType, TypeStack};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
-// TODO: insert casts in relevant places
+fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
+    let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
+    let mut casts: Vec<(usize, IrType)> = vec![]; // a vector of cast targets, and where they're needed
+    for (i, block) in blocks.iter().enumerate() {
+        let expected_inputs = block.acceptable_inputs();
+        if type_stack.len() < expected_inputs.len() {
+            hq_bug!("didn't have enough inputs on the type stack")
+        }
+        let actual_inputs: Vec<_> = type_stack
+            .splice((type_stack.len() - expected_inputs.len()).., [])
+            .collect();
+        for (&expected, actual) in core::iter::zip(expected_inputs.iter(), actual_inputs) {
+            if !expected.contains(actual.0) {
+                casts.push((actual.1, expected));
+            }
+        }
+        // TODO: make this more specific by using the actual input types post-cast
+        if let Some(output) = block.output_type(expected_inputs)? {
+            type_stack.push((output, i));
+        }
+    }
+    for (pos, ty) in casts {
+        blocks.insert(pos + 1, IrOpcode::hq_cast(HqCastFields(ty)));
+    }
+    Ok(blocks)
+}
 
-pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
-    Ok(match block {
+pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Vec<IrOpcode>> {
+    insert_casts(match block {
         Block::Normal { block_info, .. } => {
             if let Some(next_id) = &block_info.next {
                 from_normal_block(block_info, blocks)?
@@ -29,7 +55,7 @@ pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>>
                     .collect()
             }
         }
-        Block::Special(block_array) => Box::new([from_special_block(block_array)?]),
+        Block::Special(block_array) => vec![from_special_block(block_array)?],
     })
 }
 
@@ -37,6 +63,7 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
     Ok(match opcode {
         BlockOpcode::looks_say => vec!["MESSAGE"],
         BlockOpcode::operator_add => vec!["NUM1", "NUM2"],
+        BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
     .into_iter()
@@ -81,6 +108,7 @@ fn from_normal_block(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Box<
         .chain(match &block_info.opcode {
             BlockOpcode::operator_add => [IrOpcode::operator_add].into_iter(),
             BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
+            BlockOpcode::operator_join => [IrOpcode::operator_join].into_iter(),
             other => hq_todo!("unimplemented block: {:?}", other),
         })
         .collect())

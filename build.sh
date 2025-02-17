@@ -20,9 +20,9 @@ usage()
   echo "  -V     build the website with vite"
   echo "  -W     build wasm"
   echo "  -o     do not run wasm-opt"
-  echo "  -O     run wasm-opt"
   echo "  -s     run wasm-opt with -Os"
   echo "  -z     run wasm-opt with -Oz"
+  echo "  -v     verbose output"
   exit 1
 }
 
@@ -41,7 +41,7 @@ set_variable()
 
 unset VITE WASM PROD;
 QUIET=1;
-while getopts 'dpwvoWVszhi' c
+while getopts 'dpVWoszvh' c
 do
   case $c in
     d) set_variable PROD 0 ;;
@@ -51,7 +51,7 @@ do
     o) set_variable WOPT 0 ;;
     s) set_variable WOPT 1 ;;
     z) set_variable WOPT 2 ;;
-    i) unset QUIET ;;
+    v) unset QUIET ;;
     h|?) usage ;;
   esac
 done
@@ -94,11 +94,13 @@ if [ $WASM = "1" ]; then
 fi
 if [ $WOPT = "1" ]; then
   echo running wasm-opt -Os...
-  wasm-opt -Os -g js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
+  wasm-opt -Os -g js/compiler/hyperquark_bg.wasm -o js/compiler/hyperquark_bg.wasm
+  wasm-opt -Os -g js/no-compiler/hyperquark_bg.wasm -o js/no-compiler/hyperquark_bg.wasm
 fi
 if [ $WOPT = "2" ]; then
   echo running wasm-opt -Oz...
-  wasm-opt -Oz -g js/hyperquark_bg.wasm -o js/hyperquark_bg.wasm
+  wasm-opt -Oz -g js/compiler/hyperquark_bg.wasm -o js/compiler/hyperquark_bg.wasm
+  wasm-opt -Oz -g js/no-compiler/hyperquark_bg.wasm -o js/no-compiler/hyperquark_bg.wasm
 fi
 if [ $VITE = "1" ]; then
   echo running npm build...

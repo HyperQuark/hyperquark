@@ -1,4 +1,5 @@
 use super::{ExternalEnvironment, Registries};
+use crate::instructions::wrap_instruction;
 use crate::ir::{Event, IrProject, Step, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{StepFunc, WasmFlags};
@@ -47,8 +48,8 @@ impl WasmProject {
         self.environment
     }
 
-    pub fn step_funcs(&self) -> &[StepFunc] {
-        self.step_funcs.borrow()
+    pub fn step_funcs(&self) -> &Box<[StepFunc]> {
+        &self.step_funcs
     }
 
     /// maps a broad IR type to a WASM type
@@ -60,7 +61,7 @@ impl WasmProject {
         } else if IrType::String.contains(ir_type) {
             ValType::EXTERNREF
         } else if IrType::Color.contains(ir_type) {
-            hq_todo!() //ValType::V128 // f32x4
+            hq_todo!() //ValType::V128 // f32x4?
         } else {
             ValType::I64 // NaN boxed value... let's worry about colors later
         })
@@ -107,11 +108,17 @@ impl WasmProject {
             step_func_indices,
         );
 
+        let strings = self.registries().strings().clone().finish();
+
         self.registries().tables().register::<usize>(
             "strings".into(),
             (
                 RefType::EXTERNREF,
-                0, // filled in by js (for now...); TODO: use js string imports
+                strings
+                    .len()
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("strings length out of bounds"))?,
+                // TODO: use js string imports for preknown strings
             ),
         )?;
 
@@ -131,7 +138,10 @@ impl WasmProject {
 
         self.registries().types().clone().finish(&mut types);
 
-        self.registries().tables().clone().finish(&mut tables);
+        self.registries()
+            .tables()
+            .clone()
+            .finish(&mut tables, &mut exports);
 
         let data_count = DataCountSection { count: data.len() };
 
@@ -155,7 +165,7 @@ impl WasmProject {
 
         Ok(FinishedWasm {
             wasm_bytes: wasm_bytes.into_boxed_slice(),
-            strings: self.registries().strings().clone().finish(),
+            strings,
         })
     }
 
@@ -163,7 +173,7 @@ impl WasmProject {
         self.registries()
             .external_functions()
             .registry()
-            .borrow()
+            .try_borrow()?
             .len()
             .try_into()
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
@@ -175,7 +185,7 @@ impl WasmProject {
         registries: Rc<Registries>,
         flags: WasmFlags,
     ) -> HQResult<()> {
-        if steps.borrow().contains_key(&step) {
+        if steps.try_borrow()?.contains_key(&step) {
             return Ok(());
         }
         let step_func = StepFunc::new(registries, flags);
@@ -185,13 +195,17 @@ impl WasmProject {
             let inputs = type_stack
                 .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
                 .collect();
-            instrs.append(&mut opcode.wasm(&step_func, Rc::clone(&inputs))?);
+            instrs.append(&mut wrap_instruction(
+                &step_func,
+                Rc::clone(&inputs),
+                opcode.clone(),
+            )?);
             if let Some(output) = opcode.output_type(inputs)? {
                 type_stack.push(output);
             }
         }
-        step_func.add_instructions(instrs);
-        steps.borrow_mut().insert(step, step_func);
+        step_func.add_instructions(instrs)?;
+        steps.try_borrow_mut()?.insert(step, step_func);
         Ok(())
     }
 
@@ -247,7 +261,7 @@ impl WasmProject {
             Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                    .map_err(|_| make_hq_bug!("thread num byte offset out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }), // [i32]
@@ -258,7 +272,7 @@ impl WasmProject {
             Instruction::I32Const(0), // offset in data segment; [i32, i32]
             Instruction::I32Const(
                 i32::try_from(indices.len())
-                    .map_err(|_| make_hq_bug!("start_type count out of bounds"))?
+                    .map_err(|_| make_hq_bug!("indices lenout of bounds"))?
                     * WasmProject::THREAD_BYTE_LEN,
             ), // segment length; [i32, i32, i32]
             Instruction::MemoryInit {
@@ -271,7 +285,7 @@ impl WasmProject {
             Instruction::I32Load(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                    .map_err(|_| make_hq_bug!("thread num byte offset out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }), // [i32, i32]
@@ -285,7 +299,7 @@ impl WasmProject {
             Instruction::I32Store(MemArg {
                 offset: byte_offset::THREAD_NUM
                     .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
+                    .map_err(|_| make_hq_bug!("thread num byte offset out of bounds"))?,
                 align: 2,
                 memory_index: 0,
             }), // []
@@ -367,7 +381,7 @@ impl WasmProject {
             Instruction::LocalGet(0),
             Instruction::I32Load(MemArg {
                 offset: /*(byte_offset::VARS as usize
-                    + VAR_INFO_LEN as usize * project.vars.borrow().len()
+                    + VAR_INFO_LEN as usize * project.vars.try_borrow()?.len()
                     + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
                         * (project.target_names.len() - 1))
                     .try_into()
@@ -431,14 +445,14 @@ impl WasmProject {
             Rc::clone(&registries),
             flags,
         )?;
-        for thread in ir_project.threads().borrow().iter() {
+        for thread in ir_project.threads().try_borrow()?.iter() {
             let step = thread.first_step().get_rc();
             WasmProject::compile_step(step, &steps, Rc::clone(&registries), flags)?;
             events.entry(thread.event()).or_default().push(
                 u32::try_from(
                     ir_project
                         .steps()
-                        .borrow()
+                        .try_borrow()?
                         .get_index_of(&thread.first_step().get_rc())
                         .ok_or(make_hq_bug!(
                             "Thread's first_step wasn't found in Thread::steps()"
@@ -487,7 +501,9 @@ mod tests {
     fn project_with_one_empty_step_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
         let step_func = StepFunc::new(Rc::clone(&registries), Default::default());
-        step_func.add_instructions(vec![Instruction::I32Const(0)]); // this is handled by compile_step in a non-test environment
+        step_func
+            .add_instructions(vec![Instruction::I32Const(0)])
+            .unwrap(); // this is handled by compile_step in a non-test environment
         let project = WasmProject {
             flags: Default::default(),
             step_funcs: Box::new([step_func]),

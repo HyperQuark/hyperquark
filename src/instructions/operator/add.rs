@@ -4,6 +4,7 @@ use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, ValType};
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+    hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
     Ok(if IrType::QuasiInt.contains(t1) {
@@ -38,6 +39,7 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 }
 
 // TODO: nan
+
 pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     let t1 = inputs[0];
     let t2 = inputs[1];
@@ -49,7 +51,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     {
         IrType::Float
     } else {
-        hq_todo!() //IrType::Number
+        IrType::Number
     }))
 }
 

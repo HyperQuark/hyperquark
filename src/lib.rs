@@ -50,6 +50,7 @@ use prelude::*;
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen(js_namespace=console)]
 extern "C" {
+
     pub fn log(s: &str);
 }
 

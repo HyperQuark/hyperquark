@@ -64,5 +64,26 @@ pub enum Type {
 
     Color,
 }
+impl Type {
+    pub const BASE_TYPES: [Type; 3] = [Type::String, Type::QuasiInt, Type::Float];
+
+    pub fn is_base_type(&self) -> bool {
+        Type::BASE_TYPES.iter().any(|ty| ty.contains(*self))
+    }
+
+    pub fn base_type(&self) -> Option<Type> {
+        if !self.is_base_type() {
+            return None;
+        }
+        Type::BASE_TYPES
+            .iter()
+            .cloned()
+            .find(|&ty| ty.contains(*self))
+    }
+
+    pub fn base_types(&self) -> impl Iterator<Item = &Type> {
+        Type::BASE_TYPES.iter().filter(|ty| ty.intersects(*self))
+    }
+}
 
 pub type TypeStack = Vec<Type>;

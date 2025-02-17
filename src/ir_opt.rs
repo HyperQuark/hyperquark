@@ -8,12 +8,12 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 impl IrProject {
-    pub fn optimise(&mut self) -> Result<(), HQError> {
+     pub fn optimise(&mut self) -> Result<(), HQError> {
         self.const_fold()?;
         self.variable_types()?;
         Ok(())
     }
-    pub fn variable_types(&mut self) -> Result<(), HQError> {
+     pub fn variable_types(&mut self) -> Result<(), HQError> {
         let mut var_map: BTreeMap<String, BTreeSet<InputType>> = BTreeMap::new();
         #[allow(clippy::type_complexity)]
         let mut block_swaps: BTreeMap<
@@ -124,7 +124,7 @@ impl IrProject {
                             },
                             _ => &previous_block
                                 .type_stack()
-                                .borrow()
+                                .try_borrow()?
                                 .clone()
                                 .ok_or(make_hq_bug!("unexpected empty type stack"))?
                                 .1
@@ -191,7 +191,7 @@ impl IrProject {
         }
         Ok(())
     }
-    pub fn const_fold(&mut self) -> Result<(), HQError> {
+     pub fn const_fold(&mut self) -> Result<(), HQError> {
         for step in self.steps.values_mut() {
             step.const_fold()?;
         }

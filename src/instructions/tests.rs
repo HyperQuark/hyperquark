@@ -17,9 +17,9 @@ macro_rules! instructions_test {
         use $crate::prelude::*;
         use $crate::ir::Type as IrType;
         use wasm_encoder::{
-            CodeSection, FunctionSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
+            CodeSection, ExportSection, FunctionSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
         };
-        use $crate::wasm::{StepFunc, Registries, WasmProject, ExternalEnvironment};
+        use $crate::wasm::{StepFunc, Registries, WasmProject};
 
         #[allow(unused)]
         macro_rules! ident_as_irtype {
@@ -35,7 +35,13 @@ macro_rules! instructions_test {
                 for (i, input) in (*types).into_iter().enumerate() {
                     // invalid input types should be handled by a wrapper function somewhere
                     // so we won't test those here.
+                    // TODO: are they actually handled elsewhere?
                     if !acceptable_inputs()[i].contains(**input) {
+                        return false;
+                    }
+                    // again, non-base types should be handled and unboxed by a wrapper function
+                    // contained in src/instructions/input_switcher.rs
+                    if !input.is_base_type() {
                         return false;
                     }
                 }
@@ -89,9 +95,9 @@ macro_rules! instructions_test {
                     };
                     println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([Instruction::LocalGet((i + 1).try_into().unwrap())])
+                        step_func.add_instructions([Instruction::LocalGet((i + 1).try_into().unwrap())])?
                     }
-                    step_func.add_instructions(wasm);
+                    step_func.add_instructions(wasm)?;
 
                     let mut module = Module::new();
 
@@ -101,6 +107,7 @@ macro_rules! instructions_test {
                     let mut functions = FunctionSection::new();
                     let mut codes = CodeSection::new();
                     let mut memories = MemorySection::new();
+                    let mut exports = ExportSection::new();
 
                     memories.memory(MemoryType {
                         minimum: 1,
@@ -113,7 +120,7 @@ macro_rules! instructions_test {
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
                     step_func.finish(&mut functions, &mut codes)?;
                     registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(& mut tables);
+                    registries.tables().clone().finish(& mut tables, &mut exports);
 
                     module.section(&types);
                     module.section(&imports);
@@ -151,7 +158,7 @@ macro_rules! instructions_test {
                         println!("skipping failed wasm");
                         continue;
                     };
-                    for ((module, name), (params, results)) in registries.external_functions().registry().borrow().iter() {
+                    for ((module, name), (params, results)) in registries.external_functions().registry().try_borrow().unwrap().iter() {
                         assert!(results.len() <= 1, "external function {}::{} registered as returning multiple results", module, name);
                         let out = if results.len() == 0 {
                           "void"

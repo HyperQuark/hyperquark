@@ -115,6 +115,7 @@ export default async (
           upc,
           unreachable_dbg
         } = instance.exports;
+        strings.grow(Object.entries(string_consts).length);
         for (const [i, str] of Object.entries(string_consts || {})) {
           // @ts-ignore
           strings.set(i, str);

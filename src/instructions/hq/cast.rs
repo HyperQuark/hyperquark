@@ -1,16 +1,36 @@
-use crate::ir::{Step, Type as IrType};
+use crate::ir::Type as IrType;
 use crate::prelude::*;
-use crate::wasm::{byte_offset, StepFunc, WasmProject};
+use crate::wasm::StepFunc;
 use wasm_encoder::Instruction::{self, *};
-use wasm_encoder::{BlockType, MemArg, RefType, ValType};
+use wasm_encoder::ValType;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub IrType);
 
-/// Canonical NaN + bit 33, + string pointer in bits 1-32
-const BOXED_STRING_PATTERN: i64 = 0x7FF80001 << 32;
-/// Canonical NaN + bit 33, + i32 in bits 1-32
-const BOXED_INT_PATTERN: i64 = 0x7ff80002 << 32;
+fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
+    let to_base_types = to.base_types().collect::<Vec<_>>();
+    hq_assert!(!to_base_types.is_empty());
+    let Some(from_base) = from.base_type() else {
+        hq_bug!("from type has no base type")
+    };
+    Ok(if to_base_types.contains(&&from_base) {
+        from_base
+    } else {
+        let mut candidates = vec![];
+        for preference in match from_base {
+            IrType::QuasiInt => &[IrType::Float, IrType::String] as &[IrType],
+            IrType::Float => &[IrType::String] as &[IrType],
+            IrType::String => &[IrType::Float] as &[IrType],
+            _ => unreachable!(),
+        } {
+            if to_base_types.contains(&preference) {
+                candidates.push(preference);
+            }
+        }
+        hq_assert!(!candidates.is_empty());
+        *candidates[0]
+    })
+}
 
 pub fn wasm(
     func: &StepFunc,
@@ -18,153 +38,45 @@ pub fn wasm(
     &Fields(to): &Fields,
 ) -> HQResult<Vec<Instruction<'static>>> {
     let from = inputs[0];
-    // float needs to be the last input type we check, as I don't think there's a direct way of checking
-    // if a value is *not* boxed
-    let base_types = [IrType::QuasiInt, IrType::String, IrType::Float];
-    let casts = base_types
-        .into_iter()
-        .filter(|&ty| from.intersects(ty))
-        .map(|ty| Ok((ty, cast_instructions(ty, to, func)?)))
-        .collect::<HQResult<Vec<_>>>()?;
-    Ok(match casts.len() {
-        0 => hq_bug!("empty input type for hq_cast"),
-        1 => casts[0].1.clone(),
-        _ => {
-            let result_type = WasmProject::ir_type_to_wasm(to)?;
-            let box_local = func.local(ValType::I64)?;
-            let possible_types_num = casts.len();
-            [LocalSet(box_local)]
-                .into_iter()
-                .chain(
-                    casts
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, (ty, instrs))| {
-                            Ok([
-                                if i == 0 {
-                                    match ty {
-                                        IrType::QuasiInt => vec![
-                                            LocalGet(box_local),
-                                            I64Const(BOXED_INT_PATTERN),
-                                            I64And,
-                                            I64Const(BOXED_INT_PATTERN),
-                                            I64Eq,
-                                            If(BlockType::Result(result_type)),
-                                        ],
-                                        IrType::String => vec![
-                                            LocalGet(box_local),
-                                            I64Const(BOXED_STRING_PATTERN),
-                                            I64And,
-                                            I64Const(BOXED_STRING_PATTERN),
-                                            I64Eq,
-                                            If(BlockType::Result(result_type)),
-                                        ],
-                                        // float guaranteed to be last so no need to check
-                                        _ => unreachable!(),
-                                    }
-                                } else if i == possible_types_num - 1 {
-                                    vec![Else]
-                                } else {
-                                    match ty {
-                                        IrType::Float => vec![Else], // float guaranteed to be last so no need to check
-                                        IrType::QuasiInt => vec![
-                                            Else,
-                                            LocalGet(box_local),
-                                            I64Const(BOXED_INT_PATTERN),
-                                            I64And,
-                                            I64Const(BOXED_INT_PATTERN),
-                                            I64Eq,
-                                            If(BlockType::Result(result_type)),
-                                        ],
-                                        IrType::String => vec![
-                                            Else,
-                                            LocalGet(box_local),
-                                            I64Const(BOXED_STRING_PATTERN),
-                                            I64And,
-                                            I64Const(BOXED_STRING_PATTERN),
-                                            I64Eq,
-                                            If(BlockType::Result(result_type)),
-                                        ],
-                                        _ => unreachable!(),
-                                    }
-                                },
-                                vec![LocalGet(box_local)],
-                                if IrType::QuasiInt.contains(ty) {
-                                    vec![I32WrapI64]
-                                } else if IrType::Float.contains(ty) {
-                                    vec![F64ReinterpretI64]
-                                } else if IrType::String.contains(ty) {
-                                    let table_index = func
-                                        .registries()
-                                        .tables()
-                                        .register("strings".into(), (RefType::EXTERNREF, 0))?;
-                                    vec![I32WrapI64, TableGet(table_index)]
-                                } else {
-                                    vec![]
-                                },
-                                instrs.clone(),
-                            ]
-                            .into_iter()
-                            .flatten())
-                        })
-                        .collect::<HQResult<Vec<_>>>()?
-                        .into_iter()
-                        .flatten(),
-                )
-                .chain(std::iter::repeat_n(
-                    Instruction::End,
-                    possible_types_num - 1, // the last else doesn't need an additional `end` instruction
-                ))
-                .collect::<Vec<_>>()
-        }
-    })
-}
 
-fn cast_instructions(
-    from: IrType,
-    to: IrType,
-    func: &StepFunc,
-) -> HQResult<Vec<Instruction<'static>>> {
-    // `to` and `from` are guaranteed to be a base type (i.e. float, int/bool or string)
-    Ok(if IrType::Number.contains(to) {
-        // if casting to a number, we always cast to a float. for now.
-        // I suppose this doesn't really make sense if we're casting to a bool,
-        // but we should never be casting anything to a bool because in general you can't
-        // put round blocks in predicate inputs.
-        // TODO: consider the exception (<item in list>)
-        if IrType::Float.contains(from) {
-            vec![]
-        } else if IrType::QuasiInt.contains(from) {
-            vec![F64ConvertI32S]
-        } else if IrType::String.contains(from) {
-            let func_index = func.registries().external_functions().register(
-                ("cast", "string2float"),
-                (vec![ValType::EXTERNREF], vec![ValType::F64]),
-            )?;
-            vec![Call(func_index)]
-        } else {
-            hq_todo!("bad cast: {:?} -> number", to)
-        }
-    } else if IrType::String.contains(to) {
-        if IrType::Float.contains(from) {
-            let func_index = func.registries().external_functions().register(
-                ("cast", "float2string"),
-                (vec![ValType::F64], vec![ValType::EXTERNREF]),
-            )?;
-            vec![Call(func_index)]
-        } else if IrType::QuasiInt.contains(from) {
-            let func_index = func.registries().external_functions().register(
-                ("cast", "int2string"),
-                (vec![ValType::I32], vec![ValType::EXTERNREF]),
-            )?;
-            vec![Call(func_index)]
-        } else if IrType::String.contains(from) {
-            vec![]
-        } else {
-            hq_todo!("bad cast: {:?} -> number", to)
-        }
-    } else {
-        hq_todo!("unimplemented cast: {:?} -> {:?}", to, from)
+    let target = best_cast_candidate(from, to)?;
+
+    let Some(from_base) = from.base_type() else {
+        hq_bug!("from type has no base type")
+    };
+
+    Ok(match target {
+        IrType::Float => match from_base {
+            IrType::Float => vec![],
+            IrType::QuasiInt => vec![F64ConvertI32S],
+            IrType::String => {
+                let func_index = func.registries().external_functions().register(
+                    ("cast", "string2float"),
+                    (vec![ValType::EXTERNREF], vec![ValType::F64]),
+                )?;
+                vec![Call(func_index)]
+            }
+            _ => hq_todo!("bad cast: {:?} -> float", from_base),
+        },
+        IrType::String => match from_base {
+            IrType::Float => {
+                let func_index = func.registries().external_functions().register(
+                    ("cast", "float2string"),
+                    (vec![ValType::F64], vec![ValType::EXTERNREF]),
+                )?;
+                vec![Call(func_index)]
+            }
+            IrType::QuasiInt => {
+                let func_index = func.registries().external_functions().register(
+                    ("cast", "int2string"),
+                    (vec![ValType::I32], vec![ValType::EXTERNREF]),
+                )?;
+                vec![Call(func_index)]
+            }
+            IrType::String => vec![],
+            _ => hq_todo!("bad cast: {:?} -> string", from_base),
+        },
+        _ => hq_todo!("unimplemented cast: {:?} -> {:?}", from_base, target),
     })
 }
 
@@ -172,8 +84,16 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
     Rc::new([IrType::Number.or(IrType::String).or(IrType::Boolean)])
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(to))
+pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Option<IrType>> {
+    Ok(Some(
+        inputs[0]
+            .base_types()
+            .map(|&from| best_cast_candidate(from, to))
+            .collect::<HQResult<Vec<_>>>()?
+            .into_iter()
+            .reduce(|acc, el| acc.or(el))
+            .ok_or(make_hq_bug!("input was empty"))?,
+    ))
 }
 
 crate::instructions_test! {float; t @ super::Fields(IrType::Float)}

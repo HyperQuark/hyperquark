@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::fmt;
 use core::hash::BuildHasherDefault;
-use hashers::fnv::FNV1aHasher64;
+use hashers:: fnv::FNV1aHasher64;
 use indexmap::IndexMap;
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
@@ -41,7 +41,7 @@ pub struct IrProject {
 }
 
 impl fmt::Display for IrProject {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{\n\tthreads: {:?},\n\tvars: {:?},\n\t,target_names: {:?},\n\tcostumes: {:?},\n\tsteps: {:?}\n}}",
             self.threads,
             self.vars,
@@ -55,7 +55,7 @@ impl fmt::Display for IrProject {
 impl TryFrom<Sb3Project> for IrProject {
     type Error = HQError;
 
-    fn try_from(sb3: Sb3Project) -> Result<IrProject, Self::Error> {
+     fn try_from(sb3: Sb3Project) -> Result<IrProject, Self::Error> {
         let vars: Rc<RefCell<Vec<IrVar>>> = Rc::new(RefCell::new(
             sb3.targets
                 .iter()
@@ -393,22 +393,22 @@ pub enum IrOpcode {
 pub struct TypeStack(pub Rc<RefCell<Option<TypeStack>>>, pub InputType);
 
 impl TypeStack {
-    pub fn new_some(prev: TypeStack) -> Rc<RefCell<Option<Self>>> {
+     pub fn new_some(prev: TypeStack) -> Rc<RefCell<Option<Self>>> {
         Rc::new(RefCell::new(Some(prev)))
     }
-    pub fn new(prev: Option<TypeStack>) -> Rc<RefCell<Option<Self>>> {
+     pub fn new(prev: Option<TypeStack>) -> Rc<RefCell<Option<Self>>> {
         Rc::new(RefCell::new(prev))
     }
 }
 
 #[allow(clippy::len_without_is_empty)]
 pub trait TypeStackImpl {
-    fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>>;
-    fn len(&self) -> usize;
+     fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>>;
+     fn len(&self) -> usize;
 }
 
 impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
-    fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>> {
+     fn get(&self, i: usize) -> Rc<RefCell<Option<TypeStack>>> {
         if i == 0 || self.borrow().is_none() {
             Rc::clone(self)
         } else {
@@ -416,7 +416,7 @@ impl TypeStackImpl for Rc<RefCell<Option<TypeStack>>> {
         }
     }
 
-    fn len(&self) -> usize {
+     fn len(&self) -> usize {
         if self.borrow().is_none() {
             0
         } else {
@@ -432,7 +432,7 @@ pub struct IrBlock {
 }
 
 impl IrBlock {
-    pub fn new_with_stack<F>(
+     pub fn new_with_stack<F>(
         opcode: IrOpcode,
         type_stack: Rc<RefCell<Option<TypeStack>>>,
         add_cast: &mut F,
@@ -464,7 +464,7 @@ impl IrBlock {
         })
     }
 
-    pub fn new_with_stack_no_cast(
+     pub fn new_with_stack_no_cast(
         opcode: IrOpcode,
         type_stack: Rc<RefCell<Option<TypeStack>>>,
     ) -> Result<Self, HQError> {
@@ -503,7 +503,7 @@ impl IrBlock {
         })
     }
 
-    pub fn does_request_redraw(&self) -> bool {
+     pub fn does_request_redraw(&self) -> bool {
         use IrOpcode::*;
         matches!(
             self.opcode(),
@@ -523,18 +523,18 @@ impl IrBlock {
                 | looks_changesizeby
         )
     }
-    pub fn is_hat(&self) -> bool {
+     pub fn is_hat(&self) -> bool {
         use IrOpcode::*;
         matches!(self.opcode, event_whenflagclicked)
     }
-    pub fn opcode(&self) -> &IrOpcode {
+     pub fn opcode(&self) -> &IrOpcode {
         &self.opcode
     }
-    pub fn type_stack(&self) -> Rc<RefCell<Option<TypeStack>>> {
+     pub fn type_stack(&self) -> Rc<RefCell<Option<TypeStack>>> {
         Rc::clone(&self.type_stack)
     }
 
-    pub fn is_const(&self) -> bool {
+     pub fn is_const(&self) -> bool {
         use IrOpcode::*;
         matches!(
             self.opcode(),
@@ -547,7 +547,7 @@ impl IrBlock {
         )
     }
 
-    pub fn const_value(&self, value_stack: &mut Vec<IrVal>) -> Result<Option<()>, HQError> {
+     pub fn const_value(&self, value_stack: &mut Vec<IrVal>) -> Result<Option<()>, HQError> {
         use IrOpcode::*;
         //dbg!(value_stack.len());
         let arity = self.opcode().expected_inputs()?.len();
@@ -663,7 +663,7 @@ pub enum InputType {
 impl InputType {
     /// returns the base type that a type is aliased to, if present;
     /// otherwise, returns a clone of itself
-    pub fn base_type(&self) -> InputType {
+     pub fn base_type(&self) -> InputType {
         use InputType::*;
         // unions of types should be represented with the least restrictive type first,
         // so that casting chooses the less restrictive type to cast to
@@ -683,7 +683,7 @@ impl InputType {
     /// when a type is a union type, returns the first concrete type in that union
     /// (this assumes that the least restrictive type is placed first in the union).
     /// otherwise, returns itself.
-    pub fn least_restrictive_concrete_type(&self) -> InputType {
+     pub fn least_restrictive_concrete_type(&self) -> InputType {
         match self.base_type() {
             InputType::Union(a, _) => a.least_restrictive_concrete_type(),
             other => other,
@@ -691,7 +691,7 @@ impl InputType {
     }
 
     /// determines whether a type is a superyype of another type
-    pub fn includes(&self, other: &Self) -> bool {
+     pub fn includes(&self, other: &Self) -> bool {
         if self.base_type() == other.base_type() {
             true
         } else if let InputType::Union(a, b) = self.base_type() {
@@ -706,7 +706,7 @@ impl InputType {
     /// so that there is no ambiguity over which type it should be promoted to.
     /// if there are no types that can be prpmoted to,
     /// an `Err(HQError)` will be returned.
-    pub fn loosen_to<T>(&self, others: T) -> Result<Self, HQError>
+     pub fn loosen_to<T>(&self, others: T) -> Result<Self, HQError>
     where
         T: IntoIterator<Item = InputType>,
         T::IntoIter: ExactSizeIterator,
@@ -723,12 +723,12 @@ impl InputType {
 }
 
 impl IrOpcode {
-    pub fn does_request_redraw(&self) -> bool {
+     pub fn does_request_redraw(&self) -> bool {
         use IrOpcode::*;
         matches!(self, looks_say | looks_think)
     }
 
-    pub fn expected_inputs(&self) -> Result<Vec<InputType>, HQError> {
+     pub fn expected_inputs(&self) -> Result<Vec<InputType>, HQError> {
         use InputType::*;
         use IrOpcode::*;
         Ok(match self {
@@ -798,7 +798,7 @@ impl IrOpcode {
         })
     }
 
-    pub fn output(
+     pub fn output(
         &self,
         type_stack: Rc<RefCell<Option<TypeStack>>>,
     ) -> Result<Rc<RefCell<Option<TypeStack>>>, HQError> {
@@ -940,7 +940,7 @@ pub struct IrVar {
 }
 
 impl IrVar {
-    pub fn new(id: String, name: String, initial_value: VarVal, is_cloud: bool) -> Self {
+     pub fn new(id: String, name: String, initial_value: VarVal, is_cloud: bool) -> Self {
         Self {
             id,
             name,
@@ -948,16 +948,16 @@ impl IrVar {
             is_cloud,
         }
     }
-    pub fn id(&self) -> &String {
+     pub fn id(&self) -> &String {
         &self.id
     }
-    pub fn name(&self) -> &String {
+     pub fn name(&self) -> &String {
         &self.name
     }
-    pub fn initial_value(&self) -> &VarVal {
+     pub fn initial_value(&self) -> &VarVal {
         &self.initial_value
     }
-    pub fn is_cloud(&self) -> &bool {
+     pub fn is_cloud(&self) -> &bool {
         &self.is_cloud
     }
 }
@@ -982,7 +982,7 @@ pub struct Procedure {
 }
 
 impl fmt::Debug for TypeStack {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let this = Rc::new(RefCell::new(Some(self.clone())));
         f.debug_list()
             .entries(
@@ -995,19 +995,19 @@ impl fmt::Debug for TypeStack {
 }
 
 impl Step {
-    pub fn new(opcodes: Vec<IrBlock>, context: Rc<ThreadContext>) -> Step {
+     pub fn new(opcodes: Vec<IrBlock>, context: Rc<ThreadContext>) -> Step {
         Step { opcodes, context }
     }
-    pub fn opcodes(&self) -> &Vec<IrBlock> {
+     pub fn opcodes(&self) -> &Vec<IrBlock> {
         &self.opcodes
     }
-    pub fn opcodes_mut(&mut self) -> &mut Vec<IrBlock> {
+     pub fn opcodes_mut(&mut self) -> &mut Vec<IrBlock> {
         &mut self.opcodes
     }
-    pub fn context(&self) -> Rc<ThreadContext> {
+     pub fn context(&self) -> Rc<ThreadContext> {
         Rc::clone(&self.context)
     }
-    pub fn const_fold(&mut self) -> Result<(), HQError> {
+     pub fn const_fold(&mut self) -> Result<(), HQError> {
         let mut value_stack: Vec<IrVal> = vec![];
         let mut is_folding = false;
         let mut fold_start = 0;
@@ -1070,7 +1070,7 @@ pub enum IrVal {
 }
 
 impl IrVal {
-    pub fn to_f64(self) -> f64 {
+     pub fn to_f64(self) -> f64 {
         match self {
             IrVal::Unknown(u) => u.to_f64(),
             IrVal::Float(f) => f,
@@ -1079,7 +1079,7 @@ impl IrVal {
             IrVal::String(s) => s.parse().unwrap_or(0.0),
         }
     }
-    pub fn to_i32(self) -> i32 {
+     pub fn to_i32(self) -> i32 {
         match self {
             IrVal::Unknown(u) => u.to_i32(),
             IrVal::Float(f) => f as i32,
@@ -1089,7 +1089,7 @@ impl IrVal {
         }
     }
     #[allow(clippy::inherent_to_string)]
-    pub fn to_string(self) -> String {
+     pub fn to_string(self) -> String {
         match self {
             IrVal::Unknown(u) => u.to_string(),
             IrVal::Float(f) => format!("{f}"),
@@ -1098,14 +1098,14 @@ impl IrVal {
             IrVal::String(s) => s,
         }
     }
-    pub fn to_bool(self) -> bool {
+     pub fn to_bool(self) -> bool {
         match self {
             IrVal::Unknown(u) => u.to_bool(),
             IrVal::Boolean(b) => b,
             _ => unreachable!(),
         }
     }
-    pub fn as_input_type(&self) -> InputType {
+     pub fn as_input_type(&self) -> InputType {
         match self {
             IrVal::Unknown(_) => InputType::Unknown,
             IrVal::Float(_) => InputType::Float,
@@ -1114,7 +1114,7 @@ impl IrVal {
             IrVal::Boolean(_) => InputType::Boolean,
         }
     }
-    pub fn try_as_block(
+     pub fn try_as_block(
         &self,
         type_stack: Rc<RefCell<Option<TypeStack>>>,
     ) -> Result<IrBlock, HQError> {
@@ -1150,7 +1150,7 @@ pub struct Thread {
 
 static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"[^\\]%[nbs]"#);
 
-fn arg_types_from_proccode(proccode: String) -> Result<Vec<InputType>, HQError> {
+ fn arg_types_from_proccode(proccode: String) -> Result<Vec<InputType>, HQError> {
     // https://github.com/scratchfoundation/scratch-blocks/blob/abbfe93136fef57fdfb9a077198b0bc64726f012/blocks_vertical/procedures.js#L207-L215
     (*ARG_REGEX)
         .find_iter(proccode.as_str())
@@ -1168,7 +1168,7 @@ fn arg_types_from_proccode(proccode: String) -> Result<Vec<InputType>, HQError> 
         .collect::<Result<Vec<_>, _>>()
 }
 
-fn add_procedure(
+ fn add_procedure(
     target_id: String,
     proccode: String,
     expect_warp: bool,
@@ -1263,7 +1263,7 @@ fn add_procedure(
 
 trait IrBlockVec {
     #[allow(clippy::too_many_arguments)]
-    fn add_block(
+     fn add_block(
         &mut self,
         block_id: String,
         blocks: &BTreeMap<String, Block>,
@@ -1273,8 +1273,8 @@ trait IrBlockVec {
         target_id: String,
         procedures: &mut ProcMap,
     ) -> Result<(), HQError>;
-    fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError>;
-    fn add_inputs(
+     fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError>;
+     fn add_inputs(
         &mut self,
         inputs: &BTreeMap<String, Input>,
         blocks: &BTreeMap<String, Block>,
@@ -1283,11 +1283,11 @@ trait IrBlockVec {
         target_id: String,
         procedures: &mut ProcMap,
     ) -> Result<(), HQError>;
-    fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>>;
+     fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>>;
 }
 
 impl IrBlockVec for Vec<IrBlock> {
-    fn add_inputs(
+     fn add_inputs(
         &mut self,
         inputs: &BTreeMap<String, Input>,
         blocks: &BTreeMap<String, Block>,
@@ -1326,7 +1326,7 @@ impl IrBlockVec for Vec<IrBlock> {
         }
         Ok(())
     }
-    fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError> {
+     fn add_block_arr(&mut self, block_arr: &BlockArray) -> Result<(), HQError> {
         let prev_block = self.last();
         let type_stack = if let Some(block) = prev_block {
             Rc::clone(&block.type_stack)
@@ -1384,7 +1384,7 @@ impl IrBlockVec for Vec<IrBlock> {
         )?);
         Ok(())
     }
-    fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>> {
+     fn get_type_stack(&self, i: Option<usize>) -> Rc<RefCell<Option<TypeStack>>> {
         let prev_block = if let Some(j) = i {
             self.get(j)
         } else {
@@ -1396,7 +1396,7 @@ impl IrBlockVec for Vec<IrBlock> {
             Rc::new(RefCell::new(None))
         }
     }
-    fn add_block(
+     fn add_block(
         &mut self,
         block_id: String,
         blocks: &BTreeMap<String, Block>,
@@ -2124,7 +2124,7 @@ impl IrBlockVec for Vec<IrBlock> {
     }
 }
 
-pub fn step_from_top_block<'a>(
+ pub fn step_from_top_block<'a>(
     top_id: String,
     mut last_nexts: Vec<String>,
     blocks: &BTreeMap<String, Block>,
@@ -2230,23 +2230,23 @@ pub fn step_from_top_block<'a>(
 }
 
 impl Thread {
-    pub fn new(start: ThreadStart, first_step: String, target_id: String) -> Thread {
+     pub fn new(start: ThreadStart, first_step: String, target_id: String) -> Thread {
         Thread {
             start,
             first_step,
             target_id,
         }
     }
-    pub fn start(&self) -> &ThreadStart {
+     pub fn start(&self) -> &ThreadStart {
         &self.start
     }
-    pub fn first_step(&self) -> &String {
+     pub fn first_step(&self) -> &String {
         &self.first_step
     }
-    pub fn target_id(&self) -> &String {
+     pub fn target_id(&self) -> &String {
         &self.target_id
     }
-    pub fn from_hat(
+     pub fn from_hat(
         hat: Block,
         blocks: BTreeMap<String, Block>,
         context: Rc<ThreadContext>,
@@ -2291,7 +2291,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn create_ir() -> Result<(), HQError> {
+     fn create_ir() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
         let proj: Sb3Project = fs::read_to_string("./project.json")
@@ -2303,7 +2303,7 @@ mod tests {
     }
 
     #[test]
-    fn const_fold() -> Result<(), HQError> {
+     fn const_fold() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
         let proj: Sb3Project = fs::read_to_string("./project.json")
@@ -2315,7 +2315,7 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn opt() -> Result<(), HQError> {
+     fn opt() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
         let proj: Sb3Project = fs::read_to_string("./project.json")
@@ -2328,7 +2328,7 @@ mod tests {
     }
 
     #[test]
-    fn input_types() {
+     fn input_types() {
         use InputType::*;
         assert!(Number.includes(&Float));
         assert!(Number.includes(&Integer));

@@ -88,7 +88,7 @@ export const imports = {{
                 .iter()
                 .map(|dir| {
                     format!(
-                        "{dir}: {{ {} }},",
+                        "{dir}: {{ {} }}",
                         ts_paths
                             .iter()
                             .filter(|(d, _)| d == dir)
@@ -116,21 +116,21 @@ pub enum IrOpcode {{
 
 impl IrOpcode {{
     /// maps an opcode to its acceptable input types
-    pub fn acceptable_inputs(&self) -> Rc<[crate::ir::Type]> {{
+     pub fn acceptable_inputs(&self) -> Rc<[crate::ir::Type]> {{
         match self {{
             {}
         }}
     }}
 
     /// maps an opcode to its WASM instructions
-    pub fn wasm(&self, step_func: &crate::wasm::StepFunc, inputs: Rc<[crate::ir::Type]>) -> HQResult<Vec<wasm_encoder::Instruction<'static>>> {{
+     pub fn wasm(&self, step_func: &crate::wasm::StepFunc, inputs: Rc<[crate::ir::Type]>) -> HQResult<Vec<wasm_encoder::Instruction<'static>>> {{
         match self {{
             {}
         }}
     }}
     
     /// maps an opcode to its output type
-    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
+     pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
         match self {{
             {}
         }}

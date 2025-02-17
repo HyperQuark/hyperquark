@@ -14,12 +14,12 @@ pub struct ProcedureContext {
 }
 
 impl ProcedureContext {
-    pub fn arg_ids(&self) -> &[Box<str>] {
-        self.arg_ids.borrow()
+    pub fn arg_ids(&self) -> &Box<[Box<str>]> {
+        &self.arg_ids
     }
 
-    pub fn arg_types(&self) -> &[IrType] {
-        self.arg_types.borrow()
+    pub fn arg_types(&self) -> &Box<[IrType]> {
+        &self.arg_types
     }
 
     pub fn warp(&self) -> bool {
@@ -158,12 +158,7 @@ impl Proc {
                 step_context,
                 project,
             )?,
-            None => RcStep::new(Rc::new(Step::new(
-                None,
-                step_context,
-                Box::new([]),
-                project,
-            ))),
+            None => RcStep::new(Rc::new(Step::new(None, step_context, vec![], project))),
         };
         Ok(Proc {
             first_step,
@@ -196,7 +191,7 @@ impl ProcRegistry {
         )?;
         Ok(Rc::clone(
             self.registry()
-                .borrow()
+                .try_borrow()?
                 .get_index(idx)
                 .ok_or(make_hq_bug!(
                     "recently inserted proc not found in ProcRegistry"

@@ -32,8 +32,9 @@ impl IrProject {
         }
     }
 
-    pub fn register_step(&self, step: Rc<Step>) {
-        self.steps().borrow_mut().insert(step);
+    pub fn register_step(&self, step: Rc<Step>) -> HQResult<()> {
+        self.steps().try_borrow_mut()?.insert(step);
+        Ok(())
     }
 }
 
@@ -68,7 +69,7 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             .flatten()
             .cloned()
             .collect::<Box<[_]>>();
-        *project.threads.borrow_mut() = threads;
+        *project.threads.try_borrow_mut()? = threads;
         Ok(project)
     }
 }

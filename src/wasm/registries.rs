@@ -1,4 +1,5 @@
 use super::{ExternalFunctionRegistry, StringRegistry, TableRegistry, TypeRegistry};
+use crate::prelude::*;
 
 #[derive(Default)]
 pub struct Registries {

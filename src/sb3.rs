@@ -494,7 +494,7 @@ impl TryFrom<&str> for Sb3Project {
 pub mod tests {
     use super::*;
 
-    pub fn test_project_id(id: &str) -> String {
+     pub fn test_project_id(id: &str) -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
         println!("https://api.scratch.mit.edu/projects/{:}/", id);
         let token_val = serde_json::from_str::<Value>(
@@ -530,7 +530,7 @@ pub mod tests {
     }
 
     #[test]
-    fn paper_minecraft() {
+     fn paper_minecraft() {
         let resp = self::test_project_id("10128407");
         let j: Sb3Project = resp.try_into().unwrap();
         dbg!(j);
@@ -557,7 +557,7 @@ pub mod tests {
     }
 
     #[test]
-    fn level_eaten() {
+     fn level_eaten() {
         let resp = self::test_project_id("704676520");
         let j: Sb3Project = resp.try_into().unwrap();
         dbg!(j);
@@ -584,7 +584,7 @@ pub mod tests {
     }
 
     #[test]
-    fn hq_test_project() {
+     fn hq_test_project() {
         let resp = self::test_project_id("771449498");
         dbg!(&resp);
         let j: Sb3Project = resp.try_into().unwrap();
@@ -592,7 +592,7 @@ pub mod tests {
     }
 
     #[test]
-    fn default_project() {
+     fn default_project() {
         let resp = self::test_project_id("510186917");
         let j: Sb3Project = resp.try_into().unwrap();
         dbg!(j);

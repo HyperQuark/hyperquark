@@ -54,13 +54,17 @@ impl StepFunc {
 
     /// Registers a new local in this function, and returns its index
     pub fn local(&self, val_type: ValType) -> HQResult<u32> {
-        self.locals.borrow_mut().push(val_type);
-        u32::try_from(self.locals.borrow().len() + self.params.len() - 1)
+        self.locals.try_borrow_mut()?.push(val_type);
+        u32::try_from(self.locals.try_borrow()?.len() + self.params.len() - 1)
             .map_err(|_| make_hq_bug!("local index was out of bounds"))
     }
 
-    pub fn add_instructions(&self, instructions: impl IntoIterator<Item = Instruction<'static>>) {
-        self.instructions.borrow_mut().extend(instructions);
+    pub fn add_instructions(
+        &self,
+        instructions: impl IntoIterator<Item = Instruction<'static>>,
+    ) -> HQResult<()> {
+        self.instructions.try_borrow_mut()?.extend(instructions);
+        Ok(())
     }
 
     /// Takes ownership of the function and returns the backing `wasm_encoder` `Function`

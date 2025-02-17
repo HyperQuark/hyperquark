@@ -19,7 +19,7 @@ use wasm_encoder::{
     MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
-fn instructions(
+ fn instructions(
     op: &IrBlock,
     context: Rc<ThreadContext>,
     string_consts: &mut Vec<String>,
@@ -1371,7 +1371,7 @@ fn instructions(
 }
 
 pub trait CompileToWasm {
-    fn compile_wasm(
+     fn compile_wasm(
         &self,
         step_funcs: &mut IndexMap<
             Option<(String, String)>,
@@ -1384,7 +1384,7 @@ pub trait CompileToWasm {
 }
 
 impl CompileToWasm for (&(String, String), &Step) {
-    fn compile_wasm(
+     fn compile_wasm(
         &self,
         step_funcs: &mut IndexMap<
             Option<(String, String)>,
@@ -1451,13 +1451,13 @@ pub struct WasmProject {
 /*
 #[wasm_bindgen]
 impl WasmProject {
-    pub fn wasm_bytes(&self) -> &Vec<u8> {
+     pub fn wasm_bytes(&self) -> &Vec<u8> {
         &self.wasm_bytes
     }
-    pub fn string_consts(&self) -> &Vec<String> {
+     pub fn string_consts(&self) -> &Vec<String> {
         &self.string_consts
     }
-    pub fn target_names(&self) -> &Vec<String> {
+     pub fn target_names(&self) -> &Vec<String> {
         &self.target_names
     }
 }*/
@@ -1639,7 +1639,7 @@ pub const BUILTIN_GLOBALS: u32 = 3;
 impl TryFrom<IrProject> for WasmProject {
     type Error = HQError;
 
-    fn try_from(project: IrProject) -> Result<Self, Self::Error> {
+     fn try_from(project: IrProject) -> Result<Self, Self::Error> {
         let mut module = Module::new();
 
         let mut imports = ImportSection::new();
@@ -2858,7 +2858,7 @@ mod tests {
     use std::process::{Command, Stdio};
 
     #[test]
-    fn make_wasm() -> Result<(), HQError> {
+     fn make_wasm() -> Result<(), HQError> {
         use crate::sb3::Sb3Project;
         use std::fs;
         let proj: Sb3Project = fs::read_to_string("./benchmark (3.1).json")

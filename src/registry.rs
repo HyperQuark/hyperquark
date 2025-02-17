@@ -69,14 +69,15 @@ pub trait Registry: Sized {
     fn register<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
         N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
     {
         self.registry()
-            .borrow_mut()
+            .try_borrow_mut()?
             .entry(key.clone())
             .or_insert(value);
         N::try_from(
             self.registry()
-                .borrow()
+                .try_borrow()?
                 .get_index_of(&key)
                 .ok_or(make_hq_bug!("couldn't find entry in Registry"))?,
         )
@@ -88,6 +89,7 @@ pub trait RegistryDefault: Registry<Value: Default> {
     fn register_default<N>(&self, key: Self::Key) -> HQResult<N>
     where
         N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
     {
         self.register(key, Default::default())
     }

@@ -10,3 +10,6 @@ mod operator;
 mod tests;
 
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
+
+mod input_switcher;
+pub use input_switcher::wrap_instruction;

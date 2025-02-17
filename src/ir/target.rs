@@ -7,8 +7,8 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn name(&self) -> &str {
-        self.name.borrow()
+    pub fn name(&self) -> &Box<str> {
+        &self.name
     }
 
     pub fn is_stage(&self) -> bool {

@@ -8,7 +8,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug)]
 pub struct Step {
     context: StepContext,
-    opcodes: Box<[IrOpcode]>,
+    opcodes: Vec<IrOpcode>,
     /// is this step inlined? if not, its own function should be produced
     inlined: RefCell<bool>,
     /// used for `Hash`. Should be obtained from a block in the `Step` where possible.
@@ -29,12 +29,12 @@ impl Step {
         &self.context
     }
 
-    pub fn opcodes(&self) -> &[IrOpcode] {
-        self.opcodes.borrow()
+    pub fn opcodes(&self) -> &Vec<IrOpcode> {
+        &self.opcodes
     }
 
-    pub fn inlined(&self) -> bool {
-        *self.inlined.borrow()
+    pub fn inlined(&self) -> &RefCell<bool> {
+        &self.inlined
     }
 
     pub fn project(&self) -> Weak<IrProject> {
@@ -44,7 +44,7 @@ impl Step {
     pub fn new(
         id: Option<Box<str>>,
         context: StepContext,
-        opcodes: Box<[IrOpcode]>,
+        opcodes: Vec<IrOpcode>,
         project: Weak<IrProject>,
     ) -> Self {
         Step {
@@ -63,9 +63,9 @@ impl Step {
                 target: Weak::new(),
                 proc_context: None,
             },
-            opcodes: Box::new([IrOpcode::hq_integer(crate::instructions::HqIntegerFields(
+            opcodes: vec![IrOpcode::hq_integer(crate::instructions::HqIntegerFields(
                 0,
-            ))]),
+            ))],
             inlined: RefCell::new(false),
             project: Weak::new(),
         }
@@ -88,8 +88,9 @@ impl Step {
             .upgrade()
             .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
             .steps()
-            .borrow_mut()
+            .try_borrow_mut()?
             .insert(Rc::clone(&step));
+        crate::log(format!("{:?}", step).as_str());
         Ok(RcStep(step))
     }
 }
@@ -113,23 +114,23 @@ impl RcStep {
     }
 
     pub fn make_inlined(&self) -> HQResult<()> {
-        if *self.0.inlined.borrow() {
+        if *self.0.inlined.try_borrow()? {
             return Ok(());
         };
-        *self.0.inlined.borrow_mut() = true;
+        *self.0.inlined.try_borrow_mut()? = true;
         self.0
             .project
             .upgrade()
             .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
             .inlined_steps()
-            .borrow_mut()
+            .try_borrow_mut()?
             .insert(
                 self.0
                     .project
                     .upgrade()
                     .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
                     .steps()
-                    .borrow_mut()
+                    .try_borrow_mut()?
                     .swap_take(&self.0)
                     .ok_or(make_hq_bug!("step not in project's StepMap"))?,
             );

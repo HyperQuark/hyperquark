@@ -16,18 +16,24 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
             .external_functions()
             .register(("looks", "say_float"), (vec![ValType::F64], vec![]))?;
         vec![Instruction::Call(func_index)]
+    } else if IrType::String.contains(inputs[0]) {
+        let func_index = func
+            .registries()
+            .external_functions()
+            .register(("looks", "say_string"), (vec![ValType::EXTERNREF], vec![]))?;
+        vec![Instruction::Call(func_index)]
     } else {
         hq_todo!()
     })
 }
 
 pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Any])
+    Rc::new([IrType::String.or(IrType::Number)])
 }
 
 pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
-    if !(IrType::QuasiInt.contains(inputs[0]) || IrType::Float.contains(inputs[0])) {
-        hq_todo!()
+    if !(IrType::Number.or(IrType::String).contains(inputs[0])) {
+        hq_todo!("unimplemented input type: {:?}", inputs)
     }
     Ok(None)
 }
