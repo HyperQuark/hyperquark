@@ -22,6 +22,16 @@ The build script has additonal configuration options; run `./build.sh -h` for in
 
 If you experience runtime stack overflow errors in debug mode, try using the `-O` option to enable wasm-opt.
 
+## Adding a new block
+
+To add a new block named `category_opcode`:
+- create `src/instructions/category/opcode.rs` with the relevant `pub` functions
+- - ensure to add relevant `instructions_test!`s
+- add `pub mod opcode;` to `src/instructions/category.rs`, creating the file if needed
+- - if you're creating the category file, add `mod category;` to `src/instructions.rs`
+- add the block to `from_normal_block` in `src/ir/blocks.rs`
+- add the block's input names to `input_names` in `src/ir/blocks.rs`
+
 ## generared WASM module memory layout
 
 |    name       |                           number of bytes                            | optional? | description                                                                                                                                                                                                                                                                                                        |
