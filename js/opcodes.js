@@ -1,0 +1,1 @@
+export const opcodes = ["looks_say","operator_add","operator_join"];
