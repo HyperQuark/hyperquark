@@ -45,4 +45,4 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Opti
     }))
 }
 
-crate::instructions_test! {tests;@ super::Fields("hello, world!".into())}
+crate::instructions_test! {tests; hq_text; @ super::Fields("hello, world!".into())}

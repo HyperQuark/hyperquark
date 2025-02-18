@@ -26,6 +26,7 @@ fn generate_branches(
 ) -> HQResult<Vec<Instruction<'static>>> {
     if remaining_inputs.is_empty() {
         hq_assert!(processed_inputs.iter().all(|ty| ty.is_base_type()));
+        crate::log(format!("processed_inputs:{:?}", processed_inputs).as_str());
         let mut wasm = opcode.wasm(func, Rc::from(processed_inputs))?;
         // if the overall output is boxed, but this particular branch produces an unboxed result
         // (which i think all branches probably should?), box it.
@@ -79,17 +80,26 @@ fn generate_branches(
         )?);
         wasm
     } else {
-        let if_block_type = if let Some(out_ty) = output_type {
-            BlockType::Result(WasmProject::ir_type_to_wasm(out_ty)?)
-        } else {
-            BlockType::Empty
-        };
+        let if_block_type = BlockType::FunctionType(
+            func.registries().types().register_default((
+                processed_inputs
+                    .iter()
+                    .cloned() // &T.clone() is *T
+                    .map(WasmProject::ir_type_to_wasm)
+                    .collect::<HQResult<Vec<_>>>()?,
+                if let Some(out_ty) = output_type {
+                    vec![WasmProject::ir_type_to_wasm(out_ty)?]
+                } else {
+                    vec![]
+                },
+            ))?,
+        );
         let possible_types_num = curr_input.len();
         for (i, ty) in curr_input.iter().enumerate() {
+            let base = ty.base_type().ok_or(make_hq_bug!("non-base type found"))?;
             wasm.append(&mut if i == 0 {
-                match *ty {
+                match base {
                     IrType::QuasiInt => vec![
-                        LocalGet(local_idx),
                         I64Const(BOXED_INT_PATTERN),
                         I64And,
                         I64Const(BOXED_INT_PATTERN),
@@ -104,7 +114,6 @@ fn generate_branches(
                             .tables()
                             .register("strings".into(), (RefType::EXTERNREF, 0))?;
                         vec![
-                            LocalGet(local_idx),
                             I64Const(BOXED_STRING_PATTERN),
                             I64And,
                             I64Const(BOXED_STRING_PATTERN),
@@ -119,7 +128,7 @@ fn generate_branches(
                     _ => unreachable!(),
                 }
             } else if i == possible_types_num - 1 {
-                match *ty {
+                match base {
                     IrType::Float => vec![Else, LocalGet(local_idx), F64ReinterpretI64], // float guaranteed to be last so no need to check
                     IrType::QuasiInt => vec![Else, LocalGet(local_idx), I32WrapI64],
                     IrType::String => {
@@ -132,7 +141,7 @@ fn generate_branches(
                     _ => unreachable!(),
                 }
             } else {
-                match *ty {
+                match base {
                     // float guaranteed to be last so no need to check
                     IrType::Float => vec![Else, LocalGet(local_idx), F64ReinterpretI64],
                     IrType::QuasiInt => vec![
@@ -168,7 +177,7 @@ fn generate_branches(
                 }
             });
             let mut processed_inputs = processed_inputs.to_vec();
-            processed_inputs.push(curr_input[0]);
+            processed_inputs.push(*ty);
             wasm.append(&mut generate_branches(
                 func,
                 &processed_inputs,
@@ -190,29 +199,31 @@ pub fn wrap_instruction(
     inputs: Rc<[IrType]>,
     opcode: IrOpcode,
 ) -> HQResult<Vec<Instruction<'static>>> {
-    crate::log(
-        format!(
-            "wrap_instruction. inputs: {:?}, opcode: {:?}",
-            inputs, opcode
-        )
-        .as_str(),
-    );
+    // crate::log(
+    //     format!(
+    //         "wrap_instruction. inputs: {:?}, opcode: {:?}",
+    //         inputs, opcode
+    //     )
+    //     .as_str(),
+    // );
 
     let output = opcode.output_type(Rc::clone(&inputs))?;
 
     hq_assert!(inputs.len() == opcode.acceptable_inputs().len());
 
-    // iterator of possible base types for each input
-    let mut base_types =
+    // possible base types for each input
+    let base_types =
         // check for float last of all, because I don't think there's an easy way of checking
         // if something is *not* a canonical NaN with extra bits
         core::iter::repeat([IrType::QuasiInt, IrType::String, IrType::Float].into_iter())
             .take(inputs.len())
             .enumerate()
             .map(|(i, tys)| {
-                tys.filter(|ty| inputs[i].intersects(*ty))
+                tys.filter(|ty| inputs[i].intersects(*ty)).map(|ty| ty.and(inputs[i]))
                     .collect::<Box<[_]>>()
             }).collect::<Vec<_>>();
+
+    crate::log(format!("{:?}", base_types).as_str());
 
     // sanity check; we have at least one possible input type for each input
     hq_assert!(
@@ -221,15 +232,9 @@ pub fn wrap_instruction(
         opcode
     );
 
-    let locals = base_types
+    let locals = inputs
         .iter()
-        .map(|tys| {
-            if tys.len() == 1 {
-                func.local(WasmProject::ir_type_to_wasm(tys[0])?)
-            } else {
-                func.local(ValType::I64)
-            }
-        })
+        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)?))
         .collect::<HQResult<Vec<_>>>()?;
 
     // for now, chuck each input into a local

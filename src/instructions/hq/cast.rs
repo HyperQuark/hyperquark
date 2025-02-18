@@ -96,5 +96,5 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Optio
     ))
 }
 
-crate::instructions_test! {float; t @ super::Fields(IrType::Float)}
-crate::instructions_test! {string; t @ super::Fields(IrType::String)}
+crate::instructions_test! {float; hq_cast; t @ super::Fields(IrType::Float)}
+crate::instructions_test! {string; hq_cast; t @ super::Fields(IrType::String)}

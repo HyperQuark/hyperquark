@@ -38,4 +38,4 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(None)
 }
 
-crate::instructions_test! {tests; t}
+crate::instructions_test! {tests; looks_say; t}

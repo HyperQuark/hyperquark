@@ -54,16 +54,14 @@ impl WasmProject {
 
     /// maps a broad IR type to a WASM type
     pub fn ir_type_to_wasm(ir_type: IrType) -> HQResult<ValType> {
-        Ok(if IrType::Float.contains(ir_type) {
-            ValType::F64
-        } else if IrType::QuasiInt.contains(ir_type) {
-            ValType::I32
-        } else if IrType::String.contains(ir_type) {
-            ValType::EXTERNREF
-        } else if IrType::Color.contains(ir_type) {
-            hq_todo!() //ValType::V128 // f32x4?
-        } else {
-            ValType::I64 // NaN boxed value... let's worry about colors later
+        let base = ir_type.base_type();
+        Ok(match base {
+            Some(IrType::Float) => ValType::F64,
+            Some(IrType::QuasiInt) => ValType::I32,
+            Some(IrType::String) => ValType::EXTERNREF,
+            Some(IrType::Color) => hq_todo!("colours"), //ValType::V128 // f32x4?
+            None => ValType::I64, // NaN boxed value... let's worry about colors later
+            Some(_) => unreachable!(),
         })
     }
 

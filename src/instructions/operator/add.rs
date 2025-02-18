@@ -55,4 +55,4 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     }))
 }
 
-crate::instructions_test! {tests; t1, t2 ;}
+crate::instructions_test! {tests; operator_add; t1, t2 ;}
