@@ -9,6 +9,7 @@ Compile scratch projects to WASM
 - the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
 - wasm-bindgen-cli (`cargo install -f wasm-bindgen-cli`)
 - wasm-opt (install binaryen using whatever package manager you use)
+- `cargo-outdir` (`cargo install cargo-outdir`)
 
 ## Building
 
