@@ -17,7 +17,7 @@ import ProjectInput from '../components/ProjectInput.vue'
     <br>
     <ul id="featured-projects-container">
       <li v-for="project in featuredProjects">
-        <a :href="'projects/' + project.id">{{ project.name }}</a> by {{ project.author }}
+        <RouterLink :to="'projects/' + project.id">{{ project.name }}</RouterLink> by {{ project.author }}
       </li>
     </ul>
     <br>
