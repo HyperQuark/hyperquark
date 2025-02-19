@@ -56,6 +56,8 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     let maybe_positive = t1.maybe_positive() || t2.maybe_positive();
     let maybe_negative = t1.maybe_negative() || t2.maybe_negative();
     let maybe_zero = (t1.maybe_zero() || t1.maybe_nan()) && (t2.maybe_zero() || t2.maybe_nan());
+    let maybe_nan = (IrType::FloatNegInf.intersects(t1) && IrType::FloatPosInf.intersects(t2))
+        || (IrType::FloatNegInf.intersects(t2) && IrType::FloatPosInf.intersects(t1));
     Ok(Some(if IrType::QuasiInt.contains(t1.or(t2)) {
         IrType::none_if_false(maybe_positive, IrType::IntPos)
             .or(IrType::none_if_false(maybe_negative, IrType::IntNeg))
@@ -67,10 +69,12 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
         IrType::none_if_false(maybe_positive, IrType::FloatPos)
             .or(IrType::none_if_false(maybe_negative, IrType::FloatNeg))
             .or(IrType::none_if_false(maybe_zero, IrType::FloatZero))
+            .or(IrType::none_if_false(maybe_nan, IrType::FloatNan))
     } else {
         // there is a boxed type somewhere
         // TODO: can these bounds be tightened? e.g. it may only be a positive int or negative float?
-        // i have no idea if that would ever work or would even be useful
+        // i have no idea if that would ever work, but it would be useful for considering when
+        // addition/subtraction may give NaN (since inf-inf=nan but inf+inf=inf)
         IrType::none_if_false(maybe_positive, IrType::FloatPos.or(IrType::IntPos))
             .or(IrType::none_if_false(
                 maybe_negative,
@@ -80,6 +84,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
                 maybe_zero,
                 IrType::FloatZero.or(IrType::IntZero),
             ))
+            .or(IrType::none_if_false(maybe_nan, IrType::FloatNan))
     }))
 }
 
