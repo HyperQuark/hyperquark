@@ -1,8 +1,4 @@
-use crate::ir::Type as IrType;
-use crate::prelude::*;
-use crate::wasm::StepFunc;
-use wasm_encoder::{Instruction, ValType};
-use wasm_gen::wasm;
+use super::super::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub IrType);

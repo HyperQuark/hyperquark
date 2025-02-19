@@ -1,8 +1,5 @@
-use crate::ir::Type as IrType;
-use crate::prelude::*;
-use crate::wasm::StepFunc;
-use wasm_encoder::{Instruction, RefType};
-use wasm_gen::wasm;
+use super::super::prelude::*;
+use wasm_encoder::RefType;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Box<str>);

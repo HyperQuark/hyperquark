@@ -1,6 +1,17 @@
-/// generates unit tests for instructions files. Takes a module name, followed by a semicolon, followed by an optional comma-separated list of arbitrary identifiers
-/// corresponding to the number of inputs the block takes, optionally followed by a semicolon and an expression
-/// for a sensible default for any fields; if multiple field values need to be tested, the macro can be repeated.
+/// Generates unit tests for instructions files. Takes a module name, followed by a semicolon,
+/// collowed by the full name of the opcode (in category_opcode form), followed by an optional
+/// comma-separated list of arbitrary identifiers corresponding to the number of inputs the block
+/// takes, optionally followed by a semicolon and an expression for a sensible default for any fields,
+/// optionally followed by a semicolon and a `WasmFlags` configuration (defaults to `Default::default()`).
+/// If multiple field values or flags configurations need to be tested, the macro can be repeated with
+/// different module names.
+/// 
+/// Example:
+/// For a block foo_bar, which takes 2 inputs, with Fields(bool),
+/// ```rust
+/// instructions_test!(test; foo_bar; t1, t2 @ Fields(true));
+/// instructions_test!(test; foo_bar; t1, t2 @ Fields(false));
+/// ```
 #[macro_export]
 macro_rules! instructions_test {
     {$module:ident; $opcode:ident; $($type_arg:ident $(,)?)* $(@$fields:expr)? $(;)?} => {

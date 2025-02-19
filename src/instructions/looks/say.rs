@@ -1,8 +1,4 @@
-use crate::ir::Type as IrType;
-use crate::prelude::*;
-use crate::wasm::StepFunc;
-use wasm_encoder::{Instruction, ValType};
-use wasm_gen::wasm;
+use super::super::prelude::*;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     Ok(if IrType::QuasiInt.contains(inputs[0]) {

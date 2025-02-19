@@ -90,7 +90,9 @@ impl Type {
     }
 
     pub fn maybe_positive(&self) -> bool {
-        self.contains(Type::IntPos) || self.intersects(Type::FloatPos) || self.contains(Type::BooleanTrue)
+        self.contains(Type::IntPos)
+            || self.intersects(Type::FloatPos)
+            || self.contains(Type::BooleanTrue)
     }
 
     pub fn maybe_negative(&self) -> bool {
@@ -98,7 +100,9 @@ impl Type {
     }
 
     pub fn maybe_zero(&self) -> bool {
-        self.contains(Type::IntZero) || self.contains(Type::BooleanFalse) || self.intersects(Type::FloatZero)
+        self.contains(Type::IntZero)
+            || self.contains(Type::BooleanFalse)
+            || self.intersects(Type::FloatZero)
     }
 
     pub fn maybe_nan(&self) -> bool {

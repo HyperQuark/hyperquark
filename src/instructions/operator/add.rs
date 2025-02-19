@@ -1,8 +1,4 @@
-use crate::ir::Type as IrType;
-use crate::prelude::*;
-use crate::wasm::StepFunc;
-use wasm_encoder::{Instruction, ValType};
-use wasm_gen::wasm;
+use super::super::prelude::*;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     hq_assert_eq!(inputs.len(), 2);
@@ -71,12 +67,19 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
         IrType::none_if_false(maybe_positive, IrType::FloatPos)
             .or(IrType::none_if_false(maybe_negative, IrType::FloatNeg))
             .or(IrType::none_if_false(maybe_zero, IrType::FloatZero))
-    } else { // there is a boxed type somewhere
+    } else {
+        // there is a boxed type somewhere
         // TODO: can these bounds be tightened? e.g. it may only be a positive int or negative float?
         // i have no idea if that would ever work or would even be useful
         IrType::none_if_false(maybe_positive, IrType::FloatPos.or(IrType::IntPos))
-            .or(IrType::none_if_false(maybe_negative, IrType::FloatNeg.or(IrType::IntNeg)))
-            .or(IrType::none_if_false(maybe_zero, IrType::FloatZero.or(IrType::IntZero)))
+            .or(IrType::none_if_false(
+                maybe_negative,
+                IrType::FloatNeg.or(IrType::IntNeg),
+            ))
+            .or(IrType::none_if_false(
+                maybe_zero,
+                IrType::FloatZero.or(IrType::IntZero),
+            ))
     }))
 }
 

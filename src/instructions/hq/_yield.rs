@@ -1,8 +1,7 @@
-use crate::ir::{Step, Type as IrType};
-use crate::prelude::*;
+use super::super::prelude::*;
+use crate::ir::Step;
 use crate::wasm::{byte_offset, StepFunc};
-use wasm_encoder::{Instruction, MemArg};
-use wasm_gen::wasm;
+use wasm_encoder::MemArg;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Option<Rc<Step>>);
