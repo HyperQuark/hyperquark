@@ -146,6 +146,7 @@ macro_rules! instructions_test {
                             continue;
                         }
                     };
+                    println!("{output_type:?}");
                     let registries = Rc::new(Registries::default());
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
@@ -153,6 +154,7 @@ macro_rules! instructions_test {
                         Some(output) => Some(WasmProject::ir_type_to_wasm(output)?),
                         None => None,
                         };
+                    println!("{result:?}");
                     let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), flags())?;
                     let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::new([$($type_arg,)*]), $crate::instructions::IrOpcode::$opcode$(($fields))?) {
                         Ok(a) => a,

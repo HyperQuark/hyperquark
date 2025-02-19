@@ -68,7 +68,7 @@ impl Type {
     pub const BASE_TYPES: [Type; 3] = [Type::String, Type::QuasiInt, Type::Float];
 
     pub fn is_base_type(&self) -> bool {
-        Type::BASE_TYPES.iter().any(|ty| ty.contains(*self))
+        (!self.is_none()) && Type::BASE_TYPES.iter().any(|ty| ty.contains(*self))
     }
 
     pub fn base_type(&self) -> Option<Type> {
@@ -81,8 +81,36 @@ impl Type {
             .find(|&ty| ty.contains(*self))
     }
 
-    pub fn base_types(&self) -> impl Iterator<Item = &Type> {
-        Type::BASE_TYPES.iter().filter(|ty| ty.intersects(*self))
+    pub fn base_types(&self) -> Box<dyn Iterator<Item = &Type> + '_> {
+        crate::log(format!("base_types: {:?}", self).as_str());
+        if self.is_none() {
+            return Box::new(core::iter::empty());
+        }
+        Box::new(Type::BASE_TYPES.iter().filter(|ty| ty.intersects(*self)))
+    }
+
+    pub fn maybe_positive(&self) -> bool {
+        self.contains(Type::IntPos) || self.intersects(Type::FloatPos) || self.contains(Type::BooleanTrue)
+    }
+
+    pub fn maybe_negative(&self) -> bool {
+        self.contains(Type::IntNeg) || self.intersects(Type::FloatNeg)
+    }
+
+    pub fn maybe_zero(&self) -> bool {
+        self.contains(Type::IntZero) || self.contains(Type::BooleanFalse) || self.intersects(Type::FloatZero)
+    }
+
+    pub fn maybe_nan(&self) -> bool {
+        self.contains(Type::FloatNan) || self.contains(Type::StringNan)
+    }
+
+    pub fn none_if_false(condition: bool, if_true: Type) -> Type {
+        if condition {
+            if_true
+        } else {
+            Type::none()
+        }
     }
 }
 
