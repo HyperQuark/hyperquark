@@ -2,6 +2,7 @@ use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::Instruction;
+use wasm_gen::wasm;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Fields(pub i32);
@@ -11,7 +12,7 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<Instruction<'static>>> {
-    Ok(vec![Instruction::I32Const(fields.0)])
+    Ok(wasm![I32Const(fields.0)])
 }
 
 pub fn acceptable_inputs() -> Rc<[IrType]> {

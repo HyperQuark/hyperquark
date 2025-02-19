@@ -2,6 +2,7 @@ use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, ValType};
+use wasm_gen::wasm;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
@@ -9,19 +10,19 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
             .registries()
             .external_functions()
             .register(("looks", "say_int"), (vec![ValType::I32], vec![]))?;
-        vec![Instruction::Call(func_index)]
+        wasm![Call(func_index)]
     } else if IrType::Float.contains(inputs[0]) {
         let func_index = func
             .registries()
             .external_functions()
             .register(("looks", "say_float"), (vec![ValType::F64], vec![]))?;
-        vec![Instruction::Call(func_index)]
+        wasm![Call(func_index)]
     } else if IrType::String.contains(inputs[0]) {
         let func_index = func
             .registries()
             .external_functions()
             .register(("looks", "say_string"), (vec![ValType::EXTERNREF], vec![]))?;
-        vec![Instruction::Call(func_index)]
+        wasm![Call(func_index)]
     } else {
         hq_todo!()
     })

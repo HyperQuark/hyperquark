@@ -19,6 +19,7 @@ itertools = { version = "0.13.0", default-features = false, features = ["use_all
 split_exact = "1.1.0"
 wasm-bindgen = "0.2.92"
 serde-wasm-bindgen = "0.6.5"
+wasm-gen = { path = "wasm-gen" }
 
 [dev-dependencies]
 wasmparser = "0.222.0"

@@ -2,6 +2,7 @@ use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, RefType};
+use wasm_gen::wasm;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Box<str>);
@@ -15,9 +16,9 @@ pub fn wasm(
         .registries()
         .strings()
         .register_default(fields.0.clone())?;
-    Ok(vec![
-        Instruction::I32Const(string_idx),
-        Instruction::TableGet(
+    Ok(wasm![
+        I32Const(string_idx),
+        TableGet(
             func.registries()
                 .tables()
                 .register("strings".into(), (RefType::EXTERNREF, 0))?,

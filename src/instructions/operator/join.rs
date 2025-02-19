@@ -2,6 +2,7 @@ use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, ValType};
+use wasm_gen::wasm;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     hq_assert_eq!(inputs.len(), 2);
@@ -12,7 +13,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
             vec![ValType::EXTERNREF],
         ),
     )?;
-    Ok(vec![Instruction::Call(func_index)])
+    Ok(wasm![Call(func_index)])
 }
 
 pub fn acceptable_inputs() -> Rc<[IrType]> {

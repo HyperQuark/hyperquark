@@ -1,8 +1,8 @@
 use crate::ir::{Step, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{byte_offset, StepFunc};
-use wasm_encoder::Instruction::{self, *};
-use wasm_encoder::MemArg;
+use wasm_encoder::{Instruction, MemArg};
+use wasm_gen::wasm;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Option<Rc<Step>>);
@@ -15,7 +15,7 @@ pub fn wasm(
     Ok(if let Some(next_step) = &fields.0 {
         hq_todo!()
     } else {
-        vec![
+        wasm![
             LocalGet(0),
             I32Const(byte_offset::THREADS),
             I32Add, // destination (= current thread pos in memory)

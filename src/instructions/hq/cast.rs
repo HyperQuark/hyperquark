@@ -1,8 +1,8 @@
 use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
-use wasm_encoder::Instruction::{self, *};
-use wasm_encoder::ValType;
+use wasm_encoder::{Instruction, ValType};
+use wasm_gen::wasm;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub IrType);
@@ -47,14 +47,14 @@ pub fn wasm(
 
     Ok(match target {
         IrType::Float => match from_base {
-            IrType::Float => vec![],
-            IrType::QuasiInt => vec![F64ConvertI32S],
+            IrType::Float => wasm![],
+            IrType::QuasiInt => wasm![F64ConvertI32S],
             IrType::String => {
                 let func_index = func.registries().external_functions().register(
                     ("cast", "string2float"),
                     (vec![ValType::EXTERNREF], vec![ValType::F64]),
                 )?;
-                vec![Call(func_index)]
+                wasm![Call(func_index)]
             }
             _ => hq_todo!("bad cast: {:?} -> float", from_base),
         },
@@ -64,14 +64,14 @@ pub fn wasm(
                     ("cast", "float2string"),
                     (vec![ValType::F64], vec![ValType::EXTERNREF]),
                 )?;
-                vec![Call(func_index)]
+                wasm![Call(func_index)]
             }
             IrType::QuasiInt => {
                 let func_index = func.registries().external_functions().register(
                     ("cast", "int2string"),
                     (vec![ValType::I32], vec![ValType::EXTERNREF]),
                 )?;
-                vec![Call(func_index)]
+                wasm![Call(func_index)]
             }
             IrType::String => vec![],
             _ => hq_todo!("bad cast: {:?} -> string", from_base),

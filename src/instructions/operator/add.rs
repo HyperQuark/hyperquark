@@ -2,6 +2,7 @@ use crate::ir::Type as IrType;
 use crate::prelude::*;
 use crate::wasm::StepFunc;
 use wasm_encoder::{Instruction, ValType};
+use wasm_gen::wasm;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
     hq_assert_eq!(inputs.len(), 2);
@@ -9,23 +10,38 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
     let t2 = inputs[1];
     Ok(if IrType::QuasiInt.contains(t1) {
         if IrType::QuasiInt.contains(t2) {
-            vec![Instruction::I32Add]
+            wasm![I32Add]
         } else if IrType::Float.contains(t2) {
             let f64_local = func.local(ValType::F64)?;
-            vec![
-                Instruction::LocalSet(f64_local),
-                Instruction::F64ConvertI32S,
-                Instruction::LocalGet(f64_local),
-                Instruction::F64Add,
+            wasm![
+                LocalSet(f64_local),
+                F64ConvertI32S,
+                LocalGet(f64_local),
+                @nanreduce(t2),
+                F64Add,
             ]
         } else {
             hq_todo!()
         }
     } else if IrType::Float.contains(t1) {
         if IrType::Float.contains(t2) {
-            vec![Instruction::F64Add]
+            let f64_local = func.local(ValType::F64)?;
+            wasm![
+                @nanreduce(t2),
+                LocalSet(f64_local),
+                @nanreduce(t1),
+                LocalGet(f64_local),
+                F64Add
+            ]
         } else if IrType::QuasiInt.contains(t2) {
-            vec![Instruction::F64ConvertI32S, Instruction::F64Add]
+            let i32_local = func.local(ValType::I32)?;
+            wasm![
+                LocalSet(i32_local),
+                @nanreduce(t1),
+                LocalGet(i32_local),
+                F64ConvertI32S,
+                F64Add
+            ]
         } else {
             hq_todo!()
         }
@@ -39,7 +55,6 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 }
 
 // TODO: nan
-
 pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     let t1 = inputs[0];
     let t2 = inputs[1];
