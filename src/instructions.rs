@@ -6,6 +6,7 @@ use crate::prelude::*;
 mod hq;
 mod looks;
 mod operator;
+mod sensing;
 #[macro_use]
 mod tests;
 

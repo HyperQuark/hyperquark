@@ -1,1 +1,1 @@
-export const opcodes = ["looks_say","operator_subtract","operator_join","operator_add","operator_divide"];
+export const opcodes = ["looks_say","operator_add","operator_divide","operator_join","operator_multiply","operator_subtract","sensing_dayssince2000"];
