@@ -17,7 +17,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 F64Sub,
             ]
         } else {
-            hq_todo!()
+            hq_bug!("bad input")
         }
     } else if IrType::Float.contains(t1) {
         if IrType::Float.contains(t2) {
@@ -39,10 +39,10 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 F64Sub
             ]
         } else {
-            hq_todo!()
+            hq_bug!("bad input")
         }
     } else {
-        hq_todo!()
+        hq_bug!("bad input")
     })
 }
 

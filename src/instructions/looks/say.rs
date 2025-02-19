@@ -20,7 +20,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
             .register(("looks", "say_string"), (vec![ValType::EXTERNREF], vec![]))?;
         wasm![Call(func_index)]
     } else {
-        hq_todo!()
+        hq_bug!("bad input")
     })
 }
 
