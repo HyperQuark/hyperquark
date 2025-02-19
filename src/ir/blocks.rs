@@ -62,7 +62,7 @@ pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Vec<IrOpcode>> {
 pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
     Ok(match opcode {
         BlockOpcode::looks_say => vec!["MESSAGE"],
-        BlockOpcode::operator_add => vec!["NUM1", "NUM2"],
+        BlockOpcode::operator_add | BlockOpcode::operator_divide => vec!["NUM1", "NUM2"],
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
@@ -107,6 +107,7 @@ fn from_normal_block(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Box<
         .into_iter()
         .chain(match &block_info.opcode {
             BlockOpcode::operator_add => [IrOpcode::operator_add].into_iter(),
+            BlockOpcode::operator_divide => [IrOpcode::operator_divide].into_iter(),
             BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
             BlockOpcode::operator_join => [IrOpcode::operator_join].into_iter(),
             other => hq_todo!("unimplemented block: {:?}", other),

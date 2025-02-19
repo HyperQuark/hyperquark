@@ -8,7 +8,7 @@ import { say_string } from './looks/say_string.ts';
 import { say_float } from './looks/say_float.ts';
 export const imports = {
     cast: { string2float, int2string, float2string },
-	looks: { say_int, say_string, say_float },
-	operator: { join }
+	operator: { join },
+	looks: { say_int, say_string, say_float }
 };
             

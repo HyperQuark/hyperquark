@@ -5,7 +5,7 @@
 /// optionally followed by a semicolon and a `WasmFlags` configuration (defaults to `Default::default()`).
 /// If multiple field values or flags configurations need to be tested, the macro can be repeated with
 /// different module names.
-/// 
+///
 /// Example:
 /// For a block foo_bar, which takes 2 inputs, with Fields(bool),
 /// ```rust

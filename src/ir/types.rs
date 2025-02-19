@@ -106,7 +106,7 @@ impl Type {
     }
 
     pub fn maybe_nan(&self) -> bool {
-        self.contains(Type::FloatNan) || self.contains(Type::StringNan)
+        self.intersects(Type::FloatNan) || self.contains(Type::StringNan)
     }
 
     pub fn none_if_false(condition: bool, if_true: Type) -> Type {
