@@ -24,7 +24,7 @@ import { getSettings, saveSettings, settingsInfo, WasmFlags } from '../lib/setti
 
 console.log(settingsInfo)
 
-const settings = reactive(getSettings().as_js());
+const settings = reactive(getSettings().to_js());
 
 console.log(settings)
 

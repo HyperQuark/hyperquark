@@ -1,5 +1,8 @@
 import { getSettings } from './settings.js';
 import { imports } from './imports.js';
+import { useDebugModeStore } from '../stores/debug.js';
+
+const debugModeStore = useDebugModeStore();
 
 function createSkin(renderer, type, layer, ...params) {
   let drawableId = renderer.createDrawable(layer.toString());
@@ -21,7 +24,7 @@ export default async (
     framerate: 30,
   }
 ) => {
-    if (window.debug) window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
+    if (debugModeStore.debug) window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
     const framerate_wait = Math.round(1000 / framerate);
     let assert;
     let exit;

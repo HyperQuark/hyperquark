@@ -21,7 +21,7 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Number])
+    Rc::new([IrType::Any])
     //Rc::new([IrType::String.or(IrType::Number)])
 }
 

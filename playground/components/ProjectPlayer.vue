@@ -54,7 +54,7 @@
   try {
     // we need to convert settings to and from a JsValue because the WasmFlags exported from the
     // no-compiler version is not the same as that exported by the compiler... because reasons
-    wasmProject = sb3_to_wasm(JSON.stringify(props.json), WasmFlags.from_js(getSettings().as_js()));
+    wasmProject = sb3_to_wasm(JSON.stringify(props.json), WasmFlags.from_js(getSettings().to_js()));
     if (!wasmProject instanceof FinishedWasm) {
       throw new Error("unknown error occurred when compiling project");
     }

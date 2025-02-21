@@ -185,21 +185,17 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                         if let Some(state) = these_unboxed.get(&input_ident.clone().to_string()) {
                             match state {
                                 1 => Some((vec![
-                                    quote! { LocalSet(#local_ident) },
-                                    quote! { TableSize(__strings_table_index) },
                                     quote! { I32Const(1) },
                                     quote! { TableGrow(__strings_table_index) },
-                                    quote! { LocalGet(#local_ident) },
-                                    quote! { TableSet(__strings_table_index) },
                                     quote! { I64ExtendI32S },
                                     quote! { I64Const(BOXED_STRING_PATTERN) },
-                                    quote! { I64And },
+                                    quote! { I64Or },
                                 ].into_iter(), Some((local_ident, format_ident!("EXTERNREF"))))),
                                 2 => Some((vec![quote! { I64ReinterpretF64 }].into_iter(), None)),
                                 3 => Some((vec![
                                     quote! { I64ExtendI32S },
                                     quote! { I64Const(BOXED_INT_PATTERN) },
-                                    quote! { I64And },
+                                    quote! { I64Or },
                                 ].into_iter(), None)),
                                 _ => panic!("invalid state")
                             }

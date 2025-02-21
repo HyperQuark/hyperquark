@@ -1,5 +1,8 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { useDebugModeStore } from './stores/debug';
+const debugModeStore = useDebugModeStore();
+const route = useRoute();
 </script>
 
 <template>
@@ -9,6 +12,7 @@ import { RouterLink, RouterView } from 'vue-router'
       <RouterLink to="/about">About</RouterLink>
       <a href="https://github.com/hyperquark/">Github</a>
       <RouterLink to="/settings">Settings</RouterLink>
+      <a class="fake-link" @click="debugModeStore.toggleDebug">{{ debugModeStore.debug ? 'disable' : 'enable' }} debug mode</a>
     </nav>
   </div>
   <RouterView />
@@ -41,11 +45,11 @@ nav a.router-link-exact-active {
   color: var(--color-text);
 }
 
-nav a.router-link-exact-active:hover {
+nav a.router-link-exact-active:hover, nav .fake-link:hover {
   background-color: transparent;
 }
 
-nav a {
+nav a, nav .fake-link {
   display: inline-block;
   padding: 0 1rem;
   border-left: 1px solid var(--color-border);
@@ -57,5 +61,9 @@ nav a:first-of-type {
 
 div.wrapper {
   margin: 0 auto;
+}
+
+.fake-link {
+  cursor: pointer;
 }
 </style>
