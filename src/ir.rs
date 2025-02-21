@@ -7,6 +7,7 @@ mod step;
 mod target;
 mod thread;
 mod types;
+mod variable;
 
 use context::StepContext;
 pub(crate) use event::Event;
@@ -15,4 +16,5 @@ pub(crate) use project::IrProject;
 pub(crate) use step::{RcStep, Step};
 use target::Target;
 use thread::Thread;
-pub(crate) use types::{Type, TypeStack};
+pub(crate) use types::Type;
+pub(crate) use variable::{RcVar, Variable};

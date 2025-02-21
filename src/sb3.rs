@@ -345,7 +345,7 @@ pub enum VarVal {
 }
 
 /// Represents a variable
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, EnumFieldGetter)]
 #[serde(untagged)]
 pub enum VariableInfo {
     CloudVar(Box<str>, VarVal, bool),

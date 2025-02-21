@@ -6,8 +6,8 @@ use crate::wasm::{StepFunc, WasmFlags};
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection, DataSection,
-    ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection, ImportSection,
-    Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection, TableType,
+    ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection, GlobalSection,
+    ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection,
     TypeSection, ValType,
 };
 
@@ -48,7 +48,7 @@ impl WasmProject {
         self.environment
     }
 
-    pub fn step_funcs(&self) -> &Box<[StepFunc]> {
+    pub fn step_funcs(&self) -> &[StepFunc] {
         &self.step_funcs
     }
 
@@ -77,6 +77,7 @@ impl WasmProject {
         let mut exports = ExportSection::new();
         let mut elements = ElementSection::new();
         let mut data = DataSection::new();
+        let mut globals = GlobalSection::new();
 
         memories.memory(MemoryType {
             minimum: 1,
@@ -145,13 +146,18 @@ impl WasmProject {
 
         exports.export("memory", ExportKind::Memory, 0);
 
+        self.registries()
+            .globals()
+            .clone()
+            .finish(&mut globals, &mut exports);
+
         module
             .section(&types)
             .section(&imports)
             .section(&functions)
             .section(&tables)
             .section(&memories)
-            // globals
+            .section(&globals)
             .section(&exports)
             // start
             .section(&elements)

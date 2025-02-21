@@ -34,7 +34,7 @@ impl WasmFlags {
     }
 
     #[wasm_bindgen]
-    pub fn to_js(&self) -> HQResult<JsValue> {
+    pub fn as_js(&self) -> HQResult<JsValue> {
         serde_wasm_bindgen::to_value(&self)
             .map_err(|_| make_hq_bug!("couldn't convert WasmFlags to JsValue"))
     }

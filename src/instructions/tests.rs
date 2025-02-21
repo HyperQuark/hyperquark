@@ -9,8 +9,8 @@
 /// Example:
 /// For a block foo_bar, which takes 2 inputs, with Fields(bool),
 /// ```rust
-/// instructions_test!(test; foo_bar; t1, t2 @ Fields(true));
-/// instructions_test!(test; foo_bar; t1, t2 @ Fields(false));
+/// instructions_test!(test; foo_bar; t1, t2 @ super::Fields(true));
+/// instructions_test!(test; foo_bar; t1, t2 @ super::Fields(false));
 /// ```
 #[macro_export]
 macro_rules! instructions_test {
@@ -28,7 +28,7 @@ macro_rules! instructions_test {
             use $crate::prelude::*;
             use $crate::ir::Type as IrType;
             use wasm_encoder::{
-                CodeSection, ExportSection, FunctionSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
+                CodeSection, ExportSection, FunctionSection, GlobalSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
             };
             use $crate::wasm::{StepFunc, Registries, WasmProject};
 
@@ -119,6 +119,7 @@ macro_rules! instructions_test {
                     let mut codes = CodeSection::new();
                     let mut memories = MemorySection::new();
                     let mut exports = ExportSection::new();
+                    let mut globals = GlobalSection::new();
 
                     memories.memory(MemoryType {
                         minimum: 1,
@@ -131,13 +132,15 @@ macro_rules! instructions_test {
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
                     step_func.finish(&mut functions, &mut codes)?;
                     registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(& mut tables, &mut exports);
+                    registries.tables().clone().finish(&mut tables, &mut exports);
+                    registries.globals().clone().finish(&mut globals, &mut exports);
 
                     module.section(&types);
                     module.section(&imports);
                     module.section(&functions);
                     module.section(&tables);
                     module.section(&memories);
+                    module.section(&globals);
                     module.section(&codes);
 
                     let wasm_bytes = module.finish();
@@ -180,6 +183,8 @@ macro_rules! instructions_test {
                     }
                     step_func.add_instructions(wasm)?;
 
+                    println!("{:?}", step_func.instructions().borrow());
+
                     let mut module = Module::new();
 
                     let mut imports = ImportSection::new();
@@ -189,6 +194,7 @@ macro_rules! instructions_test {
                     let mut codes = CodeSection::new();
                     let mut memories = MemorySection::new();
                     let mut exports = ExportSection::new();
+                    let mut globals = GlobalSection::new();
 
                     memories.memory(MemoryType {
                         minimum: 1,
@@ -201,13 +207,15 @@ macro_rules! instructions_test {
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
                     step_func.finish(&mut functions, &mut codes)?;
                     registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(& mut tables, &mut exports);
+                    registries.tables().clone().finish(&mut tables, &mut exports);
+                    registries.globals().clone().finish(&mut globals, &mut exports);
 
                     module.section(&types);
                     module.section(&imports);
                     module.section(&functions);
                     module.section(&tables);
                     module.section(&memories);
+                    module.section(&globals);
                     module.section(&codes);
 
                     let wasm_bytes = module.finish();

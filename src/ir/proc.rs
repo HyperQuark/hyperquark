@@ -14,11 +14,11 @@ pub struct ProcedureContext {
 }
 
 impl ProcedureContext {
-    pub fn arg_ids(&self) -> &Box<[Box<str>]> {
+    pub fn arg_ids(&self) -> &[Box<str>] {
         &self.arg_ids
     }
 
-    pub fn arg_types(&self) -> &Box<[IrType]> {
+    pub fn arg_types(&self) -> &[IrType] {
         &self.arg_types
     }
 

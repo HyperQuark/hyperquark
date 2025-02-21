@@ -1,7 +1,10 @@
+use super::{RcVar, Type as IrType};
 use crate::instructions::{fields::*, IrOpcode};
-use crate::ir::{Type as IrType, TypeStack};
 use crate::prelude::*;
-use crate::sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
+use crate::sb3;
+use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
+
+use super::context::StepContext;
 
 fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
@@ -30,11 +33,15 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
     Ok(blocks)
 }
 
-pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Vec<IrOpcode>> {
+pub fn from_block(
+    block: &Block,
+    blocks: &BlockMap,
+    context: &StepContext,
+) -> HQResult<Vec<IrOpcode>> {
     insert_casts(match block {
         Block::Normal { block_info, .. } => {
             if let Some(next_id) = &block_info.next {
-                from_normal_block(block_info, blocks)?
+                from_normal_block(block_info, blocks, context)?
                     .iter()
                     .chain(
                         from_block(
@@ -42,20 +49,21 @@ pub fn from_block(block: &Block, blocks: &BlockMap) -> HQResult<Vec<IrOpcode>> {
                                 .get(next_id)
                                 .ok_or(make_hq_bad_proj!("specified next block missing"))?,
                             blocks,
+                            context,
                         )?
                         .iter(),
                     )
                     .cloned()
                     .collect()
             } else {
-                from_normal_block(block_info, blocks)?
+                from_normal_block(block_info, blocks, context)?
                     .iter()
                     .chain([IrOpcode::hq__yield(HqYieldFields(None))].iter())
                     .cloned()
                     .collect()
             }
         }
-        Block::Special(block_array) => vec![from_special_block(block_array)?],
+        Block::Special(block_array) => vec![from_special_block(block_array, context)?],
     })
 }
 
@@ -67,7 +75,8 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
         | BlockOpcode::operator_subtract
         | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
-        BlockOpcode::sensing_dayssince2000 => vec![],
+        BlockOpcode::sensing_dayssince2000 | BlockOpcode::data_variable => vec![],
+        BlockOpcode::data_setvariableto => vec!["VALUE"],
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
     .into_iter()
@@ -75,7 +84,11 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
     .collect())
 }
 
-pub fn inputs(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Vec<IrOpcode>> {
+pub fn inputs(
+    block_info: &BlockInfo,
+    blocks: &BlockMap,
+    context: &StepContext,
+) -> HQResult<Vec<IrOpcode>> {
     Ok(input_names(block_info.opcode.clone())?
         .into_iter()
         .map(|name| -> HQResult<Vec<IrOpcode>> {
@@ -85,15 +98,17 @@ pub fn inputs(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Vec<IrOpcod
                 .ok_or(make_hq_bad_proj!("missing input {}", name))?
             {
                 Input::NoShadow(_, Some(block)) | Input::Shadow(_, Some(block), _) => match block {
-                    BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr)?]),
+                    BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr, context)?]),
                     BlockArrayOrId::Id(id) => match blocks
                         .get(id)
                         .ok_or(make_hq_bad_proj!("block for input {} doesn't exist", name))?
                     {
                         Block::Normal { block_info, .. } => {
-                            Ok(from_normal_block(block_info, blocks)?.into())
+                            Ok(from_normal_block(block_info, blocks, context)?.into())
                         }
-                        Block::Special(block_array) => Ok(vec![from_special_block(block_array)?]),
+                        Block::Special(block_array) => {
+                            Ok(vec![from_special_block(block_array, context)?])
+                        }
                     },
                 },
                 _ => hq_bad_proj!("missing input block for {}", name),
@@ -106,8 +121,12 @@ pub fn inputs(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Vec<IrOpcod
         .collect())
 }
 
-fn from_normal_block(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Box<[IrOpcode]>> {
-    Ok(inputs(block_info, blocks)?
+fn from_normal_block(
+    block_info: &BlockInfo,
+    blocks: &BlockMap,
+    context: &StepContext,
+) -> HQResult<Box<[IrOpcode]>> {
+    Ok(inputs(block_info, blocks, context)?
         .into_iter()
         .chain(match &block_info.opcode {
             BlockOpcode::operator_add => [IrOpcode::operator_add].into_iter(),
@@ -117,12 +136,60 @@ fn from_normal_block(block_info: &BlockInfo, blocks: &BlockMap) -> HQResult<Box<
             BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
             BlockOpcode::operator_join => [IrOpcode::operator_join].into_iter(),
             BlockOpcode::sensing_dayssince2000 => [IrOpcode::sensing_dayssince2000].into_iter(),
+            BlockOpcode::data_setvariableto => {
+                let sb3::Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE").ok_or(
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE"),
+                )?
+                else {
+                    hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+                };
+                let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
+                    "invalid project.json - null variable id for VARIABLE field"
+                ))?;
+                let target = context
+                    .target
+                    .upgrade()
+                    .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
+                let variable = if let Some(var) = target.variables().get(&id) {
+                    var
+                } else {
+                    hq_todo!("global variables")
+                };
+                [IrOpcode::data_setvariableto(DataSetvariabletoFields(
+                    RcVar(Rc::clone(variable)),
+                ))]
+                .into_iter()
+            }
+            BlockOpcode::data_variable => {
+                let sb3::Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE").ok_or(
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE"),
+                )?
+                else {
+                    hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+                };
+                let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
+                    "invalid project.json - null variable id for VARIABLE field"
+                ))?;
+                let target = context
+                    .target
+                    .upgrade()
+                    .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
+                let variable = if let Some(var) = target.variables().get(&id) {
+                    var
+                } else {
+                    hq_todo!("global variables")
+                };
+                [IrOpcode::data_variable(DataVariableFields(RcVar(
+                    Rc::clone(variable),
+                )))]
+                .into_iter()
+            }
             other => hq_todo!("unimplemented block: {:?}", other),
         })
         .collect())
 }
 
-fn from_special_block(block_array: &BlockArray) -> HQResult<IrOpcode> {
+fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResult<IrOpcode> {
     Ok(match block_array {
         BlockArray::NumberOrAngle(ty, value) => match ty {
             4 | 5 | 8 => IrOpcode::hq_float(HqFloatFields(*value)),
@@ -140,13 +207,22 @@ fn from_special_block(block_array: &BlockArray) -> HQResult<IrOpcode> {
             10 => IrOpcode::hq_text(HqTextFields(value.clone())),
             _ => hq_bad_proj!("bad project json (block array of type ({}, string))", ty),
         },
-        BlockArray::Broadcast(ty, _name, _id)
-        | BlockArray::VariableOrList(ty, _name, _id, _, _) => match ty {
-            /*12 => IrOpcode::data_variable {
-                VARIABLE: id.to_string(),
-                assume_type: None,
-            },*/
-            _ => hq_todo!(""),
-        },
+        BlockArray::Broadcast(ty, _name, id) | BlockArray::VariableOrList(ty, _name, id, _, _) => {
+            match ty {
+                12 => {
+                    let target = context
+                        .target
+                        .upgrade()
+                        .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
+                    let variable = if let Some(var) = target.variables().get(id) {
+                        var
+                    } else {
+                        hq_todo!("global variables")
+                    };
+                    IrOpcode::data_variable(DataVariableFields(RcVar(Rc::clone(variable))))
+                }
+                _ => hq_todo!(""),
+            }
+        }
     })
 }

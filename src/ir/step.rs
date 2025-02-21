@@ -80,8 +80,8 @@ impl Step {
     ) -> HQResult<RcStep> {
         let step = Rc::new(Step::new(
             Some(block_id),
-            context,
-            blocks::from_block(block, blocks)?,
+            context.clone(),
+            blocks::from_block(block, blocks, &context)?,
             Weak::clone(&project),
         ));
         project

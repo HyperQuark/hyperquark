@@ -31,7 +31,7 @@ impl From<HQError> for JsValue {
 }
 
 impl From<BorrowError> for HQError {
-    fn from(e: BorrowError) -> Self {
+    fn from(_e: BorrowError) -> Self {
         HQError {
             err_type: HQErrorType::InternalError,
             msg: "couldn't borrow cell".into(),
@@ -43,7 +43,7 @@ impl From<BorrowError> for HQError {
 }
 
 impl From<BorrowMutError> for HQError {
-    fn from(e: BorrowMutError) -> Self {
+    fn from(_e: BorrowMutError) -> Self {
         HQError {
             err_type: HQErrorType::InternalError,
             msg: "couldn't mutably borrow cell".into(),

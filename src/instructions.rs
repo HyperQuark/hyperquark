@@ -3,6 +3,7 @@
 
 use crate::prelude::*;
 
+mod data;
 mod hq;
 mod looks;
 mod operator;
@@ -19,6 +20,11 @@ mod prelude {
     pub(crate) use crate::ir::Type as IrType;
     pub use crate::prelude::*;
     pub(crate) use crate::wasm::StepFunc;
-    pub use wasm_encoder::{Instruction, ValType};
+    pub use wasm_encoder::{Instruction, RefType, ValType};
     pub use wasm_gen::wasm;
+
+    /// Canonical NaN + bit 33, + string pointer in bits 1-32
+    pub const BOXED_STRING_PATTERN: i64 = 0x7FF80001 << 32;
+    /// Canonical NaN + bit 33, + i32 in bits 1-32
+    pub const BOXED_INT_PATTERN: i64 = 0x7ff80002 << 32;
 }

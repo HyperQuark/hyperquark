@@ -1,12 +1,31 @@
-use super::{ExternalFunctionRegistry, StringRegistry, TableRegistry, TypeRegistry};
+use super::{
+    ExternalFunctionRegistry, GlobalRegistry, StringRegistry, TableRegistry, TypeRegistry,
+    VariableRegistry,
+};
 use crate::prelude::*;
 
-#[derive(Default)]
 pub struct Registries {
     strings: StringRegistry,
     external_functions: ExternalFunctionRegistry,
     types: TypeRegistry,
     tables: TableRegistry,
+    globals: Rc<GlobalRegistry>,
+    variables: VariableRegistry,
+}
+
+impl Default for Registries {
+    fn default() -> Self {
+        let globals = Default::default();
+        let variables = VariableRegistry::new(&globals);
+        Registries {
+            globals,
+            variables,
+            strings: Default::default(),
+            external_functions: Default::default(),
+            tables: Default::default(),
+            types: Default::default(),
+        }
+    }
 }
 
 impl Registries {
@@ -24,5 +43,13 @@ impl Registries {
 
     pub fn tables(&self) -> &TableRegistry {
         &self.tables
+    }
+
+    pub fn globals(&self) -> &GlobalRegistry {
+        &self.globals
+    }
+
+    pub fn variables(&self) -> &VariableRegistry {
+        &self.variables
     }
 }

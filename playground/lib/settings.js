@@ -52,6 +52,6 @@ export function getSettings() {
  * @param {WasmFlags} settings 
  */
 export function saveSettings(settings) {
-    console.log(settings.to_js())
-    localStorage['settings'] = JSON.stringify(settings.to_js());
+    console.log(settings.as_js())
+    localStorage['settings'] = JSON.stringify(settings.as_js());
 }

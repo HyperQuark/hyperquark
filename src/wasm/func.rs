@@ -22,6 +22,10 @@ impl StepFunc {
         self.flags
     }
 
+    pub fn instructions(&self) -> &RefCell<Vec<Instruction<'static>>> {
+        &self.instructions
+    }
+
     /// creates a new step function, with one paramter
     pub fn new(registries: Rc<Registries>, flags: WasmFlags) -> Self {
         StepFunc {

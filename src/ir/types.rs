@@ -117,5 +117,3 @@ impl Type {
         }
     }
 }
-
-pub type TypeStack = Vec<Type>;

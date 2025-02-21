@@ -1,17 +1,12 @@
 //! Provides the logic for having boxed input types to blocks
 
+use super::prelude::*;
 use super::IrOpcode;
-use crate::prelude::*;
 use crate::wasm::WasmProject;
 use crate::{ir::Type as IrType, wasm::StepFunc};
 use itertools::Itertools;
-use wasm_encoder::Instruction::{self, *};
-use wasm_encoder::{BlockType, RefType, ValType};
-
-/// Canonical NaN + bit 33, + string pointer in bits 1-32
-const BOXED_STRING_PATTERN: i64 = 0x7FF80001 << 32;
-/// Canonical NaN + bit 33, + i32 in bits 1-32
-const BOXED_INT_PATTERN: i64 = 0x7ff80002 << 32;
+use wasm_encoder::{BlockType, Instruction, RefType};
+use wasm_gen::wasm;
 
 /// generates branches (or not, if an input is not boxed) for a list of remaining input types.
 /// This sort of recursion makes me feel distinctly uneasy; I'm just waiting for a stack
@@ -38,36 +33,15 @@ fn generate_branches(
                     .ok_or(make_hq_bug!("expected no output type but got one"))?
                     .is_base_type()
             {
-                wasm.append(&mut match this_output.base_type().unwrap() {
-                    IrType::Float => vec![I64ReinterpretF64],
-                    IrType::QuasiInt => vec![I64ExtendI32S, I64Const(BOXED_INT_PATTERN), I64And],
-                    IrType::String => {
-                        let table_index = func
-                            .registries()
-                            .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0))?;
-                        let externref_local = func.local(ValType::EXTERNREF)?;
-                        vec![
-                            LocalSet(externref_local),
-                            TableSize(table_index),
-                            I32Const(1),
-                            TableGrow(table_index),
-                            LocalGet(externref_local),
-                            TableSet(table_index),
-                            I64ExtendI32S,
-                            I64Const(BOXED_STRING_PATTERN),
-                            I64And,
-                        ]
-                    }
-                    _ => unreachable!(),
-                });
+                let this_base_type = this_output.base_type().unwrap();
+                wasm.append(&mut wasm![@boxed(this_base_type)]);
             }
         }
         return Ok(wasm);
     }
     let (curr_input, local_idx) = &remaining_inputs[0];
     let local_idx = *local_idx; // variable shadowing feels evil but hey it works
-    let mut wasm = vec![LocalGet(local_idx)];
+    let mut wasm = wasm![LocalGet(local_idx)];
     Ok(if curr_input.len() == 1 {
         let mut processed_inputs = processed_inputs.to_vec();
         processed_inputs.push(curr_input[0]);
@@ -99,7 +73,7 @@ fn generate_branches(
             let base = ty.base_type().ok_or(make_hq_bug!("non-base type found"))?;
             wasm.append(&mut if i == 0 {
                 match base {
-                    IrType::QuasiInt => vec![
+                    IrType::QuasiInt => wasm![
                         I64Const(BOXED_INT_PATTERN),
                         I64And,
                         I64Const(BOXED_INT_PATTERN),
@@ -113,7 +87,7 @@ fn generate_branches(
                             .registries()
                             .tables()
                             .register("strings".into(), (RefType::EXTERNREF, 0))?;
-                        vec![
+                        wasm![
                             I64Const(BOXED_STRING_PATTERN),
                             I64And,
                             I64Const(BOXED_STRING_PATTERN),
@@ -129,22 +103,22 @@ fn generate_branches(
                 }
             } else if i == possible_types_num - 1 {
                 match base {
-                    IrType::Float => vec![Else, LocalGet(local_idx), F64ReinterpretI64], // float guaranteed to be last so no need to check
-                    IrType::QuasiInt => vec![Else, LocalGet(local_idx), I32WrapI64],
+                    IrType::Float => wasm![Else, LocalGet(local_idx), F64ReinterpretI64], // float guaranteed to be last so no need to check
+                    IrType::QuasiInt => wasm![Else, LocalGet(local_idx), I32WrapI64],
                     IrType::String => {
                         let table_index = func
                             .registries()
                             .tables()
                             .register("strings".into(), (RefType::EXTERNREF, 0))?;
-                        vec![Else, LocalGet(local_idx), I32WrapI64, TableGet(table_index)]
+                        wasm![Else, LocalGet(local_idx), I32WrapI64, TableGet(table_index)]
                     }
                     _ => unreachable!(),
                 }
             } else {
                 match base {
                     // float guaranteed to be last so no need to check
-                    IrType::Float => vec![Else, LocalGet(local_idx), F64ReinterpretI64],
-                    IrType::QuasiInt => vec![
+                    IrType::Float => wasm![Else, LocalGet(local_idx), F64ReinterpretI64],
+                    IrType::QuasiInt => wasm![
                         Else,
                         LocalGet(local_idx),
                         I64Const(BOXED_INT_PATTERN),
@@ -160,7 +134,7 @@ fn generate_branches(
                             .registries()
                             .tables()
                             .register("strings".into(), (RefType::EXTERNREF, 0))?;
-                        vec![
+                        wasm![
                             Else,
                             LocalGet(local_idx),
                             I64Const(BOXED_STRING_PATTERN),
@@ -243,7 +217,7 @@ pub fn wrap_instruction(
         .iter()
         .rev()
         .cloned()
-        .map(LocalSet)
+        .map(Instruction::LocalSet)
         .collect::<Vec<_>>();
 
     wasm.append(&mut generate_branches(
@@ -259,5 +233,3 @@ pub fn wrap_instruction(
     )?);
     Ok(wasm)
 }
-
-// TODO: test that wasm compiles correctly. How? Not sure yet.

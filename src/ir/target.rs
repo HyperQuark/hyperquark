@@ -1,21 +1,25 @@
+use super::Variable;
 use crate::prelude::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Target {
-    name: Box<str>,
     is_stage: bool,
+    variables: BTreeMap<Box<str>, Rc<Variable>>,
 }
 
 impl Target {
-    pub fn name(&self) -> &Box<str> {
-        &self.name
-    }
-
     pub fn is_stage(&self) -> bool {
         self.is_stage
     }
 
-    pub fn new(name: Box<str>, is_stage: bool) -> Self {
-        Target { name, is_stage }
+    pub fn variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
+        &self.variables
+    }
+
+    pub fn new(is_stage: bool, variables: BTreeMap<Box<str>, Rc<Variable>>) -> Self {
+        Target {
+            is_stage,
+            variables,
+        }
     }
 }
