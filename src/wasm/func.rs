@@ -1,4 +1,6 @@
 use super::{Registries, WasmFlags};
+use crate::instructions::wrap_instruction;
+use crate::ir::Step;
 use crate::prelude::*;
 use wasm_encoder::{CodeSection, Function, FunctionSection, Instruction, ValType};
 
@@ -11,6 +13,7 @@ pub struct StepFunc {
     output: Option<ValType>,
     registries: Rc<Registries>,
     flags: WasmFlags,
+    steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
 }
 
 impl StepFunc {
@@ -26,8 +29,16 @@ impl StepFunc {
         &self.instructions
     }
 
+    pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
+        Rc::clone(&self.steps)
+    }
+
     /// creates a new step function, with one paramter
-    pub fn new(registries: Rc<Registries>, flags: WasmFlags) -> Self {
+    pub fn new(
+        registries: Rc<Registries>,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        flags: WasmFlags,
+    ) -> Self {
         StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
@@ -35,6 +46,7 @@ impl StepFunc {
             output: Some(ValType::I32),
             registries,
             flags,
+            steps,
         }
     }
 
@@ -44,6 +56,7 @@ impl StepFunc {
         params: Box<[ValType]>,
         output: Option<ValType>,
         registries: Rc<Registries>,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         flags: WasmFlags,
     ) -> HQResult<Self> {
         Ok(StepFunc {
@@ -53,6 +66,7 @@ impl StepFunc {
             output,
             registries,
             flags,
+            steps,
         })
     }
 
@@ -88,6 +102,36 @@ impl StepFunc {
         ))?;
         funcs.function(type_index);
         code.function(&func);
+        Ok(())
+    }
+
+    pub fn compile_step(
+        step: Rc<Step>,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        registries: Rc<Registries>,
+        flags: WasmFlags,
+    ) -> HQResult<()> {
+        if steps.try_borrow()?.contains_key(&step) {
+            return Ok(());
+        }
+        let step_func = StepFunc::new(registries, Rc::clone(&steps), flags);
+        let mut instrs = vec![];
+        let mut type_stack = vec![];
+        for opcode in step.opcodes() {
+            let inputs = type_stack
+                .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
+                .collect();
+            instrs.append(&mut wrap_instruction(
+                &step_func,
+                Rc::clone(&inputs),
+                opcode.clone(),
+            )?);
+            if let Some(output) = opcode.output_type(inputs)? {
+                type_stack.push(output);
+            }
+        }
+        step_func.add_instructions(instrs)?;
+        steps.try_borrow_mut()?.insert(step, step_func);
         Ok(())
     }
 }

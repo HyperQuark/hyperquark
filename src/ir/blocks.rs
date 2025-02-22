@@ -74,6 +74,7 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
         | BlockOpcode::operator_divide
         | BlockOpcode::operator_subtract
         | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
+        BlockOpcode::operator_lt => vec!["OPERAND1", "OPERAND2"],
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
         BlockOpcode::sensing_dayssince2000 | BlockOpcode::data_variable => vec![],
         BlockOpcode::data_setvariableto => vec!["VALUE"],
@@ -136,6 +137,7 @@ fn from_normal_block(
             BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
             BlockOpcode::operator_join => [IrOpcode::operator_join].into_iter(),
             BlockOpcode::sensing_dayssince2000 => [IrOpcode::sensing_dayssince2000].into_iter(),
+            BlockOpcode::operator_lt => [IrOpcode::operator_lt].into_iter(),
             BlockOpcode::data_setvariableto => {
                 let sb3::Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE").ok_or(
                     make_hq_bad_proj!("invalid project.json - missing field VARIABLE"),

@@ -183,36 +183,6 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
     }
 
-    fn compile_step(
-        step: Rc<Step>,
-        steps: &RefCell<IndexMap<Rc<Step>, StepFunc>>,
-        registries: Rc<Registries>,
-        flags: WasmFlags,
-    ) -> HQResult<()> {
-        if steps.try_borrow()?.contains_key(&step) {
-            return Ok(());
-        }
-        let step_func = StepFunc::new(registries, flags);
-        let mut instrs = vec![];
-        let mut type_stack = vec![];
-        for opcode in step.opcodes() {
-            let inputs = type_stack
-                .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
-                .collect();
-            instrs.append(&mut wrap_instruction(
-                &step_func,
-                Rc::clone(&inputs),
-                opcode.clone(),
-            )?);
-            if let Some(output) = opcode.output_type(inputs)? {
-                type_stack.push(output);
-            }
-        }
-        step_func.add_instructions(instrs)?;
-        steps.try_borrow_mut()?.insert(step, step_func);
-        Ok(())
-    }
-
     fn unreachable_dbg_func(
         &self,
         functions: &mut FunctionSection,
@@ -440,18 +410,20 @@ impl WasmProject {
     }
 
     pub fn from_ir(ir_project: Rc<IrProject>, flags: WasmFlags) -> HQResult<WasmProject> {
-        let steps: RefCell<IndexMap<Rc<Step>, StepFunc>> = Default::default();
+        let steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> = Default::default();
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = Default::default();
-        WasmProject::compile_step(
+        StepFunc::compile_step(
             Rc::new(Step::new_empty()),
-            &steps,
+            Rc::clone(&steps),
             Rc::clone(&registries),
             flags,
         )?;
         for thread in ir_project.threads().try_borrow()?.iter() {
             let step = thread.first_step().get_rc();
-            WasmProject::compile_step(step, &steps, Rc::clone(&registries), flags)?;
+            if !*step.inlined().borrow() {
+                StepFunc::compile_step(step, Rc::clone(&steps), Rc::clone(&registries), flags)?;
+            }
             events.entry(thread.event()).or_default().push(
                 u32::try_from(
                     ir_project
@@ -504,7 +476,11 @@ mod tests {
     #[test]
     fn project_with_one_empty_step_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let step_func = StepFunc::new(Rc::clone(&registries), Default::default());
+        let step_func = StepFunc::new(
+            Rc::clone(&registries),
+            Default::default(),
+            Default::default(),
+        );
         step_func
             .add_instructions(vec![Instruction::I32Const(0)])
             .unwrap(); // this is handled by compile_step in a non-test environment

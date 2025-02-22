@@ -8,8 +8,9 @@ use syn::{parenthesized, Error as SynError, Expr, Ident, Token};
 enum Item {
     Instruction { expr: Expr },
     NanReduce { input_ident: Ident },
+    IsNan { input_ident: Ident },
     Box { input_ident: Ident },
-    Error(TokenStream2)
+    Error(TokenStream2),
 }
 
 impl Parse for Item {
@@ -27,6 +28,18 @@ impl Parse for Item {
                         let span = content.span();
                         Ok(Item::Error(
                             quote_spanned! { span=> compile_error!("Expected an ident in @nanreduce") },
+                        ))
+                    }
+                }
+                "isnan" => {
+                    let content;
+                    parenthesized!(content in input);
+                    if let Ok(input_ident) = content.parse::<Ident>() {
+                        Ok(Item::IsNan { input_ident })
+                    } else {
+                        let span = content.span();
+                        Ok(Item::Error(
+                            quote_spanned! { span=> compile_error!("Expected an ident in @isnan") },
                         ))
                     }
                 }
@@ -64,7 +77,7 @@ impl Parse for WasmInput {
         let mut boxed_checks = HashSet::new();
         while !input.is_empty() {
             let item = input.parse()?;
-            if let Item::NanReduce { ref input_ident } = item {
+            if let Item::NanReduce { ref input_ident } | Item::IsNan { ref input_ident } = item {
                 nan_checks.insert(input_ident.clone().to_string());
             }
             if let Item::Box { ref input_ident } = item {
@@ -178,6 +191,25 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                             ))
                         } else {
                             None
+                        }
+                    }
+                    Item::IsNan { input_ident } => {
+                        if these_nan.contains(&input_ident.clone().to_string()) {
+                            let local_ident = format_ident!("__local_{}", i);
+                            Some((
+                                vec![
+                                    quote! { LocalTee(#local_ident) },
+                                    quote! { LocalGet(#local_ident) },
+                                    quote! { F64Ne },
+                                ]
+                                .into_iter(),
+                                Some((local_ident, format_ident!("F64")))
+                            ))
+                        } else {
+                            Some((vec![
+                                quote! { Drop },
+                                quote! { I32Const(0) }
+                            ].into_iter(), None))
                         }
                     }
                     Item::Box { input_ident} => {
