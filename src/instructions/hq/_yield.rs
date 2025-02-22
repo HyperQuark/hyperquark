@@ -20,6 +20,7 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<Instruction<'static>>> {
+    #[allow(unused_variables)]
     Ok(if let Some(next_step) = &fields.step {
         hq_todo!()
     } else {

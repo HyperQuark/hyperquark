@@ -189,8 +189,7 @@ pub fn wrap_instruction(
     let base_types =
         // check for float last of all, because I don't think there's an easy way of checking
         // if something is *not* a canonical NaN with extra bits
-        core::iter::repeat([IrType::QuasiInt, IrType::String, IrType::Float].into_iter())
-            .take(inputs.len())
+        core::iter::repeat_n([IrType::QuasiInt, IrType::String, IrType::Float].into_iter(), inputs.len())
             .enumerate()
             .map(|(i, tys)| {
                 tys.filter(|ty| inputs[i].intersects(*ty)).map(|ty| ty.and(inputs[i]))
@@ -201,7 +200,7 @@ pub fn wrap_instruction(
 
     // sanity check; we have at least one possible input type for each input
     hq_assert!(
-        !base_types.iter().any(|tys| tys.len() == 0),
+        !base_types.iter().any(|tys| tys.is_empty()),
         "empty input type for block {:?}",
         opcode
     );

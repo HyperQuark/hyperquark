@@ -11,6 +11,7 @@ use wasm_encoder::{
 };
 
 pub mod byte_offset {
+    #[allow(dead_code)]
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
     pub const THREADS: i32 = 8;
@@ -19,16 +20,19 @@ pub mod byte_offset {
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
 pub struct WasmProject {
+    #[allow(dead_code)]
     flags: WasmFlags,
     step_funcs: Box<[StepFunc]>,
     /// maps an event to a list of *step_func* indices (NOT function indices) which are
     /// triggered by that event.
     events: BTreeMap<Event, Vec<u32>>,
     registries: Rc<Registries>,
+    #[allow(dead_code)]
     environment: ExternalEnvironment,
 }
 
 impl WasmProject {
+    #[allow(dead_code)]
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         WasmProject {
             flags,
@@ -43,6 +47,7 @@ impl WasmProject {
         Rc::clone(&self.registries)
     }
 
+    #[allow(dead_code)]
     pub fn environment(&self) -> ExternalEnvironment {
         self.environment
     }
