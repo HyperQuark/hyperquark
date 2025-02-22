@@ -18,7 +18,10 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
             .splice((type_stack.len() - expected_inputs.len()).., [])
             .collect();
         for (&expected, actual) in core::iter::zip(expected_inputs.iter(), actual_inputs) {
-            if !expected.contains(actual.0) {
+            if !expected
+                .base_types()
+                .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
+            {
                 casts.push((actual.1, expected));
             }
         }
@@ -100,11 +103,19 @@ pub fn inputs(
     Ok(input_names(block_info.opcode.clone())?
         .into_iter()
         .map(|name| -> HQResult<Vec<IrOpcode>> {
-            match block_info
-                .inputs
-                .get((*name).into())
-                .ok_or(make_hq_bad_proj!("missing input {}", name))?
-            {
+            match match block_info.inputs.get((*name).into()) {
+                Some(input) => input,
+                None => {
+                    if name.starts_with("CONDITION") {
+                        &Input::NoShadow(
+                            0,
+                            Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
+                        )
+                    } else {
+                        hq_bad_proj!("missing input {}", name)
+                    }
+                }
+            } {
                 Input::NoShadow(_, Some(block)) | Input::Shadow(_, Some(block), _) => match block {
                     BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr, context)?]),
                     BlockArrayOrId::Id(id) => match blocks
@@ -137,14 +148,14 @@ fn from_normal_block(
     Ok(inputs(block_info, blocks, context)?
         .into_iter()
         .chain(match &block_info.opcode {
-            BlockOpcode::operator_add => [IrOpcode::operator_add].into_iter(),
-            BlockOpcode::operator_subtract => [IrOpcode::operator_subtract].into_iter(),
-            BlockOpcode::operator_multiply => [IrOpcode::operator_multiply].into_iter(),
-            BlockOpcode::operator_divide => [IrOpcode::operator_divide].into_iter(),
-            BlockOpcode::looks_say => [IrOpcode::looks_say].into_iter(),
-            BlockOpcode::operator_join => [IrOpcode::operator_join].into_iter(),
-            BlockOpcode::sensing_dayssince2000 => [IrOpcode::sensing_dayssince2000].into_iter(),
-            BlockOpcode::operator_lt => [IrOpcode::operator_lt].into_iter(),
+            BlockOpcode::operator_add => vec![IrOpcode::operator_add],
+            BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
+            BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
+            BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
+            BlockOpcode::looks_say => vec![IrOpcode::looks_say],
+            BlockOpcode::operator_join => vec![IrOpcode::operator_join],
+            BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
+            BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
             BlockOpcode::data_setvariableto => {
                 let sb3::Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE").ok_or(
                     make_hq_bad_proj!("invalid project.json - missing field VARIABLE"),
@@ -164,10 +175,9 @@ fn from_normal_block(
                 } else {
                     hq_todo!("global variables")
                 };
-                [IrOpcode::data_setvariableto(DataSetvariabletoFields(
+                vec![IrOpcode::data_setvariableto(DataSetvariabletoFields(
                     RcVar(Rc::clone(variable)),
                 ))]
-                .into_iter()
             }
             BlockOpcode::data_variable => {
                 let sb3::Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE").ok_or(
@@ -188,20 +198,19 @@ fn from_normal_block(
                 } else {
                     hq_todo!("global variables")
                 };
-                [IrOpcode::data_variable(DataVariableFields(RcVar(
+                vec![IrOpcode::data_variable(DataVariableFields(RcVar(
                     Rc::clone(variable),
                 )))]
-                .into_iter()
             }
-            BlockOpcode::control_if => {
-                let BlockArrayOrId::Id(substack_id) = block_info
-                    .inputs
-                    .get("SUBSTACK")
-                    .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
-                    .get_1()
-                    .ok_or(make_hq_bug!(""))?
-                    .clone()
-                    .ok_or(make_hq_bug!(""))?
+            BlockOpcode::control_if => 'block: {
+                let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
+                    Some(input) => input,
+                    None => break 'block vec![],
+                }
+                .get_1()
+                .ok_or(make_hq_bug!(""))?
+                .clone()
+                .ok_or(make_hq_bug!(""))?
                 else {
                     hq_bad_proj!("malformed SUBSTACK input")
                 };
@@ -219,7 +228,7 @@ fn from_normal_block(
                         .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
                         .project(),
                 )?;
-                [IrOpcode::control__if(ControlIfFields(substack_step))].into_iter()
+                vec![IrOpcode::control__if(ControlIfFields(substack_step))]
             }
             other => hq_todo!("unimplemented block: {:?}", other),
         })
