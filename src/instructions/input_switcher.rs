@@ -1,6 +1,7 @@
 //! Provides the logic for having boxed input types to blocks
 
 use super::prelude::*;
+use super::HqCastFields;
 use super::IrOpcode;
 use crate::wasm::WasmProject;
 use crate::{ir::Type as IrType, wasm::StepFunc};
@@ -22,12 +23,25 @@ fn generate_branches(
     if remaining_inputs.is_empty() {
         hq_assert!(processed_inputs.iter().all(|ty| ty.is_base_type()));
         crate::log(format!("processed_inputs:{:?}", processed_inputs).as_str());
-        let mut wasm = opcode.wasm(func, Rc::from(processed_inputs))?;
+        let mut processed_inputs = Vec::from(processed_inputs);
+        for (i, expected) in opcode.acceptable_inputs().iter().enumerate() {
+            if !expected
+                .base_types()
+                .any(|ty| *ty == processed_inputs[i].base_type().unwrap())
+            {
+                processed_inputs[i] = IrOpcode::hq_cast(HqCastFields(*expected))
+                    .output_type(Rc::new([processed_inputs[i]]))?.unwrap();
+            }
+        }
+        let processed_inputs = processed_inputs.into();
+        let mut wasm = opcode.wasm(func, Rc::clone(&processed_inputs))?;
         // if the overall output is boxed, but this particular branch produces an unboxed result
         // (which i think all branches probably should?), box it.
         // TODO: split this into another function somewhere? it seems like this should
         // be useful somewhere else as well
-        if let Some(this_output) = opcode.output_type(Rc::from(processed_inputs))? {
+        if let Some(this_output) =
+            opcode.output_type(processed_inputs)?
+        {
             if this_output.is_base_type()
                 && !output_type
                     .ok_or(make_hq_bug!("expected no output type but got one"))?
@@ -69,8 +83,10 @@ fn generate_branches(
             ))?,
         );
         let possible_types_num = curr_input.len();
+        let allowed_input_types = opcode.acceptable_inputs()[processed_inputs.len()];
         for (i, ty) in curr_input.iter().enumerate() {
             let base = ty.base_type().ok_or(make_hq_bug!("non-base type found"))?;
+            crate::log(format!("{allowed_input_types:?}; {base:?}").as_str());
             wasm.append(&mut if i == 0 {
                 match base {
                     IrType::QuasiInt => wasm![
@@ -150,6 +166,13 @@ fn generate_branches(
                     _ => unreachable!(),
                 }
             });
+            if !allowed_input_types.base_types().any(|ty| *ty == base) {
+                crate::log("disallowed input type detected");
+                wasm.append(
+                    &mut IrOpcode::hq_cast(HqCastFields(allowed_input_types))
+                        .wasm(func, Rc::new([*ty]))?,
+                );
+            }
             let mut processed_inputs = processed_inputs.to_vec();
             processed_inputs.push(*ty);
             wasm.append(&mut generate_branches(

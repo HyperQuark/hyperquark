@@ -15,8 +15,8 @@ fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
         let mut candidates = vec![];
         for preference in match from_base {
             IrType::QuasiInt => &[IrType::Float, IrType::String] as &[IrType],
-            IrType::Float => &[IrType::String] as &[IrType],
-            IrType::String => &[IrType::Float] as &[IrType],
+            IrType::Float => &[IrType::String, IrType::QuasiInt] as &[IrType],
+            IrType::String => &[IrType::Float, IrType::QuasiInt] as &[IrType],
             _ => unreachable!(),
         } {
             if to_base_types.contains(&preference) {
@@ -72,6 +72,10 @@ pub fn wasm(
             IrType::String => vec![],
             _ => hq_todo!("bad cast: {:?} -> string", from_base),
         },
+        IrType::QuasiInt => match from_base {
+            IrType::Float => wasm![I32TruncSatF64S],
+            _ => hq_todo!("unimplemented cast: {:?} -> Int", from_base)
+        }
         _ => hq_todo!("unimplemented cast: {:?} -> {:?}", from_base, target),
     })
 }

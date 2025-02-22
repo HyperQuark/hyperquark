@@ -42,7 +42,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
             hq_bug!("bad input")
         }
     } else {
-        hq_bug!("bad input")
+        hq_bug!("bad input: {:?}", inputs)
     })
 }
 

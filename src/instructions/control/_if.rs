@@ -32,4 +32,4 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
     Ok(None)
 }
 
-// crate::instructions_test! {none; hq_block; @ super::Fields(None)}
+// crate::instructions_test! {none; hq__if; @ super::Fields(None)}

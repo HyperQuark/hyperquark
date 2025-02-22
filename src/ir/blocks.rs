@@ -89,6 +89,7 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
         BlockOpcode::data_setvariableto => vec!["VALUE"],
         BlockOpcode::control_if => vec!["CONDITION"],
         BlockOpcode::operator_not => vec!["OPERAND"],
+        BlockOpcode::control_repeat => vec!["TIMES"],
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
     .into_iter()
@@ -231,6 +232,34 @@ fn from_normal_block(
                         .project(),
                 )?;
                 vec![IrOpcode::control__if(ControlIfFields(substack_step))]
+            }
+            BlockOpcode::control_repeat => 'block: {
+                let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
+                    Some(input) => input,
+                    None => break 'block vec![],
+                }
+                .get_1()
+                .ok_or(make_hq_bug!(""))?
+                .clone()
+                .ok_or(make_hq_bug!(""))?
+                else {
+                    hq_bad_proj!("malformed SUBSTACK input")
+                };
+                let Some(substack_block) = blocks.get(&substack_id) else {
+                    hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+                };
+                let substack_step = Step::from_block(
+                    substack_block,
+                    substack_id,
+                    blocks,
+                    context.clone(),
+                    context
+                        .target
+                        .upgrade()
+                        .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+                        .project(),
+                )?;
+                vec![IrOpcode::control_repeat(ControlRepeatFields(substack_step))]
             }
             other => hq_todo!("unimplemented block: {:?}", other),
         })
