@@ -88,6 +88,7 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
         BlockOpcode::sensing_dayssince2000 | BlockOpcode::data_variable => vec![],
         BlockOpcode::data_setvariableto => vec!["VALUE"],
         BlockOpcode::control_if => vec!["CONDITION"],
+        BlockOpcode::operator_not => vec!["OPERAND"],
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
     .into_iter()
@@ -156,6 +157,7 @@ fn from_normal_block(
             BlockOpcode::operator_join => vec![IrOpcode::operator_join],
             BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
             BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
+            BlockOpcode::operator_not => vec![IrOpcode::operator_not],
             BlockOpcode::data_setvariableto => {
                 let sb3::Field::ValueId(_val, maybe_id) = block_info.fields.get("VARIABLE").ok_or(
                     make_hq_bad_proj!("invalid project.json - missing field VARIABLE"),

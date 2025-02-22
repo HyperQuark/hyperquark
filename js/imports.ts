@@ -11,9 +11,9 @@ import { say_int } from './looks/say_int.ts';
 import { say_string } from './looks/say_string.ts';
 import { say_float } from './looks/say_float.ts';
 export const imports = {
-    operator: { lt_string, eq_string, join, gt_string },
-	cast: { string2float, int2string, float2string },
-	looks: { say_int, say_string, say_float },
-	sensing: { dayssince2000 }
+    looks: { say_int, say_string, say_float },
+	operator: { lt_string, eq_string, join, gt_string },
+	sensing: { dayssince2000 },
+	cast: { string2float, int2string, float2string }
 };
             
