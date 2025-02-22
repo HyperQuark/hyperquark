@@ -82,7 +82,6 @@ impl Type {
     }
 
     pub fn base_types(&self) -> Box<dyn Iterator<Item = &Type> + '_> {
-        crate::log(format!("base_types: {:?}", self).as_str());
         if self.is_none() {
             return Box::new(core::iter::empty());
         }

@@ -22,7 +22,6 @@ fn generate_branches(
 ) -> HQResult<Vec<Instruction<'static>>> {
     if remaining_inputs.is_empty() {
         hq_assert!(processed_inputs.iter().all(|ty| ty.is_base_type()));
-        crate::log(format!("processed_inputs:{:?}", processed_inputs).as_str());
         let mut processed_inputs = Vec::from(processed_inputs);
         for (i, expected) in opcode.acceptable_inputs().iter().enumerate() {
             if !expected
@@ -30,7 +29,8 @@ fn generate_branches(
                 .any(|ty| *ty == processed_inputs[i].base_type().unwrap())
             {
                 processed_inputs[i] = IrOpcode::hq_cast(HqCastFields(*expected))
-                    .output_type(Rc::new([processed_inputs[i]]))?.unwrap();
+                    .output_type(Rc::new([processed_inputs[i]]))?
+                    .unwrap();
             }
         }
         let processed_inputs = processed_inputs.into();
@@ -39,9 +39,7 @@ fn generate_branches(
         // (which i think all branches probably should?), box it.
         // TODO: split this into another function somewhere? it seems like this should
         // be useful somewhere else as well
-        if let Some(this_output) =
-            opcode.output_type(processed_inputs)?
-        {
+        if let Some(this_output) = opcode.output_type(processed_inputs)? {
             if this_output.is_base_type()
                 && !output_type
                     .ok_or(make_hq_bug!("expected no output type but got one"))?
@@ -86,7 +84,6 @@ fn generate_branches(
         let allowed_input_types = opcode.acceptable_inputs()[processed_inputs.len()];
         for (i, ty) in curr_input.iter().enumerate() {
             let base = ty.base_type().ok_or(make_hq_bug!("non-base type found"))?;
-            crate::log(format!("{allowed_input_types:?}; {base:?}").as_str());
             wasm.append(&mut if i == 0 {
                 match base {
                     IrType::QuasiInt => wasm![
@@ -167,7 +164,6 @@ fn generate_branches(
                 }
             });
             if !allowed_input_types.base_types().any(|ty| *ty == base) {
-                crate::log("disallowed input type detected");
                 wasm.append(
                     &mut IrOpcode::hq_cast(HqCastFields(allowed_input_types))
                         .wasm(func, Rc::new([*ty]))?,
@@ -196,14 +192,6 @@ pub fn wrap_instruction(
     inputs: Rc<[IrType]>,
     opcode: IrOpcode,
 ) -> HQResult<Vec<Instruction<'static>>> {
-    // crate::log(
-    //     format!(
-    //         "wrap_instruction. inputs: {:?}, opcode: {:?}",
-    //         inputs, opcode
-    //     )
-    //     .as_str(),
-    // );
-
     let output = opcode.output_type(Rc::clone(&inputs))?;
 
     hq_assert!(inputs.len() == opcode.acceptable_inputs().len());
@@ -218,8 +206,6 @@ pub fn wrap_instruction(
                 tys.filter(|ty| inputs[i].intersects(*ty)).map(|ty| ty.and(inputs[i]))
                     .collect::<Box<[_]>>()
             }).collect::<Vec<_>>();
-
-    crate::log(format!("{:?}", base_types).as_str());
 
     // sanity check; we have at least one possible input type for each input
     hq_assert!(

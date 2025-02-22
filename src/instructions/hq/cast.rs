@@ -74,8 +74,8 @@ pub fn wasm(
         },
         IrType::QuasiInt => match from_base {
             IrType::Float => wasm![I32TruncSatF64S],
-            _ => hq_todo!("unimplemented cast: {:?} -> Int", from_base)
-        }
+            _ => hq_todo!("unimplemented cast: {:?} -> Int", from_base),
+        },
         _ => hq_todo!("unimplemented cast: {:?} -> {:?}", from_base, target),
     })
 }
