@@ -77,7 +77,7 @@ impl Step {
         blocks: &BlockMap,
         context: StepContext,
         project: Weak<IrProject>,
-    ) -> HQResult<RcStep> {
+    ) -> HQResult<Rc<Step>> {
         let step = Rc::new(Step::new(
             Some(block_id),
             context.clone(),
@@ -91,49 +91,34 @@ impl Step {
             .try_borrow_mut()?
             .insert(Rc::clone(&step));
         crate::log(format!("{:?}", step).as_str());
-        Ok(RcStep(step))
+        Ok(step)
+    }
+
+    pub fn make_inlined(&self) -> HQResult<()> {
+        if *self.inlined.try_borrow()? {
+            return Ok(());
+        };
+        *self.inlined.try_borrow_mut()? = true;
+        self.project
+            .upgrade()
+            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+            .inlined_steps()
+            .try_borrow_mut()?
+            .insert(
+                self.project
+                    .upgrade()
+                    .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+                    .steps()
+                    .try_borrow_mut()?
+                    .swap_take(self)
+                    .ok_or(make_hq_bug!("step not in project's StepMap"))?,
+            );
+        Ok(())
     }
 }
 
 impl core::hash::Hash for Step {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RcStep(Rc<Step>);
-
-impl RcStep {
-    pub fn new(rc: Rc<Step>) -> Self {
-        RcStep(rc)
-    }
-
-    pub fn get_rc(&self) -> Rc<Step> {
-        Rc::clone(&self.0)
-    }
-
-    pub fn make_inlined(&self) -> HQResult<()> {
-        if *self.0.inlined.try_borrow()? {
-            return Ok(());
-        };
-        *self.0.inlined.try_borrow_mut()? = true;
-        self.0
-            .project
-            .upgrade()
-            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
-            .inlined_steps()
-            .try_borrow_mut()?
-            .insert(
-                self.0
-                    .project
-                    .upgrade()
-                    .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
-                    .steps()
-                    .try_borrow_mut()?
-                    .swap_take(&self.0)
-                    .ok_or(make_hq_bug!("step not in project's StepMap"))?,
-            );
-        Ok(())
     }
 }

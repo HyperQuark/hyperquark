@@ -1,5 +1,4 @@
 use super::{ExternalEnvironment, Registries};
-use crate::instructions::wrap_instruction;
 use crate::ir::{Event, IrProject, Step, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{StepFunc, WasmFlags};
@@ -420,16 +419,19 @@ impl WasmProject {
             flags,
         )?;
         for thread in ir_project.threads().try_borrow()?.iter() {
-            let step = thread.first_step().get_rc();
-            if !*step.inlined().borrow() {
-                StepFunc::compile_step(step, Rc::clone(&steps), Rc::clone(&registries), flags)?;
-            }
+            let step = thread.first_step();
+            StepFunc::compile_step(
+                Rc::clone(step),
+                Rc::clone(&steps),
+                Rc::clone(&registries),
+                flags,
+            )?;
             events.entry(thread.event()).or_default().push(
                 u32::try_from(
                     ir_project
                         .steps()
                         .try_borrow()?
-                        .get_index_of(&thread.first_step().get_rc())
+                        .get_index_of(thread.first_step())
                         .ok_or(make_hq_bug!(
                             "Thread's first_step wasn't found in Thread::steps()"
                         ))?,

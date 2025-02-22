@@ -4,14 +4,23 @@ use crate::wasm::{byte_offset, StepFunc};
 use wasm_encoder::MemArg;
 
 #[derive(Clone, Debug)]
-pub struct Fields(pub Option<Rc<Step>>);
+pub enum YieldMode {
+    Tail,
+    Force,
+}
+
+#[derive(Clone, Debug)]
+pub struct Fields {
+    pub step: Option<Rc<Step>>,
+    pub mode: YieldMode,
+}
 
 pub fn wasm(
     _func: &StepFunc,
     _inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<Instruction<'static>>> {
-    Ok(if let Some(next_step) = &fields.0 {
+    Ok(if let Some(next_step) = &fields.step {
         hq_todo!()
     } else {
         wasm![
@@ -69,4 +78,4 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
     Ok(None)
 }
 
-crate::instructions_test! {none; hq__yield; @ super::Fields(None)}
+crate::instructions_test! {none; hq__yield; @ super::Fields { step: None, mode: super::YieldMode::Tail }}

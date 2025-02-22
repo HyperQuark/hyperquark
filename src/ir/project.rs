@@ -84,7 +84,11 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             .iter()
             .map(|target| {
                 let variables = variables_from_target(target);
-                let ir_target = Rc::new(Target::new(target.is_stage, variables));
+                let ir_target = Rc::new(Target::new(
+                    target.is_stage,
+                    variables,
+                    Rc::downgrade(&project),
+                ));
                 let blocks = &target.blocks;
                 let threads = blocks
                     .values()

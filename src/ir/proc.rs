@@ -1,4 +1,4 @@
-use super::{IrProject, RcStep, Step, StepContext, Target, Type as IrType};
+use super::{IrProject, Step, StepContext, Target, Type as IrType};
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::sb3::{BlockMap, BlockOpcode};
@@ -33,13 +33,13 @@ impl ProcedureContext {
 
 #[derive(Clone)]
 pub struct Proc {
-    first_step: RcStep,
+    first_step: Rc<Step>,
     context: ProcedureContext,
 }
 
 impl Proc {
-    pub fn first_step(&self) -> &RcStep {
-        &self.first_step
+    pub fn first_step(&self) -> Rc<Step> {
+        Rc::clone(&self.first_step)
     }
 
     pub fn context(&self) -> &ProcedureContext {
@@ -158,7 +158,7 @@ impl Proc {
                 step_context,
                 project,
             )?,
-            None => RcStep::new(Rc::new(Step::new(None, step_context, vec![], project))),
+            None => Rc::new(Step::new(None, step_context, vec![], project)),
         };
         Ok(Proc {
             first_step,

@@ -13,7 +13,7 @@ use context::StepContext;
 pub(crate) use event::Event;
 use proc::{Proc, ProcRegistry, ProcedureContext};
 pub(crate) use project::IrProject;
-pub(crate) use step::{RcStep, Step};
+pub(crate) use step::Step;
 use target::Target;
 use thread::Thread;
 pub(crate) use types::Type;

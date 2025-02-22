@@ -1,1 +1,1 @@
-export const opcodes = ["data_setvariableto","data_variable","looks_say","operator_add","operator_divide","operator_join","operator_lt","operator_multiply","operator_subtract","sensing_dayssince2000"];
+export const opcodes = ["control_if","data_setvariableto","data_variable","looks_say","operator_add","operator_divide","operator_join","operator_lt","operator_multiply","operator_subtract","sensing_dayssince2000"];

@@ -1,5 +1,5 @@
 use super::{Registries, WasmFlags};
-use crate::instructions::wrap_instruction;
+use crate::instructions::{wrap_instruction, HqYieldFields, IrOpcode, YieldMode};
 use crate::ir::Step;
 use crate::prelude::*;
 use wasm_encoder::{CodeSection, Function, FunctionSection, Instruction, ValType};
@@ -110,9 +110,9 @@ impl StepFunc {
         steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         registries: Rc<Registries>,
         flags: WasmFlags,
-    ) -> HQResult<()> {
-        if steps.try_borrow()?.contains_key(&step) {
-            return Ok(());
+    ) -> HQResult<StepFunc> {
+        if let Some(step_func) = steps.try_borrow()?.get(&step) {
+            return Ok(step_func.clone());
         }
         let step_func = StepFunc::new(registries, Rc::clone(&steps), flags);
         let mut instrs = vec![];
@@ -131,7 +131,34 @@ impl StepFunc {
             }
         }
         step_func.add_instructions(instrs)?;
-        steps.try_borrow_mut()?.insert(step, step_func);
-        Ok(())
+        steps.try_borrow_mut()?.insert(step, step_func.clone());
+        Ok(step_func)
+    }
+
+    pub fn compile_inner_step(&self, step: Rc<Step>) -> HQResult<Vec<Instruction<'static>>> {
+        step.make_inlined()?;
+        let mut instrs = vec![];
+        let mut type_stack = vec![];
+        for opcode in step.opcodes() {
+            let inputs = type_stack
+                .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
+                .collect();
+            if let IrOpcode::hq__yield(HqYieldFields {
+                step: None,
+                mode: YieldMode::Tail,
+            }) = opcode
+            {
+                break;
+            }
+            instrs.append(&mut wrap_instruction(
+                self,
+                Rc::clone(&inputs),
+                opcode.clone(),
+            )?);
+            if let Some(output) = opcode.output_type(inputs)? {
+                type_stack.push(output);
+            }
+        }
+        Ok(instrs)
     }
 }

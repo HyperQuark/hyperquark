@@ -1,11 +1,11 @@
-use super::{Event, IrProject, RcStep, Step, StepContext, Target};
+use super::{Event, IrProject, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode};
 
 #[derive(Clone, Debug)]
 pub struct Thread {
     event: Event,
-    first_step: RcStep,
+    first_step: Rc<Step>,
     target: Weak<Target>,
 }
 
@@ -14,7 +14,7 @@ impl Thread {
         self.event
     }
 
-    pub fn first_step(&self) -> &RcStep {
+    pub fn first_step(&self) -> &Rc<Step> {
         &self.first_step
     }
 

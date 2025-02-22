@@ -3,11 +3,13 @@
 
 use crate::prelude::*;
 
+mod control;
 mod data;
 mod hq;
 mod looks;
 mod operator;
 mod sensing;
+
 #[macro_use]
 mod tests;
 
@@ -15,6 +17,8 @@ include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
 
 mod input_switcher;
 pub use input_switcher::wrap_instruction;
+
+pub use hq::_yield::YieldMode;
 
 mod prelude {
     pub(crate) use crate::ir::Type as IrType;

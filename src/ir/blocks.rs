@@ -1,5 +1,5 @@
-use super::{RcVar, Type as IrType};
-use crate::instructions::{fields::*, IrOpcode};
+use super::{RcVar, Step, Type as IrType};
+use crate::instructions::{fields::*, IrOpcode, YieldMode};
 use crate::prelude::*;
 use crate::sb3;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
@@ -58,7 +58,13 @@ pub fn from_block(
             } else {
                 from_normal_block(block_info, blocks, context)?
                     .iter()
-                    .chain([IrOpcode::hq__yield(HqYieldFields(None))].iter())
+                    .chain(
+                        [IrOpcode::hq__yield(HqYieldFields {
+                            step: None,
+                            mode: YieldMode::Tail,
+                        })]
+                        .iter(),
+                    )
                     .cloned()
                     .collect()
             }
@@ -78,6 +84,7 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
         BlockOpcode::sensing_dayssince2000 | BlockOpcode::data_variable => vec![],
         BlockOpcode::data_setvariableto => vec!["VALUE"],
+        BlockOpcode::control_if => vec!["CONDITION"],
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
     .into_iter()
@@ -185,6 +192,34 @@ fn from_normal_block(
                     Rc::clone(variable),
                 )))]
                 .into_iter()
+            }
+            BlockOpcode::control_if => {
+                let BlockArrayOrId::Id(substack_id) = block_info
+                    .inputs
+                    .get("SUBSTACK")
+                    .ok_or(make_hq_bad_proj!("missing SUBSTACK input for control_if"))?
+                    .get_1()
+                    .ok_or(make_hq_bug!(""))?
+                    .clone()
+                    .ok_or(make_hq_bug!(""))?
+                else {
+                    hq_bad_proj!("malformed SUBSTACK input")
+                };
+                let Some(substack_block) = blocks.get(&substack_id) else {
+                    hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+                };
+                let substack_step = Step::from_block(
+                    substack_block,
+                    substack_id,
+                    blocks,
+                    context.clone(),
+                    context
+                        .target
+                        .upgrade()
+                        .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+                        .project(),
+                )?;
+                [IrOpcode::control__if(ControlIfFields(substack_step))].into_iter()
             }
             other => hq_todo!("unimplemented block: {:?}", other),
         })
