@@ -3,7 +3,7 @@ name = "enum-field-getter"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "hhttps://github.com/HyperQuark/hyperquark/tree/main/enum-field-getter"
+repository = "https://github.com/HyperQuark/hyperquark/tree/main/enum-field-getter"
 authors = ["pufferfish101007"]
 description = "A derive macro to create mutable and immutable getters for tuple/struct members of enum variants"
 
