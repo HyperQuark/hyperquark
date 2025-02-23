@@ -20,4 +20,4 @@ pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(Some(IrType::String))
 }
 
-crate::instructions_test! {tests; operator_add; t1, t2 ;}
+crate::instructions_test! {tests; operator_join; t1, t2 ;}
