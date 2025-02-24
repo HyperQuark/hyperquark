@@ -74,6 +74,13 @@ pub fn wasm(
         },
         IrType::QuasiInt => match from_base {
             IrType::Float => wasm![I32TruncSatF64S],
+            IrType::String => {
+                let func_index = func.registries().external_functions().register(
+                    ("cast", "string2float"),
+                    (vec![ValType::EXTERNREF], vec![ValType::F64]),
+                )?;
+                wasm![Call(func_index), I32TruncSatF64S]
+            }
             _ => hq_todo!("unimplemented cast: {:?} -> Int", from_base),
         },
         _ => hq_todo!("unimplemented cast: {:?} -> {:?}", from_base, target),
