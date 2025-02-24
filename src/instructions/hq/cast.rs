@@ -81,6 +81,7 @@ pub fn wasm(
                 )?;
                 wasm![Call(func_index), I32TruncSatF64S]
             }
+            IrType::QuasiInt => vec![],
             _ => hq_todo!("unimplemented cast: {:?} -> Int", from_base),
         },
         _ => hq_todo!("unimplemented cast: {:?} -> {:?}", from_base, target),
