@@ -44,15 +44,14 @@ macro_rules! instructions_test {
                 itertools::iproduct!($($type_arg,)*).filter(move |($($type_arg,)*)| {
                     let types: &[&IrType] = &[$($type_arg,)*];
                     for (i, input) in (*types).into_iter().enumerate() {
-                        // invalid input types should be handled by a wrapper function somewhere
-                        // so we won't test those here.
-                        // TODO: are they actually handled elsewhere?
-                        if !acceptable_inputs()[i].contains(**input) {
-                            return false;
-                        }
-                        // again, non-base types should be handled and unboxed by a wrapper function
+                        // non-base types should be handled and unboxed by a wrapper function
                         // contained in src/instructions/input_switcher.rs
                         if base_only && !input.is_base_type() {
+                            return false;
+                        }
+                        // invalid base input types should be handled by insert_casts in
+                        // src.ir/blocks.rs, so we won't test those here
+                        if !acceptable_inputs()[i].contains(**input) {
                             return false;
                         }
                     }
