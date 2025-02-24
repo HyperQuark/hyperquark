@@ -8,7 +8,7 @@
 ///
 /// Example:
 /// For a block foo_bar, which takes 2 inputs, with Fields(bool),
-/// ```rust
+/// ```ignore
 /// instructions_test!(test; foo_bar; t1, t2 @ super::Fields(true));
 /// instructions_test!(test; foo_bar; t1, t2 @ super::Fields(false));
 /// ```
