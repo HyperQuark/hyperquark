@@ -15,6 +15,8 @@ pub fn wasm(
     let counter_local = func.local(ValType::I32)?;
     Ok(wasm![
         LocalSet(times_local),
+        I32Const(0),
+        LocalSet(counter_local),
         Block(BlockType::Empty),
         Loop(BlockType::Empty),
         LocalGet(counter_local),
