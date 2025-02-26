@@ -30,9 +30,10 @@ impl Thread {
         target: Weak<Target>,
         project: Weak<IrProject>,
     ) -> HQResult<Option<Self>> {
-        let block_info = block
-            .block_info()
-            .ok_or(make_hq_bug!("top-level block is a special block"))?;
+        let Some(block_info) = block.block_info() else {
+            return Ok(None);
+        };
+
         let event = match block_info.opcode {
             BlockOpcode::event_whenflagclicked => Event::FlagCLicked,
             BlockOpcode::event_whenbackdropswitchesto

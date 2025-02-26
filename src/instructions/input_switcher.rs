@@ -22,17 +22,6 @@ fn generate_branches(
 ) -> HQResult<Vec<Instruction<'static>>> {
     if remaining_inputs.is_empty() {
         hq_assert!(processed_inputs.iter().all(|ty| ty.is_base_type()));
-        let mut processed_inputs = Vec::from(processed_inputs);
-        // for (i, expected) in opcode.acceptable_inputs().iter().enumerate() {
-        //     if !expected
-        //         .base_types()
-        //         .any(|ty| *ty == processed_inputs[i].base_type().unwrap())
-        //     {
-        //         processed_inputs[i] = IrOpcode::hq_cast(HqCastFields(*expected))
-        //             .output_type(Rc::new([processed_inputs[i]]))?
-        //             .unwrap();
-        //     }
-        // }
         let processed_inputs = processed_inputs.into();
         let mut wasm = opcode.wasm(func, Rc::clone(&processed_inputs))?;
         // if the overall output is boxed, but this particular branch produces an unboxed result
