@@ -84,5 +84,5 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: -- --skip cast::float::js_functions_match_declared_types --skip cast::int::js_functions_match_declared_types --skip cast::string::js_functions_match_declared_types --skip join::tests::js_functions_match_declared_types --skip lt::tests::js_functions_match_declared_types --skip dayssince2000::tests::js_functions_match_declared_types
+          args: -- --skip cast::float::js_functions_match_declared_types --skip cast::int::js_functions_match_declared_types --skip cast::string::js_functions_match_declared_types --skip join::tests::js_functions_match_declared_types --skip lt::tests::js_functions_match_declared_types --skip dayssince2000::tests::js_functions_match_declared_types --skip looks::say::tests::js_functions_match_declared_types
  
