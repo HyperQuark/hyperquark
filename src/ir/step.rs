@@ -90,7 +90,6 @@ impl Step {
             .steps()
             .try_borrow_mut()?
             .insert(Rc::clone(&step));
-        crate::log(format!("{:?}", step).as_str());
         Ok(step)
     }
 

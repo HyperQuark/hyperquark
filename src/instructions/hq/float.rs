@@ -11,7 +11,7 @@ pub fn wasm(
     Ok(wasm![F64Const(fields.0)])
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
+pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
     Rc::new([])
 }
 

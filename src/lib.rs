@@ -12,6 +12,7 @@ use wasm_bindgen::prelude::*;
 #[macro_use]
 mod error;
 mod ir;
+mod optimisation;
 // pub mod ir_opt;
 mod sb3;
 mod wasm;
@@ -50,7 +51,6 @@ use prelude::*;
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen(js_namespace=console)]
 extern "C" {
-
     pub fn log(s: &str);
 }
 
@@ -63,6 +63,7 @@ pub fn log(s: &str) {
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::FinishedWasm> {
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
-    let ir_proj: Rc<ir::IrProject> = sb3_proj.try_into()?;
+    let ir_proj = sb3_proj.try_into()?;
+    optimisation::ir_optimise(Rc::clone(&ir_proj))?;
     wasm::WasmProject::from_ir(ir_proj, flags)?.finish()
 }

@@ -51,7 +51,7 @@ macro_rules! instructions_test {
                         }
                         // invalid base input types should be handled by insert_casts in
                         // src.ir/blocks.rs, so we won't test those here
-                        if !acceptable_inputs()[i].contains(**input) {
+                        if !acceptable_inputs($(&$fields)?)[i].contains(**input) {
                             return false;
                         }
                     }

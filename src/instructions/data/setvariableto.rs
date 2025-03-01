@@ -14,15 +14,22 @@ pub fn wasm(
         .variables()
         .register(RcVar::clone(variable))?;
     let t1 = inputs[0];
-    Ok(wasm![
-        @boxed(t1),
-        GlobalSet(global_index)
-    ])
+    if variable.0.possible_types().is_base_type() {
+        Ok(wasm![GlobalSet(global_index)])
+    } else {
+        Ok(wasm![
+            @boxed(t1),
+            GlobalSet(global_index)
+        ])
+    }
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Any])
-    //Rc::new([IrType::String.or(IrType::Number)])
+pub fn acceptable_inputs(Fields(rcvar): &Fields) -> Rc<[IrType]> {
+    Rc::new([if rcvar.0.possible_types().is_none() {
+        IrType::Any
+    } else {
+        *rcvar.0.possible_types()
+    }])
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
@@ -30,7 +37,7 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
 }
 
 crate::instructions_test!(
-    tests;
+    any;
     data_setvariableto;
     t
     @ super::Fields(
@@ -39,6 +46,54 @@ crate::instructions_test!(
                 crate::ir::Variable::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0)
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    float;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::Float,
+                    crate::sb3::VarVal::Float(0.0)
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    string;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::String,
+                    crate::sb3::VarVal::String("".into())
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    int;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::QuasiInt,
+                    crate::sb3::VarVal::Bool(true)
                 )
             )
         )

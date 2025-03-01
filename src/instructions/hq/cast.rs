@@ -88,7 +88,7 @@ pub fn wasm(
     })
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
+pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
     Rc::new([IrType::Number.or(IrType::String).or(IrType::Boolean)])
 }
 

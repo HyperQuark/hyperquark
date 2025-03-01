@@ -1,3 +1,9 @@
+let output_div;
+
 export function say_float(data: number): void {
-  console.log(data);
+  if (typeof output_div == 'undefined') {
+    output_div = document.getElementById('hq-output');
+  }
+  output_div.innerHTML += data.toString();
+  output_div.innerHTML += '<br>';
 }

@@ -151,7 +151,7 @@ pub use fields::*;
             }).collect::<Vec<_>>().join(",\n\t"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(_) => {}::acceptable_inputs(),", id, path)
+                    format!("IrOpcode::{}(fields) => {}::acceptable_inputs(fields),", id, path)
                 } else {
                     format!("IrOpcode::{} => {}::acceptable_inputs(),", id, path)
                 }
