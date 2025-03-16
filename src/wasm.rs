@@ -15,7 +15,7 @@ pub(crate) use func::StepFunc;
 pub(crate) use globals::{
     Exportable as GlobalExportable, GlobalRegistry, Mutable as GlobalMutable,
 };
-pub(crate) use project::{byte_offset, FinishedWasm, WasmProject};
+pub(crate) use project::{FinishedWasm, WasmProject};
 pub(crate) use registries::Registries;
 pub(crate) use strings::StringRegistry;
 pub(crate) use tables::TableRegistry;

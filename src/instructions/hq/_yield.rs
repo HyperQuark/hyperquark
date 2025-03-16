@@ -1,7 +1,7 @@
 use super::super::prelude::*;
 use crate::ir::Step;
-use crate::wasm::{byte_offset, StepFunc};
-use wasm_encoder::MemArg;
+use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc};
+use wasm_encoder::{ConstExpr, HeapType};
 
 #[derive(Clone, Debug)]
 pub enum YieldMode {
@@ -16,57 +16,66 @@ pub struct Fields {
 }
 
 pub fn wasm(
-    _func: &StepFunc,
+    func: &StepFunc,
     _inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<Instruction<'static>>> {
-    #[allow(unused_variables)]
-    Ok(if let Some(next_step) = &fields.step {
+    let noop_global = func.registries().globals().register(
+        "noop_func".into(),
+        (
+            ValType::Ref(RefType {
+                nullable: false,
+                heap_type: HeapType::Concrete(
+                    func.registries()
+                        .types()
+                        .register_default((vec![ValType::I32], vec![]))?,
+                ),
+            }),
+            ConstExpr::ref_func(0), // this is a placeholder.
+            GlobalMutable(false),
+            GlobalExportable(false),
+        ),
+    )?;
+
+    let step_func_ty = func
+        .registries()
+        .types()
+        .register_default((vec![ValType::I32], vec![]))?;
+    let threads_table = func.registries().tables().register(
+        "threads".into(),
+        (
+            RefType {
+                nullable: false,
+                heap_type: HeapType::Concrete(step_func_ty),
+            },
+            0,
+            // this default gets fixed up in src/wasm/tables.rs
+            None,
+        ),
+    )?;
+
+    let threads_count = func.registries().globals().register(
+        "threads_count".into(),
+        (
+            ValType::I32,
+            ConstExpr::i32_const(0),
+            GlobalMutable(true),
+            GlobalExportable(true),
+        ),
+    )?;
+
+    Ok(if let Some(_next_step) = &fields.step {
         hq_todo!()
     } else {
         wasm![
             LocalGet(0),
-            I32Const(byte_offset::THREADS),
-            I32Add, // destination (= current thread pos in memory)
-            LocalGet(0),
-            I32Const(byte_offset::THREADS + 4),
-            I32Add, // source (= current thread pos + 4)
-            I32Const(0),
-            I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }),
-            I32Const(4),
-            I32Mul,
-            LocalGet(0),
-            I32Sub, // length (threadnum * 4 - current thread pos)
-            MemoryCopy {
-                src_mem: 0,
-                dst_mem: 0,
-            },
-            I32Const(0),
-            I32Const(0),
-            I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }),
+            GlobalGet(noop_global),
+            TableSet(threads_table),
+            GlobalGet(threads_count),
             I32Const(1),
             I32Sub,
-            I32Store(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }),
-            I32Const(0),
-            Return,
+            GlobalSet(threads_count),
+            Return
         ]
     })
 }

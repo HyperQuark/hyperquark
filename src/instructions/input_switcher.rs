@@ -88,7 +88,7 @@ fn generate_branches(
                         let table_index = func
                             .registries()
                             .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0))?;
+                            .register("strings".into(), (RefType::EXTERNREF, 0, None))?;
                         wasm![
                             I64Const(BOXED_STRING_PATTERN),
                             I64And,
@@ -111,7 +111,7 @@ fn generate_branches(
                         let table_index = func
                             .registries()
                             .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0))?;
+                            .register("strings".into(), (RefType::EXTERNREF, 0, None))?;
                         wasm![Else, LocalGet(local_idx), I32WrapI64, TableGet(table_index)]
                     }
                     _ => unreachable!(),
@@ -135,7 +135,7 @@ fn generate_branches(
                         let table_index = func
                             .registries()
                             .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0))?;
+                            .register("strings".into(), (RefType::EXTERNREF, 0, None))?;
                         wasm![
                             Else,
                             LocalGet(local_idx),

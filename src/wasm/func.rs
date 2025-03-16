@@ -43,7 +43,7 @@ impl StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params: Box::new([ValType::I32]),
-            output: Some(ValType::I32),
+            output: None,
             registries,
             flags,
             steps,

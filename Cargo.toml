@@ -8,7 +8,7 @@ publish = false
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 enum-field-getter = { path = "enum-field-getter" }
-wasm-encoder = "0.222.0"
+wasm-encoder = "0.226.0"
 indexmap = { version = "2.0.0", default-features = false }
 hashers = "1.0.1"
 uuid = { version = "1.4.1", default-features = false, features = ["v4", "js"] }
@@ -22,7 +22,8 @@ serde-wasm-bindgen = "0.6.5"
 wasm-gen = { path = "wasm-gen" }
 
 [dev-dependencies]
-wasmparser = "0.222.0"
+wasmparser = "0.226.0"
+wasmprinter = "0.226.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]

@@ -28,12 +28,12 @@ mod registry;
 pub mod prelude {
     pub use crate::registry::{Registry, RegistryDefault};
     pub use crate::{HQError, HQResult};
+    pub use alloc::borrow::{Borrow, Cow};
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
     pub use alloc::rc::{Rc, Weak};
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;
-    pub use core::borrow::Borrow;
     pub use core::cell::RefCell;
     pub use core::fmt;
 

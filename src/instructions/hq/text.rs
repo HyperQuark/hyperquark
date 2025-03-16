@@ -18,7 +18,7 @@ pub fn wasm(
         TableGet(
             func.registries()
                 .tables()
-                .register("strings".into(), (RefType::EXTERNREF, 0))?,
+                .register("strings".into(), (RefType::EXTERNREF, 0, None))?,
         ),
     ])
 }

@@ -131,8 +131,8 @@ macro_rules! instructions_test {
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
                     step_func.finish(&mut functions, &mut codes)?;
                     registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(&mut tables, &mut exports);
-                    registries.globals().clone().finish(&mut globals, &mut exports);
+                    registries.tables().clone().finish(&imports, &mut tables, &mut exports);
+                    registries.globals().clone().finish(&imports, &mut globals, &mut exports);
 
                     module.section(&types);
                     module.section(&imports);
@@ -206,8 +206,8 @@ macro_rules! instructions_test {
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
                     step_func.finish(&mut functions, &mut codes)?;
                     registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(&mut tables, &mut exports);
-                    registries.globals().clone().finish(&mut globals, &mut exports);
+                    registries.tables().clone().finish(&imports, &mut tables, &mut exports);
+                    registries.globals().clone().finish(&imports, &mut globals, &mut exports);
 
                     module.section(&types);
                     module.section(&imports);

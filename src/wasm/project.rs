@@ -1,17 +1,18 @@
-use super::{ExternalEnvironment, Registries};
+use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
 use crate::ir::{Event, IrProject, Step, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{StepFunc, WasmFlags};
+use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
-    BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection, DataSection,
-    ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection, GlobalSection,
-    ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, RefType, TableSection,
-    TypeSection, ValType,
+    BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, ExportKind,
+    ExportSection, Function, FunctionSection, GlobalSection, HeapType, ImportSection, Instruction,
+    MemorySection, MemoryType, Module, RefType, TableSection, TypeSection, ValType,
 };
+use wasm_gen::wasm;
 
+#[allow(dead_code)]
 pub mod byte_offset {
-    #[allow(dead_code)]
     pub const REDRAW_REQUESTED: i32 = 0;
     pub const THREAD_NUM: i32 = 4;
     pub const THREADS: i32 = 8;
@@ -80,7 +81,7 @@ impl WasmProject {
         let mut tables = TableSection::new();
         let mut exports = ExportSection::new();
         let mut elements = ElementSection::new();
-        let mut data = DataSection::new();
+        //let mut data = DataSection::new();
         let mut globals = GlobalSection::new();
 
         memories.memory(MemoryType {
@@ -90,26 +91,6 @@ impl WasmProject {
             shared: false,
             page_size_log2: None,
         });
-
-        let step_indices = (self.imported_func_count()?
-            ..(u32::try_from(self.step_funcs().len())
-                .map_err(|_| make_hq_bug!("step_funcs length out of bounds"))?
-                + self.imported_func_count()?))
-            .collect::<Vec<_>>();
-        let step_func_table_idx = self.registries().tables().register(
-            "step_funcs".into(),
-            (
-                RefType::FUNCREF,
-                u64::try_from(step_indices.len())
-                    .map_err(|_| make_hq_bug!("step indices length out of bounds"))?,
-            ),
-        )?;
-        let step_func_indices = Elements::Functions(step_indices.into());
-        elements.active(
-            Some(step_func_table_idx),
-            &ConstExpr::i32_const(0),
-            step_func_indices,
-        );
 
         let strings = self.registries().strings().clone().finish();
 
@@ -122,6 +103,7 @@ impl WasmProject {
                     .try_into()
                     .map_err(|_| make_hq_bug!("strings length out of bounds"))?,
                 // TODO: use js string imports for preknown strings
+                None,
             ),
         )?;
 
@@ -135,7 +117,7 @@ impl WasmProject {
 
         self.tick_func(&mut functions, &mut codes, &mut exports)?;
 
-        self.finish_events(&mut functions, &mut codes, &mut exports, &mut data)?;
+        self.finish_events(&mut functions, &mut codes, &mut exports)?;
 
         self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
 
@@ -144,16 +126,20 @@ impl WasmProject {
         self.registries()
             .tables()
             .clone()
-            .finish(&mut tables, &mut exports);
+            .finish(&imports, &mut tables, &mut exports);
 
-        let data_count = DataCountSection { count: data.len() };
+        elements.declared(Elements::Functions(
+            (self.imported_func_count()?..functions.len() + self.imported_func_count()? - 2)
+                .collect(),
+        ));
 
         exports.export("memory", ExportKind::Memory, 0);
+        exports.export("noop", ExportKind::Func, self.imported_func_count()?);
 
         self.registries()
             .globals()
             .clone()
-            .finish(&mut globals, &mut exports);
+            .finish(&imports, &mut globals, &mut exports);
 
         module
             .section(&types)
@@ -165,9 +151,9 @@ impl WasmProject {
             .section(&exports)
             // start
             .section(&elements)
-            .section(&data_count)
-            .section(&codes)
-            .section(&data);
+            //.section(&data_count)
+            .section(&codes);
+        //.section(&data);
 
         let wasm_bytes = module.finish();
 
@@ -211,6 +197,30 @@ impl WasmProject {
         Ok(())
     }
 
+    fn threads_table_index<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+    {
+        let step_func_ty = self
+            .registries()
+            .types()
+            .register_default((vec![ValType::I32], vec![]))?;
+
+        self.registries().tables().register(
+            "threads".into(),
+            (
+                RefType {
+                    nullable: false,
+                    heap_type: HeapType::Concrete(step_func_ty),
+                },
+                0,
+                // default to noop, just so the module validates.
+                Some(ConstExpr::ref_func(self.imported_func_count()?)),
+            ),
+        )
+    }
+
     fn finish_event(
         &self,
         export_name: &str,
@@ -218,75 +228,49 @@ impl WasmProject {
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
-        data: &mut DataSection,
     ) -> HQResult<()> {
-        data.passive(Vec::from(unsafe {
-            // I don't like using unsafe code but a random person on stackoverflow claims that it's ok,
-            // therefore it must be fine. Right? https://stackoverflow.com/a/29042896
-            // TODO: can we run miri or something on this to make sure it's actually safe? Not that I
-            // don't trust that person on SO, but it's best to be sure.
-            core::slice::from_raw_parts(
-                indices.as_ptr() as *const u8,
-                indices.len() * core::mem::size_of::<i32>(),
-            )
-        }));
-
         let mut func = Function::new(vec![]);
 
-        let instrs = vec![
-            // first, add the step indices into memory
-            Instruction::I32Const(0), // [i32]
-            Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("thread num byte offset out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }), // [i32]
-            Instruction::I32Const(WasmProject::THREAD_BYTE_LEN), // [i32, i32]
-            Instruction::I32Mul,      // [i32]
-            Instruction::I32Const(byte_offset::THREADS), // [i32, i32]
-            Instruction::I32Add,      // memory offset; [i32]
-            Instruction::I32Const(0), // offset in data segment; [i32, i32]
-            Instruction::I32Const(
-                i32::try_from(indices.len())
-                    .map_err(|_| make_hq_bug!("indices lenout of bounds"))?
-                    * WasmProject::THREAD_BYTE_LEN,
-            ), // segment length; [i32, i32, i32]
-            Instruction::MemoryInit {
-                mem: 0,
-                data_index: data.len() - 1,
-            }, // []
-            // then, increment the number of active threads
-            Instruction::I32Const(0), // stack: [i32]
-            Instruction::I32Const(0), // stack: [i32, i32]
-            Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("thread num byte offset out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }), // [i32, i32]
-            Instruction::I32Const(
-                indices
-                    .len()
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("indices len out of bounds"))?,
-            ), // [i32, i32, i32]
-            Instruction::I32Add,      // [i32, i32]
-            Instruction::I32Store(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("thread num byte offset out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }), // []
-            Instruction::End,
-        ];
+        let threads_table_index = self.threads_table_index()?;
+
+        let threads_count = self.registries().globals().register(
+            "threads_count".into(),
+            (
+                ValType::I32,
+                ConstExpr::i32_const(0),
+                GlobalMutable(true),
+                GlobalExportable(true),
+            ),
+        )?;
+
+        let instrs = indices
+            .iter()
+            .map(|i| {
+                Ok(wasm![
+                    RefFunc(i + self.imported_func_count()?),
+                    I32Const(1),
+                    TableGrow(threads_table_index),
+                    Drop,
+                ])
+            })
+            .flatten_ok()
+            .collect::<HQResult<Vec<_>>>()?;
 
         for instruction in instrs {
             func.instruction(&instruction);
         }
+        for instruction in wasm![
+            GlobalGet(threads_count),
+            I32Const(
+                i32::try_from(indices.len())
+                    .map_err(|_| make_hq_bug!("indices len out of bounds"))?
+            ),
+            I32Add,
+            GlobalSet(threads_count)
+        ] {
+            func.instruction(&instruction);
+        }
+        func.instruction(&Instruction::End);
 
         funcs.function(
             self.registries()
@@ -308,7 +292,6 @@ impl WasmProject {
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
-        data: &mut DataSection,
     ) -> HQResult<()> {
         for (event, indices) in self.events.iter() {
             self.finish_event(
@@ -319,14 +302,11 @@ impl WasmProject {
                 funcs,
                 codes,
                 exports,
-                data,
             )?;
         }
 
         Ok(())
     }
-
-    const THREAD_BYTE_LEN: i32 = 4;
 
     fn tick_func(
         &self,
@@ -336,64 +316,33 @@ impl WasmProject {
     ) -> HQResult<()> {
         let mut tick_func = Function::new(vec![(2, ValType::I32)]);
 
-        let instructions = vec![
-            Instruction::I32Const(0),
-            Instruction::I32Load(MemArg {
-                offset: byte_offset::THREAD_NUM
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("THREAD_NUM out of bounds"))?,
-                align: 2,
-                memory_index: 0,
-            }),
-            Instruction::LocalTee(1),
-            Instruction::I32Eqz,
-            Instruction::BrIf(0),
-            Instruction::LocalGet(1),
-            Instruction::I32Const(WasmProject::THREAD_BYTE_LEN),
-            Instruction::I32Mul,
-            Instruction::I32Const(WasmProject::THREAD_BYTE_LEN),
-            Instruction::I32Sub,
-            Instruction::LocalSet(1),
-            Instruction::Loop(WasmBlockType::Empty),
-            Instruction::LocalGet(0),
-            Instruction::LocalGet(0),
-            Instruction::I32Load(MemArg {
-                offset: /*(byte_offset::VARS as usize
-                    + VAR_INFO_LEN as usize * project.vars.try_borrow()?.len()
-                    + usize::try_from(SPRITE_INFO_LEN).map_err(|_| make_hq_bug!(""))?
-                        * (project.target_names.len() - 1))
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("i32.store offset out of bounds"))?*/
-                    byte_offset::THREADS.try_into().map_err(|_| make_hq_bug!("i32.store offset out of bounds"))?,
-                align: 2, // 2 ** 2 = 4 (bytes)
-                memory_index: 0,
-            }),
-            Instruction::CallIndirect {
-                type_index: self
-                    .registries()
-                    .types()
-                    .register_default((vec![ValType::I32], vec![ValType::I32]))?,
-                table_index: self
-                    .registries()
-                    .tables()
-                    .register("step_funcs".into(), (RefType::FUNCREF, 0))?,
+        let step_func_ty = self
+            .registries()
+            .types()
+            .register_default((vec![ValType::I32], vec![]))?;
+
+        let threads_table_index = self.threads_table_index()?;
+
+        let instructions = wasm![
+            TableSize(threads_table_index),
+            LocalTee(1),
+            I32Eqz,
+            BrIf(0),
+            Loop(WasmBlockType::Empty),
+            LocalGet(0),
+            LocalGet(0),
+            CallIndirect {
+                type_index: step_func_ty,
+                table_index: threads_table_index,
             },
-            Instruction::If(WasmBlockType::Empty),
-            Instruction::LocalGet(0),
-            Instruction::I32Const(WasmProject::THREAD_BYTE_LEN),
-            Instruction::I32Add,
-            Instruction::LocalSet(0),
-            Instruction::Else,
-            Instruction::LocalGet(1),
-            Instruction::I32Const(WasmProject::THREAD_BYTE_LEN),
-            Instruction::I32Sub,
-            Instruction::LocalSet(1),
-            Instruction::End,
-            Instruction::LocalGet(0),
-            Instruction::LocalGet(1),
-            Instruction::I32LeS,
-            Instruction::BrIf(0),
-            Instruction::End,
+            LocalGet(0),
+            I32Const(1),
+            I32Add,
+            LocalTee(0),
+            LocalGet(1),
+            I32LtS,
+            BrIf(0),
+            End,
         ];
         for instr in instructions {
             tick_func.instruction(&instr);
@@ -477,7 +426,13 @@ mod tests {
     fn empty_project_is_valid_wasm() {
         let proj = WasmProject::new(Default::default(), ExternalEnvironment::WebBrowser);
         let wasm_bytes = proj.finish().unwrap().wasm_bytes;
-        wasmparser::validate(&wasm_bytes).unwrap();
+        if let Err(err) = wasmparser::validate(&wasm_bytes) {
+            panic!(
+                "wasmparser error: {:?}\nwasm:\n{}",
+                err,
+                wasmprinter::print_bytes(wasm_bytes).unwrap()
+            )
+        }
     }
 
     #[test]
@@ -488,9 +443,6 @@ mod tests {
             Default::default(),
             Default::default(),
         );
-        step_func
-            .add_instructions(vec![Instruction::I32Const(0)])
-            .unwrap(); // this is handled by compile_step in a non-test environment
         let project = WasmProject {
             flags: Default::default(),
             step_funcs: Box::new([step_func]),
@@ -499,6 +451,12 @@ mod tests {
             registries,
         };
         let wasm_bytes = project.finish().unwrap().wasm_bytes;
-        wasmparser::validate(&wasm_bytes).unwrap();
+        if let Err(err) = wasmparser::validate(&wasm_bytes) {
+            panic!(
+                "wasmparser error: {:?}\nwasm:\n{}",
+                err,
+                wasmprinter::print_bytes(wasm_bytes).unwrap()
+            )
+        }
     }
 }

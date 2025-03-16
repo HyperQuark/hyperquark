@@ -114,8 +114,10 @@ export default async (
           step_funcs,
           vars_num,
           rr_offset,
-          thn_offset,
+          threads_num,
           upc,
+          threads,
+          noop,
           unreachable_dbg
         } = instance.exports;
         strings.grow(Object.entries(string_consts).length);
@@ -129,8 +131,9 @@ export default async (
         window.flag_clicked = flag_clicked;
         window.tick = tick;
         window.stop = () => {
-          for (let i = 0; i < new Uint32Array(memory.buffer)[1/*thn_offset.value / 4*/]; i++) {
-            new Uint32Array(memory.buffer)[(i + sprite_info_offset + spriteInfoLen * (target_names.length - 1)) / 4] = 0;
+          for (let i = 0; i < threads_num.value; i++) {
+            threads.set(i, noop);
+            threads_num.value = 0;
           }
         };
         // @ts-ignore
@@ -166,10 +169,10 @@ export default async (
             // @ts-ignore
             tick();
             // @ts-ignore
-            if (new Uint32Array(memory.buffer)[1 /*thn_offset.value / 4*/] === 0) {
+            if (threads_num === 0) {
               break $outertickloop;
             }
-          } while (
+          } while ( false &&
             Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
             new Uint8Array(memory.buffer)[0 /*rr_offset.value*/] === 0
           )
