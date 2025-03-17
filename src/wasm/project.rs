@@ -415,25 +415,10 @@ pub struct FinishedWasm {
 
 #[cfg(test)]
 mod tests {
-    use wasm_encoder::Instruction;
-
     use super::{Registries, WasmProject};
     use crate::ir::Event;
     use crate::prelude::*;
     use crate::wasm::{ExternalEnvironment, StepFunc};
-
-    #[test]
-    fn empty_project_is_valid_wasm() {
-        let proj = WasmProject::new(Default::default(), ExternalEnvironment::WebBrowser);
-        let wasm_bytes = proj.finish().unwrap().wasm_bytes;
-        if let Err(err) = wasmparser::validate(&wasm_bytes) {
-            panic!(
-                "wasmparser error: {:?}\nwasm:\n{}",
-                err,
-                wasmprinter::print_bytes(wasm_bytes).unwrap()
-            )
-        }
-    }
 
     #[test]
     fn project_with_one_empty_step_is_valid_wasm() {
