@@ -81,6 +81,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 LocalTee(local1),
                 @isnan(t1),
                 If(block_type),
+                    LocalGet(local2),
                     @isnan(t2),
                     If(block_type),
                         I32Const(0), // NaN is not greater than NaN
