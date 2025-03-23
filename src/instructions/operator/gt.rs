@@ -9,7 +9,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
     let block_type = BlockType::Result(ValType::I32);
     Ok(if IrType::QuasiInt.contains(t1) {
         if IrType::QuasiInt.contains(t2) {
-            wasm![I32LtS]
+            wasm![I32GtS]
         } else if IrType::Float.contains(t2) {
             let local1 = func.local(ValType::F64)?;
             let local2 = func.local(ValType::F64)?;
@@ -20,11 +20,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 LocalGet(local2),
                 @isnan(t2),
                 If(block_type),
-                    I32Const(1), // (number) < NaN always true
+                    I32Const(0), // (number) < NaN always false
                 Else,
                     LocalGet(local1),
                     LocalGet(local2),
-                    F64Lt,
+                    F64Gt,
                 End,
             ]
         } else if IrType::String.contains(t2) {
@@ -33,8 +33,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 ("cast", "int2string"),
                 (vec![ValType::I32], vec![ValType::EXTERNREF]),
             )?;
-            let string_lt = func.registries().external_functions().register(
-                ("operator", "lt_string"),
+            let string_gt = func.registries().external_functions().register(
+                ("operator", "gt_string"),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
@@ -45,7 +45,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 LocalSet(extern_local),
                 Call(int2string),
                 LocalGet(extern_local),
-                Call(string_lt)
+                Call(string_gt)
             ]
         } else {
             hq_bug!("bad input")
@@ -59,17 +59,17 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 LocalTee(local1),
                 @isnan(t1),
                 If(block_type),
-                    I32Const(0), // NaN < number always false
-                Else,
                     LocalGet(local2),
                     @isnan(t2),
                     If(block_type),
-                        I32Const(1), // number < NaN always true
+                        I32Const(0), // NaN is not greater than NaN
                     Else,
-                        LocalGet(local1),
-                        LocalGet(local2),
-                        F64Lt,
+                        I32Const(1), // NaN > number always true
                     End,
+                Else,
+                    LocalGet(local1),
+                    LocalGet(local2),
+                    F64Gt,
                 End,
             ]
         } else if IrType::QuasiInt.contains(t2) {
@@ -81,15 +81,16 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 LocalTee(local1),
                 @isnan(t1),
                 If(block_type),
-                    // if t2 is NaN, NaN < NaN is false
-                    // if t2 is a number, NaN < (number) is false, since scratch converts to
-                    // a string if one or both inputs are NaN, and compares the strings;
-                    // numbers (and -) come before N.
-                    I32Const(0),
+                    @isnan(t2),
+                    If(block_type),
+                        I32Const(0), // NaN is not greater than NaN
+                    Else,
+                        I32Const(1), // NaN > number is always true
+                    End,
                 Else,
                     LocalGet(local1),
                     LocalGet(local2),
-                    F64Lt,
+                    F64Gt,
                 End,
             ]
         } else if IrType::String.contains(t2) {
@@ -97,8 +98,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 ("cast", "float2string"),
                 (vec![ValType::F64], vec![ValType::EXTERNREF]),
             )?;
-            let string_lt = func.registries().external_functions().register(
-                ("operator", "lt_string"),
+            let string_gt = func.registries().external_functions().register(
+                ("operator", "gt_string"),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
@@ -109,7 +110,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 LocalSet(extern_local),
                 Call(float2string),
                 LocalGet(extern_local),
-                Call(string_lt)
+                Call(string_gt)
             ]
         } else {
             hq_bug!("bad input")
@@ -121,37 +122,37 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'
                 ("cast", "int2string"),
                 (vec![ValType::I32], vec![ValType::EXTERNREF]),
             )?;
-            let string_lt = func.registries().external_functions().register(
-                ("operator", "lt_string"),
+            let string_gt = func.registries().external_functions().register(
+                ("operator", "gt_string"),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
                 ),
             )?;
-            wasm![Call(int2string), Call(string_lt)]
+            wasm![Call(int2string), Call(string_gt)]
         } else if IrType::Float.contains(t2) {
             // TODO: try converting string to number first
             let float2string = func.registries().external_functions().register(
                 ("cast", "float2string"),
                 (vec![ValType::F64], vec![ValType::EXTERNREF]),
             )?;
-            let string_lt = func.registries().external_functions().register(
-                ("operator", "lt_string"),
+            let string_gt = func.registries().external_functions().register(
+                ("operator", "gt_string"),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
                 ),
             )?;
-            wasm![Call(float2string), Call(string_lt)]
+            wasm![Call(float2string), Call(string_gt)]
         } else if IrType::String.contains(t2) {
-            let string_lt = func.registries().external_functions().register(
-                ("operator", "lt_string"),
+            let string_gt = func.registries().external_functions().register(
+                ("operator", "gt_string"),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
                 ),
             )?;
-            wasm![Call(string_lt)]
+            wasm![Call(string_gt)]
         } else {
             hq_bug!("bad input")
         }
