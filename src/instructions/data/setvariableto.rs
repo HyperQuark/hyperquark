@@ -8,7 +8,7 @@ pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
     Fields(variable): &Fields,
-) -> HQResult<Vec<Instruction<'static>>> {
+) -> HQResult<Vec<InternalInstruction>> {
     let global_index: u32 = func
         .registries()
         .variables()
@@ -35,6 +35,8 @@ pub fn acceptable_inputs(Fields(rcvar): &Fields) -> Rc<[IrType]> {
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
     Ok(None)
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test!(
     any;

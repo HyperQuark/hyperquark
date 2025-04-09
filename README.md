@@ -28,7 +28,7 @@ If you experience runtime stack overflow errors in debug mode, try using the `-s
 To add a new block named `category_opcode`, if it cannot be reduced to simpler blocks:
 1. create `src/instructions/category/opcode.rs`. Make sure to `use super::super::prelude::*` and create the relevant `pub` items:
 - (optional) `pub struct Fields` (must be `Debug` and `Clone`)
-- `pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Vec<Instruction<'static>>>;`
+- `pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Vec<InternalInstruction>>;`
 - - wasm is generated using the `wasm_gen::wasm` macro. See [its README](./wasm-gen/README.md) for usage instructions, or e.g. [say.rs](./src/instructions/looks/say.rs) for an example.
 - `pub fn acceptable_inputs() -> Rc<[IrType]>;`
 - - these should really be base types (see BASE_TYPES in [types.rs](./src/ir/types.rs))

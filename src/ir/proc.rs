@@ -1,3 +1,4 @@
+use super::blocks::NextBlocks;
 use super::{IrProject, Step, StepContext, Target, Type as IrType};
 use crate::prelude::*;
 use crate::registry::MapRegistry;
@@ -157,6 +158,7 @@ impl Proc {
                 blocks,
                 step_context,
                 project,
+                NextBlocks::new(),
             )?,
             None => Rc::new(Step::new(None, step_context, vec![], project)),
         };

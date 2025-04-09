@@ -1,6 +1,6 @@
 use super::super::prelude::*;
 
-pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
@@ -90,5 +90,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
             .or(IrType::none_if_false(maybe_inf, IrType::FloatInf))
     }))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {tests; operator_multiply; t1, t2 ;}

@@ -1,6 +1,6 @@
 use super::super::prelude::*;
 
-pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
         let func_index = func
             .registries()
@@ -34,5 +34,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     }
     Ok(None)
 }
+
+pub const YIELDS: bool = true;
 
 crate::instructions_test! {tests; looks_say; t}

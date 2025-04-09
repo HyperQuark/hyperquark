@@ -1,14 +1,51 @@
 use super::{Registries, WasmFlags};
-use crate::instructions::{wrap_instruction, HqYieldFields, IrOpcode, YieldMode};
+use crate::instructions::wrap_instruction;
 use crate::ir::Step;
 use crate::prelude::*;
-use wasm_encoder::{CodeSection, Function, FunctionSection, Instruction, ValType};
+use wasm_encoder::{
+    self, CodeSection, Function, FunctionSection, Instruction as WInstruction, ValType,
+};
+
+#[derive(Clone, Debug)]
+pub enum Instruction {
+    ImmediateInstruction(wasm_encoder::Instruction<'static>),
+    LazyStepRef(Weak<Step>),
+}
+
+impl Instruction {
+    pub fn eval(
+        &self,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        imported_func_count: u32,
+    ) -> HQResult<WInstruction<'static>> {
+        Ok(match self {
+            Instruction::ImmediateInstruction(instr) => instr.clone(),
+            Instruction::LazyStepRef(step) => {
+                crate::log(format!("{:?}\n{:}", step, steps.try_borrow()?.len()).as_str());
+                let step_index: u32 = steps
+                    .try_borrow()?
+                    .get_index_of(
+                        &step
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                    )
+                    .ok_or(make_hq_bug!(
+                        "couldn't find step in step map - has it been inlined?"
+                    ))?
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
+                crate::log(format!("imported funcs: {imported_func_count}; step index: {step_index}; function index: {}", imported_func_count + step_index).as_str());
+                WInstruction::RefFunc(imported_func_count + step_index)
+            }
+        })
+    }
+}
 
 /// representation of a step's function
 #[derive(Clone)]
 pub struct StepFunc {
     locals: RefCell<Vec<ValType>>,
-    instructions: RefCell<Vec<Instruction<'static>>>,
+    instructions: RefCell<Vec<Instruction>>,
     params: Box<[ValType]>,
     output: Option<ValType>,
     registries: Rc<Registries>,
@@ -25,7 +62,7 @@ impl StepFunc {
         self.flags
     }
 
-    pub fn instructions(&self) -> &RefCell<Vec<Instruction<'static>>> {
+    pub fn instructions(&self) -> &RefCell<Vec<Instruction>> {
         &self.instructions
     }
 
@@ -72,26 +109,38 @@ impl StepFunc {
 
     /// Registers a new local in this function, and returns its index
     pub fn local(&self, val_type: ValType) -> HQResult<u32> {
-        self.locals.try_borrow_mut()?.push(val_type);
+        self.locals
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .push(val_type);
         u32::try_from(self.locals.try_borrow()?.len() + self.params.len() - 1)
             .map_err(|_| make_hq_bug!("local index was out of bounds"))
     }
 
     pub fn add_instructions(
         &self,
-        instructions: impl IntoIterator<Item = Instruction<'static>>,
+        instructions: impl IntoIterator<Item = Instruction>,
     ) -> HQResult<()> {
-        self.instructions.try_borrow_mut()?.extend(instructions);
+        self.instructions
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .extend(instructions);
         Ok(())
     }
 
     /// Takes ownership of the function and returns the backing `wasm_encoder` `Function`
-    pub fn finish(self, funcs: &mut FunctionSection, code: &mut CodeSection) -> HQResult<()> {
+    pub fn finish(
+        self,
+        funcs: &mut FunctionSection,
+        code: &mut CodeSection,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        imported_func_count: u32,
+    ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions.take() {
-            func.instruction(&instruction);
+            func.instruction(&instruction.eval(Rc::clone(&steps), imported_func_count)?);
         }
-        func.instruction(&Instruction::End);
+        func.instruction(&wasm_encoder::Instruction::End);
         let type_index = self.registries().types().register_default((
             self.params.into(),
             if let Some(output) = self.output {
@@ -117,7 +166,7 @@ impl StepFunc {
         let step_func = StepFunc::new(registries, Rc::clone(&steps), flags);
         let mut instrs = vec![];
         let mut type_stack = vec![];
-        for opcode in step.opcodes() {
+        for opcode in &*step.opcodes().try_borrow()?.clone() {
             let inputs = type_stack
                 .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
                 .collect();
@@ -131,25 +180,21 @@ impl StepFunc {
             }
         }
         step_func.add_instructions(instrs)?;
-        steps.try_borrow_mut()?.insert(step, step_func.clone());
+        steps
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .insert(step, step_func.clone());
         Ok(step_func)
     }
 
-    pub fn compile_inner_step(&self, step: Rc<Step>) -> HQResult<Vec<Instruction<'static>>> {
+    pub fn compile_inner_step(&self, step: Rc<Step>) -> HQResult<Vec<Instruction>> {
         step.make_inlined()?;
         let mut instrs = vec![];
         let mut type_stack = vec![];
-        for opcode in step.opcodes() {
+        for opcode in &*step.opcodes().try_borrow()?.clone() {
             let inputs = type_stack
                 .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
                 .collect();
-            if let IrOpcode::hq__yield(HqYieldFields {
-                step: None,
-                mode: YieldMode::Tail,
-            }) = opcode
-            {
-                break;
-            }
             instrs.append(&mut wrap_instruction(
                 self,
                 Rc::clone(&inputs),

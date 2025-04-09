@@ -72,7 +72,8 @@ pub trait Registry: Sized {
         <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
     {
         self.registry()
-            .try_borrow_mut()?
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
             .entry(key.clone())
             .or_insert(value);
         N::try_from(

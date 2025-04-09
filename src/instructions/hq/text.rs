@@ -8,7 +8,7 @@ pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
     fields: &Fields,
-) -> HQResult<Vec<Instruction<'static>>> {
+) -> HQResult<Vec<InternalInstruction>> {
     let string_idx = func
         .registries()
         .strings()
@@ -42,5 +42,7 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Opti
         _ => IrType::StringNan,
     }))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {tests; hq_text; @ super::Fields("hello, world!".into())}

@@ -5,21 +5,22 @@ use wasm_encoder::{ConstExpr, HeapType};
 
 #[derive(Clone, Debug)]
 pub enum YieldMode {
-    Tail,
-    Force,
+    Tail(Rc<Step>),
+    Inline(Rc<Step>),
+    Schedule(Weak<Step>),
+    None,
 }
 
 #[derive(Clone, Debug)]
 pub struct Fields {
-    pub step: Option<Rc<Step>>,
     pub mode: YieldMode,
 }
 
 pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
-    fields: &Fields,
-) -> HQResult<Vec<Instruction<'static>>> {
+    Fields { mode: yield_mode }: &Fields,
+) -> HQResult<Vec<InternalInstruction>> {
     let noop_global = func.registries().globals().register(
         "noop_func".into(),
         (
@@ -64,10 +65,8 @@ pub fn wasm(
         ),
     )?;
 
-    Ok(if let Some(_next_step) = &fields.step {
-        hq_todo!()
-    } else {
-        wasm![
+    Ok(match yield_mode {
+        YieldMode::None => wasm![
             LocalGet(0),
             GlobalGet(noop_global),
             TableSet(threads_table),
@@ -76,7 +75,19 @@ pub fn wasm(
             I32Sub,
             GlobalSet(threads_count),
             Return
-        ]
+        ],
+        YieldMode::Inline(step) => func.compile_inner_step(Rc::clone(step))?,
+        YieldMode::Schedule(weak_step) => {
+            let _step =
+                Weak::upgrade(weak_step).ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?;
+            wasm![
+                LocalGet(0),
+                #LazyStepRef(Weak::clone(weak_step)),
+                TableSet(threads_table),
+                Return
+            ]
+        }
+        _ => hq_todo!(),
     })
 }
 
@@ -88,4 +99,6 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
     Ok(None)
 }
 
-crate::instructions_test! {none; hq__yield; @ super::Fields { step: None, mode: super::YieldMode::Tail }}
+pub const YIELDS: bool = false;
+
+crate::instructions_test! {none; hq_yield; @ super::Fields { mode: super::YieldMode::None }}

@@ -28,7 +28,7 @@ macro_rules! instructions_test {
             use $crate::prelude::*;
             use $crate::ir::Type as IrType;
             use wasm_encoder::{
-                CodeSection, ExportSection, FunctionSection, GlobalSection, ImportSection, Instruction, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
+                CodeSection, ExportSection, FunctionSection, GlobalSection, ImportSection, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
             };
             use $crate::wasm::{StepFunc, Registries, WasmProject};
 
@@ -103,9 +103,8 @@ macro_rules! instructions_test {
                             continue;
                         }
                     };
-                    println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([Instruction::LocalGet((i + 1).try_into().unwrap())])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::ImmediateInstruction(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 
@@ -128,8 +127,9 @@ macro_rules! instructions_test {
                         page_size_log2: None,
                     });
 
+                    let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes)?;
+                    step_func.finish(&mut functions, &mut codes, Default::default(), imported_func_count)?;
                     registries.types().clone().finish(&mut types);
                     registries.tables().clone().finish(&imports, &mut tables, &mut exports);
                     registries.globals().clone().finish(&imports, &mut globals, &mut exports);
@@ -178,7 +178,7 @@ macro_rules! instructions_test {
                     };
                     println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([Instruction::LocalGet((i + 1).try_into().unwrap())])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::ImmediateInstruction(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 
@@ -198,13 +198,13 @@ macro_rules! instructions_test {
                     memories.memory(MemoryType {
                         minimum: 1,
                         maximum: None,
-                        memory64: false,
-                        shared: false,
                         page_size_log2: None,
+                        shared: false,
+                        memory64: false,
                     });
-
+                    let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes)?;
+                    step_func.finish(&mut functions, &mut codes, Default::default(), imported_func_count)?;
                     registries.types().clone().finish(&mut types);
                     registries.tables().clone().finish(&imports, &mut tables, &mut exports);
                     registries.globals().clone().finish(&imports, &mut globals, &mut exports);

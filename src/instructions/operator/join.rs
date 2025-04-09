@@ -1,6 +1,6 @@
 use super::super::prelude::*;
 
-pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);
     let func_index = func.registries().external_functions().register(
         ("operator", "join"),
@@ -19,5 +19,7 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(Some(IrType::String))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {tests; operator_join; t1, t2 ;}

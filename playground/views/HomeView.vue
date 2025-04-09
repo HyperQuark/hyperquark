@@ -50,6 +50,11 @@ import ProjectInput from '../components/ProjectInput.vue'
       id: 1050568991,
       name: 'fibonacci benchmark',
       author: 'pufferfish_test',
+    },
+    {
+      id: 1116438829,
+      name: 'HQ test project 2.0',
+      author: 'pufferfish_test'
     }
   ];
 </script>

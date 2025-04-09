@@ -6,7 +6,7 @@ pub fn optimise_var_types(project: Rc<IrProject>) -> HQResult<()> {
     crate::log("optimise vars");
     for step in project.steps().borrow().iter() {
         let mut type_stack: Vec<IrType> = vec![]; // a vector of types, and where they came from
-        for block in step.opcodes() {
+        for block in &*step.opcodes().try_borrow()?.clone() {
             let expected_inputs = block.acceptable_inputs();
             if type_stack.len() < expected_inputs.len() {
                 hq_bug!("didn't have enough inputs on the type stack")

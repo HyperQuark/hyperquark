@@ -6,7 +6,7 @@ use super::IrOpcode;
 use crate::wasm::WasmProject;
 use crate::{ir::Type as IrType, wasm::StepFunc};
 use itertools::Itertools;
-use wasm_encoder::{BlockType, Instruction, RefType};
+use wasm_encoder::{BlockType, Instruction as WInstruction, RefType};
 use wasm_gen::wasm;
 
 /// generates branches (or not, if an input is not boxed) for a list of remaining input types.
@@ -19,7 +19,7 @@ fn generate_branches(
     remaining_inputs: &[(Box<[IrType]>, u32)], // u32 is local index
     opcode: &IrOpcode,
     output_type: Option<IrType>,
-) -> HQResult<Vec<Instruction<'static>>> {
+) -> HQResult<Vec<InternalInstruction>> {
     if remaining_inputs.is_empty() {
         hq_assert!(processed_inputs.iter().all(|ty| ty.is_base_type()));
         let processed_inputs = processed_inputs.into();
@@ -173,7 +173,7 @@ fn generate_branches(
             )?)
         }
         wasm.extend(core::iter::repeat_n(
-            Instruction::End,
+            InternalInstruction::ImmediateInstruction(WInstruction::End),
             possible_types_num - 1, // the last else doesn't need an additional `end` instruction
         ));
         wasm
@@ -184,7 +184,7 @@ pub fn wrap_instruction(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
     opcode: IrOpcode,
-) -> HQResult<Vec<Instruction<'static>>> {
+) -> HQResult<Vec<InternalInstruction>> {
     let output = opcode.output_type(Rc::clone(&inputs))?;
 
     hq_assert!(inputs.len() == opcode.acceptable_inputs().len());
@@ -218,7 +218,8 @@ pub fn wrap_instruction(
         .iter()
         .rev()
         .cloned()
-        .map(Instruction::LocalSet)
+        .map(WInstruction::LocalSet)
+        .map(InternalInstruction::ImmediateInstruction)
         .collect::<Vec<_>>();
 
     wasm.append(&mut generate_branches(

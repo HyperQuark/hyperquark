@@ -23,7 +23,7 @@ pub mod byte_offset {
 pub struct WasmProject {
     #[allow(dead_code)]
     flags: WasmFlags,
-    step_funcs: Box<[StepFunc]>,
+    steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
     /// maps an event to a list of *step_func* indices (NOT function indices) which are
     /// triggered by that event.
     events: BTreeMap<Event, Vec<u32>>,
@@ -37,7 +37,7 @@ impl WasmProject {
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         WasmProject {
             flags,
-            step_funcs: Box::new([]),
+            steps: Default::default(),
             events: Default::default(),
             environment,
             registries: Rc::new(Registries::default()),
@@ -53,8 +53,8 @@ impl WasmProject {
         self.environment
     }
 
-    pub fn step_funcs(&self) -> &[StepFunc] {
-        &self.step_funcs
+    pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
+        Rc::clone(&self.steps)
     }
 
     /// maps a broad IR type to a WASM type
@@ -111,8 +111,13 @@ impl WasmProject {
             .external_functions()
             .clone()
             .finish(&mut imports, self.registries().types())?;
-        for step_func in self.step_funcs().iter().cloned() {
-            step_func.finish(&mut functions, &mut codes)?;
+        for step_func in self.steps().try_borrow()?.values().cloned() {
+            step_func.finish(
+                &mut functions,
+                &mut codes,
+                self.steps(),
+                self.imported_func_count()?,
+            )?;
         }
 
         self.tick_func(&mut functions, &mut codes, &mut exports)?;
@@ -246,6 +251,14 @@ impl WasmProject {
         let instrs = indices
             .iter()
             .map(|i| {
+                crate::log(
+                    format!(
+                        "event step idx: {}; func idx: {}",
+                        i,
+                        i + self.imported_func_count()?
+                    )
+                    .as_str(),
+                );
                 Ok(wasm![
                     RefFunc(i + self.imported_func_count()?),
                     I32Const(1),
@@ -257,7 +270,7 @@ impl WasmProject {
             .collect::<HQResult<Vec<_>>>()?;
 
         for instruction in instrs {
-            func.instruction(&instruction);
+            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?)?);
         }
         for instruction in wasm![
             GlobalGet(threads_count),
@@ -268,7 +281,7 @@ impl WasmProject {
             I32Add,
             GlobalSet(threads_count)
         ] {
-            func.instruction(&instruction);
+            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?)?);
         }
         func.instruction(&Instruction::End);
 
@@ -345,7 +358,7 @@ impl WasmProject {
             End,
         ];
         for instr in instructions {
-            tick_func.instruction(&instr);
+            tick_func.instruction(&instr.eval(self.steps(), self.imported_func_count()?)?);
         }
         tick_func.instruction(&Instruction::End);
         funcs.function(
@@ -372,31 +385,36 @@ impl WasmProject {
             Rc::clone(&registries),
             flags,
         )?;
-        for thread in ir_project.threads().try_borrow()?.iter() {
-            let step = thread.first_step();
+        // compile every step
+        // TODO: don't compile inlined steps
+        for step in ir_project.steps().try_borrow()?.iter() {
+            // if *step.inlined().borrow() {
+            //     continue;
+            // }
             StepFunc::compile_step(
                 Rc::clone(step),
                 Rc::clone(&steps),
                 Rc::clone(&registries),
                 flags,
             )?;
+        }
+        // add thread event handlers for them
+        for thread in ir_project.threads().try_borrow()?.iter() {
             events.entry(thread.event()).or_default().push(
                 u32::try_from(
-                    ir_project
-                        .steps()
+                    steps
                         .try_borrow()?
                         .get_index_of(thread.first_step())
                         .ok_or(make_hq_bug!(
                             "Thread's first_step wasn't found in Thread::steps()"
                         ))?,
                 )
-                .map_err(|_| make_hq_bug!("step func index out of bounds"))?
-                    + 1, // we add 1 to account for the noop step
+                .map_err(|_| make_hq_bug!("step func index out of bounds"))?,
             );
         }
         Ok(WasmProject {
             flags,
-            step_funcs: steps.take().values().cloned().collect(),
+            steps,
             events,
             registries,
             environment: ExternalEnvironment::WebBrowser,
@@ -416,22 +434,25 @@ pub struct FinishedWasm {
 #[cfg(test)]
 mod tests {
     use super::{Registries, WasmProject};
-    use crate::ir::Event;
+    use crate::ir::{Event, Step};
     use crate::prelude::*;
     use crate::wasm::{ExternalEnvironment, StepFunc};
 
     #[test]
-    fn project_with_one_empty_step_is_valid_wasm() {
+    fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let step_func = StepFunc::new(
+        let steps = Default::default();
+        StepFunc::compile_step(
+            Rc::new(Step::new_empty()),
+            Rc::clone(&steps),
             Rc::clone(&registries),
             Default::default(),
-            Default::default(),
-        );
+        )
+        .unwrap();
         let project = WasmProject {
             flags: Default::default(),
-            step_funcs: Box::new([step_func]),
-            events: BTreeMap::from_iter(vec![(Event::FlagCLicked, vec![0])].into_iter()),
+            steps,
+            events: BTreeMap::new(),
             environment: ExternalEnvironment::WebBrowser,
             registries,
         };

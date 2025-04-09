@@ -18,13 +18,13 @@ include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
 mod input_switcher;
 pub use input_switcher::wrap_instruction;
 
-pub use hq::_yield::YieldMode;
+pub use hq::r#yield::YieldMode;
 
 mod prelude {
     pub(crate) use crate::ir::Type as IrType;
     pub use crate::prelude::*;
-    pub(crate) use crate::wasm::StepFunc;
-    pub use wasm_encoder::{Instruction, RefType, ValType};
+    pub(crate) use crate::wasm::{InternalInstruction, StepFunc};
+    pub use wasm_encoder::{RefType, ValType};
     pub use wasm_gen::wasm;
 
     /// Canonical NaN + bit 33, + string pointer in bits 1-32

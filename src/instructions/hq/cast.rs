@@ -32,7 +32,7 @@ pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
     &Fields(to): &Fields,
-) -> HQResult<Vec<Instruction<'static>>> {
+) -> HQResult<Vec<InternalInstruction>> {
     let from = inputs[0];
 
     let target = best_cast_candidate(from, to)?;
@@ -103,6 +103,8 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Optio
             .ok_or(make_hq_bug!("input was empty"))?,
     ))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {float; hq_cast; t @ super::Fields(IrType::Float)}
 crate::instructions_test! {string; hq_cast; t @ super::Fields(IrType::String)}

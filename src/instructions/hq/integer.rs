@@ -7,7 +7,7 @@ pub fn wasm(
     _func: &StepFunc,
     _inputs: Rc<[IrType]>,
     fields: &Fields,
-) -> HQResult<Vec<Instruction<'static>>> {
+) -> HQResult<Vec<InternalInstruction>> {
     Ok(wasm![I32Const(fields.0)])
 }
 
@@ -23,5 +23,7 @@ pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<Opt
         _ => unreachable!(),
     }))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {tests; hq_integer; @ super::Fields(0)}

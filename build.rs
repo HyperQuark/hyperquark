@@ -38,7 +38,14 @@ fn main() {
                         let fields_name =
                             format!("{}_{}_fields", category, opcode).to_case(Case::Pascal);
                         paths.push((
-                            format!("{}::{}", category, opcode),
+                            format!(
+                                "{}::{}",
+                                category,
+                                match opcode {
+                                    "yield" | "loop" => format!("r#{opcode}"),
+                                    _ => opcode.to_string(),
+                                }
+                            ),
                             format!("{}_{}", category, opcode,),
                             fields,
                             fields_name,
@@ -116,21 +123,28 @@ pub enum IrOpcode {{
 
 impl IrOpcode {{
     /// maps an opcode to its acceptable input types
-     pub fn acceptable_inputs(&self) -> Rc<[crate::ir::Type]> {{
+    pub fn acceptable_inputs(&self) -> Rc<[crate::ir::Type]> {{
         match self {{
             {}
         }}
     }}
 
     /// maps an opcode to its WASM instructions
-     pub fn wasm(&self, step_func: &crate::wasm::StepFunc, inputs: Rc<[crate::ir::Type]>) -> HQResult<Vec<wasm_encoder::Instruction<'static>>> {{
+    pub fn wasm(&self, step_func: &crate::wasm::StepFunc, inputs: Rc<[crate::ir::Type]>) -> HQResult<Vec<crate::wasm::InternalInstruction>> {{
         match self {{
             {}
         }}
     }}
     
     /// maps an opcode to its output type
-     pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
+    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
+        match self {{
+            {}
+        }}
+    }}
+
+    /// does this opcode request a screen refresh (and by extension yields)?
+    pub const fn yields(&self) -> bool {{
         match self {{
             {}
         }}
@@ -168,6 +182,13 @@ pub use fields::*;
                     format!("IrOpcode::{}(fields) => {}::output_type(inputs, fields),", id, path)
                 } else {
                     format!("IrOpcode::{} => {}::output_type(inputs),", id, path)
+                }
+            }).collect::<Vec<_>>().join("\n\t\t\t"),
+            paths.iter().map(|(path, id, fields, _)| {
+                if *fields {
+                    format!("IrOpcode::{}(_) => {}::YIELDS,", id, path)
+                } else {
+                    format!("IrOpcode::{} => {}::YIELDS,", id, path)
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().filter(|(_, _, fields, _)| *fields)

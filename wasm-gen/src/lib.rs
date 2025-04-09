@@ -7,6 +7,7 @@ use syn::{parenthesized, Error as SynError, Expr, Ident, Token};
 
 enum Item {
     Instruction { expr: Expr },
+    SpecialInstruction { expr: Expr },
     NanReduce { input_ident: Ident },
     IsNan { input_ident: Ident },
     Box { input_ident: Ident },
@@ -57,6 +58,10 @@ impl Parse for Item {
                 }
                 _ => Err(SynError::new(ident.span(), "Unknown special instruction")),
             }
+        } else if input.peek(Token![#]) {
+            input.parse::<Token![#]>()?;
+            let expr: Expr = input.parse()?;
+            Ok(Item::SpecialInstruction { expr })
         } else {
             let expr: Expr = input.parse()?;
             Ok(Item::Instruction { expr })
@@ -108,12 +113,14 @@ pub fn wasm(input: TokenStream) -> TokenStream {
     if nan_checks.is_empty() && boxed_checks.is_empty() {
         let instructions = parsed.items.iter().filter_map(|item| {
             if let Item::Instruction { expr } = item {
+                Some(quote! { ImmediateInstruction(wasm_encoder::Instruction::#expr) })
+            } else if let Item::SpecialInstruction { expr } = item {
                 Some(quote! { #expr })
             } else {
                 None
             }
         });
-        quote! { vec![#(wasm_encoder::Instruction::#instructions),*] }
+        quote! { vec![#(crate::wasm::InternalInstruction::#instructions),*] }
     } else {
         let conditions = (0..(1 << (nan_checks.len() + 2 * boxed_checks.len()))).map(|mask| {
             let checks = nan_checks.iter().enumerate().map(|(i, ident)| {
@@ -170,21 +177,21 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 .enumerate()
                 .filter_map(|(i, item)| match item {
                     Item::Instruction { expr } => {
-                        Some((vec![quote! { #expr }].into_iter(), None))
+                        Some((vec![quote! { ImmediateInstruction(wasm_encoder::Instruction::#expr) }].into_iter(), None))
                     }
                     Item::NanReduce { input_ident } => {
                         if these_nan.contains(&input_ident.clone().to_string()) {
                             let local_ident = format_ident!("__local_{}", i);
                             Some((
                                 vec![
-                                    quote! { LocalTee(#local_ident) },
-                                    quote! { LocalGet(#local_ident) },
-                                    quote! { F64Eq },
-                                    quote! { If(wasm_encoder::BlockType::Result(wasm_encoder::ValType::F64)) },
-                                    quote! { LocalGet(#local_ident) },
-                                    quote! { Else },
-                                    quote! { F64Const(0.0) },
-                                    quote! { End }
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalTee(#local_ident)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalGet(#local_ident)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::F64Eq) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::If(wasm_encoder::BlockType::Result(wasm_encoder::ValType::F64))) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalGet(#local_ident)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::Else) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::F64Const(0.0)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::End) }
                                 ]
                                 .into_iter(),
                                 Some((local_ident, format_ident!("F64")))
@@ -198,17 +205,17 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                             let local_ident = format_ident!("__local_{}", i);
                             Some((
                                 vec![
-                                    quote! { LocalTee(#local_ident) },
-                                    quote! { LocalGet(#local_ident) },
-                                    quote! { F64Ne },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalTee(#local_ident)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalGet(#local_ident)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::F64Ne) },
                                 ]
                                 .into_iter(),
                                 Some((local_ident, format_ident!("F64")))
                             ))
                         } else {
                             Some((vec![
-                                quote! { Drop },
-                                quote! { I32Const(0) }
+                                quote! { ImmediateInstruction(wasm_encoder::Instruction::Drop) },
+                                quote! { ImmediateInstruction(wasm_encoder::Instruction::I32Const(0)) }
                             ].into_iter(), None))
                         }
                     }
@@ -217,17 +224,17 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                         if let Some(state) = these_unboxed.get(&input_ident.clone().to_string()) {
                             match state {
                                 1 => Some((vec![
-                                    quote! { I32Const(1) },
-                                    quote! { TableGrow(__strings_table_index) },
-                                    quote! { I64ExtendI32S },
-                                    quote! { I64Const(BOXED_STRING_PATTERN) },
-                                    quote! { I64Or },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I32Const(1)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::TableGrow(__strings_table_index)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Const(BOXED_STRING_PATTERN)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Or) },
                                 ].into_iter(), Some((local_ident, format_ident!("EXTERNREF"))))),
-                                2 => Some((vec![quote! { I64ReinterpretF64 }].into_iter(), None)),
+                                2 => Some((vec![quote! { ImmediateInstruction(wasm_encoder::Instruction::I64ReinterpretF64) }].into_iter(), None)),
                                 3 => Some((vec![
-                                    quote! { I64ExtendI32S },
-                                    quote! { I64Const(BOXED_INT_PATTERN) },
-                                    quote! { I64Or },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Const(BOXED_INT_PATTERN)) },
+                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Or) },
                                 ].into_iter(), None)),
                                 _ => panic!("invalid state")
                             }
@@ -235,6 +242,7 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                             None
                         }
                     }
+                    Item::SpecialInstruction { expr } => Some((vec![quote! { #expr }].into_iter(), None)),
                     Item::Error(ts) => Some((vec![ts.clone()].into_iter(), None))
                 })
                 .unzip();
@@ -243,7 +251,7 @@ pub fn wasm(input: TokenStream) -> TokenStream {
             quote! {
                 if #(#checks)&&* {
                     #(let #local_names = func.local(wasm_encoder::ValType::#local_types)?;)*
-                    vec![#(wasm_encoder::Instruction::#instructions),*]
+                    vec![#(crate::wasm::InternalInstruction::#instructions),*]
                 }
             }
         });

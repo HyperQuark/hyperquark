@@ -2,7 +2,7 @@ use wasm_encoder::BlockType;
 
 use super::super::prelude::*;
 
-pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
@@ -167,5 +167,7 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(Some(IrType::Boolean))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {tests; operator_lt; t1, t2 ;}

@@ -8,7 +8,6 @@ pub type StepSet = IndexSet<Rc<Step>>;
 pub struct IrProject {
     threads: RefCell<Box<[Thread]>>,
     steps: RefCell<StepSet>,
-    inlined_steps: RefCell<StepSet>,
     global_variables: BTreeMap<Box<str>, Rc<Variable>>,
     targets: RefCell<BTreeMap<Box<str>, Rc<Target>>>,
 }
@@ -20,10 +19,6 @@ impl IrProject {
 
     pub fn steps(&self) -> &RefCell<StepSet> {
         &self.steps
-    }
-
-    pub fn inlined_steps(&self) -> &RefCell<StepSet> {
-        &self.inlined_steps
     }
 
     pub fn targets(&self) -> &RefCell<BTreeMap<Box<str>, Rc<Target>>> {
@@ -38,14 +33,16 @@ impl IrProject {
         IrProject {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(Default::default()),
-            inlined_steps: RefCell::new(Default::default()),
             global_variables,
             targets: RefCell::new(Default::default()),
         }
     }
 
     pub fn register_step(&self, step: Rc<Step>) -> HQResult<()> {
-        self.steps().try_borrow_mut()?.insert(step);
+        self.steps()
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .insert(step);
         Ok(())
     }
 }
@@ -110,8 +107,15 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             .cloned()
             .unzip();
         let threads = threads.into_iter().flatten().collect::<Box<[_]>>();
-        *project.threads.try_borrow_mut()? = threads;
-        *project.targets.try_borrow_mut()? = targets.into_iter().collect();
+        *project
+            .threads
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? = threads;
+        *project
+            .targets
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? =
+            targets.into_iter().collect();
         Ok(project)
     }
 }

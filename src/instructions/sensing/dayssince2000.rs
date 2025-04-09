@@ -1,6 +1,6 @@
 use super::super::prelude::*;
 
-pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<Instruction<'static>>> {
+pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 0);
     let func_index = func
         .registries()
@@ -16,5 +16,7 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(Some(IrType::Float))
 }
+
+pub const YIELDS: bool = false;
 
 crate::instructions_test! {tests; sensing_dayssince2000; ;}

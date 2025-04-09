@@ -11,7 +11,7 @@ mod variable;
 
 pub(crate) use external::{ExternalEnvironment, ExternalFunctionRegistry};
 pub use flags::WasmFlags;
-pub(crate) use func::StepFunc;
+pub(crate) use func::{Instruction as InternalInstruction, StepFunc};
 pub(crate) use globals::{
     Exportable as GlobalExportable, GlobalRegistry, Mutable as GlobalMutable,
 };

@@ -1,17 +1,17 @@
 use super::super::prelude::*;
 
 pub fn wasm(_func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
-    Ok(wasm![I32Eqz])
+    Ok(wasm![Drop])
 }
 
 pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Boolean])
+    Rc::new([IrType::Number.or(IrType::String)])
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
-    Ok(Some(IrType::Boolean))
+    Ok(None)
 }
 
 pub const YIELDS: bool = false;
 
-crate::instructions_test! {tests; operator_not; t ;}
+crate::instructions_test! {tests; hq_drop; t}

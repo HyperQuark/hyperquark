@@ -1,3 +1,4 @@
+use super::blocks::NextBlocks;
 use super::{Event, IrProject, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode};
@@ -63,6 +64,7 @@ impl Thread {
                 proc_context: None,
             },
             Weak::clone(&project),
+            NextBlocks::new(),
         )?;
         Ok(Some(Thread {
             event,
