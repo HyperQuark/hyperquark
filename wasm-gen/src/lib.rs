@@ -139,8 +139,8 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 let float_check = quote! { #ident.base_type() == Some(crate::ir::Type::Float) };
                 let int_check = quote! { #ident.base_type() == Some(crate::ir::Type::QuasiInt) };
                 if (mask & ((1 << i) + (1 << (i + 1)))) == 0 {
-                    return boxed_check
-                } if (mask & ((1 << i) + (1 << (i + 1)))) == 1 {
+                    boxed_check
+                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 1 {
                     string_check
                 } else if (mask & ((1 << i) + (1 << (i + 1)))) == 2 {
                     float_check

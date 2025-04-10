@@ -434,7 +434,7 @@ pub struct FinishedWasm {
 #[cfg(test)]
 mod tests {
     use super::{Registries, WasmProject};
-    use crate::ir::{Event, Step};
+    use crate::ir::Step;
     use crate::prelude::*;
     use crate::wasm::{ExternalEnvironment, StepFunc};
 
