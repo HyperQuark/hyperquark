@@ -259,6 +259,17 @@ pub enum Field {
     ValueId(Option<VarVal>, Option<Box<str>>),
 }
 
+impl Field {
+    // this isn't auto implemented by EnumFieldGetter because Field::Value is actually a tuple
+    // in a tuple, so that serde correctly parses a single-item array
+    pub fn get_0(&self) -> &Option<VarVal> {
+        match self {
+            Field::Value((val,)) => val,
+            Field::ValueId(val, _) => val,
+        }
+    }
+}
+
 /// Represents a mutation on a block. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format#Mutations>
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

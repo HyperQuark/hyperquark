@@ -1,6 +1,8 @@
-use super::{Step, Target, Thread, Type, Variable};
+use super::proc::{procs_from_target, ProcMap};
+use super::variable::variables_from_target;
+use super::{Step, Target, Thread, Variable};
 use crate::prelude::*;
-use crate::sb3::{Sb3Project, Target as Sb3Target};
+use crate::sb3::Sb3Project;
 
 pub type StepSet = IndexSet<Rc<Step>>;
 
@@ -47,22 +49,6 @@ impl IrProject {
     }
 }
 
-fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, Rc<Variable>> {
-    target
-        .variables
-        .iter()
-        .map(|(id, var_info)| {
-            (
-                id.clone(),
-                Rc::new(Variable::new(
-                    Type::none(),
-                    var_info.get_1().unwrap().clone(),
-                )),
-            )
-        })
-        .collect()
-}
-
 impl TryFrom<Sb3Project> for Rc<IrProject> {
     type Error = HQError;
 
@@ -81,11 +67,14 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             .iter()
             .map(|target| {
                 let variables = variables_from_target(target);
+                let procedures = RefCell::new(ProcMap::new());
                 let ir_target = Rc::new(Target::new(
                     target.is_stage,
                     variables,
                     Rc::downgrade(&project),
+                    procedures,
                 ));
+                procs_from_target(target, Rc::clone(&ir_target))?;
                 let blocks = &target.blocks;
                 let threads = blocks
                     .values()

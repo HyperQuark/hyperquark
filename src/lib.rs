@@ -30,7 +30,7 @@ pub mod prelude {
     pub use crate::{HQError, HQResult};
     pub use alloc::borrow::{Borrow, Cow};
     pub use alloc::boxed::Box;
-    pub use alloc::collections::BTreeMap;
+    pub use alloc::collections::{BTreeMap, BTreeSet};
     pub use alloc::rc::{Rc, Weak};
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;

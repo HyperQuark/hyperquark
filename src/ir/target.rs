@@ -1,4 +1,6 @@
-use super::{IrProject, Variable};
+use core::cell::{Ref, RefMut};
+
+use super::{proc::Proc, IrProject, Variable};
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -6,6 +8,7 @@ pub struct Target {
     is_stage: bool,
     variables: BTreeMap<Box<str>, Rc<Variable>>,
     project: Weak<IrProject>,
+    procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
 }
 
 impl Target {
@@ -21,15 +24,25 @@ impl Target {
         Weak::clone(&self.project)
     }
 
+    pub fn procedures(&self) -> HQResult<Ref<BTreeMap<Box<str>, Rc<Proc>>>> {
+        Ok(self.procedures.try_borrow()?)
+    }
+
+    pub fn procedures_mut(&self) -> HQResult<RefMut<BTreeMap<Box<str>, Rc<Proc>>>> {
+        Ok(self.procedures.try_borrow_mut()?)
+    }
+
     pub fn new(
         is_stage: bool,
         variables: BTreeMap<Box<str>, Rc<Variable>>,
         project: Weak<IrProject>,
+        procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
     ) -> Self {
         Target {
             is_stage,
             variables,
             project,
+            procedures,
         }
     }
 }

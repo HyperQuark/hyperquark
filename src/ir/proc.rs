@@ -1,57 +1,94 @@
 use super::blocks::NextBlocks;
-use super::{IrProject, Step, StepContext, Target, Type as IrType};
+use super::context::StepContext;
+use super::{Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
-use crate::registry::MapRegistry;
-use crate::sb3::{BlockMap, BlockOpcode};
+use crate::sb3::{Block, BlockMap, BlockOpcode, Target as Sb3Target};
+use core::cell::Ref;
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
 
-#[derive(Clone, Debug)]
-pub struct ProcedureContext {
-    arg_ids: Box<[Box<str>]>,
-    arg_types: Box<[IrType]>,
-    warp: bool,
-    target: Weak<Target>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum PartialStep {
+    None,
+    StartedCompilation,
+    Finished(Rc<Step>),
 }
 
-impl ProcedureContext {
+impl PartialStep {
+    pub fn is_finished(&self) -> bool {
+        matches!(self, PartialStep::Finished(_))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ProcContext {
+    arg_types: Box<[IrType]>,
+    arg_ids: Box<[Box<str>]>,
+    arg_names: Box<[Box<str>]>,
+    target: Weak<IrTarget>,
+}
+
+impl ProcContext {
     pub fn arg_ids(&self) -> &[Box<str>] {
         &self.arg_ids
+    }
+
+    pub fn arg_names(&self) -> &[Box<str>] {
+        &self.arg_names
     }
 
     pub fn arg_types(&self) -> &[IrType] {
         &self.arg_types
     }
 
-    pub fn warp(&self) -> bool {
-        self.warp
-    }
-
-    pub fn target(&self) -> Weak<Target> {
+    pub fn target(&self) -> Weak<IrTarget> {
         Weak::clone(&self.target)
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Proc {
-    first_step: Rc<Step>,
-    context: ProcedureContext,
+    /// whether a procedure is 'run without screen refresh' - a procedure can be warped
+    /// even without this condition holding true, if a procedure higher up in the call
+    /// stack is warped.
+    always_warped: bool,
+    non_warped_first_step: RefCell<PartialStep>,
+    warped_first_step: RefCell<PartialStep>,
+    first_step_id: Option<Box<str>>,
+    proccode: Box<str>,
+    context: ProcContext,
 }
 
 impl Proc {
-    pub fn first_step(&self) -> Rc<Step> {
-        Rc::clone(&self.first_step)
+    pub fn non_warped_first_step(&self) -> HQResult<Ref<PartialStep>> {
+        Ok(self.non_warped_first_step.try_borrow()?)
     }
 
-    pub fn context(&self) -> &ProcedureContext {
+    pub fn warped_first_step(&self) -> HQResult<Ref<PartialStep>> {
+        Ok(self.warped_first_step.try_borrow()?)
+    }
+
+    pub fn first_step_id(&self) -> &Option<Box<str>> {
+        &self.first_step_id
+    }
+
+    pub fn always_warped(&self) -> bool {
+        self.always_warped
+    }
+
+    pub fn context(&self) -> &ProcContext {
         &self.context
+    }
+
+    pub fn proccode(&self) -> &Box<str> {
+        &self.proccode
     }
 }
 
 static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"[^\\]%[nbs]"#);
 
 fn arg_types_from_proccode(proccode: Box<str>) -> Result<Box<[IrType]>, HQError> {
-    // https://github.com/scratchfoundation/scratch-blocks/blob/abbfe93136fef57fdfb9a077198b0bc64726f012/blocks_vertical/procedures.js#L207-L215
+    // https://github.com/scratchfoundation/scratch-blocks/blob/abbfe9/blocks_vertical/procedures.js#L207-L215
     (*ARG_REGEX)
         .find_iter(&proccode)
         .map(|s| s.as_str().to_string().trim().to_string())
@@ -69,136 +106,153 @@ fn arg_types_from_proccode(proccode: Box<str>) -> Result<Box<[IrType]>, HQError>
 }
 
 impl Proc {
-    pub fn from_proccode(
-        proccode: Box<str>,
+    fn string_vec_mutation(
+        mutations: &BTreeMap<Box<str>, serde_json::Value>,
+        id: &str,
+    ) -> HQResult<Box<[Box<str>]>> {
+        Ok(
+            match mutations
+                .get(id)
+                .ok_or(make_hq_bad_proj!("missing {id} mutation"))?
+            {
+                serde_json::Value::Array(values) => values
+                    .iter()
+                    .map(|val| match val {
+                        serde_json::Value::String(s) => Ok(s.clone().into_boxed_str()),
+                        _ => hq_bad_proj!("non-string {id} member in"),
+                    })
+                    .collect::<HQResult<Box<[_]>>>()?,
+                serde_json::Value::String(string_arr) => {
+                    // let mut string_arr = string_arr.clone();
+                    string_arr
+                        .strip_prefix("[\"")
+                        .ok_or(make_hq_bug!("malformed {id} array"))?
+                        .strip_suffix("\"]")
+                        .ok_or(make_hq_bug!("malformed {id} array"))?
+                        .split("\",\"")
+                        .map(Box::from)
+                        .collect::<Box<[_]>>()
+                }
+                _ => hq_bad_proj!("non-array {id}"),
+            },
+        )
+    }
+
+    pub fn from_prototype(
+        prototype: &Block,
         blocks: &BlockMap,
-        target: Weak<Target>,
-        expect_warp: bool,
-        project: Weak<IrProject>,
-    ) -> HQResult<Self> {
-        let arg_types = arg_types_from_proccode(proccode.clone())?;
-        let Some(prototype_block) = blocks.values().find(|block| {
-            let Some(info) = block.block_info() else {
-                return false;
-            };
-            info.opcode == BlockOpcode::procedures_prototype
-                && (match info.mutation.mutations.get("proccode") {
-                    Some(serde_json::Value::String(ref s)) => **s == *proccode,
-                    _ => false,
-                })
-        }) else {
-            hq_bad_proj!("no prototype found for {proccode} in")
+        target: Weak<IrTarget>,
+    ) -> HQResult<Rc<Self>> {
+        hq_assert!(prototype
+            .block_info()
+            .is_some_and(|info| info.opcode == BlockOpcode::procedures_prototype));
+        let mutations = &prototype.block_info().unwrap().mutation.mutations;
+        let serde_json::Value::String(proccode) = mutations.get("proccode").ok_or(
+            make_hq_bad_proj!("missing proccode on procedures_prototype"),
+        )?
+        else {
+            hq_bad_proj!("proccode wasn't a string");
         };
+        let arg_types = arg_types_from_proccode(proccode.as_str().into())?;
         let Some(def_block) = blocks.get(
-            &prototype_block
+            &prototype
                 .block_info()
                 .unwrap()
                 .parent
                 .clone()
                 .ok_or(make_hq_bad_proj!("prototype block without parent"))?,
         ) else {
-            hq_bad_proj!("no definition found for {proccode}")
+            hq_bad_proj!("no definition block found for {proccode}")
         };
-        if let Some(warp_val) = prototype_block
+        let first_step_id = def_block
             .block_info()
-            .unwrap()
-            .mutation
-            .mutations
-            .get("warp")
-        {
-            let warp = match warp_val {
-                serde_json::Value::Bool(w) => *w,
-                serde_json::Value::String(wstr) => match wstr.as_str() {
-                    "true" => true,
-                    "false" => false,
-                    _ => hq_bad_proj!("unexpected string for warp mutation for {proccode}"),
-                },
-                _ => hq_bad_proj!("bad type for warp mutation for {proccode}"),
-            };
-            if warp != expect_warp {
-                hq_bad_proj!("proc call warp does not equal definition warp for {proccode}")
-            }
-        } else {
+            .ok_or(make_hq_bad_proj!("special block where normal def expected"))?
+            .next
+            .clone();
+        let Some(warp_val) = mutations.get("warp") else {
             hq_bad_proj!("missing warp mutation on procedures_definition for {proccode}")
         };
-        let arg_ids = match prototype_block
-            .block_info()
-            .unwrap()
-            .mutation
-            .mutations
-            .get("argumentids")
-            .ok_or(make_hq_bad_proj!(
-                "missing argumentids mutation for {proccode}"
-            ))? {
-            serde_json::Value::Array(values) => values
-                .iter()
-                .map(|val| match val {
-                    serde_json::Value::String(s) => Ok(Into::<Box<str>>::into(s.clone())),
-                    _ => hq_bad_proj!("non-string argumentids member in {proccode}"),
-                })
-                .collect::<HQResult<Box<[_]>>>()?,
-            _ => hq_bad_proj!("non-array argumentids for {proccode}"),
+        let warp = match warp_val {
+            serde_json::Value::Bool(w) => *w,
+            serde_json::Value::String(wstr) => match wstr.as_str() {
+                "true" => true,
+                "false" => false,
+                _ => hq_bad_proj!("unexpected string for warp mutation for {proccode}"),
+            },
+            _ => hq_bad_proj!("bad type for warp mutation for {proccode}"),
         };
-        let context = ProcedureContext {
-            warp: expect_warp,
+        let arg_ids = Proc::string_vec_mutation(mutations, "argumentids")?;
+        let arg_names = Proc::string_vec_mutation(mutations, "argumentnames")?;
+        let context = ProcContext {
             arg_types,
             arg_ids,
-            target: Weak::clone(&target),
-        };
-        let step_context = StepContext {
+            arg_names,
             target,
-            proc_context: Some(context.clone()),
         };
-        let first_step = match &def_block.block_info().unwrap().next {
-            Some(next_id) => Step::from_block(
-                blocks
-                    .get(next_id)
-                    .ok_or(make_hq_bad_proj!("specified next block does not exist"))?,
-                next_id.clone(),
-                blocks,
-                step_context,
-                project,
-                NextBlocks::new(),
-            )?,
-            None => Rc::new(Step::new(None, step_context, vec![], project)),
-        };
-        Ok(Proc {
-            first_step,
+        Ok(Rc::new(Proc {
+            proccode: proccode.as_str().into(),
+            always_warped: warp,
+            non_warped_first_step: RefCell::new(PartialStep::None),
+            warped_first_step: RefCell::new(PartialStep::None),
+            first_step_id,
             context,
-        })
+        }))
+    }
+
+    pub fn compile_warped(&self, blocks: &BTreeMap<Box<str>, Block>) -> HQResult<()> {
+        {
+            if *self.non_warped_first_step()? != PartialStep::None {
+                return Ok(());
+            }
+        }
+        {
+            *self.warped_first_step.try_borrow_mut()? = PartialStep::StartedCompilation;
+        }
+        let step_context = StepContext {
+            warp: true,
+            proc_context: Some(self.context.clone()),
+            target: Weak::clone(&self.context.target),
+        };
+        let step = match self.first_step_id {
+            None => Rc::new(Step::new(
+                None,
+                step_context.clone(),
+                vec![],
+                step_context.project()?,
+            )),
+            Some(ref id) => {
+                let block = blocks.get(id).ok_or(make_hq_bad_proj!(
+                    "procedure's first step block doesn't exist"
+                ))?;
+                Step::from_block(
+                    block,
+                    id.clone(),
+                    blocks,
+                    step_context.clone(),
+                    step_context.project()?,
+                    NextBlocks::NothingAtAll,
+                )?
+            }
+        };
+        *self.warped_first_step.try_borrow_mut()? = PartialStep::Finished(step);
+        Ok(())
     }
 }
 
-pub type ProcRegistry = MapRegistry<Box<str>, Rc<Proc>>;
+pub type ProcMap = BTreeMap<Box<str>, Rc<Proc>>;
 
-impl ProcRegistry {
-    /// get the `Proc` for the specified proccode, creating it if it doesn't already exist
-    pub fn proc(
-        &self,
-        proccode: Box<str>,
-        blocks: &BlockMap,
-        target: Weak<Target>,
-        expect_warp: bool,
-        project: Weak<IrProject>,
-    ) -> HQResult<Rc<Proc>> {
-        let idx = self.register(
-            proccode.clone(),
-            Rc::new(Proc::from_proccode(
-                proccode,
-                blocks,
-                target,
-                expect_warp,
-                project,
-            )?),
-        )?;
-        Ok(Rc::clone(
-            self.registry()
-                .try_borrow()?
-                .get_index(idx)
-                .ok_or(make_hq_bug!(
-                    "recently inserted proc not found in ProcRegistry"
-                ))?
-                .1,
-        ))
+pub fn procs_from_target(sb3_target: &Sb3Target, ir_target: Rc<IrTarget>) -> HQResult<()> {
+    let mut proc_map = ir_target.procedures_mut()?;
+    for block in sb3_target.blocks.values() {
+        let Block::Normal { block_info, .. } = block else {
+            continue;
+        };
+        if block_info.opcode != BlockOpcode::procedures_prototype {
+            continue;
+        }
+        let proc = Proc::from_prototype(block, &sb3_target.blocks, Rc::downgrade(&ir_target))?;
+        let proccode = proc.proccode();
+        proc_map.insert(proccode.clone(), proc);
     }
+    Ok(())
 }

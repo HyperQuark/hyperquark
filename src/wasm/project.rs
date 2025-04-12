@@ -386,17 +386,19 @@ impl WasmProject {
             flags,
         )?;
         // compile every step
-        // TODO: don't compile inlined steps
         for step in ir_project.steps().try_borrow()?.iter() {
-            // if *step.inlined().borrow() {
-            //     continue;
-            // }
             StepFunc::compile_step(
                 Rc::clone(step),
                 Rc::clone(&steps),
                 Rc::clone(&registries),
                 flags,
             )?;
+        }
+        // get rid of inlined steps
+        for step in ir_project.steps().try_borrow()?.iter() {
+            if *step.inlined().try_borrow()? {
+                steps.try_borrow_mut()?.swap_remove(step);
+            }
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {

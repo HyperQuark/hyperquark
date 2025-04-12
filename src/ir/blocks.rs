@@ -106,7 +106,15 @@ pub fn from_block(
     })
 }
 
-pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
+pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Vec<String>> {
+    let opcode = &block_info.opcode;
+    // target and procs need to be declared outside of the match block
+    // to prevent lifetime issues
+    let target = context
+        .target
+        .upgrade()
+        .ok_or(make_hq_bug!("couldn't upgrade Weak<Target>"))?;
+    let procs = target.procedures()?;
     Ok(match opcode {
         BlockOpcode::looks_say => vec!["MESSAGE"],
         BlockOpcode::operator_add
@@ -115,11 +123,28 @@ pub fn input_names(opcode: BlockOpcode) -> HQResult<Vec<String>> {
         | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
         BlockOpcode::operator_lt | BlockOpcode::operator_gt => vec!["OPERAND1", "OPERAND2"],
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
-        BlockOpcode::sensing_dayssince2000 | BlockOpcode::data_variable => vec![],
+        BlockOpcode::sensing_dayssince2000
+        | BlockOpcode::data_variable
+        | BlockOpcode::argument_reporter_boolean
+        | BlockOpcode::argument_reporter_string_number => vec![],
         BlockOpcode::data_setvariableto => vec!["VALUE"],
         BlockOpcode::control_if => vec!["CONDITION"],
         BlockOpcode::operator_not => vec!["OPERAND"],
         BlockOpcode::control_repeat => vec!["TIMES"],
+        BlockOpcode::procedures_call => {
+            let serde_json::Value::String(proccode) = block_info
+                .mutation
+                .mutations
+                .get("proccode")
+                .ok_or(make_hq_bad_proj!("missing proccode on procedures_call"))?
+            else {
+                hq_bad_proj!("non-string proccode on procedures_call");
+            };
+            let Some(proc) = procs.get(proccode.as_str()) else {
+                hq_bad_proj!("procedures_call proccode doesn't exist")
+            };
+            proc.context().arg_ids().into_iter().map(|b| &**b).collect()
+        }
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
     .into_iter()
@@ -133,7 +158,7 @@ pub fn inputs(
     context: &StepContext,
     project: Weak<IrProject>,
 ) -> HQResult<Vec<IrOpcode>> {
-    Ok(input_names(block_info.opcode.clone())?
+    Ok(input_names(block_info, context)?
         .into_iter()
         .map(|name| -> HQResult<Vec<IrOpcode>> {
             match match block_info.inputs.get((*name).into()) {
@@ -172,6 +197,63 @@ pub fn inputs(
         .collect())
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ProcArgType {
+    Boolean,
+    StringNumber,
+}
+
+impl ProcArgType {
+    fn default_block(&self) -> Vec<IrOpcode> {
+        vec![match self {
+            ProcArgType::Boolean => IrOpcode::hq_integer(HqIntegerFields(0)),
+            ProcArgType::StringNumber => IrOpcode::hq_text(HqTextFields("".into())),
+        }]
+    }
+}
+
+fn procedure_argument(
+    arg_type: ProcArgType,
+    block_info: &BlockInfo,
+    context: &StepContext,
+) -> HQResult<Vec<IrOpcode>> {
+    let Some(proc_context) = context.proc_context.clone() else {
+        return Ok(arg_type.default_block());
+    };
+    let sb3::VarVal::String(arg_name) = block_info
+        .fields
+        .get("VALUE")
+        .ok_or(make_hq_bad_proj!("missing VALUE field for proc argument"))?
+        .get_0()
+        .clone()
+        .ok_or(make_hq_bad_proj!("missing value of VALUE field"))?
+    else {
+        hq_bad_proj!("non-string proc argument name")
+    };
+    let Some(index) = proc_context
+        .arg_names()
+        .iter()
+        .position(|name| *name == arg_name)
+    else {
+        return Ok(arg_type.default_block());
+    };
+    let expected_type = proc_context
+        .arg_types()
+        .get(index)
+        .ok_or(make_hq_bad_proj!(
+            "argument index not in range of argumenttypes"
+        ))?;
+    hq_assert!(
+        (arg_type == ProcArgType::Boolean && *expected_type == IrType::Boolean)
+            || (arg_type == ProcArgType::StringNumber
+                && (*expected_type == IrType::String || *expected_type == IrType::Number)),
+        "argument block doesn't match actual argument type"
+    );
+    Ok(vec![IrOpcode::procedures_argument(
+        ProceduresArgumentFields(index, *expected_type),
+    )])
+}
+
 fn from_normal_block(
     block_info: &BlockInfo,
     stack_mode: StackMode,
@@ -187,6 +269,7 @@ fn from_normal_block(
         if stack_mode == StackMode::Stack {
             crate::log(format!("{:?}", block_info.opcode).as_str());
         }
+        if block_info.opcode == BlockOpcode::procedures_call {}
         opcodes.append(
             &mut inputs(block_info, blocks, context, Weak::clone(&project))?
                 .into_iter()
@@ -337,81 +420,161 @@ fn from_normal_block(
                         let Some(substack_block) = blocks.get(&substack_id) else {
                             hq_bad_proj!("SUBSTACK block doesn't seem to exist")
                         };
-                        let (next_block, outer_next_blocks) =
-                            if let Some(ref next_block) = block_info.next {
-                                (Some(next_block.clone()), final_next_blocks.clone())
-                            } else if let (Some(next_block_info), popped_next_blocks) =
-                                final_next_blocks.clone().pop_inner()
-                            {
-                                (Some(next_block_info.id), popped_next_blocks)
+                        if !context.warp {
+                            should_break = true;
+                            let (next_block, outer_next_blocks) =
+                                if let Some(ref next_block) = block_info.next {
+                                    (Some(next_block.clone()), final_next_blocks.clone())
+                                } else if let (Some(next_block_info), popped_next_blocks) =
+                                    final_next_blocks.clone().pop_inner()
+                                {
+                                    (Some(next_block_info.id), popped_next_blocks)
+                                } else {
+                                    (None, NextBlocks::new())
+                                };
+                            let next_step = if next_block.is_some() {
+                                let Some(next_block_block) =
+                                    blocks.get(&next_block.clone().unwrap())
+                                else {
+                                    hq_bad_proj!("next block doesn't exist")
+                                };
+                                Step::from_block(
+                                    next_block_block,
+                                    next_block.clone().unwrap(),
+                                    blocks,
+                                    context.clone(),
+                                    context.project()?,
+                                    outer_next_blocks,
+                                )?
                             } else {
-                                (None, NextBlocks::new())
+                                Step::new_terminating(context.clone(), context.project()?)?
                             };
-                        should_break = true;
-                        let next_step = if next_block.is_some() {
-                            let Some(next_block_block) = blocks.get(&next_block.clone().unwrap())
-                            else {
-                                hq_bad_proj!("next block doesn't exist")
-                            };
-                            Step::from_block(
-                                next_block_block,
-                                next_block.clone().unwrap(),
+                            let variable =
+                                RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
+                            let substack_blocks = from_block(
+                                substack_block,
+                                StackMode::Stack,
                                 blocks,
-                                context.clone(),
+                                context,
                                 context.project()?,
-                                outer_next_blocks,
-                            )?
-                        } else {
-                            Step::new_terminating(context.clone(), context.project()?)?
-                        };
-                        let variable =
-                            RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
-                        let substack_blocks = from_block(
-                            substack_block,
-                            StackMode::Stack,
-                            blocks,
-                            context,
-                            context.project()?,
-                            NextBlocks::NothingAtAll,
-                        )?;
-                        let substack_step = Step::new_rc(
-                            None,
-                            context.clone(),
-                            substack_blocks,
-                            context.project()?,
-                        )?;
-                        let condition_step = Step::new_rc(
-                            None,
-                            context.clone(),
+                                NextBlocks::NothingAtAll,
+                            )?;
+                            let substack_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                substack_blocks,
+                                context.project()?,
+                            )?;
+                            let condition_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                vec![
+                                    IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                                    IrOpcode::hq_integer(HqIntegerFields(1)),
+                                    IrOpcode::operator_subtract,
+                                    IrOpcode::data_teevariable(DataTeevariableFields(
+                                        variable.clone(),
+                                    )),
+                                    IrOpcode::hq_integer(HqIntegerFields(0)),
+                                    IrOpcode::operator_gt,
+                                    IrOpcode::control_if_else(ControlIfElseFields {
+                                        branch_if: Rc::clone(&substack_step),
+                                        branch_else: Rc::clone(&next_step),
+                                    }),
+                                ],
+                                context.project()?,
+                            )?;
+                            substack_step
+                                .opcodes_mut()?
+                                .push(IrOpcode::hq_yield(HqYieldFields {
+                                    mode: YieldMode::Schedule(Rc::downgrade(&condition_step)),
+                                }));
                             vec![
-                                IrOpcode::data_variable(DataVariableFields(variable.clone())),
-                                IrOpcode::hq_integer(HqIntegerFields(1)),
-                                IrOpcode::operator_subtract,
-                                IrOpcode::data_teevariable(DataTeevariableFields(variable.clone())),
+                                IrOpcode::hq_cast(HqCastFields(IrType::Int)),
+                                IrOpcode::data_teevariable(DataTeevariableFields(variable)),
                                 IrOpcode::hq_integer(HqIntegerFields(0)),
                                 IrOpcode::operator_gt,
                                 IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: Rc::clone(&substack_step),
-                                    branch_else: Rc::clone(&next_step),
+                                    branch_if: substack_step,
+                                    branch_else: next_step,
                                 }),
-                            ],
-                            context.project()?,
-                        )?;
-                        substack_step
-                            .opcodes_mut()?
-                            .push(IrOpcode::hq_yield(HqYieldFields {
-                                mode: YieldMode::Schedule(Rc::downgrade(&condition_step)),
-                            }));
-                        vec![
-                            IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-                            IrOpcode::data_teevariable(DataTeevariableFields(variable)),
-                            IrOpcode::hq_integer(HqIntegerFields(0)),
-                            IrOpcode::operator_gt,
-                            IrOpcode::control_if_else(ControlIfElseFields {
-                                branch_if: substack_step,
-                                branch_else: next_step,
-                            }),
-                        ]
+                            ]
+                        } else {
+                            // TODO: this shoud use a local variable (as opposed to global)
+                            let variable =
+                                RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
+                            let substack_blocks = from_block(
+                                substack_block,
+                                StackMode::Stack,
+                                blocks,
+                                context,
+                                context.project()?,
+                                NextBlocks::NothingAtAll,
+                            )?;
+                            let substack_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                substack_blocks,
+                                context.project()?,
+                            )?;
+                            let condition_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                vec![
+                                    IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                                    IrOpcode::hq_integer(HqIntegerFields(1)),
+                                    IrOpcode::operator_subtract,
+                                    IrOpcode::data_teevariable(DataTeevariableFields(
+                                        variable.clone(),
+                                    )),
+                                    IrOpcode::hq_integer(HqIntegerFields(0)),
+                                    IrOpcode::operator_gt,
+                                ],
+                                context.project()?,
+                            )?;
+                            vec![
+                                IrOpcode::hq_cast(HqCastFields(IrType::Int)),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields(variable)),
+                                IrOpcode::control_loop(ControlLoopFields {
+                                    first_condition: None,
+                                    condition: condition_step,
+                                    body: substack_step,
+                                }),
+                            ]
+                        }
+                    }
+                    BlockOpcode::procedures_call => {
+                        let target = context
+                            .target
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Target>"))?;
+                        let procs = target.procedures()?;
+                        let serde_json::Value::String(proccode) = block_info
+                            .mutation
+                            .mutations
+                            .get("proccode")
+                            .ok_or(make_hq_bad_proj!("missing proccode on procedures_call"))?
+                        else {
+                            hq_bad_proj!("non-string proccode on procedures_call")
+                        };
+                        let proc = procs.get(proccode.as_str()).ok_or(make_hq_bad_proj!(
+                            "non-existant proccode on procedures_call"
+                        ))?;
+                        let warp = context.warp || proc.always_warped();
+                        if warp {
+                            proc.compile_warped(blocks)?;
+                            vec![IrOpcode::procedures_call_warp(ProceduresCallWarpFields {
+                                proc: Rc::clone(proc),
+                            })]
+                        } else {
+                            hq_todo!("non-warped procedures")
+                        }
+                    }
+                    BlockOpcode::argument_reporter_boolean => {
+                        procedure_argument(ProcArgType::Boolean, block_info, context)?
+                    }
+                    BlockOpcode::argument_reporter_string_number => {
+                        procedure_argument(ProcArgType::StringNumber, block_info, context)?
                     }
                     other => hq_todo!("unimplemented block: {:?}", other),
                 })
@@ -425,7 +588,7 @@ fn from_normal_block(
                 let next_block = blocks
                     .get(next_id)
                     .ok_or(make_hq_bad_proj!("missing next block"))?;
-                if opcodes.last().is_some_and(|o| o.yields()) {
+                if opcodes.last().is_some_and(|o| o.yields()) && !context.warp {
                     crate::log("next block, yielding required");
                     opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                         mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
@@ -448,7 +611,7 @@ fn from_normal_block(
                 let next_block = blocks
                     .get(&popped_next.id)
                     .ok_or(make_hq_bad_proj!("missing next block"))?;
-                if popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields()) {
+                if (popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields())) && !context.warp {
                     crate::log("next block, yielding required");
                     opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                         mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(

@@ -79,6 +79,7 @@ impl Step {
             context: StepContext {
                 target: Weak::new(),
                 proc_context: None,
+                warp: false, // this is a fairly arbitrary choice and doesn't matter at all
             },
             opcodes: RefCell::new(vec![]),
             inlined: RefCell::new(false),

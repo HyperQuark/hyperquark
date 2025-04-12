@@ -8,6 +8,7 @@ mod data;
 mod hq;
 mod looks;
 mod operator;
+mod procedures;
 mod sensing;
 
 #[macro_use]

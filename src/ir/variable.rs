@@ -1,5 +1,8 @@
 use super::Type;
-use crate::{prelude::*, sb3::VarVal};
+use crate::{
+    prelude::*,
+    sb3::{Target as Sb3Target, VarVal},
+};
 use core::cell::Ref;
 use core::hash::{Hash, Hasher};
 
@@ -46,4 +49,20 @@ impl Hash for RcVar {
     fn hash<H: Hasher>(&self, state: &mut H) {
         core::ptr::hash(Rc::as_ptr(&self.0), state);
     }
+}
+
+pub fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, Rc<Variable>> {
+    target
+        .variables
+        .iter()
+        .map(|(id, var_info)| {
+            (
+                id.clone(),
+                Rc::new(Variable::new(
+                    Type::none(),
+                    var_info.get_1().unwrap().clone(),
+                )),
+            )
+        })
+        .collect()
 }

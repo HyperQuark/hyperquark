@@ -62,6 +62,7 @@ impl Thread {
             StepContext {
                 target: Weak::clone(&target),
                 proc_context: None,
+                warp: false, // steps from top blocks are never warped
             },
             Weak::clone(&project),
             NextBlocks::new(),

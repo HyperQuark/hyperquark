@@ -1,7 +1,7 @@
-use super::{Registries, WasmFlags};
-use crate::instructions::wrap_instruction;
-use crate::ir::Step;
+use super::{Registries, WasmFlags, WasmProject};
+use crate::ir::{PartialStep, Step};
 use crate::prelude::*;
+use crate::{instructions::wrap_instruction, ir::Proc};
 use wasm_encoder::{
     self, CodeSection, Function, FunctionSection, Instruction as WInstruction, ValType,
 };
@@ -10,6 +10,7 @@ use wasm_encoder::{
 pub enum Instruction {
     ImmediateInstruction(wasm_encoder::Instruction<'static>),
     LazyStepRef(Weak<Step>),
+    LazyWarpedProcCall(Rc<Proc>),
 }
 
 impl Instruction {
@@ -21,7 +22,6 @@ impl Instruction {
         Ok(match self {
             Instruction::ImmediateInstruction(instr) => instr.clone(),
             Instruction::LazyStepRef(step) => {
-                crate::log(format!("{:?}\n{:}", step, steps.try_borrow()?.len()).as_str());
                 let step_index: u32 = steps
                     .try_borrow()?
                     .get_index_of(
@@ -29,13 +29,23 @@ impl Instruction {
                             .upgrade()
                             .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
                     )
-                    .ok_or(make_hq_bug!(
-                        "couldn't find step in step map - has it been inlined?"
-                    ))?
+                    .ok_or(make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                crate::log(format!("imported funcs: {imported_func_count}; step index: {step_index}; function index: {}", imported_func_count + step_index).as_str());
                 WInstruction::RefFunc(imported_func_count + step_index)
+            }
+            Instruction::LazyWarpedProcCall(proc) => {
+                crate::log(format!("{:?}", proc).as_str());
+                let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {
+                    hq_bug!("tried to use uncompiled warped procedure step")
+                };
+                let step_index: u32 = steps
+                    .try_borrow()?
+                    .get_index_of(step)
+                    .ok_or(make_hq_bug!("couldn't find step in step map"))?
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
+                WInstruction::Call(imported_func_count + step_index)
             }
         })
     }
@@ -68,6 +78,10 @@ impl StepFunc {
 
     pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
         Rc::clone(&self.steps)
+    }
+
+    pub fn params(&self) -> &Box<[ValType]> {
+        &self.params
     }
 
     /// creates a new step function, with one paramter
@@ -163,7 +177,23 @@ impl StepFunc {
         if let Some(step_func) = steps.try_borrow()?.get(&step) {
             return Ok(step_func.clone());
         }
-        let step_func = StepFunc::new(registries, Rc::clone(&steps), flags);
+        crate::log(format!("step: {:?}", step).as_str());
+        let step_func = if let Some(ref proc_context) = step.context().proc_context {
+            let arg_types = proc_context
+                .arg_types()
+                .into_iter()
+                .cloned()
+                .map(WasmProject::ir_type_to_wasm)
+                .collect::<HQResult<Box<[_]>>>()?;
+            let input_types = arg_types
+                .iter()
+                .chain(&[ValType::I32])
+                .cloned()
+                .collect();
+            StepFunc::new_with_types(input_types, None, registries, Rc::clone(&steps), flags)?
+        } else {
+            StepFunc::new(registries, Rc::clone(&steps), flags)
+        };
         let mut instrs = vec![];
         let mut type_stack = vec![];
         for opcode in &*step.opcodes().try_borrow()?.clone() {
