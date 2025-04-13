@@ -143,7 +143,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             let Some(proc) = procs.get(proccode.as_str()) else {
                 hq_bad_proj!("procedures_call proccode doesn't exist")
             };
-            proc.context().arg_ids().into_iter().map(|b| &**b).collect()
+            proc.context().arg_ids().iter().map(|b| &**b).collect()
         }
         other => hq_todo!("unimplemented input_names for {:?}", other),
     }
@@ -269,7 +269,6 @@ fn from_normal_block(
         if stack_mode == StackMode::Stack {
             crate::log(format!("{:?}", block_info.opcode).as_str());
         }
-        if block_info.opcode == BlockOpcode::procedures_call {}
         opcodes.append(
             &mut inputs(block_info, blocks, context, Weak::clone(&project))?
                 .into_iter()
@@ -532,11 +531,21 @@ fn from_normal_block(
                                 ],
                                 context.project()?,
                             )?;
+                            let first_condition_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                vec![
+                                    IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                                    IrOpcode::hq_integer(HqIntegerFields(0)),
+                                    IrOpcode::operator_gt,
+                                ],
+                                context.project()?,
+                            )?;
                             vec![
                                 IrOpcode::hq_cast(HqCastFields(IrType::Int)),
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields(variable)),
                                 IrOpcode::control_loop(ControlLoopFields {
-                                    first_condition: None,
+                                    first_condition: Some(first_condition_step),
                                     condition: condition_step,
                                     body: substack_step,
                                 }),
@@ -611,7 +620,9 @@ fn from_normal_block(
                 let next_block = blocks
                     .get(&popped_next.id)
                     .ok_or(make_hq_bad_proj!("missing next block"))?;
-                if (popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields())) && !context.warp {
+                if (popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields()))
+                    && !context.warp
+                {
                     crate::log("next block, yielding required");
                     opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                         mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(

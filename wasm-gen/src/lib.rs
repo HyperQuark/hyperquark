@@ -113,7 +113,7 @@ pub fn wasm(input: TokenStream) -> TokenStream {
     if nan_checks.is_empty() && boxed_checks.is_empty() {
         let instructions = parsed.items.iter().filter_map(|item| {
             if let Item::Instruction { expr } = item {
-                Some(quote! { ImmediateInstruction(wasm_encoder::Instruction::#expr) })
+                Some(quote! { Immediate(wasm_encoder::Instruction::#expr) })
             } else if let Item::SpecialInstruction { expr } = item {
                 Some(quote! { #expr })
             } else {
@@ -177,21 +177,21 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 .enumerate()
                 .filter_map(|(i, item)| match item {
                     Item::Instruction { expr } => {
-                        Some((vec![quote! { ImmediateInstruction(wasm_encoder::Instruction::#expr) }].into_iter(), None))
+                        Some((vec![quote! { Immediate(wasm_encoder::Instruction::#expr) }].into_iter(), None))
                     }
                     Item::NanReduce { input_ident } => {
                         if these_nan.contains(&input_ident.clone().to_string()) {
                             let local_ident = format_ident!("__local_{}", i);
                             Some((
                                 vec![
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalTee(#local_ident)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalGet(#local_ident)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::F64Eq) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::If(wasm_encoder::BlockType::Result(wasm_encoder::ValType::F64))) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalGet(#local_ident)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::Else) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::F64Const(0.0)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::End) }
+                                    quote! { Immediate(wasm_encoder::Instruction::LocalTee(#local_ident)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::LocalGet(#local_ident)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::F64Eq) },
+                                    quote! { Immediate(wasm_encoder::Instruction::If(wasm_encoder::BlockType::Result(wasm_encoder::ValType::F64))) },
+                                    quote! { Immediate(wasm_encoder::Instruction::LocalGet(#local_ident)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::Else) },
+                                    quote! { Immediate(wasm_encoder::Instruction::F64Const(0.0)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::End) }
                                 ]
                                 .into_iter(),
                                 Some((local_ident, format_ident!("F64")))
@@ -205,17 +205,17 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                             let local_ident = format_ident!("__local_{}", i);
                             Some((
                                 vec![
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalTee(#local_ident)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::LocalGet(#local_ident)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::F64Ne) },
+                                    quote! { Immediate(wasm_encoder::Instruction::LocalTee(#local_ident)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::LocalGet(#local_ident)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::F64Ne) },
                                 ]
                                 .into_iter(),
                                 Some((local_ident, format_ident!("F64")))
                             ))
                         } else {
                             Some((vec![
-                                quote! { ImmediateInstruction(wasm_encoder::Instruction::Drop) },
-                                quote! { ImmediateInstruction(wasm_encoder::Instruction::I32Const(0)) }
+                                quote! { Immediate(wasm_encoder::Instruction::Drop) },
+                                quote! { Immediate(wasm_encoder::Instruction::I32Const(0)) }
                             ].into_iter(), None))
                         }
                     }
@@ -224,17 +224,17 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                         if let Some(state) = these_unboxed.get(&input_ident.clone().to_string()) {
                             match state {
                                 1 => Some((vec![
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I32Const(1)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::TableGrow(__strings_table_index)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64ExtendI32S) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Const(BOXED_STRING_PATTERN)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Or) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I32Const(1)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::TableGrow(__strings_table_index)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_STRING_PATTERN)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Or) },
                                 ].into_iter(), Some((local_ident, format_ident!("EXTERNREF"))))),
-                                2 => Some((vec![quote! { ImmediateInstruction(wasm_encoder::Instruction::I64ReinterpretF64) }].into_iter(), None)),
+                                2 => Some((vec![quote! { Immediate(wasm_encoder::Instruction::I64ReinterpretF64) }].into_iter(), None)),
                                 3 => Some((vec![
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64ExtendI32S) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Const(BOXED_INT_PATTERN)) },
-                                    quote! { ImmediateInstruction(wasm_encoder::Instruction::I64Or) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_INT_PATTERN)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Or) },
                                 ].into_iter(), None)),
                                 _ => panic!("invalid state")
                             }

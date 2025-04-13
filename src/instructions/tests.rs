@@ -104,7 +104,7 @@ macro_rules! instructions_test {
                         }
                     };
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::ImmediateInstruction(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 
@@ -178,7 +178,7 @@ macro_rules! instructions_test {
                     };
                     println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::ImmediateInstruction(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 

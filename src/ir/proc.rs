@@ -80,7 +80,7 @@ impl Proc {
         &self.context
     }
 
-    pub fn proccode(&self) -> &Box<str> {
+    pub fn proccode(&self) -> &str {
         &self.proccode
     }
 }
@@ -252,7 +252,7 @@ pub fn procs_from_target(sb3_target: &Sb3Target, ir_target: Rc<IrTarget>) -> HQR
         }
         let proc = Proc::from_prototype(block, &sb3_target.blocks, Rc::downgrade(&ir_target))?;
         let proccode = proc.proccode();
-        proc_map.insert(proccode.clone(), proc);
+        proc_map.insert(proccode.into(), proc);
     }
     Ok(())
 }

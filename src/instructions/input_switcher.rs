@@ -173,7 +173,7 @@ fn generate_branches(
             )?)
         }
         wasm.extend(core::iter::repeat_n(
-            InternalInstruction::ImmediateInstruction(WInstruction::End),
+            InternalInstruction::Immediate(WInstruction::End),
             possible_types_num - 1, // the last else doesn't need an additional `end` instruction
         ));
         wasm
@@ -219,7 +219,7 @@ pub fn wrap_instruction(
         .rev()
         .cloned()
         .map(WInstruction::LocalSet)
-        .map(InternalInstruction::ImmediateInstruction)
+        .map(InternalInstruction::Immediate)
         .collect::<Vec<_>>();
 
     wasm.append(&mut generate_branches(

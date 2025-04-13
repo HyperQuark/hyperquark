@@ -8,7 +8,7 @@ use wasm_encoder::{
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
-    ImmediateInstruction(wasm_encoder::Instruction<'static>),
+    Immediate(wasm_encoder::Instruction<'static>),
     LazyStepRef(Weak<Step>),
     LazyWarpedProcCall(Rc<Proc>),
 }
@@ -20,7 +20,7 @@ impl Instruction {
         imported_func_count: u32,
     ) -> HQResult<WInstruction<'static>> {
         Ok(match self {
-            Instruction::ImmediateInstruction(instr) => instr.clone(),
+            Instruction::Immediate(instr) => instr.clone(),
             Instruction::LazyStepRef(step) => {
                 let step_index: u32 = steps
                     .try_borrow()?
@@ -80,7 +80,7 @@ impl StepFunc {
         Rc::clone(&self.steps)
     }
 
-    pub fn params(&self) -> &Box<[ValType]> {
+    pub fn params(&self) -> &[ValType] {
         &self.params
     }
 
@@ -181,15 +181,11 @@ impl StepFunc {
         let step_func = if let Some(ref proc_context) = step.context().proc_context {
             let arg_types = proc_context
                 .arg_types()
-                .into_iter()
+                .iter()
                 .cloned()
                 .map(WasmProject::ir_type_to_wasm)
                 .collect::<HQResult<Box<[_]>>>()?;
-            let input_types = arg_types
-                .iter()
-                .chain(&[ValType::I32])
-                .cloned()
-                .collect();
+            let input_types = arg_types.iter().chain(&[ValType::I32]).cloned().collect();
             StepFunc::new_with_types(input_types, None, registries, Rc::clone(&steps), flags)?
         } else {
             StepFunc::new(registries, Rc::clone(&steps), flags)
