@@ -123,15 +123,18 @@ impl Proc {
                     })
                     .collect::<HQResult<Box<[_]>>>()?,
                 serde_json::Value::String(string_arr) => {
-                    // let mut string_arr = string_arr.clone();
-                    string_arr
-                        .strip_prefix("[\"")
-                        .ok_or(make_hq_bug!("malformed {id} array"))?
-                        .strip_suffix("\"]")
-                        .ok_or(make_hq_bug!("malformed {id} array"))?
-                        .split("\",\"")
-                        .map(Box::from)
-                        .collect::<Box<[_]>>()
+                    if string_arr == "[]" {
+                        Box::new([])
+                    } else {
+                        string_arr
+                            .strip_prefix("[\"")
+                            .ok_or(make_hq_bug!("malformed {id} array"))?
+                            .strip_suffix("\"]")
+                            .ok_or(make_hq_bug!("malformed {id} array"))?
+                            .split("\",\"")
+                            .map(Box::from)
+                            .collect::<Box<[_]>>()
+                    }
                 }
                 _ => hq_bad_proj!("non-array {id}"),
             },
