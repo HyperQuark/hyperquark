@@ -394,9 +394,13 @@ impl WasmProject {
                 flags,
             )?;
         }
-        // get rid of inlined steps
+        // mark first steps as used in a non-inline context
+        for thread in ir_project.threads().try_borrow()?.iter() {
+            thread.first_step().make_used_non_inline()?;
+        }
+        // get rid of steps which aren't used in a non-inlined context
         for step in ir_project.steps().try_borrow()?.iter() {
-            if *step.inlined().try_borrow()? {
+            if *step.inline().try_borrow()? && !*step.used_non_inline().try_borrow()? {
                 steps.try_borrow_mut()?.swap_remove(step);
             }
         }

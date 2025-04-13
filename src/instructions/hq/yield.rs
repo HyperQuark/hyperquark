@@ -78,8 +78,9 @@ pub fn wasm(
         ],
         YieldMode::Inline(step) => func.compile_inner_step(Rc::clone(step))?,
         YieldMode::Schedule(weak_step) => {
-            let _step =
+            let step =
                 Weak::upgrade(weak_step).ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?;
+            step.make_used_non_inline()?;
             wasm![
                 LocalGet(0),
                 #LazyStepRef(Weak::clone(weak_step)),

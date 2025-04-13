@@ -9,8 +9,8 @@ use uuid::Uuid;
 pub struct Step {
     context: StepContext,
     opcodes: RefCell<Vec<IrOpcode>>,
-    /// is this step inlined? if not, its own function should be produced
-    inlined: RefCell<bool>,
+    used_non_inline: RefCell<bool>,
+    inline: RefCell<bool>,
     /// used for `Hash`. Should be obtained from a block in the `Step` where possible.
     id: Box<str>,
     project: Weak<IrProject>,
@@ -33,8 +33,12 @@ impl Step {
         &self.opcodes
     }
 
-    pub fn inlined(&self) -> &RefCell<bool> {
-        &self.inlined
+    pub fn used_non_inline(&self) -> &RefCell<bool> {
+        &self.used_non_inline
+    }
+
+    pub fn inline(&self) -> &RefCell<bool> {
+        &self.inline
     }
 
     pub fn project(&self) -> Weak<IrProject> {
@@ -51,7 +55,8 @@ impl Step {
             id: id.unwrap_or_else(|| Uuid::new_v4().to_string().into()),
             context,
             opcodes: RefCell::new(opcodes),
-            inlined: RefCell::new(false),
+            used_non_inline: RefCell::new(false),
+            inline: RefCell::new(false),
             project,
         }
     }
@@ -82,7 +87,8 @@ impl Step {
                 warp: false, // this is a fairly arbitrary choice and doesn't matter at all
             },
             opcodes: RefCell::new(vec![]),
-            inlined: RefCell::new(false),
+            used_non_inline: RefCell::new(false),
+            inline: RefCell::new(false),
             project: Weak::new(),
         }
     }
@@ -95,7 +101,8 @@ impl Step {
             opcodes: RefCell::new(vec![IrOpcode::hq_yield(HqYieldFields {
                 mode: YieldMode::None,
             })]),
-            inlined: RefCell::new(false),
+            used_non_inline: RefCell::new(false),
+            inline: RefCell::new(false),
             project: Weak::clone(&project),
         });
         project
@@ -158,12 +165,23 @@ impl Step {
         Ok(step)
     }
 
-    pub fn make_inlined(&self) -> HQResult<()> {
-        if *self.inlined.try_borrow()? {
+    pub fn make_used_non_inline(&self) -> HQResult<()> {
+        if *self.used_non_inline.try_borrow()? {
             return Ok(());
         };
         *self
-            .inlined
+            .used_non_inline
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? = true;
+        Ok(())
+    }
+
+    pub fn make_inlined(&self) -> HQResult<()> {
+        if *self.inline.try_borrow()? {
+            return Ok(());
+        };
+        *self
+            .inline
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? = true;
         Ok(())
