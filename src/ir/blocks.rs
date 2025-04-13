@@ -302,8 +302,16 @@ fn from_normal_block(
                             .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
                         let variable = if let Some(var) = target.variables().get(&id) {
                             var
+                        } else if let Some(var) = context
+                            .project()?
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                            .global_variables()
+                            .get(&id)
+                        {
+                            &Rc::clone(var)
                         } else {
-                            hq_todo!("global variables")
+                            hq_bad_proj!("variable not found")
                         };
                         vec![IrOpcode::data_setvariableto(DataSetvariabletoFields(
                             RcVar(Rc::clone(variable)),
@@ -328,8 +336,16 @@ fn from_normal_block(
                             .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
                         let variable = if let Some(var) = target.variables().get(&id) {
                             var
+                        } else if let Some(var) = context
+                            .project()?
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                            .global_variables()
+                            .get(&id)
+                        {
+                            &Rc::clone(var)
                         } else {
-                            hq_todo!("global variables")
+                            hq_bad_proj!("variable not found")
                         };
                         vec![IrOpcode::data_variable(DataVariableFields(RcVar(
                             Rc::clone(variable),
@@ -683,8 +699,16 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                         .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
                     let variable = if let Some(var) = target.variables().get(id) {
                         var
+                    } else if let Some(var) = context
+                        .project()?
+                        .upgrade()
+                        .ok_or(make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                        .global_variables()
+                        .get(id)
+                    {
+                        &Rc::clone(var)
                     } else {
-                        hq_todo!("global variables")
+                        hq_bad_proj!("variable not found")
                     };
                     IrOpcode::data_variable(DataVariableFields(RcVar(Rc::clone(variable))))
                 }
