@@ -114,7 +114,7 @@ export default async (
           step_funcs,
           vars_num,
           rr_offset,
-          threads_num,
+          threads_count,
           upc,
           threads,
           noop,
@@ -131,9 +131,9 @@ export default async (
         window.flag_clicked = flag_clicked;
         window.tick = tick;
         window.stop = () => {
-          for (let i = 0; i < threads_num.value; i++) {
+          for (let i = 0; i < threads_count.value; i++) {
             threads.set(i, noop);
-            threads_num.value = 0;
+            threads_count.value = 0;
           }
         };
         // @ts-ignore
@@ -169,7 +169,7 @@ export default async (
             // @ts-ignore
             tick();
             // @ts-ignore
-            if (threads_num === 0) {
+            if (threads_count === 0) {
               break $outertickloop;
             }
           } while ( false &&
