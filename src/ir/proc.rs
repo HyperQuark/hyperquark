@@ -233,7 +233,7 @@ impl Proc {
                     blocks,
                     step_context.clone(),
                     step_context.project()?,
-                    NextBlocks::NothingAtAll,
+                    NextBlocks::new(false),
                 )?
             }
         };

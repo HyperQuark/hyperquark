@@ -214,6 +214,7 @@ pub fn wrap_instruction(
 
     // for now, chuck each input into a local
     // TODO: change this so that only the inputs following the first boxed input are local-ised
+    // ...or should we just let wasm-opt deal with this?
     let mut wasm = locals
         .iter()
         .rev()

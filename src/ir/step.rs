@@ -1,4 +1,4 @@
-use super::blocks::{self, NextBlocks, StackMode};
+use super::blocks::{self, NextBlocks};
 use super::{IrProject, StepContext};
 use crate::instructions::{HqYieldFields, IrOpcode, YieldMode};
 use crate::prelude::*;
@@ -146,7 +146,6 @@ impl Step {
             context.clone(),
             blocks::from_block(
                 block,
-                StackMode::Stack,
                 blocks,
                 &context,
                 Weak::clone(&project),

@@ -65,7 +65,7 @@ impl Thread {
                 warp: false, // steps from top blocks are never warped
             },
             Weak::clone(&project),
-            NextBlocks::new(),
+            NextBlocks::new(true),
         )?;
         Ok(Some(Thread {
             event,

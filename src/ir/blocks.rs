@@ -1,17 +1,10 @@
+use super::context::StepContext;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{fields::*, IrOpcode, YieldMode};
 use crate::ir::Variable;
 use crate::prelude::*;
 use crate::sb3;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
-
-use super::context::StepContext;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum StackMode {
-    Stack,
-    NotStack,
-}
 
 fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
@@ -43,50 +36,49 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
     Ok(blocks)
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
+pub enum NextBlock {
+    ID(Box<str>),
+    Step(Weak<Step>),
+}
+
+#[derive(Clone, Debug)]
 pub struct NextBlockInfo {
     pub yield_first: bool,
-    pub id: Box<str>,
+    pub block: NextBlock,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum NextBlocks {
-    /// if this is empty, terminate the thread afterwards
-    NextBlocks(Vec<NextBlockInfo>),
-    /// don't terminate the thread. do nothing. used in loop bodies
-    /// or elsewhere where next-ness is handled elsewhere
-    NothingAtAll,
-}
+/// contains a vector of next blocks, as well as information on how to proceed when
+/// there are no next blocks: true => terminate the thread, false => do nothing
+/// (useful for e.g. loop bodies, or for non-stack blocks)
+#[derive(Clone, Debug)]
+pub struct NextBlocks(Vec<NextBlockInfo>, bool);
 
 impl NextBlocks {
-    pub fn new() -> Self {
-        NextBlocks::NextBlocks(vec![])
+    pub fn new(terminating: bool) -> Self {
+        NextBlocks(vec![], terminating)
+    }
+
+    pub fn terminating(&self) -> bool {
+        self.1
     }
 
     pub fn extend_with_inner(&self, new: NextBlockInfo) -> Self {
-        match self {
-            NextBlocks::NextBlocks(inner) => {
-                let mut cloned = inner.clone();
-                cloned.push(new);
-                NextBlocks::NextBlocks(cloned)
-            }
-            NextBlocks::NothingAtAll => NextBlocks::NextBlocks(vec![new]),
-        }
+        let mut cloned = self.0.clone();
+        cloned.push(new);
+        NextBlocks(cloned, self.terminating())
     }
 
     pub fn pop_inner(self) -> (Option<NextBlockInfo>, Self) {
-        if let NextBlocks::NextBlocks(mut vec) = self {
-            let popped = vec.pop();
-            (popped, NextBlocks::NextBlocks(vec))
-        } else {
-            (None, self)
-        }
+        let terminating = self.terminating();
+        let mut vec = self.0;
+        let popped = vec.pop();
+        (popped, NextBlocks(vec, terminating))
     }
 }
 
 pub fn from_block(
     block: &Block,
-    stack_mode: StackMode,
     blocks: &BlockMap,
     context: &StepContext,
     project: Weak<IrProject>,
@@ -95,7 +87,6 @@ pub fn from_block(
     insert_casts(match block {
         Block::Normal { block_info, .. } => from_normal_block(
             block_info,
-            stack_mode,
             blocks,
             context,
             Weak::clone(&project),
@@ -180,11 +171,10 @@ pub fn inputs(
                         blocks
                             .get(id)
                             .ok_or(make_hq_bad_proj!("block for input {} doesn't exist", name))?,
-                        StackMode::NotStack,
                         blocks,
                         context,
                         Weak::clone(&project),
-                        NextBlocks::new(),
+                        NextBlocks::new(false),
                     ),
                 },
                 _ => hq_bad_proj!("missing input block for {}", name),
@@ -256,19 +246,16 @@ fn procedure_argument(
 
 fn from_normal_block(
     block_info: &BlockInfo,
-    stack_mode: StackMode,
     blocks: &BlockMap,
     context: &StepContext,
     project: Weak<IrProject>,
     final_next_blocks: NextBlocks,
 ) -> HQResult<Box<[IrOpcode]>> {
     let mut curr_block = Some(block_info);
+    let mut final_next_blocks = final_next_blocks;
     let mut opcodes = vec![];
     let mut should_break = false;
     while let Some(block_info) = curr_block {
-        if stack_mode == StackMode::Stack {
-            crate::log(format!("{:?}", block_info.opcode).as_str());
-        }
         opcodes.append(
             &mut inputs(block_info, blocks, context, Weak::clone(&project))?
                 .into_iter()
@@ -370,10 +357,10 @@ fn from_normal_block(
                         let (next_block, if_next_blocks, else_next_blocks) =
                             if let Some(ref next_block) = block_info.next {
                                 (
-                                    Some(next_block.clone()),
+                                    Some(NextBlock::ID(next_block.clone())),
                                     final_next_blocks.extend_with_inner(NextBlockInfo {
                                         yield_first: false,
-                                        id: next_block.clone(),
+                                        block: NextBlock::ID(next_block.clone()),
                                     }),
                                     final_next_blocks.clone(),
                                 )
@@ -381,12 +368,16 @@ fn from_normal_block(
                                 final_next_blocks.clone().pop_inner()
                             {
                                 (
-                                    Some(next_block_info.id),
+                                    Some(next_block_info.block),
                                     final_next_blocks.clone(),
                                     popped_next_blocks,
                                 )
                             } else {
-                                (None, NextBlocks::new(), NextBlocks::new())
+                                (
+                                    None,
+                                    final_next_blocks.clone(), // preserve termination behaviour
+                                    final_next_blocks.clone(),
+                                )
                             };
                         let if_step = Step::from_block(
                             substack_block,
@@ -397,18 +388,24 @@ fn from_normal_block(
                             if_next_blocks,
                         )?;
                         let else_step = if next_block.is_some() {
-                            let Some(next_block_block) = blocks.get(&next_block.clone().unwrap())
-                            else {
-                                hq_bad_proj!("next block doesn't exist")
-                            };
-                            Step::from_block(
-                                next_block_block,
-                                next_block.clone().unwrap(),
-                                blocks,
-                                context.clone(),
-                                context.project()?,
-                                else_next_blocks,
-                            )?
+                            match next_block.clone().unwrap() {
+                                NextBlock::ID(id) => {
+                                    let Some(next_block_block) = blocks.get(&id.clone()) else {
+                                        hq_bad_proj!("next block doesn't exist")
+                                    };
+                                    Step::from_block(
+                                        next_block_block,
+                                        id.clone(),
+                                        blocks,
+                                        context.clone(),
+                                        context.project()?,
+                                        else_next_blocks,
+                                    )?
+                                }
+                                NextBlock::Step(step) => step
+                                    .upgrade()
+                                    .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                            }
                         } else {
                             Step::new_terminating(context.clone(), context.project()?)?
                         };
@@ -419,7 +416,6 @@ fn from_normal_block(
                         })]
                     }
                     BlockOpcode::control_repeat => 'block: {
-                        // todo: use control_loop for warped loops
                         let BlockArrayOrId::Id(substack_id) =
                             match block_info.inputs.get("SUBSTACK") {
                                 Some(input) => input,
@@ -439,47 +435,41 @@ fn from_normal_block(
                             should_break = true;
                             let (next_block, outer_next_blocks) =
                                 if let Some(ref next_block) = block_info.next {
-                                    (Some(next_block.clone()), final_next_blocks.clone())
+                                    (
+                                        Some(NextBlock::ID(next_block.clone())),
+                                        final_next_blocks.clone(),
+                                    )
                                 } else if let (Some(next_block_info), popped_next_blocks) =
                                     final_next_blocks.clone().pop_inner()
                                 {
-                                    (Some(next_block_info.id), popped_next_blocks)
+                                    (Some(next_block_info.block), popped_next_blocks)
                                 } else {
-                                    (None, NextBlocks::new())
+                                    (None, final_next_blocks.clone())
                                 };
                             let next_step = if next_block.is_some() {
-                                let Some(next_block_block) =
-                                    blocks.get(&next_block.clone().unwrap())
-                                else {
-                                    hq_bad_proj!("next block doesn't exist")
-                                };
-                                Step::from_block(
-                                    next_block_block,
-                                    next_block.clone().unwrap(),
-                                    blocks,
-                                    context.clone(),
-                                    context.project()?,
-                                    outer_next_blocks,
-                                )?
+                                match next_block.clone().unwrap() {
+                                    NextBlock::ID(id) => {
+                                        let Some(next_block_block) = blocks.get(&id.clone()) else {
+                                            hq_bad_proj!("next block doesn't exist")
+                                        };
+                                        Step::from_block(
+                                            next_block_block,
+                                            id,
+                                            blocks,
+                                            context.clone(),
+                                            context.project()?,
+                                            outer_next_blocks,
+                                        )?
+                                    }
+                                    NextBlock::Step(ref step) => step
+                                        .upgrade()
+                                        .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                                }
                             } else {
                                 Step::new_terminating(context.clone(), context.project()?)?
                             };
                             let variable =
                                 RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
-                            let substack_blocks = from_block(
-                                substack_block,
-                                StackMode::Stack,
-                                blocks,
-                                context,
-                                context.project()?,
-                                NextBlocks::NothingAtAll,
-                            )?;
-                            let substack_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                substack_blocks,
-                                context.project()?,
-                            )?;
                             let condition_step = Step::new_rc(
                                 None,
                                 context.clone(),
@@ -492,17 +482,30 @@ fn from_normal_block(
                                     )),
                                     IrOpcode::hq_integer(HqIntegerFields(0)),
                                     IrOpcode::operator_gt,
-                                    IrOpcode::control_if_else(ControlIfElseFields {
-                                        branch_if: Rc::clone(&substack_step),
-                                        branch_else: Rc::clone(&next_step),
-                                    }),
                                 ],
                                 context.project()?,
                             )?;
-                            substack_step
+                            let substack_blocks = from_block(
+                                substack_block,
+                                blocks,
+                                context,
+                                context.project()?,
+                                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
+                                    yield_first: !context.warp,
+                                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
+                                }),
+                            )?;
+                            let substack_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                substack_blocks,
+                                context.project()?,
+                            )?;
+                            condition_step
                                 .opcodes_mut()?
-                                .push(IrOpcode::hq_yield(HqYieldFields {
-                                    mode: YieldMode::Schedule(Rc::downgrade(&condition_step)),
+                                .push(IrOpcode::control_if_else(ControlIfElseFields {
+                                    branch_if: Rc::clone(&substack_step),
+                                    branch_else: Rc::clone(&next_step),
                                 }));
                             vec![
                                 IrOpcode::hq_cast(HqCastFields(IrType::Int)),
@@ -511,20 +514,21 @@ fn from_normal_block(
                                 IrOpcode::operator_gt,
                                 IrOpcode::control_if_else(ControlIfElseFields {
                                     branch_if: substack_step,
-                                    branch_else: next_step,
+                                    branch_else: next_step, // repeat (0) { ... } *doesn't* yield
                                 }),
                             ]
                         } else {
                             // TODO: this shoud use a local variable (as opposed to global)
+                            // TODO: can this be expressed in the same way as non-warping loops,
+                            // just with yield_first: false?
                             let variable =
                                 RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
                             let substack_blocks = from_block(
                                 substack_block,
-                                StackMode::Stack,
                                 blocks,
                                 context,
                                 context.project()?,
-                                NextBlocks::NothingAtAll,
+                                NextBlocks::new(false),
                             )?;
                             let substack_step = Step::new_rc(
                                 None,
@@ -608,65 +612,78 @@ fn from_normal_block(
         if should_break {
             break;
         }
-        if stack_mode == StackMode::Stack {
-            curr_block = if let Some(ref next_id) = block_info.next {
-                let next_block = blocks
-                    .get(next_id)
-                    .ok_or(make_hq_bad_proj!("missing next block"))?;
-                if opcodes.last().is_some_and(|o| o.yields()) && !context.warp {
-                    crate::log("next block, yielding required");
-                    opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
-                            next_block,
-                            next_id.clone(),
-                            blocks,
-                            context.clone(),
-                            Weak::clone(&project),
-                            final_next_blocks.clone(),
-                        )?)),
-                    }));
-                    None
-                } else {
-                    crate::log("next block, no yielding required");
-                    next_block.block_info()
-                }
-            } else if let (Some(popped_next), new_next_blocks_stack) =
-                final_next_blocks.clone().pop_inner()
-            {
-                let next_block = blocks
-                    .get(&popped_next.id)
-                    .ok_or(make_hq_bad_proj!("missing next block"))?;
-                if (popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields()))
-                    && !context.warp
-                {
-                    crate::log("next block, yielding required");
-                    opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
-                            next_block,
-                            popped_next.id.clone(),
-                            blocks,
-                            context.clone(),
-                            Weak::clone(&project),
-                            new_next_blocks_stack,
-                        )?)),
-                    }));
-                    None
-                } else {
-                    crate::log("next block, no yielding required");
-                    next_block.block_info()
-                }
-            } else if final_next_blocks == NextBlocks::NothingAtAll {
-                crate::log("no next block; nothing at all");
-                None
-            } else {
-                crate::log("no next block");
+        curr_block = if let Some(ref next_id) = block_info.next {
+            let next_block = blocks
+                .get(next_id)
+                .ok_or(make_hq_bad_proj!("missing next block"))?;
+            if opcodes.last().is_some_and(|o| o.yields()) && !context.warp {
                 opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                    mode: YieldMode::None,
+                    mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
+                        next_block,
+                        next_id.clone(),
+                        blocks,
+                        context.clone(),
+                        Weak::clone(&project),
+                        final_next_blocks.clone(),
+                    )?)),
                 }));
                 None
+            } else {
+                next_block.block_info()
             }
+        } else if let (Some(popped_next), new_next_blocks_stack) =
+            final_next_blocks.clone().pop_inner()
+        {
+            match popped_next.block {
+                NextBlock::ID(id) => {
+                    let next_block = blocks
+                        .get(&id)
+                        .ok_or(make_hq_bad_proj!("missing next block"))?;
+                    if (popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields()))
+                        && !context.warp
+                    {
+                        opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
+                                next_block,
+                                id.clone(),
+                                blocks,
+                                context.clone(),
+                                Weak::clone(&project),
+                                new_next_blocks_stack,
+                            )?)),
+                        }));
+                        None
+                    } else {
+                        final_next_blocks = new_next_blocks_stack;
+                        next_block.block_info()
+                    }
+                }
+                NextBlock::Step(ref step) => {
+                    if (popped_next.yield_first || opcodes.last().is_some_and(|o| o.yields()))
+                        && !context.warp
+                    {
+                        opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Schedule(Weak::clone(step)),
+                        }));
+                        None
+                    } else {
+                        opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(
+                                step.upgrade()
+                                    .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                            ),
+                        }));
+                        None
+                    }
+                }
+            }
+        } else if final_next_blocks.terminating() {
+            opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+                mode: YieldMode::None,
+            }));
+            None
         } else {
-            break;
+            None
         }
     }
     Ok(opcodes.into_iter().collect())
