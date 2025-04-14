@@ -104,7 +104,7 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Optio
     ))
 }
 
-pub const YIELDS: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test! {float; hq_cast; t @ super::Fields(IrType::Float)}
 crate::instructions_test! {string; hq_cast; t @ super::Fields(IrType::String)}

@@ -3,9 +3,12 @@
 use super::prelude::*;
 use super::HqCastFields;
 use super::IrOpcode;
+use crate::wasm::GlobalExportable;
+use crate::wasm::GlobalMutable;
 use crate::wasm::WasmProject;
 use crate::{ir::Type as IrType, wasm::StepFunc};
 use itertools::Itertools;
+use wasm_encoder::ConstExpr;
 use wasm_encoder::{BlockType, Instruction as WInstruction, RefType};
 use wasm_gen::wasm;
 
@@ -234,5 +237,18 @@ pub fn wrap_instruction(
         &opcode,
         output,
     )?);
+    if opcode.requests_screen_refresh() {
+        let refresh_requested = func.registries().globals().register(
+            "requests_refresh".into(),
+            (
+                ValType::I32,
+                ConstExpr::i32_const(0),
+                GlobalMutable(true),
+                GlobalExportable(true),
+            ),
+        )?;
+
+        wasm.append(&mut wasm![I32Const(1), GlobalSet(refresh_requested),]);
+    }
     Ok(wasm)
 }

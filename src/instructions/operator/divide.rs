@@ -38,6 +38,6 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     ))
 }
 
-pub const YIELDS: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test! {tests; operator_divide; t1, t2 ;}

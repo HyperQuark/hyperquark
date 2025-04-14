@@ -144,7 +144,7 @@ impl IrOpcode {{
     }}
 
     /// does this opcode request a screen refresh (and by extension yields)?
-    pub const fn yields(&self) -> bool {{
+    pub const fn requests_screen_refresh(&self) -> bool {{
         match self {{
             {}
         }}
@@ -186,9 +186,9 @@ pub use fields::*;
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(_) => {}::YIELDS,", id, path)
+                    format!("IrOpcode::{}(_) => {}::REQUESTS_SCREEN_REFRESH,", id, path)
                 } else {
-                    format!("IrOpcode::{} => {}::YIELDS,", id, path)
+                    format!("IrOpcode::{} => {}::REQUESTS_SCREEN_REFRESH,", id, path)
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().filter(|(_, _, fields, _)| *fields)

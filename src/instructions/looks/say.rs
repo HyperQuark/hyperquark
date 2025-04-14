@@ -35,6 +35,6 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     Ok(None)
 }
 
-pub const YIELDS: bool = true;
+pub const REQUESTS_SCREEN_REFRESH: bool = true;
 
 crate::instructions_test! {tests; looks_say; t}

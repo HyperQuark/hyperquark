@@ -39,7 +39,7 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields(rcvar): &Fields) -> HQResult<Op
     Ok(Some(*rcvar.0.possible_types()))
 }
 
-pub const YIELDS: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test!(
     any;

@@ -43,6 +43,6 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
     Ok(None)
 }
 
-pub const YIELDS: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 // crate::instructions_test! {none; hq_repeat; @ super::Fields(None)}

@@ -43,6 +43,6 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Opti
     }))
 }
 
-pub const YIELDS: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test! {tests; hq_text; @ super::Fields("hello, world!".into())}

@@ -9,7 +9,6 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     Fields(index, ty): &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    crate::log(format!("params: {:?}", func.params()).as_str());
     hq_assert!(
         WasmProject::ir_type_to_wasm(*ty)?
             == *func.params().get(*index).ok_or(make_hq_bug!(
@@ -30,4 +29,4 @@ pub fn output_type(_inputs: Rc<[IrType]>, &Fields(_, ty): &Fields) -> HQResult<O
     Ok(Some(ty))
 }
 
-pub const YIELDS: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;

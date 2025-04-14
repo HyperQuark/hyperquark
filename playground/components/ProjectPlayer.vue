@@ -82,8 +82,9 @@
   });
   function greenFlag() {
     runProject({
-      framerate: turbo ? Infinity : 30,
+      framerate: 30,
       renderer,
+      turbo: turbo.value,
       wasm_bytes: wasmProject.wasm_bytes,
       string_consts: wasmProject.strings,
       target_names: [],//wasmProject.target_names,
