@@ -10,13 +10,15 @@ use core::hash::{Hash, Hasher};
 pub struct Variable {
     possible_types: RefCell<Type>,
     initial_value: VarVal,
+    local: bool,
 }
 
 impl Variable {
-    pub fn new(ty: Type, initial_value: VarVal) -> Self {
+    pub fn new(ty: Type, initial_value: VarVal, local: bool) -> Self {
         Variable {
             possible_types: RefCell::new(ty),
             initial_value,
+            local,
         }
     }
 
@@ -31,6 +33,10 @@ impl Variable {
 
     pub fn initial_value(&self) -> &VarVal {
         &self.initial_value
+    }
+
+    pub fn local(&self) -> bool {
+        self.local
     }
 }
 
@@ -61,6 +67,7 @@ pub fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, Rc<Variab
                 Rc::new(Variable::new(
                     Type::none(),
                     var_info.get_1().unwrap().clone(),
+                    false,
                 )),
             )
         })

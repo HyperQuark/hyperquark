@@ -9,18 +9,30 @@ pub fn wasm(
     inputs: Rc<[IrType]>,
     Fields(variable): &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let global_index: u32 = func
-        .registries()
-        .variables()
-        .register(RcVar::clone(variable))?;
     let t1 = inputs[0];
-    if variable.0.possible_types().is_base_type() {
-        Ok(wasm![GlobalSet(global_index)])
+    if variable.0.local() {
+        let local_index: u32 = func.local_variable(RcVar::clone(variable))?;
+        if variable.0.possible_types().is_base_type() {
+            Ok(wasm![LocalSet(local_index)])
+        } else {
+            Ok(wasm![
+                @boxed(t1),
+                LocalSet(local_index)
+            ])
+        }
     } else {
-        Ok(wasm![
-            @boxed(t1),
-            GlobalSet(global_index)
-        ])
+        let global_index: u32 = func
+            .registries()
+            .variables()
+            .register(RcVar::clone(variable))?;
+        if variable.0.possible_types().is_base_type() {
+            Ok(wasm![GlobalSet(global_index)])
+        } else {
+            Ok(wasm![
+                @boxed(t1),
+                GlobalSet(global_index),
+            ])
+        }
     }
 }
 
@@ -39,7 +51,7 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<I
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test!(
-    any;
+    any_global;
     data_setvariableto;
     t
     @ super::Fields(
@@ -47,7 +59,8 @@ crate::instructions_test!(
             Rc::new(
                 crate::ir::Variable::new(
                     IrType::Any,
-                    crate::sb3::VarVal::Float(0.0)
+                    crate::sb3::VarVal::Float(0.0),
+                    false
                 )
             )
         )
@@ -55,7 +68,7 @@ crate::instructions_test!(
 );
 
 crate::instructions_test!(
-    float;
+    float_global;
     data_setvariableto;
     t
     @ super::Fields(
@@ -63,7 +76,8 @@ crate::instructions_test!(
             Rc::new(
                 crate::ir::Variable::new(
                     IrType::Float,
-                    crate::sb3::VarVal::Float(0.0)
+                    crate::sb3::VarVal::Float(0.0),
+                    false
                 )
             )
         )
@@ -71,7 +85,7 @@ crate::instructions_test!(
 );
 
 crate::instructions_test!(
-    string;
+    string_global;
     data_setvariableto;
     t
     @ super::Fields(
@@ -79,7 +93,8 @@ crate::instructions_test!(
             Rc::new(
                 crate::ir::Variable::new(
                     IrType::String,
-                    crate::sb3::VarVal::String("".into())
+                    crate::sb3::VarVal::String("".into()),
+                    false
                 )
             )
         )
@@ -87,7 +102,7 @@ crate::instructions_test!(
 );
 
 crate::instructions_test!(
-    int;
+    int_global;
     data_setvariableto;
     t
     @ super::Fields(
@@ -95,7 +110,76 @@ crate::instructions_test!(
             Rc::new(
                 crate::ir::Variable::new(
                     IrType::QuasiInt,
-                    crate::sb3::VarVal::Bool(true)
+                    crate::sb3::VarVal::Bool(true),
+                    false
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    any_local;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::Any,
+                    crate::sb3::VarVal::Float(0.0),
+                    true
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    float_local;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::Float,
+                    crate::sb3::VarVal::Float(0.0),
+                    true
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    string_local;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::String,
+                    crate::sb3::VarVal::String("".into()),
+                    true
+                )
+            )
+        )
+    )
+);
+
+crate::instructions_test!(
+    int_local;
+    data_setvariableto;
+    t
+    @ super::Fields(
+        super::RcVar(
+            Rc::new(
+                crate::ir::Variable::new(
+                    IrType::QuasiInt,
+                    crate::sb3::VarVal::Bool(true),
+                    true
                 )
             )
         )

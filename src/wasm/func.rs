@@ -1,7 +1,8 @@
 use super::{Registries, WasmFlags, WasmProject};
-use crate::ir::{PartialStep, Step};
+use crate::ir::{PartialStep, RcVar, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
+use std::collections::{hash_map, HashMap};
 use wasm_encoder::{
     self, CodeSection, Function, FunctionSection, Instruction as WInstruction, ValType,
 };
@@ -35,7 +36,6 @@ impl Instruction {
                 WInstruction::RefFunc(imported_func_count + step_index)
             }
             Instruction::LazyWarpedProcCall(proc) => {
-                crate::log(format!("{:?}", proc).as_str());
                 let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {
                     hq_bug!("tried to use uncompiled warped procedure step")
                 };
@@ -61,6 +61,7 @@ pub struct StepFunc {
     registries: Rc<Registries>,
     flags: WasmFlags,
     steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+    local_variables: RefCell<HashMap<RcVar, u32>>,
 }
 
 impl StepFunc {
@@ -98,6 +99,7 @@ impl StepFunc {
             registries,
             flags,
             steps,
+            local_variables: Default::default(),
         }
     }
 
@@ -118,7 +120,22 @@ impl StepFunc {
             registries,
             flags,
             steps,
+            local_variables: Default::default(),
         })
+    }
+
+    pub fn local_variable(&self, var: RcVar) -> HQResult<u32> {
+        Ok(
+            match self.local_variables.try_borrow_mut()?.entry(var.clone()) {
+                hash_map::Entry::Occupied(entry) => *entry.get(),
+                hash_map::Entry::Vacant(entry) => {
+                    let index =
+                        self.local(WasmProject::ir_type_to_wasm(*var.0.possible_types())?)?;
+                    entry.insert(index);
+                    index
+                }
+            },
+        )
     }
 
     /// Registers a new local in this function, and returns its index
@@ -177,7 +194,6 @@ impl StepFunc {
         if let Some(step_func) = steps.try_borrow()?.get(&step) {
             return Ok(step_func.clone());
         }
-        crate::log(format!("step: {:?}", step).as_str());
         let step_func = if let Some(ref proc_context) = step.context().proc_context {
             let arg_types = proc_context
                 .arg_types()

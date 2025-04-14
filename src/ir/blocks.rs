@@ -468,8 +468,11 @@ fn from_normal_block(
                             } else {
                                 Step::new_terminating(context.clone(), context.project()?)?
                             };
-                            let variable =
-                                RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
+                            let variable = RcVar(Rc::new(Variable::new(
+                                IrType::Int,
+                                sb3::VarVal::Float(0.0),
+                                true,
+                            )));
                             let condition_step = Step::new_rc(
                                 None,
                                 context.clone(),
@@ -521,8 +524,11 @@ fn from_normal_block(
                             // TODO: this shoud use a local variable (as opposed to global)
                             // TODO: can this be expressed in the same way as non-warping loops,
                             // just with yield_first: false?
-                            let variable =
-                                RcVar(Rc::new(Variable::new(IrType::Int, sb3::VarVal::Float(0.0))));
+                            let variable = RcVar(Rc::new(Variable::new(
+                                IrType::Int,
+                                sb3::VarVal::Float(0.0),
+                                true,
+                            )));
                             let substack_blocks = from_block(
                                 substack_block,
                                 blocks,

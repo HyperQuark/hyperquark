@@ -1,4 +1,3 @@
-#![cfg_attr(target_family = "wasm", no_std)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![allow(clippy::new_without_default)]
