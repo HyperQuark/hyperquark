@@ -30,11 +30,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         } else if IrType::String.contains(t2) {
             // TODO: try converting string to number first (if applicable)
             let int2string = func.registries().external_functions().register(
-                ("cast", "int2string"),
+                ("cast", "int2string".into()),
                 (vec![ValType::I32], vec![ValType::EXTERNREF]),
             )?;
             let string_gt = func.registries().external_functions().register(
-                ("operator", "gt_string"),
+                ("operator", "gt_string".into()),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
@@ -96,11 +96,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             ]
         } else if IrType::String.contains(t2) {
             let float2string = func.registries().external_functions().register(
-                ("cast", "float2string"),
+                ("cast", "float2string".into()),
                 (vec![ValType::F64], vec![ValType::EXTERNREF]),
             )?;
             let string_gt = func.registries().external_functions().register(
-                ("operator", "gt_string"),
+                ("operator", "gt_string".into()),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
@@ -120,11 +120,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         if IrType::QuasiInt.contains(t2) {
             // TODO: try converting string to number first
             let int2string = func.registries().external_functions().register(
-                ("cast", "int2string"),
+                ("cast", "int2string".into()),
                 (vec![ValType::I32], vec![ValType::EXTERNREF]),
             )?;
             let string_gt = func.registries().external_functions().register(
-                ("operator", "gt_string"),
+                ("operator", "gt_string".into()),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
@@ -134,11 +134,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         } else if IrType::Float.contains(t2) {
             // TODO: try converting string to number first
             let float2string = func.registries().external_functions().register(
-                ("cast", "float2string"),
+                ("cast", "float2string".into()),
                 (vec![ValType::F64], vec![ValType::EXTERNREF]),
             )?;
             let string_gt = func.registries().external_functions().register(
-                ("operator", "gt_string"),
+                ("operator", "gt_string".into()),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],
@@ -147,7 +147,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             wasm![Call(float2string), Call(string_gt)]
         } else if IrType::String.contains(t2) {
             let string_gt = func.registries().external_functions().register(
-                ("operator", "gt_string"),
+                ("operator", "gt_string".into()),
                 (
                     vec![ValType::EXTERNREF, ValType::EXTERNREF],
                     vec![ValType::I32],

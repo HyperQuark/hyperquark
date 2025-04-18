@@ -3,7 +3,7 @@ use super::super::prelude::*;
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);
     let func_index = func.registries().external_functions().register(
-        ("operator", "join"),
+        ("operator", "join".into()),
         (
             vec![ValType::EXTERNREF, ValType::EXTERNREF],
             vec![ValType::EXTERNREF],

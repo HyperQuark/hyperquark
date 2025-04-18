@@ -1,6 +1,8 @@
 import { getSettings } from './settings.js';
 import { imports } from './imports.js';
 import { useDebugModeStore } from '../stores/debug.js';
+import { setup as sharedSetup } from '../../js/shared.ts'
+import { render } from 'vue';
 
 const debugModeStore = useDebugModeStore();
 
@@ -34,13 +36,13 @@ export default async (
 
   renderer.getDrawable = id => renderer._allDrawables[id];
   renderer.getSkin = id => renderer._allSkins[id];
+  renderer.createSkin = (type, layer, ...params) => createSkin(renderer, type, layer, ...params);
 
   const costumes = project_json.targets.map(
     (target, index) => target.costumes.map(
       ({ md5ext }) => assets[md5ext]
     )
   );
-
 
   const costumeNameMap = project_json.targets.map(
     target => Object.fromEntries(target.costumes.map(
@@ -54,7 +56,6 @@ export default async (
   //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
   const pen_skin = createSkin(renderer, "pen", "pen")[0];
   let strings_tbl;
-  const target_bubbles = target_names.map(_ => null);
 
   const target_skins = project_json.targets.map((target, index) => {
     const realCostume = target.costumes[target.currentCostume];
@@ -70,6 +71,8 @@ export default async (
     return [skin, drawableId];
   });
   console.log(target_skins)
+
+  sharedSetup(target_names, renderer);
 
   let updatePenColor;
   let start_time = 0;

@@ -28,6 +28,7 @@ pub struct WasmProject {
     /// triggered by that event.
     events: BTreeMap<Event, Vec<u32>>,
     registries: Rc<Registries>,
+    target_names: Vec<Box<str>>,
     #[allow(dead_code)]
     environment: ExternalEnvironment,
 }
@@ -41,6 +42,7 @@ impl WasmProject {
             events: Default::default(),
             environment,
             registries: Rc::new(Registries::default()),
+            target_names: vec![],
         }
     }
 
@@ -165,6 +167,11 @@ impl WasmProject {
         Ok(FinishedWasm {
             wasm_bytes: wasm_bytes.into_boxed_slice(),
             strings,
+            target_names: self
+                .target_names
+                .into_iter()
+                .map(|bstr| bstr.into())
+                .collect(),
         })
     }
 
@@ -424,6 +431,7 @@ impl WasmProject {
             events,
             registries,
             environment: ExternalEnvironment::WebBrowser,
+            target_names: ir_project.targets().try_borrow()?.keys().cloned().collect(),
         })
     }
 }
@@ -435,6 +443,8 @@ pub struct FinishedWasm {
     pub wasm_bytes: Box<[u8]>,
     #[wasm_bindgen(getter_with_clone)]
     pub strings: Vec<String>,
+    #[wasm_bindgen(getter_with_clone)]
+    pub target_names: Vec<String>,
 }
 
 #[cfg(test)]
@@ -461,6 +471,7 @@ mod tests {
             events: BTreeMap::new(),
             environment: ExternalEnvironment::WebBrowser,
             registries,
+            target_names: vec![],
         };
         let wasm_bytes = project.finish().unwrap().wasm_bytes;
         if let Err(err) = wasmparser::validate(&wasm_bytes) {

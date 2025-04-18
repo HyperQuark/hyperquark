@@ -1,7 +1,6 @@
-use core::cell::{Ref, RefMut};
-
 use super::{proc::Proc, IrProject, Variable};
 use crate::prelude::*;
+use core::cell::{Ref, RefMut};
 
 #[derive(Debug, Clone)]
 pub struct Target {
@@ -9,6 +8,7 @@ pub struct Target {
     variables: BTreeMap<Box<str>, Rc<Variable>>,
     project: Weak<IrProject>,
     procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
+    index: u32,
 }
 
 impl Target {
@@ -32,17 +32,23 @@ impl Target {
         Ok(self.procedures.try_borrow_mut()?)
     }
 
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+
     pub fn new(
         is_stage: bool,
         variables: BTreeMap<Box<str>, Rc<Variable>>,
         project: Weak<IrProject>,
         procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
+        index: u32,
     ) -> Self {
         Target {
             is_stage,
             variables,
             project,
             procedures,
+            index,
         }
     }
 }

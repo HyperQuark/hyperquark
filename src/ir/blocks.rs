@@ -264,7 +264,14 @@ fn from_normal_block(
                     BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
                     BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
                     BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
-                    BlockOpcode::looks_say => vec![IrOpcode::looks_say],
+                    BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
+                        debug: context.debug,
+                        target_idx: context
+                            .target
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Target>"))?
+                            .index(),
+                    })],
                     BlockOpcode::operator_join => vec![IrOpcode::operator_join],
                     BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                     BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],

@@ -47,7 +47,7 @@ pub fn wasm(
             IrType::QuasiInt => wasm![F64ConvertI32S],
             IrType::String => {
                 let func_index = func.registries().external_functions().register(
-                    ("cast", "string2float"),
+                    ("cast", "string2float".into()),
                     (vec![ValType::EXTERNREF], vec![ValType::F64]),
                 )?;
                 wasm![Call(func_index)]
@@ -57,14 +57,14 @@ pub fn wasm(
         IrType::String => match from_base {
             IrType::Float => {
                 let func_index = func.registries().external_functions().register(
-                    ("cast", "float2string"),
+                    ("cast", "float2string".into()),
                     (vec![ValType::F64], vec![ValType::EXTERNREF]),
                 )?;
                 wasm![Call(func_index)]
             }
             IrType::QuasiInt => {
                 let func_index = func.registries().external_functions().register(
-                    ("cast", "int2string"),
+                    ("cast", "int2string".into()),
                     (vec![ValType::I32], vec![ValType::EXTERNREF]),
                 )?;
                 wasm![Call(func_index)]
@@ -76,7 +76,7 @@ pub fn wasm(
             IrType::Float => wasm![I32TruncSatF64S],
             IrType::String => {
                 let func_index = func.registries().external_functions().register(
-                    ("cast", "string2float"),
+                    ("cast", "string2float".into()),
                     (vec![ValType::EXTERNREF], vec![ValType::F64]),
                 )?;
                 wasm![Call(func_index), I32TruncSatF64S]

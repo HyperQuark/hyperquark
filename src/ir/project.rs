@@ -11,7 +11,7 @@ pub struct IrProject {
     threads: RefCell<Box<[Thread]>>,
     steps: RefCell<StepSet>,
     global_variables: BTreeMap<Box<str>, Rc<Variable>>,
-    targets: RefCell<BTreeMap<Box<str>, Rc<Target>>>,
+    targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
 
 impl IrProject {
@@ -23,7 +23,7 @@ impl IrProject {
         &self.steps
     }
 
-    pub fn targets(&self) -> &RefCell<BTreeMap<Box<str>, Rc<Target>>> {
+    pub fn targets(&self) -> &RefCell<IndexMap<Box<str>, Rc<Target>>> {
         &self.targets
     }
 
@@ -65,7 +65,8 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
         let (threads, targets): (Vec<_>, Vec<_>) = sb3
             .targets
             .iter()
-            .map(|target| {
+            .enumerate()
+            .map(|(index, target)| {
                 let variables = variables_from_target(target);
                 let procedures = RefCell::new(ProcMap::new());
                 let ir_target = Rc::new(Target::new(
@@ -73,17 +74,24 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
                     variables,
                     Rc::downgrade(&project),
                     procedures,
+                    index
+                        .try_into()
+                        .map_err(|_| make_hq_bug!("target index out of bounds"))?,
                 ));
                 procs_from_target(target, Rc::clone(&ir_target))?;
                 let blocks = &target.blocks;
                 let threads = blocks
-                    .values()
-                    .filter_map(|block| {
+                    .iter()
+                    .filter_map(|(id, block)| {
                         let thread = Thread::try_from_top_block(
                             block,
                             blocks,
                             Rc::downgrade(&ir_target),
                             Rc::downgrade(&project),
+                            target.comments.clone().iter().any(|(_id, comment)| {
+                                matches!(comment.block_id.clone(), Some(d) if &d == id)
+                                    && *comment.text.clone() == *"hq-dbg"
+                            }),
                         )
                         .transpose()?;
                         Some(thread)

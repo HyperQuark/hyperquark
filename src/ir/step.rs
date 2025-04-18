@@ -85,6 +85,7 @@ impl Step {
                 target: Weak::new(),
                 proc_context: None,
                 warp: false, // this is a fairly arbitrary choice and doesn't matter at all
+                debug: false,
             },
             opcodes: RefCell::new(vec![]),
             used_non_inline: RefCell::new(false),

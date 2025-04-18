@@ -8,6 +8,9 @@ pub struct StepContext {
     /// procedure is warped, or because a procedure higher up the call stack was warped.
     pub warp: bool,
     pub proc_context: Option<ProcContext>,
+    /// enables certain behaviours such as `console.log` say/think rather than
+    /// displaying in bubbles
+    pub debug: bool,
 }
 
 impl StepContext {

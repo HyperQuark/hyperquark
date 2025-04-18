@@ -30,11 +30,11 @@ impl Thread {
         blocks: &BlockMap,
         target: Weak<Target>,
         project: Weak<IrProject>,
+        debug: bool,
     ) -> HQResult<Option<Self>> {
         let Some(block_info) = block.block_info() else {
             return Ok(None);
         };
-
         let event = match block_info.opcode {
             BlockOpcode::event_whenflagclicked => Event::FlagCLicked,
             BlockOpcode::event_whenbackdropswitchesto
@@ -63,6 +63,7 @@ impl Thread {
                 target: Weak::clone(&target),
                 proc_context: None,
                 warp: false, // steps from top blocks are never warped
+                debug,
             },
             Weak::clone(&project),
             NextBlocks::new(true),

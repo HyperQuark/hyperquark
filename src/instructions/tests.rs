@@ -261,17 +261,29 @@ macro_rules! instructions_test {
                                 wasm_to_js_type(*params.get(i).unwrap())
                                 )
                         }).collect::<Vec<_>>().join(", ");
+                        let path_buf = PathBuf::from(format!("js/{}/{}.ts", module, name));
                         let diagnostics = check_js::<_, ezno_checker::synthesis::EznoParser>(
-                            vec![PathBuf::from(format!("js/{}/{}.ts", module, name))],
+                            vec![path_buf.clone()],
                             vec![ts_defs.into()],
                             &|path: &Path| {
                                 let func_string = fs::read_to_string(path).ok()?;
-                                let test_string = format!("{func};
-function _({ins}): {out} {{
-    return {name}({ts});
-}}", ins=ins, out=out, func=func_string, name=name, ts=arg_idents.join(", "));
-                                println!("{}", test_string.clone());
-                                Some(test_string.as_str().as_bytes().into_iter().map(|&u| u).collect::<Vec<_>>())
+                                let test_string = if path == path_buf.as_path() {
+                                    format!("function _({ins}): {out} {{ return {name}({ts}); }};",
+                                        ins=ins,
+                                        out=out,
+                                        name=name,
+                                        ts=arg_idents.join(", ")
+                                    )
+                                } else { String::from("") };
+                                let total_string = format!("{func_string};\n{test_string}");
+                                println!("{}", total_string.clone());
+                                Some(test_string
+                                    .as_str()
+                                    .as_bytes()
+                                    .into_iter()
+                                    .map(|&u| u)
+                                    .collect::<Vec<_>>()
+                                )
                             },
                             Default::default(),
                             (),

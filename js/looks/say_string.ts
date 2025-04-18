@@ -1,9 +1,5 @@
-let output_div;
+import { update_bubble } from "../shared";
 
-export function say_string(data: string): void {
-  if (typeof output_div == 'undefined') {
-    output_div = document.getElementById('hq-output');
-  }
-  output_div.innerHTML += data;
-  output_div.innerHTML += '<br>';
+export function say_string(data: string, target_idx: number): void {
+  update_bubble(target_idx, "say", data);
 }

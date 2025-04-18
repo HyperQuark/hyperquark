@@ -215,6 +215,7 @@ impl Proc {
             warp: true,
             proc_context: Some(self.context.clone()),
             target: Weak::clone(&self.context.target),
+            debug: false, // TODO: allow procedures to be dbg?
         };
         let step = match self.first_step_id {
             None => Rc::new(Step::new(

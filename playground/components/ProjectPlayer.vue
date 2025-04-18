@@ -18,6 +18,7 @@
 </template>
 
 <script setup>
+  import binaryen from 'binaryen';
   import Loading from './Loading.vue';
   import { sb3_to_wasm, FinishedWasm, WasmFlags } from '../../js/compiler/hyperquark.js';
   import runProject from '../lib/project-runner.js';
@@ -55,6 +56,7 @@
     // we need to convert settings to and from a JsValue because the WasmFlags exported from the
     // no-compiler version is not the same as that exported by the compiler... because reasons
     wasmProject = sb3_to_wasm(JSON.stringify(props.json), WasmFlags.from_js(getSettings().to_js()));
+    console.log(wasmProject)
     if (!wasmProject instanceof FinishedWasm) {
       throw new Error("unknown error occurred when compiling project");
     }
@@ -64,6 +66,12 @@
       error.value += '\n' + e.stack;
     }
   }
+  console.log(wasmProject)
+  // let binaryenModule = binaryen.readBinary(wasmProject.wasm_bytes);
+  // binaryenModule.setFeatures(binaryen.Features.All);
+  // binaryenModule.optimize();
+  // let wasmBytes = binaryenModule.emitBinary();
+  // let wasmBytes = wasmProject.wasm_bytes;
   Promise.all(
     props.json.targets.map(
       target => new Promise(
@@ -87,7 +95,7 @@
       turbo: turbo.value,
       wasm_bytes: wasmProject.wasm_bytes,
       string_consts: wasmProject.strings,
-      target_names: [],//wasmProject.target_names,
+      target_names: wasmProject.target_names,
       project_json: props.json,
       assets
     }).catch(e => {
