@@ -107,7 +107,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         .ok_or(make_hq_bug!("couldn't upgrade Weak<Target>"))?;
     let procs = target.procedures()?;
     Ok(match opcode {
-        BlockOpcode::looks_say => vec!["MESSAGE"],
+        BlockOpcode::looks_say | BlockOpcode::looks_think => vec!["MESSAGE"],
         BlockOpcode::operator_add
         | BlockOpcode::operator_divide
         | BlockOpcode::operator_subtract
@@ -265,6 +265,14 @@ fn from_normal_block(
                     BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
                     BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
                     BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
+                        debug: context.debug,
+                        target_idx: context
+                            .target
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Target>"))?
+                            .index(),
+                    })],
+                    BlockOpcode::looks_think => vec![IrOpcode::looks_think(LooksThinkFields {
                         debug: context.debug,
                         target_idx: context
                             .target
