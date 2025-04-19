@@ -119,7 +119,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::argument_reporter_boolean
         | BlockOpcode::argument_reporter_string_number => vec![],
         BlockOpcode::data_setvariableto => vec!["VALUE"],
-        BlockOpcode::control_if => vec!["CONDITION"],
+        BlockOpcode::control_if | BlockOpcode::control_if_else => vec!["CONDITION"],
         BlockOpcode::operator_not => vec!["OPERAND"],
         BlockOpcode::control_repeat => vec!["TIMES"],
         BlockOpcode::procedures_call => {
@@ -424,6 +424,67 @@ fn from_normal_block(
                         } else {
                             Step::new_terminating(context.clone(), context.project()?)?
                         };
+                        should_break = true;
+                        vec![IrOpcode::control_if_else(ControlIfElseFields {
+                            branch_if: if_step,
+                            branch_else: else_step,
+                        })]
+                    }
+                    BlockOpcode::control_if_else => 'block: {
+                        let BlockArrayOrId::Id(substack1_id) =
+                            match block_info.inputs.get("SUBSTACK") {
+                                Some(input) => input,
+                                None => break 'block vec![IrOpcode::hq_drop],
+                            }
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let Some(substack1_block) = blocks.get(&substack1_id) else {
+                            hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+                        };
+                        let BlockArrayOrId::Id(substack2_id) =
+                            match block_info.inputs.get("SUBSTACK2") {
+                                Some(input) => input,
+                                None => break 'block vec![IrOpcode::hq_drop],
+                            }
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        else {
+                            hq_bad_proj!("malformed SUBSTACK2 input")
+                        };
+                        let Some(substack2_block) = blocks.get(&substack2_id) else {
+                            hq_bad_proj!("SUBSTACK2 block doesn't seem to exist")
+                        };
+                        let next_blocks = if let Some(ref next_block) = block_info.next {
+                            final_next_blocks.extend_with_inner(NextBlockInfo {
+                                yield_first: false,
+                                block: NextBlock::ID(next_block.clone()),
+                            })
+                        } else {
+                            final_next_blocks.clone() // preserve termination behaviour
+                        };
+                        let if_step = Step::from_block(
+                            substack1_block,
+                            substack1_id,
+                            blocks,
+                            context.clone(),
+                            context.project()?,
+                            next_blocks.clone(),
+                        )?;
+                        let else_step = Step::from_block(
+                            substack2_block,
+                            substack2_id,
+                            blocks,
+                            context.clone(),
+                            context.project()?,
+                            next_blocks,
+                        )?;
                         should_break = true;
                         vec![IrOpcode::control_if_else(ControlIfElseFields {
                             branch_if: if_step,
