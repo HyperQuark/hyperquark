@@ -486,7 +486,7 @@ fn from_normal_block(
                             let variable = RcVar(Rc::new(Variable::new(
                                 IrType::Int,
                                 sb3::VarVal::Float(0.0),
-                                true,
+                                false,
                             )));
                             let condition_step = Step::new_rc(
                                 None,
