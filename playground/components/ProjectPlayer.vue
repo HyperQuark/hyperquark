@@ -4,7 +4,7 @@
     <span>by {{ props.author || 'unknown' }}</span>
     <input type="checkbox" id="turbo" :value="turbo"> <label for="turbo">turbo mode</label>
     <details v-if="error">
-      <summary>An error occured whilst trying to load the project.</summary>
+      <summary>{{ errorMode }} was emitted whilst {{ errorStage }} project.</summary>
       <span v-html="error"></span>
     </details>
     <!--<template v-else>-->
@@ -27,6 +27,8 @@
   const Renderer = window.ScratchRender;
   const props = defineProps(['json', 'title', 'author', 'assets', 'zip']);
   let error = ref(null);
+  let errorStage = ref("loading");
+  let errorMode = ref("An error")
   let turbo = ref(false);
   let canvas = ref(null);
   let loadingMsg = ref('loading assets');
@@ -52,26 +54,48 @@
     renderer = new Renderer(canvas.value);
   });
   //set_attr('load_asset', load_asset);
+  let wasmBytes;
+  let success;
   try {
     // we need to convert settings to and from a JsValue because the WasmFlags exported from the
     // no-compiler version is not the same as that exported by the compiler... because reasons
+    errorStage.value = "compiling";
     wasmProject = sb3_to_wasm(JSON.stringify(props.json), WasmFlags.from_js(getSettings().to_js()));
     console.log(wasmProject)
     if (!wasmProject instanceof FinishedWasm) {
       throw new Error("unknown error occurred when compiling project");
     }
+    wasmBytes = wasmProject.wasm_bytes;
+    try {
+      errorStage.value = "optimising";
+      errorMode.value = "A warning";
+      let binaryenModule = binaryen.readBinary(wasmProject.wasm_bytes);
+      binaryenModule.setFeatures(binaryen.Features.All);
+      binaryen.setOptimizeLevel(3);
+      binaryenModule.optimize();
+      binaryenModule.optimize();
+      wasmBytes = binaryenModule.emitBinary();
+      success = true;
+    } catch (e) {
+      console.log(e)
+      error.value = e.message.toString();
+      if (e.stack) {
+        error.value += '<br>' + e.stack;
+      }
+      error.value += '<br>See browser console for more info.\
+      <brThis is not an unrecoverable error; the project should play \
+      as normal (possibly with worse-than-expected performance).';
+      success = false;
+    }
   } catch (e) {
+    console.log(e)
     error.value = e.toString();
     if (e.stack) {
-      error.value += '\n' + e.stack;
+      error.value += '<br>' + e.stack;
     }
+    success = false;
   }
   console.log(wasmProject)
-  // let binaryenModule = binaryen.readBinary(wasmProject.wasm_bytes);
-  // binaryenModule.setFeatures(binaryen.Features.All);
-  // binaryenModule.optimize();
-  // let wasmBytes = binaryenModule.emitBinary();
-  // let wasmBytes = wasmProject.wasm_bytes;
   Promise.all(
     props.json.targets.map(
       target => new Promise(
@@ -89,6 +113,9 @@
     loaded.value = true;
   });
   function greenFlag() {
+    if (!success) {
+      return;
+    }
     runProject({
       framerate: 30,
       renderer,

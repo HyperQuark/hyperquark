@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "binaryen": "^123.0.0",
+    "binaryen": "github:pufferfish101007/binaryen.js#non-nullable-table",
     "pinia": "^2.1.3",
     "scratch-parser": "^5.1.1",
     "scratch-sb1-converter": "^0.2.7",
