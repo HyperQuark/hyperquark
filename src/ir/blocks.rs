@@ -112,7 +112,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::operator_divide
         | BlockOpcode::operator_subtract
         | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
-        BlockOpcode::operator_lt | BlockOpcode::operator_gt => vec!["OPERAND1", "OPERAND2"],
+        BlockOpcode::operator_lt | BlockOpcode::operator_gt | BlockOpcode::operator_and | BlockOpcode::operator_or => vec!["OPERAND1", "OPERAND2"],
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
         BlockOpcode::sensing_dayssince2000
         | BlockOpcode::data_variable

@@ -1,8 +1,10 @@
 pub mod add;
+pub mod and;
 pub mod divide;
 pub mod gt;
 pub mod join;
 pub mod lt;
 pub mod multiply;
 pub mod not;
+pub mod or;
 pub mod subtract;
