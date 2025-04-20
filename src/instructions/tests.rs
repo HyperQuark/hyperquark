@@ -28,7 +28,8 @@ macro_rules! instructions_test {
             use $crate::prelude::*;
             use $crate::ir::Type as IrType;
             use wasm_encoder::{
-                CodeSection, ExportSection, FunctionSection, GlobalSection, ImportSection, Module, TableSection, TypeSection, MemorySection, MemoryType, ValType,
+                CodeSection, ExportSection, FunctionSection, GlobalSection, HeapType, ImportSection,
+                Module, RefType, TableSection, TypeSection, MemorySection, MemoryType, ValType,
             };
             use $crate::wasm::{StepFunc, Registries, WasmProject};
 
@@ -228,7 +229,10 @@ macro_rules! instructions_test {
                 match ty {
                     ValType::I32 => "Integer",
                     ValType::F64 => "number",
-                    ValType::EXTERNREF => "string",
+                    ValType::EXTERNREF | ValType::Ref(RefType {
+                        nullable: false,
+                        heap_type: HeapType::EXTERN,
+                    }) => "string",
                     _ => todo!("unknown js type for wasm type {:?}", ty)
                 }
             }

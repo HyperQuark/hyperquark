@@ -112,7 +112,10 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::operator_divide
         | BlockOpcode::operator_subtract
         | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
-        BlockOpcode::operator_lt | BlockOpcode::operator_gt | BlockOpcode::operator_and | BlockOpcode::operator_or => vec!["OPERAND1", "OPERAND2"],
+        BlockOpcode::operator_lt
+        | BlockOpcode::operator_gt
+        | BlockOpcode::operator_and
+        | BlockOpcode::operator_or => vec!["OPERAND1", "OPERAND2"],
         BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
         BlockOpcode::sensing_dayssince2000
         | BlockOpcode::data_variable
@@ -122,6 +125,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         BlockOpcode::control_if | BlockOpcode::control_if_else => vec!["CONDITION"],
         BlockOpcode::operator_not => vec!["OPERAND"],
         BlockOpcode::control_repeat => vec!["TIMES"],
+        BlockOpcode::operator_length => vec!["STRING"],
         BlockOpcode::procedures_call => {
             let serde_json::Value::String(proccode) = block_info
                 .mutation
@@ -281,6 +285,7 @@ fn from_normal_block(
                             .index(),
                     })],
                     BlockOpcode::operator_join => vec![IrOpcode::operator_join],
+                    BlockOpcode::operator_length => vec![IrOpcode::operator_length],
                     BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                     BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
                     BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],

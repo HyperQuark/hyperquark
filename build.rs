@@ -95,7 +95,7 @@ export const imports = {{
                 .iter()
                 .map(|dir| {
                     format!(
-                        "{dir}: {{ {} }}",
+                        "\"{dir}\": {{ {} }}",
                         ts_paths
                             .iter()
                             .filter(|(d, _)| d == dir)

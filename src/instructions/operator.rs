@@ -3,6 +3,8 @@ pub mod and;
 pub mod divide;
 pub mod gt;
 pub mod join;
+pub mod length;
+pub mod letter_of;
 pub mod lt;
 pub mod multiply;
 pub mod not;
