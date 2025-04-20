@@ -118,7 +118,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::data_variable
         | BlockOpcode::argument_reporter_boolean
         | BlockOpcode::argument_reporter_string_number => vec![],
-        BlockOpcode::data_setvariableto => vec!["VALUE"],
+        BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
         BlockOpcode::control_if | BlockOpcode::control_if_else => vec!["CONDITION"],
         BlockOpcode::operator_not => vec!["OPERAND"],
         BlockOpcode::control_repeat => vec!["TIMES"],
@@ -318,6 +318,44 @@ fn from_normal_block(
                         vec![IrOpcode::data_setvariableto(DataSetvariabletoFields(
                             RcVar(Rc::clone(variable)),
                         ))]
+                    }
+                    BlockOpcode::data_changevariableby => {
+                        let sb3::Field::ValueId(_val, maybe_id) =
+                            block_info.fields.get("VARIABLE").ok_or(make_hq_bad_proj!(
+                                "invalid project.json - missing field VARIABLE"
+                            ))?
+                        else {
+                            hq_bad_proj!(
+                                "invalid project.json - missing variable id for VARIABLE field"
+                            );
+                        };
+                        let id = maybe_id.clone().ok_or(make_hq_bad_proj!(
+                            "invalid project.json - null variable id for VARIABLE field"
+                        ))?;
+                        let target = context
+                            .target
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?;
+                        let variable = if let Some(var) = target.variables().get(&id) {
+                            var
+                        } else if let Some(var) = context
+                            .project()?
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                            .global_variables()
+                            .get(&id)
+                        {
+                            &Rc::clone(var)
+                        } else {
+                            hq_bad_proj!("variable not found")
+                        };
+                        vec![
+                            IrOpcode::data_variable(DataVariableFields(RcVar(Rc::clone(variable)))),
+                            IrOpcode::operator_add,
+                            IrOpcode::data_setvariableto(DataSetvariabletoFields(RcVar(
+                                Rc::clone(variable),
+                            ))),
+                        ]
                     }
                     BlockOpcode::data_variable => {
                         let sb3::Field::ValueId(_val, maybe_id) =
