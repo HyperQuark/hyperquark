@@ -21,9 +21,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         LocalSet(i32_local),
         LocalGet(ef_local),
         LocalGet(i32_local),
-        LocalGet(i32_local),
         I32Const(1),
-        I32Add,
+        I32Sub,
+        LocalGet(i32_local),
         Call(func_index),
     ])
 }

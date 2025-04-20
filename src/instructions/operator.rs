@@ -1,5 +1,6 @@
 pub mod add;
 pub mod and;
+pub mod contains;
 pub mod divide;
 pub mod gt;
 pub mod join;

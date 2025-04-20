@@ -116,7 +116,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::operator_gt
         | BlockOpcode::operator_and
         | BlockOpcode::operator_or => vec!["OPERAND1", "OPERAND2"],
-        BlockOpcode::operator_join => vec!["STRING1", "STRING2"],
+        BlockOpcode::operator_join | BlockOpcode::operator_contains => vec!["STRING1", "STRING2"],
+        BlockOpcode::operator_letter_of => vec!["LETTER", "STRING"],
         BlockOpcode::sensing_dayssince2000
         | BlockOpcode::data_variable
         | BlockOpcode::argument_reporter_boolean
@@ -286,6 +287,8 @@ fn from_normal_block(
                     })],
                     BlockOpcode::operator_join => vec![IrOpcode::operator_join],
                     BlockOpcode::operator_length => vec![IrOpcode::operator_length],
+                    BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
+                    BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                     BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                     BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
                     BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
