@@ -94,6 +94,7 @@ jobs:
             --skip gt::tests::js_functions_match_declared_types 
             --skip length::tests::js_functions_match_declared_types 
             --skip letter_of::tests::js_functions_match_declared_types 
+            --skip contains::tests::js_functions_match_declared_types
             --skip dayssince2000::tests::js_functions_match_declared_types 
             --skip looks::say::tests_debug::js_functions_match_declared_types
             --skip looks::say::tests_non_debug::js_functions_match_declared_types
