@@ -94,4 +94,7 @@ import ProjectInput from '../components/ProjectInput.vue'
   li.block-category-sensing {
     color: #5CB1D6;
   }
+  li.block-category-procedures, li.block-category-argument {
+    color: #FF6680;
+  }
 </style>
