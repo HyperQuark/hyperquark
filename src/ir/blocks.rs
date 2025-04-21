@@ -124,7 +124,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::argument_reporter_boolean
         | BlockOpcode::argument_reporter_string_number => vec![],
         BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
-        BlockOpcode::control_if | BlockOpcode::control_if_else => vec!["CONDITION"],
+        BlockOpcode::control_if
+        | BlockOpcode::control_if_else
+        | BlockOpcode::control_repeat_until => vec!["CONDITION"],
         BlockOpcode::operator_not => vec!["OPERAND"],
         BlockOpcode::control_repeat => vec!["TIMES"],
         BlockOpcode::operator_length => vec!["STRING"],
@@ -618,7 +620,7 @@ fn from_normal_block(
                                 context,
                                 context.project()?,
                                 NextBlocks::new(false).extend_with_inner(NextBlockInfo {
-                                    yield_first: !context.warp,
+                                    yield_first: true,
                                     block: NextBlock::Step(Rc::downgrade(&condition_step)),
                                 }),
                             )?;
@@ -700,6 +702,122 @@ fn from_normal_block(
                                     body: substack_step,
                                 }),
                             ]
+                        }
+                    }
+                    BlockOpcode::control_repeat_until => 'block: {
+                        let BlockArrayOrId::Id(substack_id) =
+                            match block_info.inputs.get("SUBSTACK") {
+                                Some(input) => input,
+                                None => break 'block vec![IrOpcode::hq_drop],
+                            }
+                            .get_1()
+                            .ok_or(make_hq_bug!(""))?
+                            .clone()
+                            .ok_or(make_hq_bug!(""))?
+                        else {
+                            hq_bad_proj!("malformed SUBSTACK input")
+                        };
+                        let Some(substack_block) = blocks.get(&substack_id) else {
+                            hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+                        };
+                        if !context.warp {
+                            should_break = true;
+                            let (next_block, outer_next_blocks) =
+                                if let Some(ref next_block) = block_info.next {
+                                    (
+                                        Some(NextBlock::ID(next_block.clone())),
+                                        final_next_blocks.clone(),
+                                    )
+                                } else if let (Some(next_block_info), popped_next_blocks) =
+                                    final_next_blocks.clone().pop_inner()
+                                {
+                                    (Some(next_block_info.block), popped_next_blocks)
+                                } else {
+                                    (None, final_next_blocks.clone())
+                                };
+                            let next_step = if next_block.is_some() {
+                                match next_block.clone().unwrap() {
+                                    NextBlock::ID(id) => {
+                                        let Some(next_block_block) = blocks.get(&id.clone()) else {
+                                            hq_bad_proj!("next block doesn't exist")
+                                        };
+                                        Step::from_block(
+                                            next_block_block,
+                                            id,
+                                            blocks,
+                                            context.clone(),
+                                            context.project()?,
+                                            outer_next_blocks,
+                                        )?
+                                    }
+                                    NextBlock::Step(ref step) => step
+                                        .upgrade()
+                                        .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                                }
+                            } else {
+                                Step::new_terminating(context.clone(), context.project()?)?
+                            };
+                            let condition_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                inputs(block_info, blocks, context, context.project()?)?,
+                                context.project()?,
+                            )?;
+                            let substack_blocks = from_block(
+                                substack_block,
+                                blocks,
+                                context,
+                                context.project()?,
+                                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
+                                    yield_first: true,
+                                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
+                                }),
+                            )?;
+                            let substack_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                substack_blocks,
+                                context.project()?,
+                            )?;
+                            condition_step
+                                .opcodes_mut()?
+                                .push(IrOpcode::control_if_else(ControlIfElseFields {
+                                    branch_if: Rc::clone(&next_step),
+                                    branch_else: Rc::clone(&substack_step),
+                                }));
+                            vec![IrOpcode::control_if_else(ControlIfElseFields {
+                                branch_if: next_step,
+                                branch_else: substack_step,
+                            })]
+                        } else {
+                            // TODO: can this be expressed in the same way as non-warping loops,
+                            // just with yield_first: false?
+                            let substack_blocks = from_block(
+                                substack_block,
+                                blocks,
+                                context,
+                                context.project()?,
+                                NextBlocks::new(false),
+                            )?;
+                            let substack_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                substack_blocks,
+                                context.project()?,
+                            )?;
+                            let condition_step = Step::new_rc(
+                                None,
+                                context.clone(),
+                                inputs(block_info, blocks, context, context.project()?)?,
+                                context.project()?,
+                            )?;
+                            let first_condition_step =
+                                Step::new_rc(None, context.clone(), vec![], context.project()?)?;
+                            vec![IrOpcode::control_loop(ControlLoopFields {
+                                first_condition: Some(first_condition_step),
+                                condition: condition_step,
+                                body: substack_step,
+                            })]
                         }
                     }
                     BlockOpcode::procedures_call => {
