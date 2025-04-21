@@ -9,6 +9,7 @@ pub struct Fields {
     pub first_condition: Option<Rc<Step>>,
     pub condition: Rc<Step>,
     pub body: Rc<Step>,
+    pub flip_if: bool,
 }
 
 pub fn wasm(
@@ -18,6 +19,7 @@ pub fn wasm(
         first_condition,
         condition,
         body,
+        flip_if,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let inner_instructions = func.compile_inner_step(Rc::clone(body))?;
@@ -28,10 +30,18 @@ pub fn wasm(
     Ok(wasm![Block(BlockType::Empty),]
         .into_iter()
         .chain(first_condition_instructions)
-        .chain(wasm![I32Eqz, BrIf(0), Loop(BlockType::Empty)])
+        .chain(if *flip_if {
+            wasm![BrIf(0), Loop(BlockType::Empty)]
+        } else {
+            wasm![I32Eqz, BrIf(0), Loop(BlockType::Empty)]
+        })
         .chain(inner_instructions)
         .chain(condition_instructions)
-        .chain(wasm![BrIf(0), End, End])
+        .chain(if *flip_if {
+            wasm![I32Eqz, BrIf(0), End, End]
+        } else {
+            wasm![BrIf(0), End, End]
+        })
         .collect())
 }
 

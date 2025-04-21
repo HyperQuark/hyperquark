@@ -6,6 +6,7 @@ let _renderer;
 export function setup(new_target_names: Array<string>, renderer: object) {
     _target_names = new_target_names;
     _target_bubbles = _target_names.map(_ => null);
+    console.log(_target_names, _target_bubbles)
     _renderer = renderer;
     _setup = true;
 }

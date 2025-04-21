@@ -389,6 +389,7 @@ fn generate_loop(
                 first_condition: first_condition_step,
                 condition: condition_step,
                 body: substack_step,
+                flip_if,
             })])
             .collect())
     }
