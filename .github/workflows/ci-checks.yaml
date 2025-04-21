@@ -92,6 +92,7 @@ jobs:
             --skip join::tests::js_functions_match_declared_types 
             --skip lt::tests::js_functions_match_declared_types 
             --skip gt::tests::js_functions_match_declared_types 
+            --skip equals::tests::js_functions_match_declared_types 
             --skip length::tests::js_functions_match_declared_types 
             --skip letter_of::tests::js_functions_match_declared_types 
             --skip contains::tests::js_functions_match_declared_types

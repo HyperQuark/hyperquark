@@ -114,6 +114,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
         | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
         BlockOpcode::operator_lt
         | BlockOpcode::operator_gt
+        | BlockOpcode::operator_equals
         | BlockOpcode::operator_and
         | BlockOpcode::operator_or => vec!["OPERAND1", "OPERAND2"],
         BlockOpcode::operator_join | BlockOpcode::operator_contains => vec!["STRING1", "STRING2"],
@@ -292,6 +293,7 @@ fn from_normal_block(
                     BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                     BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
                     BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
+                    BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
                     BlockOpcode::operator_not => vec![IrOpcode::operator_not],
                     BlockOpcode::data_setvariableto => {
                         let sb3::Field::ValueId(_val, maybe_id) =
