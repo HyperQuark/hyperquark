@@ -19,10 +19,20 @@ impl Default for WasmStringType {
 
 /// compilation flags
 #[non_exhaustive]
-#[derive(Default, Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 #[wasm_bindgen]
 pub struct WasmFlags {
     pub string_type: WasmStringType,
+    pub wasm_opt: bool,
+}
+
+impl Default for WasmFlags {
+    fn default() -> WasmFlags {
+        WasmFlags {
+            wasm_opt: true,
+            string_type: Default::default(),
+        }
+    }
 }
 
 #[wasm_bindgen]

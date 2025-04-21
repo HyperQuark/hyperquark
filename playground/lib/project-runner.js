@@ -19,21 +19,11 @@ function createSkin(renderer, type, layer, ...params) {
 }
 
 const spriteInfoLen = 80;
+let _setup = false;
 
-// @ts-ignore
-export default async (
-  { framerate = 30, turbo, renderer, wasm_bytes, target_names, string_consts, project_json, assets } = {
-    framerate: 30, turbo: false,
-  }
-) => {
-  if (debugModeStore.debug) window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
-  const framerate_wait = Math.round(1000 / framerate);
-  let assert;
-  let exit;
-  let browser = false;
-  let output_div;
-  let text_div;
-
+function setup(renderer, project_json, assets, target_names) {
+  if (_setup) return;
+  _setup = true;
   renderer.getDrawable = id => renderer._allDrawables[id];
   renderer.getSkin = id => renderer._allSkins[id];
   renderer.createSkin = (type, layer, ...params) => createSkin(renderer, type, layer, ...params);
@@ -55,7 +45,6 @@ export default async (
   renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
   //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
   const pen_skin = createSkin(renderer, "pen", "pen")[0];
-  let strings_tbl;
 
   const target_skins = project_json.targets.map((target, index) => {
     const realCostume = target.costumes[target.currentCostume];
@@ -73,6 +62,27 @@ export default async (
   console.log(target_skins)
 
   sharedSetup(target_names, renderer);
+}
+
+// @ts-ignore
+export default async (
+  { framerate = 30, turbo, renderer, wasm_bytes, target_names, string_consts, project_json, assets } = {
+    framerate: 30, turbo: false,
+  }
+) => {
+  if (debugModeStore.debug) window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
+  const framerate_wait = Math.round(1000 / framerate);
+  let assert;
+  let exit;
+  let browser = false;
+  let output_div;
+  let text_div;
+
+  setup(renderer, project_json, assets, target_names);
+
+  console.log('green flag setup complete')
+
+  let strings_tbl;
 
   let updatePenColor;
   let start_time = 0;

@@ -722,8 +722,8 @@ fn from_normal_block(
                     BlockOpcode::control_repeat_until => {
                         let condition_instructions =
                             inputs(block_info, blocks, context, context.project()?)?;
-                        let first_condition_instructions = Some(vec![]);
-                        let setup_instructions = vec![];
+                        let first_condition_instructions = None;
+                        let setup_instructions = vec![IrOpcode::hq_drop];
                         generate_loop(
                             context.warp,
                             &mut should_break,

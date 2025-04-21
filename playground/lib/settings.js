@@ -9,10 +9,12 @@ window.defaultSettings = defaultSettings;
 // TODO: can this be automated somehow?
 const settings_type = {
     string_type: WasmStringType,
+    wasm_opt: "boolean",
 }
 
 const settings_descriptions = {
-    string_type: "How strings should be represented internally."
+    string_type: "How strings should be represented internally.",
+    wasm_opt: "Should we try to optimise generated WASM modules using wasm-opt?"
 }
 
 function settingsInfoFromType(type) {
@@ -22,7 +24,7 @@ function settingsInfoFromType(type) {
             options: Object.keys(type).filter(key => typeof key === 'string' && !/\d+/.test(key)),
             enum_obj: type
         }
-    } else if (type === Boolean) {
+    } else if (type === "boolean") {
         return {
             type: "checkbox"
         }
