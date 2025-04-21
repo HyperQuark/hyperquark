@@ -252,6 +252,148 @@ fn procedure_argument(
     )])
 }
 
+#[allow(clippy::too_many_arguments)]
+fn generate_loop(
+    warp: bool,
+    should_break: &mut bool,
+    block_info: &BlockInfo,
+    blocks: &BTreeMap<Box<str>, Block>,
+    context: &StepContext,
+    final_next_blocks: NextBlocks,
+    first_condition_instructions: Option<Vec<IrOpcode>>,
+    condition_instructions: Vec<IrOpcode>,
+    flip_if: bool,
+    setup_instructions: Vec<IrOpcode>,
+) -> HQResult<Vec<IrOpcode>> {
+    let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
+        Some(input) => input,
+        None => return Ok(vec![IrOpcode::hq_drop]), // TODO: consider loops without input (i.e. forever)
+    }
+    .get_1()
+    .ok_or(make_hq_bug!(""))?
+    .clone()
+    .ok_or(make_hq_bug!(""))?
+    else {
+        hq_bad_proj!("malformed SUBSTACK input")
+    };
+    let Some(substack_block) = blocks.get(&substack_id) else {
+        hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+    };
+    if !warp {
+        *should_break = true;
+        let (next_block, outer_next_blocks) = if let Some(ref next_block) = block_info.next {
+            (
+                Some(NextBlock::ID(next_block.clone())),
+                final_next_blocks.clone(),
+            )
+        } else if let (Some(next_block_info), popped_next_blocks) =
+            final_next_blocks.clone().pop_inner()
+        {
+            (Some(next_block_info.block), popped_next_blocks)
+        } else {
+            (None, final_next_blocks.clone())
+        };
+        let next_step = if next_block.is_some() {
+            match next_block.clone().unwrap() {
+                NextBlock::ID(id) => {
+                    let Some(next_block_block) = blocks.get(&id.clone()) else {
+                        hq_bad_proj!("next block doesn't exist")
+                    };
+                    Step::from_block(
+                        next_block_block,
+                        id,
+                        blocks,
+                        context.clone(),
+                        context.project()?,
+                        outer_next_blocks,
+                    )?
+                }
+                NextBlock::Step(ref step) => step
+                    .upgrade()
+                    .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+            }
+        } else {
+            Step::new_terminating(context.clone(), context.project()?)?
+        };
+        let condition_step = Step::new_rc(
+            None,
+            context.clone(),
+            condition_instructions.clone(),
+            context.project()?,
+        )?;
+        let substack_blocks = from_block(
+            substack_block,
+            blocks,
+            context,
+            context.project()?,
+            NextBlocks::new(false).extend_with_inner(NextBlockInfo {
+                yield_first: true,
+                block: NextBlock::Step(Rc::downgrade(&condition_step)),
+            }),
+        )?;
+        let substack_step =
+            Step::new_rc(None, context.clone(), substack_blocks, context.project()?)?;
+        condition_step
+            .opcodes_mut()?
+            .push(IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
+                branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
+            }));
+        Ok(setup_instructions
+            .into_iter()
+            .chain(if let Some(instrs) = first_condition_instructions {
+                instrs
+            } else {
+                condition_instructions
+            })
+            .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if: if flip_if {
+                    next_step.clone()
+                } else {
+                    substack_step.clone()
+                },
+                branch_else: if flip_if { substack_step } else { next_step },
+            })])
+            .collect())
+    } else {
+        // TODO: can this be expressed in the same way as non-warping loops,
+        // just with yield_first: false?
+        let substack_blocks = from_block(
+            substack_block,
+            blocks,
+            context,
+            context.project()?,
+            NextBlocks::new(false),
+        )?;
+        let substack_step =
+            Step::new_rc(None, context.clone(), substack_blocks, context.project()?)?;
+        let condition_step = Step::new_rc(
+            None,
+            context.clone(),
+            condition_instructions.clone(),
+            context.project()?,
+        )?;
+        let first_condition_step = if let Some(instrs) = first_condition_instructions {
+            Some(Step::new_rc(
+                None,
+                context.clone(),
+                instrs,
+                context.project()?,
+            )?)
+        } else {
+            None
+        };
+        Ok(setup_instructions
+            .into_iter()
+            .chain(vec![IrOpcode::control_loop(ControlLoopFields {
+                first_condition: first_condition_step,
+                condition: condition_step,
+                body: substack_step,
+            })])
+            .collect())
+    }
+}
+
 fn from_normal_block(
     block_info: &BlockInfo,
     blocks: &BlockMap,
@@ -541,284 +683,59 @@ fn from_normal_block(
                             branch_else: else_step,
                         })]
                     }
-                    BlockOpcode::control_repeat => 'block: {
-                        let BlockArrayOrId::Id(substack_id) =
-                            match block_info.inputs.get("SUBSTACK") {
-                                Some(input) => input,
-                                None => break 'block vec![IrOpcode::hq_drop],
-                            }
-                            .get_1()
-                            .ok_or(make_hq_bug!(""))?
-                            .clone()
-                            .ok_or(make_hq_bug!(""))?
-                        else {
-                            hq_bad_proj!("malformed SUBSTACK input")
-                        };
-                        let Some(substack_block) = blocks.get(&substack_id) else {
-                            hq_bad_proj!("SUBSTACK block doesn't seem to exist")
-                        };
-                        if !context.warp {
-                            should_break = true;
-                            let (next_block, outer_next_blocks) =
-                                if let Some(ref next_block) = block_info.next {
-                                    (
-                                        Some(NextBlock::ID(next_block.clone())),
-                                        final_next_blocks.clone(),
-                                    )
-                                } else if let (Some(next_block_info), popped_next_blocks) =
-                                    final_next_blocks.clone().pop_inner()
-                                {
-                                    (Some(next_block_info.block), popped_next_blocks)
-                                } else {
-                                    (None, final_next_blocks.clone())
-                                };
-                            let next_step = if next_block.is_some() {
-                                match next_block.clone().unwrap() {
-                                    NextBlock::ID(id) => {
-                                        let Some(next_block_block) = blocks.get(&id.clone()) else {
-                                            hq_bad_proj!("next block doesn't exist")
-                                        };
-                                        Step::from_block(
-                                            next_block_block,
-                                            id,
-                                            blocks,
-                                            context.clone(),
-                                            context.project()?,
-                                            outer_next_blocks,
-                                        )?
-                                    }
-                                    NextBlock::Step(ref step) => step
-                                        .upgrade()
-                                        .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-                                }
-                            } else {
-                                Step::new_terminating(context.clone(), context.project()?)?
-                            };
-                            let variable = RcVar(Rc::new(Variable::new(
-                                IrType::Int,
-                                sb3::VarVal::Float(0.0),
-                                false,
-                            )));
-                            let condition_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields(variable.clone())),
-                                    IrOpcode::hq_integer(HqIntegerFields(1)),
-                                    IrOpcode::operator_subtract,
-                                    IrOpcode::data_teevariable(DataTeevariableFields(
-                                        variable.clone(),
-                                    )),
-                                    IrOpcode::hq_integer(HqIntegerFields(0)),
-                                    IrOpcode::operator_gt,
-                                ],
-                                context.project()?,
-                            )?;
-                            let substack_blocks = from_block(
-                                substack_block,
-                                blocks,
-                                context,
-                                context.project()?,
-                                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
-                                    yield_first: true,
-                                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
-                                }),
-                            )?;
-                            let substack_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                substack_blocks,
-                                context.project()?,
-                            )?;
-                            condition_step
-                                .opcodes_mut()?
-                                .push(IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: Rc::clone(&substack_step),
-                                    branch_else: Rc::clone(&next_step),
-                                }));
-                            vec![
-                                IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-                                IrOpcode::data_teevariable(DataTeevariableFields(variable)),
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::operator_gt,
-                                IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: substack_step,
-                                    branch_else: next_step, // repeat (0) { ... } *doesn't* yield
-                                }),
-                            ]
-                        } else {
-                            // TODO: this shoud use a local variable (as opposed to global)
-                            // TODO: can this be expressed in the same way as non-warping loops,
-                            // just with yield_first: false?
-                            let variable = RcVar(Rc::new(Variable::new(
-                                IrType::Int,
-                                sb3::VarVal::Float(0.0),
-                                true,
-                            )));
-                            let substack_blocks = from_block(
-                                substack_block,
-                                blocks,
-                                context,
-                                context.project()?,
-                                NextBlocks::new(false),
-                            )?;
-                            let substack_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                substack_blocks,
-                                context.project()?,
-                            )?;
-                            let condition_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields(variable.clone())),
-                                    IrOpcode::hq_integer(HqIntegerFields(1)),
-                                    IrOpcode::operator_subtract,
-                                    IrOpcode::data_teevariable(DataTeevariableFields(
-                                        variable.clone(),
-                                    )),
-                                    IrOpcode::hq_integer(HqIntegerFields(0)),
-                                    IrOpcode::operator_gt,
-                                ],
-                                context.project()?,
-                            )?;
-                            let first_condition_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields(variable.clone())),
-                                    IrOpcode::hq_integer(HqIntegerFields(0)),
-                                    IrOpcode::operator_gt,
-                                ],
-                                context.project()?,
-                            )?;
-                            vec![
-                                IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields(variable)),
-                                IrOpcode::control_loop(ControlLoopFields {
-                                    first_condition: Some(first_condition_step),
-                                    condition: condition_step,
-                                    body: substack_step,
-                                }),
-                            ]
-                        }
+                    BlockOpcode::control_repeat => {
+                        let variable = RcVar(Rc::new(Variable::new(
+                            IrType::Int,
+                            sb3::VarVal::Float(0.0),
+                            context.warp,
+                        )));
+                        let condition_instructions = vec![
+                            IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                            IrOpcode::hq_integer(HqIntegerFields(1)),
+                            IrOpcode::operator_subtract,
+                            IrOpcode::data_teevariable(DataTeevariableFields(variable.clone())),
+                            IrOpcode::hq_integer(HqIntegerFields(0)),
+                            IrOpcode::operator_gt,
+                        ];
+                        let first_condition_instructions = Some(vec![
+                            IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                            IrOpcode::hq_integer(HqIntegerFields(0)),
+                            IrOpcode::operator_gt,
+                        ]);
+                        let setup_instructions = vec![
+                            IrOpcode::hq_cast(HqCastFields(IrType::Int)),
+                            IrOpcode::data_setvariableto(DataSetvariabletoFields(variable)),
+                        ];
+                        generate_loop(
+                            context.warp,
+                            &mut should_break,
+                            block_info,
+                            blocks,
+                            context,
+                            final_next_blocks.clone(),
+                            first_condition_instructions,
+                            condition_instructions,
+                            false,
+                            setup_instructions,
+                        )?
                     }
-                    BlockOpcode::control_repeat_until => 'block: {
-                        let BlockArrayOrId::Id(substack_id) =
-                            match block_info.inputs.get("SUBSTACK") {
-                                Some(input) => input,
-                                None => break 'block vec![IrOpcode::hq_drop],
-                            }
-                            .get_1()
-                            .ok_or(make_hq_bug!(""))?
-                            .clone()
-                            .ok_or(make_hq_bug!(""))?
-                        else {
-                            hq_bad_proj!("malformed SUBSTACK input")
-                        };
-                        let Some(substack_block) = blocks.get(&substack_id) else {
-                            hq_bad_proj!("SUBSTACK block doesn't seem to exist")
-                        };
-                        if !context.warp {
-                            should_break = true;
-                            let (next_block, outer_next_blocks) =
-                                if let Some(ref next_block) = block_info.next {
-                                    (
-                                        Some(NextBlock::ID(next_block.clone())),
-                                        final_next_blocks.clone(),
-                                    )
-                                } else if let (Some(next_block_info), popped_next_blocks) =
-                                    final_next_blocks.clone().pop_inner()
-                                {
-                                    (Some(next_block_info.block), popped_next_blocks)
-                                } else {
-                                    (None, final_next_blocks.clone())
-                                };
-                            let next_step = if next_block.is_some() {
-                                match next_block.clone().unwrap() {
-                                    NextBlock::ID(id) => {
-                                        let Some(next_block_block) = blocks.get(&id.clone()) else {
-                                            hq_bad_proj!("next block doesn't exist")
-                                        };
-                                        Step::from_block(
-                                            next_block_block,
-                                            id,
-                                            blocks,
-                                            context.clone(),
-                                            context.project()?,
-                                            outer_next_blocks,
-                                        )?
-                                    }
-                                    NextBlock::Step(ref step) => step
-                                        .upgrade()
-                                        .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-                                }
-                            } else {
-                                Step::new_terminating(context.clone(), context.project()?)?
-                            };
-                            let condition_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                inputs(block_info, blocks, context, context.project()?)?,
-                                context.project()?,
-                            )?;
-                            let substack_blocks = from_block(
-                                substack_block,
-                                blocks,
-                                context,
-                                context.project()?,
-                                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
-                                    yield_first: true,
-                                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
-                                }),
-                            )?;
-                            let substack_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                substack_blocks,
-                                context.project()?,
-                            )?;
-                            condition_step
-                                .opcodes_mut()?
-                                .push(IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: Rc::clone(&next_step),
-                                    branch_else: Rc::clone(&substack_step),
-                                }));
-                            vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                branch_if: next_step,
-                                branch_else: substack_step,
-                            })]
-                        } else {
-                            // TODO: can this be expressed in the same way as non-warping loops,
-                            // just with yield_first: false?
-                            let substack_blocks = from_block(
-                                substack_block,
-                                blocks,
-                                context,
-                                context.project()?,
-                                NextBlocks::new(false),
-                            )?;
-                            let substack_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                substack_blocks,
-                                context.project()?,
-                            )?;
-                            let condition_step = Step::new_rc(
-                                None,
-                                context.clone(),
-                                inputs(block_info, blocks, context, context.project()?)?,
-                                context.project()?,
-                            )?;
-                            let first_condition_step =
-                                Step::new_rc(None, context.clone(), vec![], context.project()?)?;
-                            vec![IrOpcode::control_loop(ControlLoopFields {
-                                first_condition: Some(first_condition_step),
-                                condition: condition_step,
-                                body: substack_step,
-                            })]
-                        }
+                    BlockOpcode::control_repeat_until => {
+                        let condition_instructions =
+                            inputs(block_info, blocks, context, context.project()?)?;
+                        let first_condition_instructions = Some(vec![]);
+                        let setup_instructions = vec![];
+                        generate_loop(
+                            context.warp,
+                            &mut should_break,
+                            block_info,
+                            blocks,
+                            context,
+                            final_next_blocks.clone(),
+                            first_condition_instructions,
+                            condition_instructions,
+                            true,
+                            setup_instructions,
+                        )?
                     }
                     BlockOpcode::procedures_call => {
                         let target = context
