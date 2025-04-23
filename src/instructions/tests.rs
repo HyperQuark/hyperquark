@@ -265,7 +265,12 @@ macro_rules! instructions_test {
                                 wasm_to_js_type(*params.get(i).unwrap())
                                 )
                         }).collect::<Vec<_>>().join(", ");
-                        let path_buf = PathBuf::from(format!("js/{}/{}.ts", module, name));
+                        let module_path = if *module == "wasm:js-string" {
+                            "wasm-js-string"
+                        } else {
+                            module
+                        };
+                        let path_buf = PathBuf::from(format!("js/{}/{}.ts", module_path, name));
                         let diagnostics = check_js::<_, ezno_checker::synthesis::EznoParser>(
                             vec![path_buf.clone()],
                             vec![ts_defs.into()],

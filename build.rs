@@ -95,7 +95,12 @@ export const imports = {{
                 .iter()
                 .map(|dir| {
                     format!(
-                        "\"{dir}\": {{ {} }}",
+                        "\"{}\": {{ {} }}",
+                        if dir == "wasm-js-string" {
+                            "wasm:js-string"
+                        } else {
+                            dir
+                        },
                         ts_paths
                             .iter()
                             .filter(|(d, _)| d == dir)
