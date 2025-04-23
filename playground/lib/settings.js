@@ -1,3 +1,4 @@
+import * as hyperquarkExports from '../../js/no-compiler/hyperquark.js';
 import { WasmFlags, WasmStringType } from '../../js/no-compiler/hyperquark.js';
 export { WasmFlags };
 
@@ -5,28 +6,18 @@ const defaultSettings = new WasmFlags();
 const defaultSettingsObj = defaultSettings.to_js();
 
 window.defaultSettings = defaultSettings;
-
-// TODO: can this be automated somehow?
-const settings_type = {
-    string_type: WasmStringType,
-    wasm_opt: "boolean",
-}
-
-const settings_descriptions = {
-    string_type: "How strings should be represented internally.",
-    wasm_opt: "Should we try to optimise generated WASM modules using wasm-opt?"
-}
+window.hyperquarkExports = hyperquarkExports;
 
 function settingsInfoFromType(type) {
-    if (typeof type === "object") {
-        return {
-            type: "radio",
-            options: Object.keys(type).filter(key => typeof key === 'string' && !/\d+/.test(key)),
-            enum_obj: type
-        }
-    } else if (type === "boolean") {
+    if (type === "boolean") {
         return {
             type: "checkbox"
+        }
+    } else if (type in hyperquarkExports) {
+        return {
+            type: "radio",
+            options: Object.keys(hyperquarkExports[type]).filter(key => typeof key === 'string' && !/\d+/.test(key)),
+            enum_obj: hyperquarkExports[type],
         }
     } else {
         return null;
@@ -36,7 +27,10 @@ function settingsInfoFromType(type) {
 export const settingsInfo = Object.fromEntries(Object.entries(Object.getOwnPropertyDescriptors(WasmFlags.prototype))
     .filter(([_, descriptor]) => typeof descriptor.get === 'function')
     .map(([key, _]) => key)
-    .map(key => [key, { ...settingsInfoFromType(settings_type[key]), description: settings_descriptions[key] }]));
+    .map(key => [key, {
+        ...settingsInfoFromType(WasmFlags.flag_type(key)),
+        description: WasmFlags.flag_descriptor(key)
+    }]));
 
 /**
  * @returns {WasmFlags}

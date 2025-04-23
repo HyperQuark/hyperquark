@@ -54,4 +54,22 @@ impl WasmFlags {
     pub fn new() -> WasmFlags {
         Default::default()
     }
+
+    #[wasm_bindgen]
+    pub fn flag_descriptor(flag: &str) -> String {
+        match flag {
+            "string_type" => "How strings should be represented internally.",
+            "wasm_opt" => "Should we try to optimise generated WASM modules using wasm-opt?",
+            _ => "",
+        }.into()
+    }
+
+    #[wasm_bindgen]
+    pub fn flag_type(flag: &str) -> String {
+        match flag {
+            "string_type" => stringify!(WasmStringType),
+            "wasm_opt" => "boolean",
+            _ => "",
+        }.into()
+    }
 }
