@@ -27,10 +27,13 @@ function settingsInfoFromType(type) {
 export const settingsInfo = Object.fromEntries(Object.entries(Object.getOwnPropertyDescriptors(WasmFlags.prototype))
     .filter(([_, descriptor]) => typeof descriptor.get === 'function')
     .map(([key, _]) => key)
-    .map(key => [key, {
-        ...settingsInfoFromType(WasmFlags.flag_type(key)),
-        description: WasmFlags.flag_descriptor(key)
-    }]));
+    .map(key => {
+        let flag_info = WasmFlags.flag_info(key).to_js()
+        return [key, {
+            ...flag_info,
+            ...settingsInfoFromType(flag_info.ty)
+        }]
+    }));
 
 /**
  * @returns {WasmFlags}

@@ -46,10 +46,11 @@ jobs:
         run: |
           npm install
           npm i -g vite
+          npm i -g binaryen@nightly
       
       - name: Build
         run: |
-          chmod +x build.sh && ./build.sh -Wpo # wasm-opt breaks things currently so don't optimise
+          chmod +x build.sh && ./build.sh -Wpz
           vite build --base=/hyperquark/$BRANCH_NAME/
       
       - name: Move files to tmp

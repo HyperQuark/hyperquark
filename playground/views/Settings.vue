@@ -5,7 +5,7 @@
     <main>
         <div v-for="id in Object.keys(settings)" class="setting-box">
             <div class="description">
-                <h3 class="green">{{ id }}</h3>
+                <h3 class="green" :title="id">{{ settingsInfo[id].name }}</h3>
                 <p>{{ settingsInfo[id].description }}</p>
             </div>
             <div>
