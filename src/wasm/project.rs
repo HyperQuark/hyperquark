@@ -351,10 +351,8 @@ impl WasmProject {
             Loop(WasmBlockType::Empty),
             LocalGet(0),
             LocalGet(0),
-            CallIndirect {
-                type_index: step_func_ty,
-                table_index: threads_table_index,
-            },
+            TableGet(threads_table_index),
+            CallRef(step_func_ty),
             LocalGet(0),
             I32Const(1),
             I32Add,
