@@ -41,6 +41,8 @@ pub mod prelude {
     use indexmap;
     pub type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasherDefault<FNV1aHasher64>>;
     pub type IndexSet<T> = indexmap::IndexSet<T, BuildHasherDefault<FNV1aHasher64>>;
+
+    pub use itertools::Itertools;
 }
 
 use prelude::*;

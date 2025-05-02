@@ -1,7 +1,8 @@
 use super::super::prelude::*;
 use crate::ir::Step;
-use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc};
-use wasm_encoder::{ConstExpr, HeapType};
+use crate::wasm::TableOptions;
+use crate::wasm::{flags::Scheduler, GlobalExportable, GlobalMutable, StepFunc};
+use wasm_encoder::{ConstExpr, HeapType, MemArg};
 
 #[derive(Clone, Debug)]
 pub enum YieldMode {
@@ -42,18 +43,6 @@ pub fn wasm(
         .registries()
         .types()
         .register_default((vec![ValType::I32], vec![]))?;
-    let threads_table = func.registries().tables().register(
-        "threads".into(),
-        (
-            RefType {
-                nullable: false,
-                heap_type: HeapType::Concrete(step_func_ty),
-            },
-            0,
-            // this default gets fixed up in src/wasm/tables.rs
-            None,
-        ),
-    )?;
 
     let threads_count = func.registries().globals().register(
         "threads_count".into(),
@@ -66,27 +55,95 @@ pub fn wasm(
     )?;
 
     Ok(match yield_mode {
-        YieldMode::None => wasm![
-            LocalGet(0),
-            GlobalGet(noop_global),
-            TableSet(threads_table),
-            GlobalGet(threads_count),
-            I32Const(1),
-            I32Sub,
-            GlobalSet(threads_count),
-            Return
-        ],
+        YieldMode::None => match func.flags().scheduler {
+            Scheduler::CallIndirect => {
+                // Write a special value (e.g. 0 for noop) to linear memory for this thread
+                wasm![
+                    LocalGet(0), // thread index
+                    I32Const(4),
+                    I32Mul,
+                    I32Const(0), // 0 = noop step index
+                    // store at address (thread_index * 4)
+                    I32Store(MemArg {
+                        offset: 0,
+                        align: 2,
+                        memory_index: 0,
+                    }),
+                    // GlobalGet(threads_count),
+                    // I32Const(1),
+                    // I32Sub,
+                    // GlobalSet(threads_count),
+                    Return
+                ]
+            }
+            Scheduler::TypedFuncRef => {
+                let threads_table = func.registries().tables().register(
+                    "threads".into(),
+                    TableOptions {
+                        element_type: RefType {
+                            nullable: false,
+                            heap_type: HeapType::Concrete(step_func_ty),
+                        },
+                        min: 0,
+                        max: None,
+                        // this default gets fixed up in src/wasm/tables.rs
+                        init: None,
+                    },
+                )?;
+                wasm![
+                    LocalGet(0),
+                    GlobalGet(noop_global),
+                    TableSet(threads_table),
+                    GlobalGet(threads_count),
+                    I32Const(1),
+                    I32Sub,
+                    GlobalSet(threads_count),
+                    Return
+                ]
+            }
+        },
         YieldMode::Inline(step) => func.compile_inner_step(Rc::clone(step))?,
         YieldMode::Schedule(weak_step) => {
             let step =
                 Weak::upgrade(weak_step).ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?;
             step.make_used_non_inline()?;
-            wasm![
-                LocalGet(0),
-                #LazyStepRef(Weak::clone(weak_step)),
-                TableSet(threads_table),
-                Return
-            ]
+            match func.flags().scheduler {
+                Scheduler::CallIndirect => {
+                    wasm![
+                        LocalGet(0), // thread index
+                        I32Const(4),
+                        I32Mul,
+                        #LazyStepIndex(Weak::clone(weak_step)),
+                        I32Store(MemArg {
+                            offset: 0,
+                            align: 2,
+                            memory_index: 0,
+                        }),
+                        Return
+                    ]
+                }
+                Scheduler::TypedFuncRef => {
+                    let threads_table = func.registries().tables().register(
+                        "threads".into(),
+                        TableOptions {
+                            element_type: RefType {
+                                nullable: false,
+                                heap_type: HeapType::Concrete(step_func_ty),
+                            },
+                            min: 0,
+                            max: None,
+                            // this default gets fixed up in src/wasm/tables.rs
+                            init: None,
+                        },
+                    )?;
+                    wasm![
+                        LocalGet(0),
+                        #LazyStepRef(Weak::clone(weak_step)),
+                        TableSet(threads_table),
+                        Return
+                    ]
+                }
+            }
         }
         _ => hq_todo!(),
     })

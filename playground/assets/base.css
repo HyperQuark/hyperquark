@@ -50,6 +50,10 @@
   }
 }
 
+:root {
+  --transition-time: 0.4s;
+}
+
 *,
 *::before,
 *::after {

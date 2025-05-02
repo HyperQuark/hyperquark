@@ -18,7 +18,6 @@
 </template>
 
 <script setup>
-import binaryen from 'binaryen';
 import Loading from './Loading.vue';
 import { sb3_to_wasm, FinishedWasm, WasmFlags } from '../../js/compiler/hyperquark.js';
 import runProject from '../lib/project-runner.js';
@@ -66,28 +65,31 @@ try {
     throw new Error("unknown error occurred when compiling project");
   }
   wasmBytes = wasmProject.wasm_bytes;
-  if (getSettings().to_js().wasm_opt) {
+  if (getSettings().to_js().wasm_opt == 'On') {
     try {
+      console.log('loading binaryen...');
+      console.log(getSettings().to_js().scheduler)
+      let binaryen = (await import('binaryen-with-extras')).default; // only load binaryen if it's used.
       console.log('optimising using wasm-opt...')
       errorStage.value = "optimising";
       errorMode.value = "A warning";
       let binaryenModule = binaryen.readBinary(wasmBytes);
       console.log(wasmBytes.length);
       binaryenModule.setFeatures(binaryen.Features.All);
-      binaryen.setOptimizeLevel(4);
-      binaryen.setShrinkLevel(1);
+      binaryen.setOptimizeLevel(3);
+      binaryen.setShrinkLevel(0);
       console.log(binaryenModule.emitBinary().length);
       binaryenModule.runPasses(["generate-global-effects"]);
       binaryenModule.optimize();
       console.log(binaryenModule.emitBinary().length);
-      binaryenModule.runPasses(["flatten", 'rereloop']);
-      console.log(binaryenModule.emitBinary().length);
-      binaryenModule.optimize();
+      // binaryenModule.runPasses(["flatten", 'rereloop']);
+      // console.log(binaryenModule.emitBinary().length);
+      // binaryenModule.optimize();
       console.log(binaryenModule.emitBinary().length);
       binaryenModule.optimize();
       console.log(binaryenModule.emitBinary().length);
       wasmBytes = binaryenModule.emitBinary();
-      success = true;
+      console.log(wasmBytes.length)
     } catch (e) {
       console.error(e)
       error.value = e.message.toString();
@@ -101,8 +103,8 @@ try {
     }
   } else {
     console.log('skipping wasm-opt due to user settings');
-    success = true;
   }
+  success = true;
 } catch (e) {
   console.error(e);
   error.value = e.toString();
@@ -136,7 +138,7 @@ function greenFlag() {
     framerate: 30,
     renderer,
     turbo: turbo.value,
-    wasm_bytes: wasmProject.wasm_bytes,
+    wasm_bytes: wasmBytes,
     string_consts: wasmProject.strings,
     target_names: wasmProject.target_names,
     project_json: props.json,

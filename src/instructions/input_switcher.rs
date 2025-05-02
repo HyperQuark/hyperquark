@@ -5,6 +5,7 @@ use super::HqCastFields;
 use super::IrOpcode;
 use crate::wasm::GlobalExportable;
 use crate::wasm::GlobalMutable;
+use crate::wasm::TableOptions;
 use crate::wasm::WasmProject;
 use crate::{ir::Type as IrType, wasm::StepFunc};
 use itertools::Itertools;
@@ -88,10 +89,16 @@ fn generate_branches(
                         I32WrapI64,
                     ],
                     IrType::String => {
-                        let table_index = func
-                            .registries()
-                            .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0, None))?;
+                        let table_index = func.registries().tables().register(
+                            "strings".into(),
+                            TableOptions {
+                                element_type: RefType::EXTERNREF,
+                                min: 0,
+                                // TODO: use js string imports for preknown strings
+                                max: None,
+                                init: None,
+                            },
+                        )?;
                         wasm![
                             I64Const(BOXED_STRING_PATTERN),
                             I64And,
@@ -111,10 +118,16 @@ fn generate_branches(
                     IrType::Float => wasm![Else, LocalGet(local_idx), F64ReinterpretI64], // float guaranteed to be last so no need to check
                     IrType::QuasiInt => wasm![Else, LocalGet(local_idx), I32WrapI64],
                     IrType::String => {
-                        let table_index = func
-                            .registries()
-                            .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0, None))?;
+                        let table_index = func.registries().tables().register(
+                            "strings".into(),
+                            TableOptions {
+                                element_type: RefType::EXTERNREF,
+                                min: 0,
+                                // TODO: use js string imports for preknown strings
+                                max: None,
+                                init: None,
+                            },
+                        )?;
                         wasm![Else, LocalGet(local_idx), I32WrapI64, TableGet(table_index)]
                     }
                     _ => unreachable!(),
@@ -135,10 +148,15 @@ fn generate_branches(
                         I32WrapI64,
                     ],
                     IrType::String => {
-                        let table_index = func
-                            .registries()
-                            .tables()
-                            .register("strings".into(), (RefType::EXTERNREF, 0, None))?;
+                        let table_index = func.registries().tables().register(
+                            "strings".into(),
+                            TableOptions {
+                                element_type: RefType::EXTERNREF,
+                                min: 0,
+                                max: None,
+                                init: None,
+                            },
+                        )?;
                         wasm![
                             Else,
                             LocalGet(local_idx),

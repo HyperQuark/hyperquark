@@ -11,6 +11,7 @@ use wasm_encoder::{
 pub enum Instruction {
     Immediate(wasm_encoder::Instruction<'static>),
     LazyStepRef(Weak<Step>),
+    LazyStepIndex(Weak<Step>),
     LazyWarpedProcCall(Rc<Proc>),
 }
 
@@ -34,6 +35,19 @@ impl Instruction {
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 WInstruction::RefFunc(imported_func_count + step_index)
+            }
+            Instruction::LazyStepIndex(step) => {
+                let step_index: i32 = steps
+                    .try_borrow()?
+                    .get_index_of(
+                        &step
+                            .upgrade()
+                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                    )
+                    .ok_or(make_hq_bug!("couldn't find step in step map"))?
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
+                WInstruction::I32Const(step_index)
             }
             Instruction::LazyWarpedProcCall(proc) => {
                 let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {

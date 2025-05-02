@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
-import { h, ref } from 'vue';
+import { h, ref, onMounted } from 'vue';
 import Loading from '../components/Loading.vue';
 
 let componentCache = Object.setPrototypeOf({}, null);
@@ -21,7 +21,7 @@ const view = (name) => ({
 });
 
 const router = createRouter({
-  history: createWebHashHistory(import.meta.env.BASE_URL),
+  history: (import.meta.env.VITE_HASH_HISTORY ? createWebHashHistory : createWebHistory)(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
@@ -55,6 +55,6 @@ const router = createRouter({
       component: view('Settings'),
     }
   ]
-})
+});
 
 export default router;

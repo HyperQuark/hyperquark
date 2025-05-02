@@ -144,9 +144,16 @@ export default async (
       window.flag_clicked = flag_clicked;
       window.tick = tick;
       window.stop = () => {
+        if (typeof threads == "undefined") {
+          let memArr = new Uint32Array(memory.buffer);
+          for (let i = 0; i < threads_count.value; i++) {
+            memArr[i] = 0;
+          }
+        } else {
         for (let i = 0; i < threads.length; i++) {
           threads.set(i, noop);
         }
+      }
         threads_count.value = 0;
       };
       // @ts-ignore

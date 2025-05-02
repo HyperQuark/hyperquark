@@ -84,6 +84,25 @@ pub trait Registry: Sized {
         )
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
+
+    fn register_override<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+    {
+        self.registry()
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .entry(key.clone())
+            .insert_entry(value);
+        N::try_from(
+            self.registry()
+                .try_borrow()?
+                .get_index_of(&key)
+                .ok_or(make_hq_bug!("couldn't find entry in Registry"))?,
+        )
+        .map_err(|_| make_hq_bug!("registry item index out of bounds"))
+    }
 }
 
 pub trait RegistryDefault: Registry<Value: Default> {

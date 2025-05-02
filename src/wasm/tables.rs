@@ -4,7 +4,15 @@ use wasm_encoder::{
     ConstExpr, ExportKind, ExportSection, ImportSection, RefType, TableSection, TableType,
 };
 
-pub type TableRegistry = MapRegistry<Box<str>, (RefType, u64, Option<ConstExpr>)>;
+#[derive(Clone, Debug)]
+pub struct TableOptions {
+    pub element_type: RefType,
+    pub min: u64,
+    pub max: Option<u64>,
+    pub init: Option<ConstExpr>,
+}
+
+pub type TableRegistry = MapRegistry<Box<str>, TableOptions>;
 
 impl TableRegistry {
     pub fn finish(
@@ -13,7 +21,16 @@ impl TableRegistry {
         tables: &mut TableSection,
         exports: &mut ExportSection,
     ) {
-        for (key, (element_type, min, init)) in self.registry().take() {
+        for (
+            key,
+            TableOptions {
+                element_type,
+                min,
+                max,
+                init,
+            },
+        ) in self.registry().take()
+        {
             // TODO: allow choosing whether to export a table or not?
             exports.export(&key, ExportKind::Table, tables.len());
             let init = match &*key {
@@ -25,7 +42,7 @@ impl TableRegistry {
                     TableType {
                         element_type,
                         minimum: min,
-                        maximum: None,
+                        maximum: max,
                         table64: false,
                         shared: false,
                     },
@@ -35,7 +52,7 @@ impl TableRegistry {
                 tables.table(TableType {
                     element_type,
                     minimum: min,
-                    maximum: None,
+                    maximum: max,
                     table64: false,
                     shared: false,
                 });

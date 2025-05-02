@@ -1,5 +1,5 @@
 mod external;
-mod flags;
+pub mod flags;
 mod func;
 mod globals;
 mod project;
@@ -18,6 +18,6 @@ pub(crate) use globals::{
 pub(crate) use project::{FinishedWasm, WasmProject};
 pub(crate) use registries::Registries;
 pub(crate) use strings::StringRegistry;
-pub(crate) use tables::TableRegistry;
+pub(crate) use tables::{TableOptions, TableRegistry};
 pub(crate) use type_registry::TypeRegistry;
 pub(crate) use variable::VariableRegistry;

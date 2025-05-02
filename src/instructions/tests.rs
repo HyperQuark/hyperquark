@@ -15,7 +15,7 @@
 #[macro_export]
 macro_rules! instructions_test {
     {$module:ident; $opcode:ident; $($type_arg:ident $(,)?)* $(@$fields:expr)? $(;)?} => {
-        $crate::instructions_test!{$module; $opcode; $($type_arg,)* $(@$fields)? ; Default::default()}
+        $crate::instructions_test!{$module; $opcode; $($type_arg,)* $(@$fields)? ; WasmFlags::new(all_wasm_features())}
     };
     {$module:ident; $opcode:ident; $($type_arg:ident $(,)?)* $(@ $fields:expr)? ; $flags:expr} => {
         #[cfg(test)]
@@ -31,7 +31,7 @@ macro_rules! instructions_test {
                 CodeSection, ExportSection, FunctionSection, GlobalSection, HeapType, ImportSection,
                 Module, RefType, TableSection, TypeSection, MemorySection, MemoryType, ValType,
             };
-            use $crate::wasm::{StepFunc, Registries, WasmProject};
+            use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags};
 
             #[allow(unused)]
             macro_rules! ident_as_irtype {

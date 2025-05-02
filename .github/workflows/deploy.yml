@@ -49,6 +49,8 @@ jobs:
           npm i -g binaryen@nightly
       
       - name: Build
+        env:
+          VITE_HASH_HISTORY: true
         run: |
           chmod +x build.sh && ./build.sh -Wpz
           vite build --base=/hyperquark/$BRANCH_NAME/
