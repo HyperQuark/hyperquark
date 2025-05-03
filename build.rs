@@ -36,7 +36,7 @@ fn main() {
                                 .unwrap();
                         let fields = contents.contains("pub struct Fields");
                         let fields_name =
-                            format!("{}_{}_fields", category, opcode).to_case(Case::Pascal);
+                            format!("{category}_{opcode}_fields").to_case(Case::Pascal);
                         paths.push((
                             format!(
                                 "{}::{}",
@@ -46,7 +46,7 @@ fn main() {
                                     _ => opcode.to_string(),
                                 }
                             ),
-                            format!("{}_{}", category, opcode,),
+                            format!("{category}_{opcode}",),
                             fields,
                             fields_name,
                         ));
@@ -120,7 +120,7 @@ export const imports = {{
         format!(
             "
 /// A list of all instructions.
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = \"block opcode are snake_case\")]
 #[derive(Clone, Debug)]
 pub enum IrOpcode {{
     {}
@@ -156,7 +156,10 @@ impl IrOpcode {{
     }}
 }}
 pub mod fields {{
+    #![expect(clippy::wildcard_imports, reason = \"we don't know what we need to import\")]
+
     use super::*;
+
     {}
 }}
 pub use fields::*;
@@ -170,35 +173,35 @@ pub use fields::*;
             }).collect::<Vec<_>>().join(",\n\t"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(fields) => {}::acceptable_inputs(fields),", id, path)
+                    format!("Self::{id}(fields) => {path}::acceptable_inputs(fields),")
                 } else {
-                    format!("IrOpcode::{} => {}::acceptable_inputs(),", id, path)
+                    format!("Self::{id} => {path}::acceptable_inputs(),")
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(fields) => {}::wasm(step_func, inputs, fields),", id, path)
+                    format!("Self::{id}(fields) => {path}::wasm(step_func, inputs, fields),")
                 } else {
-                    format!("IrOpcode::{} => {}::wasm(step_func, inputs),", id, path)
+                    format!("Self::{id} => {path}::wasm(step_func, inputs),")
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(fields) => {}::output_type(inputs, fields),", id, path)
+                    format!("Self::{id}(fields) => {path}::output_type(inputs, fields),")
                 } else {
-                    format!("IrOpcode::{} => {}::output_type(inputs),", id, path)
+                    format!("Self::{id} => {path}::output_type(inputs),")
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().map(|(path, id, fields, _)| {
                 if *fields {
-                    format!("IrOpcode::{}(_) => {}::REQUESTS_SCREEN_REFRESH,", id, path)
+                    format!("Self::{id}(_) => {path}::REQUESTS_SCREEN_REFRESH,")
                 } else {
-                    format!("IrOpcode::{} => {}::REQUESTS_SCREEN_REFRESH,", id, path)
+                    format!("Self::{id} => {path}::REQUESTS_SCREEN_REFRESH,")
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().filter(|(_, _, fields, _)| *fields)
             .map(|(path, _, _, fields_name)|
-                format!("pub use {}::Fields as {};", path, fields_name)
+                format!("pub use {path}::Fields as {fields_name};")
             ).collect::<Vec<_>>().join("\n\t"),
     ))
     .unwrap();

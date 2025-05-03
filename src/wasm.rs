@@ -9,15 +9,13 @@ mod tables;
 mod type_registry;
 mod variable;
 
-pub(crate) use external::{ExternalEnvironment, ExternalFunctionRegistry};
+pub use external::{ExternalEnvironment, ExternalFunctionRegistry};
 pub use flags::WasmFlags;
-pub(crate) use func::{Instruction as InternalInstruction, StepFunc};
-pub(crate) use globals::{
-    Exportable as GlobalExportable, GlobalRegistry, Mutable as GlobalMutable,
-};
-pub(crate) use project::{FinishedWasm, WasmProject};
-pub(crate) use registries::Registries;
-pub(crate) use strings::StringRegistry;
-pub(crate) use tables::{TableOptions, TableRegistry};
-pub(crate) use type_registry::TypeRegistry;
-pub(crate) use variable::VariableRegistry;
+pub use func::{Instruction as InternalInstruction, StepFunc};
+pub use globals::{Exportable as GlobalExportable, GlobalRegistry, Mutable as GlobalMutable};
+pub use project::{FinishedWasm, WasmProject};
+pub use registries::Registries;
+pub use strings::StringRegistry;
+pub use tables::{TableOptions, TableRegistry};
+pub use type_registry::TypeRegistry;
+pub use variable::VariableRegistry;

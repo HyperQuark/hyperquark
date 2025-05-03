@@ -11,7 +11,7 @@ pub fn wasm(
 ) -> HQResult<Vec<InternalInstruction>> {
     let t1 = inputs[0];
     if variable.0.local() {
-        let local_index: u32 = func.local_variable(RcVar::clone(variable))?;
+        let local_index: u32 = func.local_variable(variable)?;
         if variable.0.possible_types().is_base_type() {
             Ok(wasm![LocalSet(local_index)])
         } else {
@@ -21,10 +21,7 @@ pub fn wasm(
             ])
         }
     } else {
-        let global_index: u32 = func
-            .registries()
-            .variables()
-            .register(RcVar::clone(variable))?;
+        let global_index: u32 = func.registries().variables().register(variable)?;
         if variable.0.possible_types().is_base_type() {
             Ok(wasm![GlobalSet(global_index)])
         } else {

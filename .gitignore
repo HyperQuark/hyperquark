@@ -12,3 +12,4 @@
 /package-lock.json
 /playground/dist/
 /.vite/
+/.vscode/

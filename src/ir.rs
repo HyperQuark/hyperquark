@@ -10,12 +10,11 @@ mod types;
 mod variable;
 
 use context::StepContext;
-pub(crate) use event::Event;
-#[allow(unused_imports)]
-pub(crate) use proc::{PartialStep, Proc, ProcContext, ProcMap};
-pub(crate) use project::IrProject;
-pub(crate) use step::Step;
+pub use event::Event;
+pub use proc::{PartialStep, Proc, ProcContext};
+pub use project::IrProject;
+pub use step::Step;
 use target::Target;
 use thread::Thread;
-pub(crate) use types::Type;
-pub(crate) use variable::{RcVar, Variable};
+pub use types::Type;
+pub use variable::{RcVar, Variable};

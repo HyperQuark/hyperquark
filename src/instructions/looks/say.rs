@@ -12,7 +12,7 @@ pub fn wasm(
     &Fields { debug, target_idx }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let prefix = String::from(if debug { "say_debug" } else { "say" });
-    let target_idx: i32 = target_idx
+    let itarget_idx: i32 = target_idx
         .try_into()
         .map_err(|_| make_hq_bug!("target index out of bounds"))?;
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
@@ -20,19 +20,19 @@ pub fn wasm(
             ("looks", format!("{prefix}_int").into_boxed_str()),
             (vec![ValType::I32, ValType::I32], vec![]),
         )?;
-        wasm![I32Const(target_idx), Call(func_index)]
+        wasm![I32Const(itarget_idx), Call(func_index)]
     } else if IrType::Float.contains(inputs[0]) {
         let func_index = func.registries().external_functions().register(
             ("looks", format!("{prefix}_float").into_boxed_str()),
             (vec![ValType::F64, ValType::I32], vec![]),
         )?;
-        wasm![I32Const(target_idx), Call(func_index)]
+        wasm![I32Const(itarget_idx), Call(func_index)]
     } else if IrType::String.contains(inputs[0]) {
         let func_index = func.registries().external_functions().register(
             ("looks", format!("{prefix}_string").into_boxed_str()),
             (vec![ValType::EXTERNREF, ValType::I32], vec![]),
         )?;
-        wasm![I32Const(target_idx), Call(func_index)]
+        wasm![I32Const(itarget_idx), Call(func_index)]
     } else {
         hq_bug!("bad input")
     })

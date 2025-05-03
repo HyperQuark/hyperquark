@@ -1,3 +1,8 @@
+#![allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "Fields should be passed by reference for type signature consistency"
+)]
+
 use super::super::prelude::*;
 
 #[derive(Clone, Copy, Debug)]

@@ -1,5 +1,7 @@
-/// Generates unit tests for instructions files. Takes a module name, followed by a semicolon,
-/// collowed by the full name of the opcode (in category_opcode form), followed by an optional
+/// Generates unit tests for instructions files.
+///
+/// Takes a module name, followed by a semicolon,
+/// collowed by the full name of the opcode (in the form of `<category>_<opcode>`), followed by an optional
 /// comma-separated list of arbitrary identifiers corresponding to the number of inputs the block
 /// takes, optionally followed by a semicolon and an expression for a sensible default for any fields,
 /// optionally followed by a semicolon and a `WasmFlags` configuration (defaults to `Default::default()`).
@@ -7,7 +9,7 @@
 /// different module names.
 ///
 /// Example:
-/// For a block foo_bar, which takes 2 inputs, with Fields(bool),
+/// For a block `foo_bar`, which takes 2 inputs, with Fields(bool),
 /// ```ignore
 /// instructions_test!(test; foo_bar; t1, t2 @ super::Fields(true));
 /// instructions_test!(test; foo_bar; t1, t2 @ super::Fields(false));
@@ -33,7 +35,6 @@ macro_rules! instructions_test {
             };
             use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags};
 
-            #[allow(unused)]
             macro_rules! ident_as_irtype {
                 ( $_:ident ) => { IrType };
             }
@@ -82,12 +83,9 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(true) {
-                    let output_type = match output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) {
-                        Ok(a) => a,
-                        Err(_) => {
-                            println!("skipping failed output_type");
-                            continue;
-                        }
+                    let Ok(output_type) = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) else {
+                        println!("skipping failed output_type");
+                        continue;
                     };
                     let registries = Rc::new(Registries::default());
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -96,13 +94,10 @@ macro_rules! instructions_test {
                         Some(output) => Some(WasmProject::ir_type_to_wasm(output)?),
                         None => None,
                         };
-                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), Default::default(), flags())?;
-                    let wasm = match wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?) {
-                        Ok(a) => a,
-                        Err(_) => {
-                            println!("skipping failed wasm");
-                            continue;
-                        }
+                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), Default::default(), flags());
+                    let Ok(wasm) = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?) else {
+                        println!("skipping failed wasm");
+                        continue;
                     };
                     for (i, _) in types.iter().enumerate() {
                         step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
@@ -130,7 +125,7 @@ macro_rules! instructions_test {
 
                     let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes, Default::default(), imported_func_count)?;
+                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count)?;
                     registries.types().clone().finish(&mut types);
                     registries.tables().clone().finish(&imports, &mut tables, &mut exports);
                     registries.globals().clone().finish(&imports, &mut globals, &mut exports);
@@ -153,12 +148,9 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_wrapped_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(false) {
-                    let output_type = match output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) {
-                        Ok(a) => a,
-                        Err(_) => {
-                            println!("skipping failed output_type");
-                            continue;
-                        }
+                    let Ok(output_type) = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) else {
+                        println!("skipping failed output_type");
+                        continue;
                     };
                     println!("{output_type:?}");
                     let registries = Rc::new(Registries::default());
@@ -169,8 +161,8 @@ macro_rules! instructions_test {
                         None => None,
                         };
                     println!("{result:?}");
-                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), Default::default(), flags())?;
-                    let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::new([$($type_arg,)*]), $crate::instructions::IrOpcode::$opcode$(($fields))?) {
+                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), Default::default(), flags());
+                    let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::new([$($type_arg,)*]), &$crate::instructions::IrOpcode::$opcode$(($fields))?) {
                         Ok(a) => a,
                         Err(e) => {
                             println!("skipping failed wasm (message: {})", e.msg);
@@ -205,7 +197,7 @@ macro_rules! instructions_test {
                     });
                     let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes, Default::default(), imported_func_count)?;
+                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count)?;
                     registries.types().clone().finish(&mut types);
                     registries.tables().clone().finish(&imports, &mut tables, &mut exports);
                     registries.globals().clone().finish(&imports, &mut globals, &mut exports);

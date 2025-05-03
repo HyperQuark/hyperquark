@@ -65,54 +65,59 @@ pub enum Type {
     Color,
 }
 impl Type {
-    pub const BASE_TYPES: [Type; 3] = [Type::String, Type::QuasiInt, Type::Float];
+    pub const BASE_TYPES: [Self; 3] = [Self::String, Self::QuasiInt, Self::Float];
 
-    pub fn is_base_type(&self) -> bool {
-        (!self.is_none()) && Type::BASE_TYPES.iter().any(|ty| ty.contains(*self))
+    pub fn is_base_type(self) -> bool {
+        (!self.is_none()) && Self::BASE_TYPES.iter().any(|ty| ty.contains(self))
     }
 
-    pub fn base_type(&self) -> Option<Type> {
+    pub fn base_type(self) -> Option<Self> {
         if !self.is_base_type() {
             return None;
         }
-        Type::BASE_TYPES
+        Self::BASE_TYPES
             .iter()
-            .cloned()
-            .find(|&ty| ty.contains(*self))
+            .copied()
+            .find(|&ty| ty.contains(self))
     }
 
-    pub fn base_types(&self) -> Box<dyn Iterator<Item = &Type> + '_> {
+    pub fn base_types(self) -> Box<dyn Iterator<Item = Self>> {
         if self.is_none() {
             return Box::new(core::iter::empty());
         }
-        Box::new(Type::BASE_TYPES.iter().filter(|ty| ty.intersects(*self)))
+        Box::new(
+            Self::BASE_TYPES
+                .iter()
+                .filter(move |ty| ty.intersects(self))
+                .copied(),
+        )
     }
 
-    pub fn maybe_positive(&self) -> bool {
-        self.contains(Type::IntPos)
-            || self.intersects(Type::FloatPos)
-            || self.contains(Type::BooleanTrue)
+    pub const fn maybe_positive(self) -> bool {
+        self.contains(Self::IntPos)
+            || self.intersects(Self::FloatPos)
+            || self.contains(Self::BooleanTrue)
     }
 
-    pub fn maybe_negative(&self) -> bool {
-        self.contains(Type::IntNeg) || self.intersects(Type::FloatNeg)
+    pub const fn maybe_negative(self) -> bool {
+        self.contains(Self::IntNeg) || self.intersects(Self::FloatNeg)
     }
 
-    pub fn maybe_zero(&self) -> bool {
-        self.contains(Type::IntZero)
-            || self.contains(Type::BooleanFalse)
-            || self.intersects(Type::FloatZero)
+    pub const fn maybe_zero(self) -> bool {
+        self.contains(Self::IntZero)
+            || self.contains(Self::BooleanFalse)
+            || self.intersects(Self::FloatZero)
     }
 
-    pub fn maybe_nan(&self) -> bool {
-        self.intersects(Type::FloatNan) || self.contains(Type::StringNan)
+    pub const fn maybe_nan(self) -> bool {
+        self.intersects(Self::FloatNan) || self.contains(Self::StringNan)
     }
 
-    pub fn none_if_false(condition: bool, if_true: Type) -> Type {
+    pub const fn none_if_false(condition: bool, if_true: Self) -> Self {
         if condition {
             if_true
         } else {
-            Type::none()
+            Self::none()
         }
     }
 }

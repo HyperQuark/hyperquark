@@ -9,7 +9,7 @@ impl StringRegistry {
             .take()
             .keys()
             .cloned()
-            .map(|s| s.into_string())
+            .map(str::into_string)
             .collect()
     }
 }

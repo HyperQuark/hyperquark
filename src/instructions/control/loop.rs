@@ -22,11 +22,13 @@ pub fn wasm(
         flip_if,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let inner_instructions = func.compile_inner_step(Rc::clone(body))?;
-    let first_condition_instructions = func.compile_inner_step(Rc::clone(
-        &first_condition.clone().unwrap_or(Rc::clone(condition)),
-    ))?;
-    let condition_instructions = func.compile_inner_step(Rc::clone(condition))?;
+    let inner_instructions = func.compile_inner_step(body)?;
+    let first_condition_instructions = func.compile_inner_step(
+        &first_condition
+            .clone()
+            .unwrap_or_else(|| Rc::clone(condition)),
+    )?;
+    let condition_instructions = func.compile_inner_step(condition)?;
     Ok(wasm![Block(BlockType::Empty),]
         .into_iter()
         .chain(first_condition_instructions)

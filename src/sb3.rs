@@ -32,8 +32,8 @@ pub struct Comment {
 
 /// A possible block opcode, encompassing the default block pallette, the pen extension,
 /// and a few hidden but non-obsolete blocks. A block being listed here does not imply that
-/// it is supported by HyperQuark.
-#[allow(non_camel_case_types)]
+/// it is supported by `HyperQuark`.
+#[expect(non_camel_case_types, reason = "opcodes are snake_case")]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum BlockOpcode {
     control_repeat,
@@ -262,10 +262,9 @@ pub enum Field {
 impl Field {
     // this isn't auto implemented by EnumFieldGetter because Field::Value is actually a tuple
     // in a tuple, so that serde correctly parses a single-item array
-    pub fn get_0(&self) -> &Option<VarVal> {
+    pub const fn get_0(&self) -> Option<&VarVal> {
         match self {
-            Field::Value((val,)) => val,
-            Field::ValueId(val, _) => val,
+            Self::ValueId(val, _) | Self::Value((val,)) => val.as_ref(),
         }
     }
 }
@@ -285,9 +284,9 @@ pub struct Mutation {
 
 impl Default for Mutation {
     fn default() -> Self {
-        Mutation {
+        Self {
             tag_name: "mutation".into(),
-            children: Default::default(),
+            children: vec![],
             mutations: BTreeMap::new(),
         }
     }
@@ -309,8 +308,8 @@ pub struct BlockInfo {
 }
 
 /// the data format of a costume
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
-#[allow(non_camel_case_types)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(non_camel_case_types, reason = "lowercase in project.json")]
 pub enum CostumeDataFormat {
     png,
     svg,
@@ -495,7 +494,7 @@ impl TryFrom<&str> for Sb3Project {
                     err.line(),
                     err.column()
                 ),
-                _ => hq_bad_proj!("Failed to deserialize json"),
+                Category::Io => hq_bug!("Failed to deserialize json due to IO error"),
             },
         }
     }

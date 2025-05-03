@@ -12,35 +12,26 @@ use wasm_encoder::{
 };
 use wasm_gen::wasm;
 
-#[allow(dead_code)]
-pub mod byte_offset {
-    pub const REDRAW_REQUESTED: i32 = 0;
-    pub const THREAD_NUM: i32 = 4;
-    pub const THREADS: i32 = 8;
-}
-
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
 pub struct WasmProject {
-    #[allow(dead_code)]
     flags: WasmFlags,
     steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
-    /// maps an event to a list of *step_func* indices (NOT function indices) which are
+    /// maps an event to a list of *`step_func`* indices (NOT function indices) which are
     /// triggered by that event.
     events: BTreeMap<Event, Vec<u32>>,
     registries: Rc<Registries>,
     target_names: Vec<Box<str>>,
-    #[allow(dead_code)]
     environment: ExternalEnvironment,
 }
 
 impl WasmProject {
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "pub item may be used in the future")]
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
-        WasmProject {
+        Self {
             flags,
-            steps: Default::default(),
-            events: Default::default(),
+            steps: Rc::new(RefCell::new(IndexMap::default())),
+            events: BTreeMap::default(),
             environment,
             registries: Rc::new(Registries::default()),
             target_names: vec![],
@@ -51,13 +42,13 @@ impl WasmProject {
         Rc::clone(&self.registries)
     }
 
-    #[allow(dead_code)]
-    pub fn environment(&self) -> ExternalEnvironment {
+    #[expect(dead_code, reason = "pub item may be used in future")]
+    pub const fn environment(&self) -> ExternalEnvironment {
         self.environment
     }
 
-    pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
-        Rc::clone(&self.steps)
+    pub const fn steps(&self) -> &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
+        &self.steps
     }
 
     /// maps a broad IR type to a WASM type
@@ -143,9 +134,13 @@ impl WasmProject {
                         init: None,
                     },
                 )?;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "step count should never get near to u32::MAX"
+                )]
                 let func_indices: Vec<u32> = (0..step_count)
-                    .map(|i| self.imported_func_count().unwrap() + i as u32)
-                    .collect();
+                    .map(|i| Ok(self.imported_func_count()? + i as u32))
+                    .collect::<HQResult<_>>()?;
                 elements.active(
                     Some(steps_table_index),
                     &ConstExpr::i32_const(0),
@@ -198,7 +193,7 @@ impl WasmProject {
             target_names: self
                 .target_names
                 .into_iter()
-                .map(|bstr| bstr.into())
+                .map(core::convert::Into::into)
                 .collect(),
         })
     }
@@ -240,7 +235,7 @@ impl WasmProject {
     fn threads_table_index<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+        <N as TryFrom<usize>>::Error: core::fmt::Debug,
     {
         let step_func_ty = self
             .registries()
@@ -266,7 +261,7 @@ impl WasmProject {
     fn steps_table_index<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+        <N as TryFrom<usize>>::Error: core::fmt::Debug,
     {
         match self.flags.scheduler {
             Scheduler::CallIndirect => self.registries().tables().register(
@@ -376,7 +371,7 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
     ) -> HQResult<()> {
-        for (event, indices) in self.events.iter() {
+        for (event, indices) in &self.events {
             self.finish_event(
                 match event {
                     Event::FlagCLicked => "flag_clicked",
@@ -444,8 +439,7 @@ impl WasmProject {
                 BrIf(0),
                 End,
             ],
-            _ => wasm![
-                // Default: typed function references (call_ref)
+            Scheduler::TypedFuncRef => wasm![
                 TableSize(self.threads_table_index()?),
                 LocalTee(1),
                 I32Eqz,
@@ -483,24 +477,20 @@ impl WasmProject {
         Ok(())
     }
 
-    pub fn from_ir(ir_project: Rc<IrProject>, flags: WasmFlags) -> HQResult<WasmProject> {
-        let steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> = Default::default();
+    pub fn from_ir(ir_project: &Rc<IrProject>, flags: WasmFlags) -> HQResult<Self> {
+        let steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> =
+            Rc::new(RefCell::new(IndexMap::default()));
         let registries = Rc::new(Registries::default());
-        let mut events: BTreeMap<Event, Vec<u32>> = Default::default();
+        let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
         StepFunc::compile_step(
             Rc::new(Step::new_empty()),
-            Rc::clone(&steps),
+            &steps,
             Rc::clone(&registries),
             flags,
         )?;
         // compile every step
         for step in ir_project.steps().try_borrow()?.iter() {
-            StepFunc::compile_step(
-                Rc::clone(step),
-                Rc::clone(&steps),
-                Rc::clone(&registries),
-                flags,
-            )?;
+            StepFunc::compile_step(Rc::clone(step), &steps, Rc::clone(&registries), flags)?;
         }
         // mark first steps as used in a non-inline context
         for thread in ir_project.threads().try_borrow()?.iter() {
@@ -519,14 +509,14 @@ impl WasmProject {
                     steps
                         .try_borrow()?
                         .get_index_of(thread.first_step())
-                        .ok_or(make_hq_bug!(
-                            "Thread's first_step wasn't found in Thread::steps()"
-                        ))?,
+                        .ok_or_else(|| {
+                            make_hq_bug!("Thread's first_step wasn't found in Thread::steps()")
+                        })?,
                 )
                 .map_err(|_| make_hq_bug!("step func index out of bounds"))?,
             );
         }
-        Ok(WasmProject {
+        Ok(Self {
             flags,
             steps,
             events,
@@ -558,10 +548,10 @@ mod tests {
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let steps = Default::default();
+        let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
             Rc::new(Step::new_empty()),
-            Rc::clone(&steps),
+            &steps,
             Rc::clone(&registries),
             WasmFlags::new(all_wasm_features()),
         )

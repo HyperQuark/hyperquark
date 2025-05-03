@@ -34,13 +34,13 @@ impl GlobalRegistry {
         globals: &mut GlobalSection,
         exports: &mut ExportSection,
     ) {
-        for (key, (ty, initial, mutable, export)) in self.registry().take() {
+        for (key, (ty, suggested_initial, mutable, export)) in self.registry().take() {
             if *export {
                 exports.export(&key, ExportKind::Global, globals.len());
             }
-            let initial = match &*key {
+            let actual_initial = match &*key {
                 "noop_func" => ConstExpr::ref_func(imports.len()),
-                _ => initial,
+                _ => suggested_initial,
             };
             globals.global(
                 GlobalType {
@@ -48,7 +48,7 @@ impl GlobalRegistry {
                     mutable: *mutable,
                     shared: false,
                 },
-                &initial,
+                &actual_initial,
             );
         }
     }

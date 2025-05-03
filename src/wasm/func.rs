@@ -18,45 +18,45 @@ pub enum Instruction {
 impl Instruction {
     pub fn eval(
         &self,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        steps: &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         imported_func_count: u32,
     ) -> HQResult<WInstruction<'static>> {
         Ok(match self {
-            Instruction::Immediate(instr) => instr.clone(),
-            Instruction::LazyStepRef(step) => {
+            Self::Immediate(instr) => instr.clone(),
+            Self::LazyStepRef(step) => {
                 let step_index: u32 = steps
                     .try_borrow()?
                     .get_index_of(
                         &step
                             .upgrade()
-                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
                     )
-                    .ok_or(make_hq_bug!("couldn't find step in step map"))?
+                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 WInstruction::RefFunc(imported_func_count + step_index)
             }
-            Instruction::LazyStepIndex(step) => {
+            Self::LazyStepIndex(step) => {
                 let step_index: i32 = steps
                     .try_borrow()?
                     .get_index_of(
                         &step
                             .upgrade()
-                            .ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
                     )
-                    .ok_or(make_hq_bug!("couldn't find step in step map"))?
+                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 WInstruction::I32Const(step_index)
             }
-            Instruction::LazyWarpedProcCall(proc) => {
+            Self::LazyWarpedProcCall(proc) => {
                 let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {
                     hq_bug!("tried to use uncompiled warped procedure step")
                 };
                 let step_index: u32 = steps
                     .try_borrow()?
                     .get_index_of(step)
-                    .ok_or(make_hq_bug!("couldn't find step in step map"))?
+                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 WInstruction::Call(imported_func_count + step_index)
@@ -83,15 +83,15 @@ impl StepFunc {
         Rc::clone(&self.registries)
     }
 
-    pub fn flags(&self) -> WasmFlags {
+    pub const fn flags(&self) -> WasmFlags {
         self.flags
     }
 
-    pub fn instructions(&self) -> &RefCell<Vec<Instruction>> {
+    pub const fn instructions(&self) -> &RefCell<Vec<Instruction>> {
         &self.instructions
     }
 
-    pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
+    pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, Self>>> {
         Rc::clone(&self.steps)
     }
 
@@ -102,10 +102,10 @@ impl StepFunc {
     /// creates a new step function, with one paramter
     pub fn new(
         registries: Rc<Registries>,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         flags: WasmFlags,
     ) -> Self {
-        StepFunc {
+        Self {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params: Box::new([ValType::I32]),
@@ -113,7 +113,7 @@ impl StepFunc {
             registries,
             flags,
             steps,
-            local_variables: Default::default(),
+            local_variables: RefCell::new(HashMap::default()),
         }
     }
 
@@ -123,10 +123,10 @@ impl StepFunc {
         params: Box<[ValType]>,
         output: Option<ValType>,
         registries: Rc<Registries>,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        steps: Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         flags: WasmFlags,
-    ) -> HQResult<Self> {
-        Ok(StepFunc {
+    ) -> Self {
+        Self {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params,
@@ -134,11 +134,11 @@ impl StepFunc {
             registries,
             flags,
             steps,
-            local_variables: Default::default(),
-        })
+            local_variables: RefCell::new(HashMap::default()),
+        }
     }
 
-    pub fn local_variable(&self, var: RcVar) -> HQResult<u32> {
+    pub fn local_variable(&self, var: &RcVar) -> HQResult<u32> {
         Ok(
             match self.local_variables.try_borrow_mut()?.entry(var.clone()) {
                 hash_map::Entry::Occupied(entry) => *entry.get(),
@@ -178,21 +178,17 @@ impl StepFunc {
         self,
         funcs: &mut FunctionSection,
         code: &mut CodeSection,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         imported_func_count: u32,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions.take() {
-            func.instruction(&instruction.eval(Rc::clone(&steps), imported_func_count)?);
+            func.instruction(&instruction.eval(steps, imported_func_count)?);
         }
         func.instruction(&wasm_encoder::Instruction::End);
         let type_index = self.registries().types().register_default((
             self.params.into(),
-            if let Some(output) = self.output {
-                vec![output]
-            } else {
-                vec![]
-            },
+            self.output.map_or_else(Vec::new, |output| vec![output]),
         ))?;
         funcs.function(type_index);
         code.function(&func);
@@ -201,10 +197,10 @@ impl StepFunc {
 
     pub fn compile_step(
         step: Rc<Step>,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         registries: Rc<Registries>,
         flags: WasmFlags,
-    ) -> HQResult<StepFunc> {
+    ) -> HQResult<Self> {
         if let Some(step_func) = steps.try_borrow()?.get(&step) {
             return Ok(step_func.clone());
         }
@@ -212,13 +208,13 @@ impl StepFunc {
             let arg_types = proc_context
                 .arg_types()
                 .iter()
-                .cloned()
+                .copied()
                 .map(WasmProject::ir_type_to_wasm)
                 .collect::<HQResult<Box<[_]>>>()?;
-            let input_types = arg_types.iter().chain(&[ValType::I32]).cloned().collect();
-            StepFunc::new_with_types(input_types, None, registries, Rc::clone(&steps), flags)?
+            let input_types = arg_types.iter().chain(&[ValType::I32]).copied().collect();
+            Self::new_with_types(input_types, None, registries, Rc::clone(steps), flags)
         } else {
-            StepFunc::new(registries, Rc::clone(&steps), flags)
+            Self::new(registries, Rc::clone(steps), flags)
         };
         let mut instrs = vec![];
         let mut type_stack = vec![];
@@ -229,7 +225,7 @@ impl StepFunc {
             instrs.append(&mut wrap_instruction(
                 &step_func,
                 Rc::clone(&inputs),
-                opcode.clone(),
+                opcode,
             )?);
             if let Some(output) = opcode.output_type(inputs)? {
                 type_stack.push(output);
@@ -243,7 +239,7 @@ impl StepFunc {
         Ok(step_func)
     }
 
-    pub fn compile_inner_step(&self, step: Rc<Step>) -> HQResult<Vec<Instruction>> {
+    pub fn compile_inner_step(&self, step: &Rc<Step>) -> HQResult<Vec<Instruction>> {
         step.make_inlined()?;
         let mut instrs = vec![];
         let mut type_stack = vec![];
@@ -251,11 +247,7 @@ impl StepFunc {
             let inputs = type_stack
                 .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
                 .collect();
-            instrs.append(&mut wrap_instruction(
-                self,
-                Rc::clone(&inputs),
-                opcode.clone(),
-            )?);
+            instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
             if let Some(output) = opcode.output_type(inputs)? {
                 type_stack.push(output);
             }

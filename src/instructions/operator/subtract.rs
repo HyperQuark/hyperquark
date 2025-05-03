@@ -51,13 +51,14 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 }
 
 pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
+    hq_assert!(inputs.len() == 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
     let maybe_positive = t1.maybe_positive() || t2.maybe_negative();
     let maybe_negative = t1.maybe_negative() || t2.maybe_positive();
     let maybe_zero = ((t1.maybe_zero() || t1.maybe_nan()) && (t2.maybe_zero() || t2.maybe_nan()))
-        || (t1.maybe_positive() && t2.maybe_negative())
-        || (t1.maybe_negative() && t2.maybe_positive());
+        || (t1.maybe_positive() && t2.maybe_positive())
+        || (t1.maybe_negative() && t2.maybe_negative());
     let maybe_nan =
         IrType::FloatPosInf.intersects(t1.and(t2)) || IrType::FloatNegInf.intersects(t1.and(t2));
     Ok(Some(if IrType::QuasiInt.contains(t1.or(t2)) {

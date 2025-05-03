@@ -1,6 +1,15 @@
 //! Contains information about instructions (roughly anaologus to blocks),
 //! including input type validation, output type mapping, and WASM generation.
 
+#![allow(
+    clippy::unnecessary_wraps,
+    reason = "many functions here needlessly return `Result`s in order to keep type signatures consistent"
+)]
+#![allow(
+    clippy::needless_pass_by_value,
+    reason = "there are so many `Rc<T>`s here which I don't want to change"
+)]
+
 use crate::prelude::*;
 
 mod control;
@@ -22,14 +31,14 @@ pub use input_switcher::wrap_instruction;
 pub use hq::r#yield::YieldMode;
 
 mod prelude {
-    pub(crate) use crate::ir::Type as IrType;
+    pub use crate::ir::Type as IrType;
     pub use crate::prelude::*;
-    pub(crate) use crate::wasm::{InternalInstruction, StepFunc};
+    pub use crate::wasm::{InternalInstruction, StepFunc};
     pub use wasm_encoder::{RefType, ValType};
     pub use wasm_gen::wasm;
 
     /// Canonical NaN + bit 33, + string pointer in bits 1-32
-    pub const BOXED_STRING_PATTERN: i64 = 0x7FF80001 << 32;
+    pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
     /// Canonical NaN + bit 33, + i32 in bits 1-32
-    pub const BOXED_INT_PATTERN: i64 = 0x7ff80002 << 32;
+    pub const BOXED_INT_PATTERN: i64 = 0x7ff8_0002 << 32;
 }

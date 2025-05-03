@@ -16,8 +16,8 @@ pub fn wasm(
         branch_else,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let if_instructions = func.compile_inner_step(Rc::clone(branch_if))?;
-    let else_instructions = func.compile_inner_step(Rc::clone(branch_else))?;
+    let if_instructions = func.compile_inner_step(branch_if)?;
+    let else_instructions = func.compile_inner_step(branch_else)?;
     let block_type = func
         .registries()
         .types()

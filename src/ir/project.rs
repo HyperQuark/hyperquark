@@ -15,28 +15,28 @@ pub struct IrProject {
 }
 
 impl IrProject {
-    pub fn threads(&self) -> &RefCell<Box<[Thread]>> {
+    pub const fn threads(&self) -> &RefCell<Box<[Thread]>> {
         &self.threads
     }
 
-    pub fn steps(&self) -> &RefCell<StepSet> {
+    pub const fn steps(&self) -> &RefCell<StepSet> {
         &self.steps
     }
 
-    pub fn targets(&self) -> &RefCell<IndexMap<Box<str>, Rc<Target>>> {
+    pub const fn targets(&self) -> &RefCell<IndexMap<Box<str>, Rc<Target>>> {
         &self.targets
     }
 
-    pub fn global_variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
+    pub const fn global_variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
         &self.global_variables
     }
 
     pub fn new(global_variables: BTreeMap<Box<str>, Rc<Variable>>) -> Self {
-        IrProject {
+        Self {
             threads: RefCell::new(Box::new([])),
-            steps: RefCell::new(Default::default()),
+            steps: RefCell::new(IndexSet::default()),
             global_variables,
-            targets: RefCell::new(Default::default()),
+            targets: RefCell::new(IndexMap::default()),
         }
     }
 
@@ -57,12 +57,12 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             sb3.targets
                 .iter()
                 .find(|target| target.is_stage)
-                .ok_or(make_hq_bad_proj!("missing stage target"))?,
+                .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
         );
 
-        let project = Rc::new(IrProject::new(global_variables));
+        let project = Self::new(IrProject::new(global_variables));
 
-        let (threads, targets): (Vec<_>, Vec<_>) = sb3
+        let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
             .iter()
             .enumerate()
@@ -72,13 +72,13 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
                 let ir_target = Rc::new(Target::new(
                     target.is_stage,
                     variables,
-                    Rc::downgrade(&project),
+                    Self::downgrade(&project),
                     procedures,
                     index
                         .try_into()
                         .map_err(|_| make_hq_bug!("target index out of bounds"))?,
                 ));
-                procs_from_target(target, Rc::clone(&ir_target))?;
+                procs_from_target(target, &ir_target)?;
                 let blocks = &target.blocks;
                 let threads = blocks
                     .iter()
@@ -87,7 +87,7 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
                             block,
                             blocks,
                             Rc::downgrade(&ir_target),
-                            Rc::downgrade(&project),
+                            &Self::downgrade(&project),
                             target.comments.clone().iter().any(|(_id, comment)| {
                                 matches!(comment.block_id.clone(), Some(d) if &d == id)
                                     && *comment.text.clone() == *"hq-dbg"
@@ -103,7 +103,7 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             .iter()
             .cloned()
             .unzip();
-        let threads = threads.into_iter().flatten().collect::<Box<[_]>>();
+        let threads = threads_vec.into_iter().flatten().collect::<Box<[_]>>();
         *project
             .threads
             .try_borrow_mut()

@@ -10,21 +10,21 @@ pub enum WasmStringType {
     //Manual,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
 pub enum WasmOpt {
     On,
     Off,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
 pub enum Scheduler {
     TypedFuncRef,
     CallIndirect,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
 pub enum WasmFeature {
     ReferenceTypes,
@@ -34,14 +34,14 @@ pub enum WasmFeature {
 
 #[wasm_bindgen]
 pub fn all_wasm_features() -> Vec<WasmFeature> {
-    use WasmFeature::*;
+    use WasmFeature::{JSStringBuiltins, ReferenceTypes, TypedFunctionReferences};
     vec![ReferenceTypes, TypedFunctionReferences, JSStringBuiltins]
 }
 
 // no &self because wasm_bidgen doesn't like it
 #[wasm_bindgen]
 pub fn wasm_feature_detect_name(feat: WasmFeature) -> String {
-    use WasmFeature::*;
+    use WasmFeature::{JSStringBuiltins, ReferenceTypes, TypedFunctionReferences};
     match feat {
         ReferenceTypes => "referenceTypes",
         TypedFunctionReferences => "typedFunctionReferences",
@@ -52,6 +52,10 @@ pub fn wasm_feature_detect_name(feat: WasmFeature) -> String {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[wasm_bindgen(getter_with_clone)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "wasm-bindgen introduces unsafe methods"
+)]
 pub struct FlagInfo {
     /// a human-readable name for the flag
     pub name: String,
@@ -64,11 +68,11 @@ pub struct FlagInfo {
 #[wasm_bindgen]
 impl FlagInfo {
     fn new() -> Self {
-        FlagInfo {
-            name: "".into(),
-            description: "".into(),
-            ty: "".into(),
-            wasm_features: Default::default(),
+        Self {
+            name: String::new(),
+            description: String::new(),
+            ty: String::new(),
+            wasm_features: BTreeMap::default(),
         }
     }
 
@@ -93,11 +97,10 @@ impl FlagInfo {
     }
 
     #[wasm_bindgen]
-    pub fn wasm_features(&self, flag: String) -> Option<Vec<WasmFeature>> {
-        self.wasm_features.get(&flag).cloned()
+    pub fn wasm_features(&self, flag: &str) -> Option<Vec<WasmFeature>> {
+        self.wasm_features.get(flag).cloned()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     #[wasm_bindgen]
     pub fn to_js(&self) -> HQResult<JsValue> {
         serde_wasm_bindgen::to_value(&self)
@@ -122,6 +125,10 @@ macro_rules! ty_str {
 /// compilation flags
 #[derive(Copy, Clone, Serialize, Deserialize)]
 #[wasm_bindgen]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "wasm-bindgen introduces unsafe methods"
+)]
 pub struct WasmFlags {
     pub string_type: WasmStringType,
     pub wasm_opt: WasmOpt,
@@ -130,13 +137,23 @@ pub struct WasmFlags {
 
 #[wasm_bindgen]
 impl WasmFlags {
+    // these attributes should be at the item level, but they don't seem to work there.
+    #![expect(
+        clippy::wrong_self_convention,
+        clippy::trivially_copy_pass_by_ref,
+        reason = "to_js taking `self` causes weird errors when wasm-fied"
+    )]
+    #![expect(
+        clippy::needless_pass_by_value,
+        reason = "wasm-bindgen does not support &[T]"
+    )]
+
     #[wasm_bindgen]
-    pub fn from_js(js: JsValue) -> HQResult<WasmFlags> {
+    pub fn from_js(js: JsValue) -> HQResult<Self> {
         serde_wasm_bindgen::from_value(js)
             .map_err(|_| make_hq_bug!("couldn't convert JsValue to WasmFlags"))
     }
 
-    #[allow(clippy::wrong_self_convention)]
     #[wasm_bindgen]
     pub fn to_js(&self) -> HQResult<JsValue> {
         serde_wasm_bindgen::to_value(&self)
@@ -144,9 +161,9 @@ impl WasmFlags {
     }
 
     #[wasm_bindgen(constructor)]
-    pub fn new(wasm_features: Vec<WasmFeature>) -> WasmFlags {
-        crate::log(format!("{:?}", wasm_features).as_str());
-        WasmFlags {
+    pub fn new(wasm_features: Vec<WasmFeature>) -> Self {
+        crate::log(format!("{wasm_features:?}").as_str());
+        Self {
             wasm_opt: WasmOpt::On,
             string_type: if wasm_features.contains(&WasmFeature::JSStringBuiltins) {
                 WasmStringType::JsStringBuiltins

@@ -1,6 +1,34 @@
+#![feature(stmt_expr_attributes)]
+#![feature(if_let_guard)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
-#![allow(clippy::new_without_default)]
+#![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]
+#![allow(
+    clippy::non_std_lazy_statics,
+    reason = "bug in clippy (https://github.com/rust-lang/rust-clippy/issues/14729)"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "Too many Results everywhere to document every possible error case. Errors should be self-descriptive and user readable anyway."
+)]
+#![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
+#![warn(
+    clippy::alloc_instead_of_core,
+    clippy::clone_on_ref_ptr,
+    clippy::dbg_macro,
+    clippy::expect_used,
+    clippy::get_unwrap,
+    clippy::missing_asserts_for_indexing,
+    clippy::panic,
+    clippy::rc_buffer,
+    clippy::redundant_type_annotations,
+    clippy::shadow_reuse,
+    clippy::std_instead_of_alloc,
+    clippy::std_instead_of_core,
+    clippy::string_to_string,
+    clippy::unwrap_used,
+    clippy::wildcard_enum_match_arm
+)]
 
 #[macro_use]
 extern crate alloc;
@@ -27,12 +55,13 @@ mod registry;
 pub mod prelude {
     pub use crate::registry::{Registry, RegistryDefault};
     pub use crate::{HQError, HQResult};
-    pub use alloc::borrow::{Borrow, Cow};
+    pub use alloc::borrow::Cow;
     pub use alloc::boxed::Box;
     pub use alloc::collections::{BTreeMap, BTreeSet};
     pub use alloc::rc::{Rc, Weak};
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;
+    pub use core::borrow::Borrow;
     pub use core::cell::RefCell;
     pub use core::fmt;
 
@@ -45,10 +74,6 @@ pub mod prelude {
     pub use itertools::Itertools;
 }
 
-use prelude::*;
-
-// use wasm::wasm;
-
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen(js_namespace=console)]
 extern "C" {
@@ -57,7 +82,7 @@ extern "C" {
 
 #[cfg(not(target_family = "wasm"))]
 pub fn log(s: &str) {
-    println!("{s}")
+    println!("{s}");
 }
 
 #[cfg(feature = "compiler")]
@@ -65,6 +90,6 @@ pub fn log(s: &str) {
 pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::FinishedWasm> {
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
     let ir_proj = sb3_proj.try_into()?;
-    optimisation::ir_optimise(Rc::clone(&ir_proj))?;
-    wasm::WasmProject::from_ir(ir_proj, flags)?.finish()
+    optimisation::ir_optimise(&ir_proj)?;
+    wasm::WasmProject::from_ir(&ir_proj, flags)?.finish()
 }

@@ -102,10 +102,10 @@ pub fn wasm(
                 ]
             }
         },
-        YieldMode::Inline(step) => func.compile_inner_step(Rc::clone(step))?,
+        YieldMode::Inline(step) => func.compile_inner_step(step)?,
         YieldMode::Schedule(weak_step) => {
-            let step =
-                Weak::upgrade(weak_step).ok_or(make_hq_bug!("couldn't upgrade Weak<Step>"))?;
+            let step = Weak::upgrade(weak_step)
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
             step.make_used_non_inline()?;
             match func.flags().scheduler {
                 Scheduler::CallIndirect => {
@@ -145,7 +145,7 @@ pub fn wasm(
                 }
             }
         }
-        _ => hq_todo!(),
+        YieldMode::Tail(_) => hq_todo!(),
     })
 }
 

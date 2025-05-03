@@ -14,8 +14,8 @@ pub struct Variable {
 }
 
 impl Variable {
-    pub fn new(ty: Type, initial_value: VarVal, local: bool) -> Self {
-        Variable {
+    pub const fn new(ty: Type, initial_value: VarVal, local: bool) -> Self {
+        Self {
             possible_types: RefCell::new(ty),
             initial_value,
             local,
@@ -31,11 +31,11 @@ impl Variable {
         self.possible_types.borrow()
     }
 
-    pub fn initial_value(&self) -> &VarVal {
+    pub const fn initial_value(&self) -> &VarVal {
         &self.initial_value
     }
 
-    pub fn local(&self) -> bool {
+    pub const fn local(&self) -> bool {
         self.local
     }
 }
@@ -66,6 +66,7 @@ pub fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, Rc<Variab
                 id.clone(),
                 Rc::new(Variable::new(
                     Type::none(),
+                    #[expect(clippy::unwrap_used, reason = "this field exists on all variants")]
                     var_info.get_1().unwrap().clone(),
                     false,
                 )),

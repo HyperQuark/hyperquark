@@ -1,0 +1,4 @@
+allowed-duplicate-crates = ["syn"]
+too-many-lines-threshold = 150
+allow-panic-in-tests = true
+allow-unwrap-in-tests = true

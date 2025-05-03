@@ -11,7 +11,7 @@ pub fn wasm(
 ) -> HQResult<Vec<InternalInstruction>> {
     hq_assert!(
         WasmProject::ir_type_to_wasm(*ty)?
-            == *func.params().get(*index).ok_or(make_hq_bug!(
+            == *func.params().get(*index).ok_or_else(|| make_hq_bug!(
                 "proc argument index was out of bounds for func params"
             ))?,
         "proc argument type didn't match that of the corresponding function param"

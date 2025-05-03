@@ -12,11 +12,11 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn is_stage(&self) -> bool {
+    pub const fn is_stage(&self) -> bool {
         self.is_stage
     }
 
-    pub fn variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
+    pub const fn variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
         &self.variables
     }
 
@@ -32,18 +32,18 @@ impl Target {
         Ok(self.procedures.try_borrow_mut()?)
     }
 
-    pub fn index(&self) -> u32 {
+    pub const fn index(&self) -> u32 {
         self.index
     }
 
-    pub fn new(
+    pub const fn new(
         is_stage: bool,
         variables: BTreeMap<Box<str>, Rc<Variable>>,
         project: Weak<IrProject>,
         procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
         index: u32,
     ) -> Self {
-        Target {
+        Self {
             is_stage,
             variables,
             project,

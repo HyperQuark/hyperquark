@@ -25,19 +25,19 @@ impl PartialEq for Step {
 impl Eq for Step {}
 
 impl Step {
-    pub fn context(&self) -> &StepContext {
+    pub const fn context(&self) -> &StepContext {
         &self.context
     }
 
-    pub fn opcodes(&self) -> &RefCell<Vec<IrOpcode>> {
+    pub const fn opcodes(&self) -> &RefCell<Vec<IrOpcode>> {
         &self.opcodes
     }
 
-    pub fn used_non_inline(&self) -> &RefCell<bool> {
+    pub const fn used_non_inline(&self) -> &RefCell<bool> {
         &self.used_non_inline
     }
 
-    pub fn inline(&self) -> &RefCell<bool> {
+    pub const fn inline(&self) -> &RefCell<bool> {
         &self.inline
     }
 
@@ -51,7 +51,7 @@ impl Step {
         opcodes: Vec<IrOpcode>,
         project: Weak<IrProject>,
     ) -> Self {
-        Step {
+        Self {
             id: id.unwrap_or_else(|| Uuid::new_v4().to_string().into()),
             context,
             opcodes: RefCell::new(opcodes),
@@ -65,12 +65,12 @@ impl Step {
         id: Option<Box<str>>,
         context: StepContext,
         opcodes: Vec<IrOpcode>,
-        project: Weak<IrProject>,
+        project: &Weak<IrProject>,
     ) -> HQResult<Rc<Self>> {
-        let step = Rc::new(Step::new(id, context, opcodes, Weak::clone(&project)));
+        let step = Rc::new(Self::new(id, context, opcodes, Weak::clone(project)));
         project
             .upgrade()
-            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
             .steps()
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
@@ -79,7 +79,7 @@ impl Step {
     }
 
     pub fn new_empty() -> Self {
-        Step {
+        Self {
             id: "".into(),
             context: StepContext {
                 target: Weak::new(),
@@ -94,9 +94,9 @@ impl Step {
         }
     }
 
-    pub fn new_terminating(context: StepContext, project: Weak<IrProject>) -> HQResult<Rc<Step>> {
+    pub fn new_terminating(context: StepContext, project: &Weak<IrProject>) -> HQResult<Rc<Self>> {
         const ID: &str = "__terminating_step_hopefully_this_id_wont_cause_any_clashes";
-        let step = Rc::new(Step {
+        let step = Rc::new(Self {
             id: ID.into(),
             context,
             opcodes: RefCell::new(vec![IrOpcode::hq_yield(HqYieldFields {
@@ -104,11 +104,11 @@ impl Step {
             })]),
             used_non_inline: RefCell::new(false),
             inline: RefCell::new(false),
-            project: Weak::clone(&project),
+            project: Weak::clone(project),
         });
         project
             .upgrade()
-            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
             .steps()
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
@@ -126,13 +126,13 @@ impl Step {
         block: &Block,
         block_id: Box<str>,
         blocks: &BlockMap,
-        context: StepContext,
-        project: Weak<IrProject>,
+        context: &StepContext,
+        project: &Weak<IrProject>,
         final_next_blocks: NextBlocks,
-    ) -> HQResult<Rc<Step>> {
+    ) -> HQResult<Rc<Self>> {
         if let Some(existing_step) = project
             .upgrade()
-            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
             .steps()
             .try_borrow()
             .map_err(|_| make_hq_bug!("couldn't immutably borrow cell"))?
@@ -142,21 +142,15 @@ impl Step {
             crate::log("step from_block already exists!");
             return Ok(Rc::clone(existing_step));
         }
-        let step = Rc::new(Step::new(
+        let step = Rc::new(Self::new(
             Some(block_id),
             context.clone(),
-            blocks::from_block(
-                block,
-                blocks,
-                &context,
-                Weak::clone(&project),
-                final_next_blocks,
-            )?,
-            Weak::clone(&project),
+            blocks::from_block(block, blocks, context, project, final_next_blocks)?,
+            Weak::clone(project),
         ));
         project
             .upgrade()
-            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
             .steps()
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
@@ -168,7 +162,7 @@ impl Step {
     pub fn make_used_non_inline(&self) -> HQResult<()> {
         if *self.used_non_inline.try_borrow()? {
             return Ok(());
-        };
+        }
         *self
             .used_non_inline
             .try_borrow_mut()
@@ -179,7 +173,7 @@ impl Step {
     pub fn make_inlined(&self) -> HQResult<()> {
         if *self.inline.try_borrow()? {
             return Ok(());
-        };
+        }
         *self
             .inline
             .try_borrow_mut()

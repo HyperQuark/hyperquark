@@ -7,15 +7,15 @@ use super::{GlobalExportable, GlobalMutable, GlobalRegistry, WasmProject};
 pub struct VariableRegistry(Rc<GlobalRegistry>);
 
 impl VariableRegistry {
-    fn globals(&self) -> &Rc<GlobalRegistry> {
+    const fn globals(&self) -> &Rc<GlobalRegistry> {
         &self.0
     }
 
     pub fn new(globals: &Rc<GlobalRegistry>) -> Self {
-        VariableRegistry(Rc::clone(globals))
+        Self(Rc::clone(globals))
     }
 
-    pub fn register(&self, var: RcVar) -> HQResult<u32> {
+    pub fn register(&self, var: &RcVar) -> HQResult<u32> {
         self.globals().register(
             format!("__rcvar_{:p}", Rc::as_ptr(&var.0)).into(),
             (

@@ -15,33 +15,33 @@ pub struct Registries {
 
 impl Default for Registries {
     fn default() -> Self {
-        let globals = Default::default();
+        let globals = Rc::new(GlobalRegistry::default());
         let variables = VariableRegistry::new(&globals);
-        Registries {
+        Self {
             globals,
             variables,
-            strings: Default::default(),
-            external_functions: Default::default(),
-            tables: Default::default(),
-            types: Default::default(),
+            strings: StringRegistry::default(),
+            external_functions: ExternalFunctionRegistry::default(),
+            tables: TableRegistry::default(),
+            types: TypeRegistry::default(),
         }
     }
 }
 
 impl Registries {
-    pub fn strings(&self) -> &StringRegistry {
+    pub const fn strings(&self) -> &StringRegistry {
         &self.strings
     }
 
-    pub fn external_functions(&self) -> &ExternalFunctionRegistry {
+    pub const fn external_functions(&self) -> &ExternalFunctionRegistry {
         &self.external_functions
     }
 
-    pub fn types(&self) -> &TypeRegistry {
+    pub const fn types(&self) -> &TypeRegistry {
         &self.types
     }
 
-    pub fn tables(&self) -> &TableRegistry {
+    pub const fn tables(&self) -> &TableRegistry {
         &self.tables
     }
 
@@ -49,7 +49,7 @@ impl Registries {
         &self.globals
     }
 
-    pub fn variables(&self) -> &VariableRegistry {
+    pub const fn variables(&self) -> &VariableRegistry {
         &self.variables
     }
 }

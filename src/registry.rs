@@ -11,8 +11,8 @@ impl<K, V> Default for MapRegistry<K, V>
 where
     K: Hash + Eq + Clone,
 {
-    fn default() -> MapRegistry<K, V> {
-        MapRegistry(RefCell::new(Default::default()))
+    fn default() -> Self {
+        Self(RefCell::new(IndexMap::default()))
     }
 }
 
@@ -37,8 +37,8 @@ impl<K> Default for SetRegistry<K>
 where
     K: Hash + Eq + Clone,
 {
-    fn default() -> SetRegistry<K> {
-        SetRegistry(RefCell::new(Default::default()))
+    fn default() -> Self {
+        Self(RefCell::new(IndexMap::default()))
     }
 }
 
@@ -69,7 +69,7 @@ pub trait Registry: Sized {
     fn register<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+        <N as TryFrom<usize>>::Error: core::fmt::Debug,
     {
         self.registry()
             .try_borrow_mut()
@@ -80,7 +80,7 @@ pub trait Registry: Sized {
             self.registry()
                 .try_borrow()?
                 .get_index_of(&key)
-                .ok_or(make_hq_bug!("couldn't find entry in Registry"))?,
+                .ok_or_else(|| make_hq_bug!("couldn't find entry in Registry"))?,
         )
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
@@ -88,7 +88,7 @@ pub trait Registry: Sized {
     fn register_override<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+        <N as TryFrom<usize>>::Error: core::fmt::Debug,
     {
         self.registry()
             .try_borrow_mut()
@@ -99,7 +99,7 @@ pub trait Registry: Sized {
             self.registry()
                 .try_borrow()?
                 .get_index_of(&key)
-                .ok_or(make_hq_bug!("couldn't find entry in Registry"))?,
+                .ok_or_else(|| make_hq_bug!("couldn't find entry in Registry"))?,
         )
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
@@ -109,9 +109,9 @@ pub trait RegistryDefault: Registry<Value: Default> {
     fn register_default<N>(&self, key: Self::Key) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: alloc::fmt::Debug,
+        <N as TryFrom<usize>>::Error: core::fmt::Debug,
     {
-        self.register(key, Default::default())
+        self.register(key, Self::Value::default())
     }
 }
 

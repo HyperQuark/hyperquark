@@ -18,7 +18,7 @@ impl StepContext {
         Ok(self
             .target
             .upgrade()
-            .ok_or(make_hq_bug!("couldn't upgrade Weak"))?
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
             .project())
     }
 }

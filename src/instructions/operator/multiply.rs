@@ -51,6 +51,7 @@ pub fn acceptable_inputs() -> Rc<[IrType]> {
 }
 
 pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
+    hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
     let maybe_positive = (t1.maybe_positive() && t2.maybe_positive())

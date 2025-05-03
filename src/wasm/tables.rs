@@ -33,11 +33,11 @@ impl TableRegistry {
         {
             // TODO: allow choosing whether to export a table or not?
             exports.export(&key, ExportKind::Table, tables.len());
-            let init = match &*key {
+            let maybe_init = match &*key {
                 "threads" => Some(ConstExpr::ref_func(imports.len())),
                 _ => init,
             };
-            if let Some(init) = init {
+            if let Some(init) = maybe_init {
                 tables.table_with_init(
                     TableType {
                         element_type,

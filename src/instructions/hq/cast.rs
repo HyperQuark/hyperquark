@@ -9,7 +9,7 @@ fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
     let Some(from_base) = from.base_type() else {
         hq_bug!("from type has no base type")
     };
-    Ok(if to_base_types.contains(&&from_base) {
+    Ok(if to_base_types.contains(&from_base) {
         from_base
     } else {
         let mut candidates = vec![];
@@ -19,7 +19,7 @@ fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
             IrType::String => &[IrType::Float, IrType::QuasiInt] as &[IrType],
             _ => unreachable!(),
         } {
-            if to_base_types.contains(&preference) {
+            if to_base_types.contains(preference) {
                 candidates.push(preference);
             }
         }
@@ -96,11 +96,11 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Optio
     Ok(Some(
         inputs[0]
             .base_types()
-            .map(|&from| best_cast_candidate(from, to))
+            .map(|from| best_cast_candidate(from, to))
             .collect::<HQResult<Vec<_>>>()?
             .into_iter()
-            .reduce(|acc, el| acc.or(el))
-            .ok_or(make_hq_bug!("input was empty"))?,
+            .reduce(IrType::or)
+            .ok_or_else(|| make_hq_bug!("input was empty"))?,
     ))
 }
 

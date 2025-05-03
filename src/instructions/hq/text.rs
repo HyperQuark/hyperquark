@@ -39,12 +39,10 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Opti
         bool if bool.to_lowercase() == "true" || bool.to_lowercase() == "false" => {
             IrType::StringBoolean
         }
-        num if num.parse::<f64>().is_ok() => {
-            if num.parse::<f64>().unwrap().is_nan() {
-                IrType::StringNan
-            } else {
-                IrType::StringNumber
-            }
+        num if let Ok(float) = num.parse::<f64>()
+            && !float.is_nan() =>
+        {
+            IrType::StringNumber
         }
         _ => IrType::StringNan,
     }))

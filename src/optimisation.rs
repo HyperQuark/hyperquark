@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 mod var_types;
 
-pub fn ir_optimise(ir: Rc<IrProject>) -> HQResult<()> {
-    var_types::optimise_var_types(Rc::clone(&ir))?;
+pub fn ir_optimise(ir: &Rc<IrProject>) -> HQResult<()> {
+    var_types::optimise_var_types(ir)?;
     Ok(())
 }

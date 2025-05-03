@@ -13,7 +13,7 @@ pub struct HQError {
     pub line: u32,
     pub column: u32,
 }
-#[derive(Clone, Debug, PartialEq)] // todo: get rid of this once all expects are gone
+#[derive(Clone, Debug, PartialEq, Eq)] // todo: get rid of this once all expects are gone
 pub enum HQErrorType {
     MalformedProject,
     InternalError,
@@ -21,8 +21,8 @@ pub enum HQErrorType {
 }
 
 impl From<HQError> for JsValue {
-    fn from(val: HQError) -> JsValue {
-        JsValue::from_str(match val.err_type {
+    fn from(val: HQError) -> Self {
+        Self::from_str(match val.err_type {
             HQErrorType::Unimplemented => format!("todo: {}<br>at {}:{}:{}<br>this is a bug or missing feature that is known and will be fixed or implemented in a future update", val.msg, val.file, val.line, val.column),
             HQErrorType::InternalError => format!("error: {}<br>at {}:{}:{}<br>this is probably a bug with HyperQuark itself. Please report this bug, with this error message, at <a href=\"https://github.com/hyperquark/hyperquark/issues/new\">https://github.com/hyperquark/hyperquark/issues/new</a>", val.msg, val.file, val.line, val.column),
             HQErrorType::MalformedProject => format!("error: {}<br>at {}:{}:{}<br>this is probably a problem with the project itself, but if it works in vanilla scratch then this is a bug; please report it, by creating an issue at <a href=\"https://github.com/hyperquark/hyperquark/issues/new\">https://github.com/hyperquark/hyperquark/issues/new</a>, including this error message", val.msg, val.file, val.line, val.column),
@@ -32,7 +32,7 @@ impl From<HQError> for JsValue {
 
 impl From<BorrowError> for HQError {
     fn from(_e: BorrowError) -> Self {
-        HQError {
+        Self {
             err_type: HQErrorType::InternalError,
             msg: "couldn't borrow cell".into(),
             file: file!().into(),
@@ -44,7 +44,7 @@ impl From<BorrowError> for HQError {
 
 impl From<BorrowMutError> for HQError {
     fn from(_e: BorrowMutError) -> Self {
-        HQError {
+        Self {
             err_type: HQErrorType::InternalError,
             msg: "couldn't mutably borrow cell".into(),
             file: file!().into(),
@@ -55,6 +55,7 @@ impl From<BorrowMutError> for HQError {
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! hq_todo {
     () => {{
         return Err($crate::HQError {
@@ -77,6 +78,7 @@ macro_rules! hq_todo {
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! hq_bug {
     ($($args:tt)+) => {{
         return Err($crate::HQError {
@@ -90,6 +92,7 @@ macro_rules! hq_bug {
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! hq_assert {
     ($expr:expr) => {{
         if !($expr) {
@@ -100,7 +103,8 @@ macro_rules! hq_assert {
                 line: line!(),
                 column: column!()
             });
-        }
+        };
+        assert!($expr);
     }};
     ($expr:expr, $($args:tt)+) => {{
         if !($expr) {
@@ -111,11 +115,13 @@ macro_rules! hq_assert {
                 line: line!(),
                 column: column!()
             });
-        }
+        };
+        assert!($expr);
     }};
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! hq_assert_eq {
     ($l:expr, $r:expr) => {{
         if $l != $r {
@@ -126,7 +132,8 @@ macro_rules! hq_assert_eq {
                 line: line!(),
                 column: column!()
             });
-        }
+        };
+        assert_eq!($l, $r);
     }};
     ($l:expr, $r:expr, $($args:tt)+) => {{
         if $l != $r {
@@ -137,11 +144,13 @@ macro_rules! hq_assert_eq {
                 line: line!(),
                 column: column!()
             });
-        }
+        };
+        assert_eq!($l, $r);
     }};
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! hq_bad_proj {
     ($($args:tt)+) => {{
         return Err($crate::HQError {
@@ -155,6 +164,7 @@ macro_rules! hq_bad_proj {
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! make_hq_todo {
     ($($args:tt)+) => {{
         use $crate::alloc::Box<str>::ToBox<str>;
@@ -169,6 +179,7 @@ macro_rules! make_hq_todo {
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! make_hq_bug {
     ($($args:tt)+) => {{
         $crate::HQError {
@@ -182,6 +193,7 @@ macro_rules! make_hq_bug {
 }
 
 #[macro_export]
+#[clippy::format_args]
 macro_rules! make_hq_bad_proj {
     ($($args:tt)+) => {{
         $crate::HQError {

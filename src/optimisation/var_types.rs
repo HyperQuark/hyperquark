@@ -2,7 +2,7 @@ use crate::instructions::{DataSetvariabletoFields, IrOpcode};
 use crate::ir::{IrProject, Type as IrType};
 use crate::prelude::*;
 
-pub fn optimise_var_types(project: Rc<IrProject>) -> HQResult<()> {
+pub fn optimise_var_types(project: &Rc<IrProject>) -> HQResult<()> {
     crate::log("optimise vars");
     for step in project.steps().borrow().iter() {
         let mut type_stack: Vec<IrType> = vec![]; // a vector of types, and where they came from

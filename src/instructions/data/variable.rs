@@ -10,13 +10,10 @@ pub fn wasm(
     Fields(variable): &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     if variable.0.local() {
-        let local_index: u32 = func.local_variable(RcVar::clone(variable))?;
+        let local_index: u32 = func.local_variable(variable)?;
         Ok(wasm![LocalGet(local_index)])
     } else {
-        let global_index: u32 = func
-            .registries()
-            .variables()
-            .register(RcVar::clone(variable))?;
+        let global_index: u32 = func.registries().variables().register(variable)?;
         Ok(wasm![GlobalGet(global_index)])
     }
 }
