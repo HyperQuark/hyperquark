@@ -69,7 +69,7 @@ try {
     try {
       console.log('loading binaryen...');
       console.log(getSettings().to_js().scheduler)
-      let binaryen = (await import('binaryen-with-extras')).default; // only load binaryen if it's used.
+      let binaryen = (await import('binaryen')).default; // only load binaryen if it's used.
       console.log('optimising using wasm-opt...')
       errorStage.value = "optimising";
       errorMode.value = "A warning";
