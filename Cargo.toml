@@ -8,16 +8,26 @@ publish = false
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 enum-field-getter = { path = "enum-field-getter" }
-wasm-encoder = "0.214.0"
-wasm-bindgen = "0.2.92"
+wasm-encoder = "0.226.0"
 indexmap = { version = "2.0.0", default-features = false }
 hashers = "1.0.1"
 uuid = { version = "1.4.1", default-features = false, features = ["v4", "js"] }
 regex = "1.10.5"
 lazy-regex = "3.2.0"
+bitmask-enum = "2.2.5"
+itertools = { version = "0.13.0", default-features = false, features = ["use_alloc"] }
+split_exact = "1.1.0"
+wasm-bindgen = "0.2.92"
+serde-wasm-bindgen = "0.6.5"
+wasm-gen = { path = "wasm-gen" }
 
-#[dev-dependencies]
+[dev-dependencies]
+wasmparser = "0.226.0"
+wasmprinter = "0.226.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058bdbb0cde924be008ca1e5a67fe39f46b9" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -25,3 +35,10 @@ crate-type = ["cdylib", "rlib"]
 [profile.release]
 lto = true
 opt-level = "z"
+
+[build-dependencies]
+convert_case = "0.6.0"
+
+[features]
+compiler = [] # if we only want to access flags, we don't want to additionally have all the compiler machinery
+default = ["compiler"]

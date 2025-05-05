@@ -1,6 +1,6 @@
-on: [push, workflow_dispatch]
+on: [push, workflow_dispatch, pull_request]
 
-name: CI
+name: CI checks
 
 jobs:
   build:
@@ -16,18 +16,20 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
+          target: wasm32-unknown-unknown
 
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --target=wasm32-unknown-unknown
  
   clippy:
     name: Lint (clippy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install nightly toolchain with clippy available
         uses: actions-rs/toolchain@v1
@@ -48,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install nightly toolchain with rustfmt available
         uses: actions-rs/toolchain@v1
@@ -60,14 +62,12 @@ jobs:
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
-        continue-on-error: true  # WARNING: only for this example, remove it!
         with:
           command: fmt
           args: --all -- --check
-
-  buildwasm:
-    name: Build WASM & website
-    if: github.ref_name == 'main'
+          
+  test:
+    name: Run unit tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -79,34 +79,26 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
-          target: wasm32-unknown-unknown
-      
-      - name: Install wasm-bindgen
+
+      - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: install
-          args: -f wasm-bindgen-cli
-          
-      - name: Install binaryen
-        run: sudo apt-get install binaryen
-      
-      - name: Install node
-        uses: actions/setup-node@v3
-        with:
-          node-version: "20.x"
-          
-      - name: Run npm install
-        run: npm install
-      
-      - name: Build
-        run: chmod +x build.sh && ./build.sh -pWV
-      
-      - name: Move files for gh pages
-        run: mv ./playground/dist docs && cp docs/index.html docs/404.html
-      
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          branch: gh-pages
-          create_branch: true
-          push_options: '--force'
+          command: test
+          args: >-
+            -- 
+            --skip cast::float::js_functions_match_declared_types 
+            --skip cast::int::js_functions_match_declared_types 
+            --skip cast::string::js_functions_match_declared_types 
+            --skip join::tests::js_functions_match_declared_types 
+            --skip lt::tests::js_functions_match_declared_types 
+            --skip gt::tests::js_functions_match_declared_types 
+            --skip equals::tests::js_functions_match_declared_types 
+            --skip length::tests::js_functions_match_declared_types 
+            --skip letter_of::tests::js_functions_match_declared_types 
+            --skip contains::tests::js_functions_match_declared_types
+            --skip dayssince2000::tests::js_functions_match_declared_types 
+            --skip looks::say::tests_debug::js_functions_match_declared_types
+            --skip looks::say::tests_non_debug::js_functions_match_declared_types
+            --skip looks::think::tests_debug::js_functions_match_declared_types
+            --skip looks::think::tests_non_debug::js_functions_match_declared_types
+ 

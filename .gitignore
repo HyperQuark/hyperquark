@@ -4,8 +4,12 @@
 /bad.mjs
 /bad.wat
 /wabt*
-/js/
+/js/compiler
+/js/no-compiler
+/js/imports.ts
+/js/opcodes.js
 /node_modules/
 /package-lock.json
 /playground/dist/
 /.vite/
+/.vscode/

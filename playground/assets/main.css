@@ -15,7 +15,7 @@ a,
 .green {
   text-decoration: none;
   color: hsl(39.3,100%,37%);
-  transition: 0.4s;
+  transition: var(--transition-time);
 }
 
 @media (hover: hover) {

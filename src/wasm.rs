@@ -1,0 +1,21 @@
+mod external;
+pub mod flags;
+mod func;
+mod globals;
+mod project;
+mod registries;
+mod strings;
+mod tables;
+mod type_registry;
+mod variable;
+
+pub use external::{ExternalEnvironment, ExternalFunctionRegistry};
+pub use flags::WasmFlags;
+pub use func::{Instruction as InternalInstruction, StepFunc};
+pub use globals::{Exportable as GlobalExportable, GlobalRegistry, Mutable as GlobalMutable};
+pub use project::{FinishedWasm, WasmProject};
+pub use registries::Registries;
+pub use strings::StringRegistry;
+pub use tables::{TableOptions, TableRegistry};
+pub use type_registry::TypeRegistry;
+pub use variable::VariableRegistry;

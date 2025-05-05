@@ -42,7 +42,7 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
                     tuple_field_info.entry(i).and_modify(|info| {
                         let (ty, used_variants) = info;
                         if quote!{#field_ty}.to_string() != quote!{#ty}.to_string() {
-                            emit_warning!(field, "fields must be the same type across all variants - no getter will be emitted for this field");
+                            emit_warning!(field, "Fields must be the same type across all variants - no getter will be emitted for this field.\nExpected type {}, got {}.", quote!{#ty}.to_string(), quote!{#field_ty}.to_string());
                             tuple_incompatible.insert(i);
                         } else {
                             used_variants.push(variant.ident.to_string());

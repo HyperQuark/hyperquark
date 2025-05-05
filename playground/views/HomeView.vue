@@ -17,13 +17,21 @@ import ProjectInput from '../components/ProjectInput.vue'
     <br>
     <ul id="featured-projects-container">
       <li v-for="project in featuredProjects">
-        <a :href="'/hyperquark/projects/' + project.id">{{ project.name }}</a> by {{ project.author }}
+        <RouterLink :to="'projects/' + project.id">{{ project.name }}</RouterLink> by {{ project.author }}
+      </li>
+    </ul>
+    <br>
+    <h2>Currently implemented blocks:</h2>
+    <ul id="implemented-opcodes-container">
+      <li v-for="opcode in implementedOpcodes" :class="'block-category-' + opcode.match(/^[a-z]+(?=_)/)">
+        {{ opcode }}
       </li>
     </ul>
   </main>
 </template>
 
 <script>
+  import { opcodes as implementedOpcodes } from '@/../js/opcodes.js';
   // todo: just use ids, dynamically fetch/cache title, author thumbnail etc
   // or use a studio like turbowarp
   // but at the moment this is kind of just a quick-access bar for frequently tested projects
@@ -42,6 +50,11 @@ import ProjectInput from '../components/ProjectInput.vue'
       id: 1050568991,
       name: 'fibonacci benchmark',
       author: 'pufferfish_test',
+    },
+    {
+      id: 1116438829,
+      name: 'HQ test project 2.0',
+      author: 'pufferfish_test'
     }
   ];
 </script>
@@ -56,8 +69,32 @@ import ProjectInput from '../components/ProjectInput.vue'
     font-style: italic;
     text-decoration: line-through;
   }
-  ul#featured-projects-container {
+  ul {
     list-style: none;
     padding: inherit;
+  }
+  li.block-category-looks {
+    color:#9966FF;
+  }
+  li.block-category-operator {
+    color: #59C059;
+  }
+  li.block-category-motion {
+    color: #4C97FF;
+  }
+  li.block-category-control {
+    color: #FFAB19;
+  }
+  li.block-category-pen {
+    color: #0fBD8C;
+  }
+  li.block-category-data {
+    color: #FF8C1A;
+  }
+  li.block-category-sensing {
+    color: #5CB1D6;
+  }
+  li.block-category-procedures, li.block-category-argument {
+    color: #FF6680;
   }
 </style>

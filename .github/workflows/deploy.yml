@@ -1,0 +1,76 @@
+on: [push, workflow_dispatch]
+
+name: Deploy
+
+jobs:
+  deploy:
+    name: Build WASM & website
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          target: wasm32-unknown-unknown
+      
+      - name: Install wasm-bindgen
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: -f wasm-bindgen-cli
+          
+      - name: Install cargo-outdir
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-outdir
+
+      - name: Install binaryen
+        run: sudo apt-get install binaryen
+      
+      - name: Install node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20.x"
+          
+      - name: Run npm install
+        run: |
+          npm install
+          npm i -g vite
+          npm i -g binaryen@nightly
+      
+      - name: Build
+        env:
+          VITE_HASH_HISTORY: true
+        run: |
+          chmod +x build.sh && ./build.sh -Wpz
+          vite build --base=/hyperquark/$BRANCH_NAME/
+      
+      - name: Move files to tmp
+        run: mv ./playground/dist /tmp/hq-dist
+      
+      - name: checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      
+      - name: move file to gh-pages
+        run: |
+          rm -rf ./$BRANCH_NAME
+          mv /tmp/hq-dist ./$BRANCH_NAME
+          #mv ./main/* ./
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          branch: gh-pages
+          push_options: '--force-with-lease'

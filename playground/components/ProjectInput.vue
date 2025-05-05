@@ -4,12 +4,12 @@
     {{error}}
   </details>
   <template v-else>
-    <span class=".inline-block">Enter a project id: <span class="projinput inline-block" tabindex=0 @focus="()=>numInput.focus()">https://scratch.mit.edu/projects/<input type="number" min="1" placeholder="771449498" ref="numInput" v-model="projId"></span><button @click="handleNumInput">Go!</button></span> <span class="inline-block">or upload a project: <ProjectFileInput @error="err"></ProjectFileInput></span>
+    <span class=".inline-block">Enter a project id: <span class="projinput inline-block" tabindex=0 @focus="()=>numInput.focus()">https://scratch.mit.edu/projects/<input type="text" placeholder="771449498" ref="numInput" v-model="projId"></span><button @click="handleNumInput">Go!</button></span> <span class="inline-block">or upload a project: <ProjectFileInput @error="err"></ProjectFileInput></span>
   </template>
 </template>
 
 <script setup>
-  import { ref } from "vue";
+  import { ref, watch } from "vue";
   import { useRouter } from 'vue-router';
   import ProjectFileInput from './ProjectFileInput.vue'
   
@@ -18,11 +18,12 @@
   const numInput = ref(null);
   const fileInput = ref(null);
   const error = ref(null);
+
+  watch(projId, () => {
+    projId.value = projId.value.toString().replaceAll(/[^\d]/g, '');
+  });
   
   function handleNumInput() {
-    if (!/^\d+$/.test(projId.value)) {
-      return alert("invalid project id");
-    }
     router.push({ name: 'projectIdPlayer', params: { id: projId.value }})
   }
   
@@ -36,7 +37,7 @@
     display: inline-block;
   }
   
-  input[type="number"] {
+  input[type="text"] {
     width: 12ch;
     color: var(--color-text);
     background: var(--color-background);

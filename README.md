@@ -5,22 +5,42 @@ Compile scratch projects to WASM
 
 ## Prerequisites
 
-- [Rust](https://rust-lang.org) (v1.65.0 or later)
+- [Rust](https://rust-lang.org) v1.65.0 or later
 - the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
 - wasm-bindgen-cli (`cargo install -f wasm-bindgen-cli`)
 - wasm-opt (install binaryen using whatever package manager you use)
+- `cargo-outdir` (`cargo install cargo-outdir`)
 
 ## Building
 
 ```bash
-./build.sh -pVW # use -dVW for a debug build without optimisation
+./build.sh -Wp # use -Wd for a debug build without optimisation
 ```
 
 You may need to run `chmod +x build.sh` if it says it doesn't have permission.
 
 The build script has additonal configuration options; run `./build.sh -h` for info on these.
 
-If you experience runtime stack overflow errors in debug mode, try using the `-O` option to enable wasm-opt.
+If you experience runtime stack overflow errors in debug mode, try using the `-s` or `-z` options to enable wasm-opt; weird wasm errors in production mode may conversely be solved by *disabling* wasm-opt using the `-o` flag.
+
+## Adding a new block
+
+To add a new block named `category_opcode`, if it cannot be reduced to simpler blocks:
+1. create `src/instructions/category/opcode.rs`. Make sure to `use super::super::prelude::*` and create the relevant `pub` items:
+- (optional) `pub struct Fields` (must be `Debug` and `Clone`)
+- `pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Vec<InternalInstruction>>;`
+- - wasm is generated using the `wasm_gen::wasm` macro. See [its README](./wasm-gen/README.md) for usage instructions, or e.g. [say.rs](./src/instructions/looks/say.rs) for an example.
+- `pub fn acceptable_inputs() -> Rc<[IrType]>;`
+- - these should really be base types (see BASE_TYPES in [types.rs](./src/ir/types.rs))
+- `pub fn output_type(inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Option<IrType>>;`
+- - the output type should be as restrictive as possible; loose output types can cause us to lose out on some optimisations
+- ensure to add relevant `instructions_test!`s - see [instructions/tests.rs](./src/instructions/tests.rs) for usage
+2. add `pub mod opcode;` to `src/instructions/category.rs`, creating the file if needed
+- if you're creating the category file, add `mod category;` to `src/instructions.rs`
+3. add the block to `from_normal_block` in `src/ir/blocks.rs`; in most cases this should be a direct mapping of `BlockOpcode::category_opcode => IrOpcode::category_opcode`
+4. add the block's input names to `input_names` in `src/ir/blocks.rs`
+
+If the block *can* be reduced to simpler steps, only carry out steps 3 and 4 above.
 
 ## generared WASM module memory layout
 
