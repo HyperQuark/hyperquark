@@ -2,7 +2,7 @@ import { getSettings } from './settings.js';
 import { imports } from './imports.js';
 import { useDebugModeStore } from '../stores/debug.js';
 import { setup as sharedSetup } from '../../js/shared.ts'
-import { render } from 'vue';
+await import('../assets/renderer.js');
 
 const debugModeStore = useDebugModeStore();
 
