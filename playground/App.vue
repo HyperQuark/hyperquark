@@ -3,9 +3,13 @@ import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useDebugModeStore } from './stores/debug';
 const debugModeStore = useDebugModeStore();
 const route = useRoute();
+
+let is_prod = window.location.host === "hyperquark.edgecompute.app";
+console.log(is_prod)
 </script>
 
 <template>
+  <div v-if="!is_prod" id="dev-banner">This is a development preview of HyperQuark. Please find the most recent stable version at <a href="https://hyperquark.edgecompute.app">https://hyperquark.edgecompute.app</a></div>.
   <div class="wrapper">
     <nav>
       <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark</RouterLink>
@@ -21,6 +25,17 @@ const route = useRoute();
 <style>
   header, main {
     text-align: center;
+  }
+
+  #dev-banner {
+    text-align: center;
+    border: 3px dashed #0d79f5;
+    padding: 0.5em;
+    margin: 0;
+    margin-bottom: 0.5em;
+    position: sticky;
+    top: 5px;
+    background-color: var(--color-background);
   }
 </style>
 

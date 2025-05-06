@@ -57,4 +57,8 @@ const router = createRouter({
   ]
 });
 
+router.afterEach((to, from) => {
+  document.getElementById('canonical-rel').setAttribute('href', `https://hyperquark.edgecompute.app${to.path}`);
+})
+
 export default router;
