@@ -4,15 +4,15 @@ import { useDebugModeStore } from './stores/debug';
 const debugModeStore = useDebugModeStore();
 const route = useRoute();
 
-let is_prod = window.location.host === "hyperquark.edgecompute.app";
-console.log(is_prod)
+const is_prod = window.location.host === "hyperquark.edgecompute.app";
+const hq_version = import.meta.env.VITE_HQ_VERSION_NAME;
 </script>
 
 <template>
   <div v-if="!is_prod" id="dev-banner">This is a development preview of HyperQuark. Please find the most recent stable version at <a href="https://hyperquark.edgecompute.app">https://hyperquark.edgecompute.app</a></div>.
   <div class="wrapper">
     <nav>
-      <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark</RouterLink>
+      <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark <span v-if="!!hq_version" id="hq-version">{{ hq_version }}</span></RouterLink>
       <RouterLink to="/about">About</RouterLink>
       <a href="https://github.com/hyperquark/">Github</a>
       <RouterLink to="/settings">Settings</RouterLink>
@@ -51,9 +51,13 @@ nav {
     height: 30px;
   }
   width: 100%;
-  font-size: 12px;
+  font-size: 0.9em;
   text-align: center;
   margin-bottom: 1rem;
+}
+
+span#hq-version {
+  font-size: 0.8em;
 }
 
 nav a.router-link-exact-active {

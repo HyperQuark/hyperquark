@@ -53,6 +53,11 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: view('Settings'),
+    },
+    {
+      path: '/:_(.*)*',
+      name: '404',
+      component: view('404'),
     }
   ]
 });
