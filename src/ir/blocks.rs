@@ -38,7 +38,7 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
             type_stack.push((output, i));
         }
     }
-    for (pos, ty) in casts {
+    for (pos, ty) in casts.into_iter().rev() {
         blocks.insert(pos + 1, IrOpcode::hq_cast(HqCastFields(ty)));
     }
     Ok(blocks)
