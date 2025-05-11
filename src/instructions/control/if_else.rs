@@ -6,6 +6,12 @@ use wasm_encoder::BlockType;
 pub struct Fields {
     pub branch_if: Rc<Step>,
     pub branch_else: Rc<Step>,
+    /// If both branches converge to the same step at some point, this should be marked here
+    /// to make optimisation easier. This is only necessary if they will converge to that step
+    /// *without* yielding, but if this is present when they *do* yield, it should not cause
+    /// unexpected behaviour.
+    pub converges_to: Option<Rc<Step>>
+}
 }
 
 pub fn wasm(
@@ -14,6 +20,7 @@ pub fn wasm(
     Fields {
         branch_if,
         branch_else,
+        ..
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let if_instructions = func.compile_inner_step(branch_if)?;

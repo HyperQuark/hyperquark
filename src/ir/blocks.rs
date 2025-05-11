@@ -383,6 +383,8 @@ fn generate_loop(
             .push(IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
+                // branches don't converge because the loop yields after every iteration
+                converges_to: None,
             }));
         Ok(setup_instructions
             .into_iter()
@@ -394,6 +396,7 @@ fn generate_loop(
                     Rc::clone(&substack_step)
                 },
                 branch_else: if flip_if { substack_step } else { next_step },
+                converges_to: None,
             })])
             .collect())
     }
@@ -647,11 +650,20 @@ fn from_normal_block(
                                     Step::new_terminating(context.clone(), &context.project()?)?
                                 }
                             };
-                            should_break = true;
-                            vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                branch_if: if_step,
-                                branch_else: else_step,
-                            })]
+                            if context.warp {
+                                vec![IrOpcode::control_if_else(ControlIfElseFields {
+                                    branch_if: if_step,
+                                    branch_else: else_step,
+                                    converges_to: None,
+                                })]
+                            } else {
+                                should_break = true;
+                                vec![IrOpcode::control_if_else(ControlIfElseFields {
+                                    branch_if: if_step,
+                                    branch_else: Rc::clone(&else_step),
+                                    converges_to: Some(else_step),
+                                })]
+                            }
                         }
                         BlockOpcode::control_if_else => 'block: {
                             let BlockArrayOrId::Id(substack1_id) =
@@ -707,13 +719,55 @@ fn from_normal_block(
                                 blocks,
                                 context,
                                 &context.project()?,
-                                next_blocks,
+                                next_blocks.clone(),
                             )?;
-                            should_break = true;
-                            vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                branch_if: if_step,
-                                branch_else: else_step,
-                            })]
+                            if context.warp {
+                                vec![IrOpcode::control_if_else(ControlIfElseFields {
+                                    branch_if: if_step,
+                                    branch_else: else_step,
+                                    converges_to: None,
+                                })]
+                            } else {
+                                let next_step = match next_blocks.pop_inner() {
+                                    (
+                                        Some(NextBlockInfo {
+                                            block: NextBlock::ID(id),
+                                            ..
+                                        }),
+                                        next_next_blocks,
+                                    ) => {
+                                        let Some(next_block_block) = blocks.get(&id.clone()) else {
+                                            hq_bad_proj!("next block doesn't exist")
+                                        };
+                                        Step::from_block(
+                                            next_block_block,
+                                            id.clone(),
+                                            blocks,
+                                            context,
+                                            &context.project()?,
+                                            next_next_blocks,
+                                        )?
+                                    }
+                                    (
+                                        Some(NextBlockInfo {
+                                            block: NextBlock::Step(step),
+                                            ..
+                                        }),
+                                        _,
+                                    ) => step.upgrade().ok_or_else(|| {
+                                        make_hq_bug!("couldn't upgrade Weak<Step>")
+                                    })?,
+                                    (None, _) => {
+                                        Step::new_terminating(context.clone(), &context.project()?)?
+                                    }
+                                };
+                                should_break = true;
+                                vec![IrOpcode::control_if_else(ControlIfElseFields {
+                                    branch_if: if_step,
+                                    branch_else: else_step,
+                                    converges_to: Some(next_step),
+                                })]
+                            }
                         }
                         BlockOpcode::control_repeat => {
                             let variable = RcVar(Rc::new(Variable::new(
