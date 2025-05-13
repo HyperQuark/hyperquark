@@ -14,11 +14,20 @@ pub struct StepContext {
 }
 
 impl StepContext {
-    pub fn project(&self) -> HQResult<Weak<IrProject>> {
+    pub fn project(&self) -> HQResult<Rc<IrProject>> {
         Ok(self
             .target
             .upgrade()
             .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
-            .project())
+            .project()
+        .upgrade()
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?)
+    }
+
+    pub fn target(&self) -> HQResult<Rc<Target>> {
+        Ok(self
+            .target
+            .upgrade()
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?)
     }
 }

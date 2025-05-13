@@ -1,4 +1,5 @@
 use super::context::StepContext;
+use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
     fields::{
@@ -300,23 +301,27 @@ fn generate_loop(
             substack_block,
             blocks,
             context,
-            &context.project()?,
+            &context.target()?.project(),
             NextBlocks::new(false),
         )?;
-        let substack_step =
-            Step::new_rc(None, context.clone(), substack_blocks, &context.project()?)?;
+        let substack_step = Step::new_rc(
+            None,
+            context.clone(),
+            substack_blocks,
+            &context.target()?.project(),
+        )?;
         let condition_step = Step::new_rc(
             None,
             context.clone(),
             condition_instructions,
-            &context.project()?,
+            &context.target()?.project(),
         )?;
         let first_condition_step = if let Some(instrs) = first_condition_instructions {
             Some(Step::new_rc(
                 None,
                 context.clone(),
                 instrs,
-                &context.project()?,
+                &context.target()?.project(),
             )?)
         } else {
             None
@@ -351,40 +356,42 @@ fn generate_loop(
                     id,
                     blocks,
                     context,
-                    &context.project()?,
+                    &context.target()?.project(),
                     outer_next_blocks,
                 )?
             }
             Some(NextBlock::Step(ref step)) => step
                 .upgrade()
                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-            None => Step::new_terminating(context.clone(), &context.project()?)?,
+            None => Step::new_terminating(context.clone(), &context.target()?.project())?,
         };
         let condition_step = Step::new_rc(
             None,
             context.clone(),
             condition_instructions.clone(),
-            &context.project()?,
+            &context.target()?.project(),
         )?;
         let substack_blocks = from_block(
             substack_block,
             blocks,
             context,
-            &context.project()?,
+            &context.target()?.project(),
             NextBlocks::new(false).extend_with_inner(NextBlockInfo {
                 yield_first: true,
                 block: NextBlock::Step(Rc::downgrade(&condition_step)),
             }),
         )?;
-        let substack_step =
-            Step::new_rc(None, context.clone(), substack_blocks, &context.project()?)?;
+        let substack_step = Step::new_rc(
+            None,
+            context.clone(),
+            substack_blocks,
+            &context.target()?.project(),
+        )?;
         condition_step
             .opcodes_mut()?
             .push(IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
-                // branches don't converge because the loop yields after every iteration
-                converges_to: None,
             }));
         Ok(setup_instructions
             .into_iter()
@@ -396,9 +403,197 @@ fn generate_loop(
                     Rc::clone(&substack_step)
                 },
                 branch_else: if flip_if { substack_step } else { next_step },
-                converges_to: None,
             })])
             .collect())
+    }
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "difficult to split up; will probably be condensed in future"
+)]
+fn generate_if_else(
+    if_block: (&Block, Box<str>),
+    maybe_else_block: Option<(&Block, Box<str>)>,
+    block_info: &BlockInfo,
+    final_next_blocks: &NextBlocks,
+    blocks: &BTreeMap<Box<str>, Block>,
+    context: &StepContext,
+    should_break: &mut bool,
+) -> HQResult<Vec<IrOpcode>> {
+    crate::log(
+        format!(
+            "generate_if_else (if block: {}) (else block?: {})",
+            if_block.1,
+            maybe_else_block.is_some()
+        )
+        .as_str(),
+    );
+    let this_project = context.project()?;
+    let dummy_project = Rc::new(IrProject::new(this_project.global_variables().clone()));
+    let dummy_target = Rc::new(Target::new(
+        false,
+        context.target()?.variables().clone(),
+        Rc::downgrade(&dummy_project),
+        RefCell::new(context.target()?.procedures()?.clone()),
+        0,
+    ));
+    dummy_project
+        .targets()
+        .try_borrow_mut()
+        .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+        .insert("".into(), Rc::clone(&dummy_target));
+    let dummy_context = StepContext {
+        target: Rc::downgrade(&dummy_target),
+        ..context.clone()
+    };
+    let dummy_if_step = Step::from_block(
+        if_block.0,
+        if_block.1.clone(),
+        blocks,
+        &dummy_context,
+        &Rc::downgrade(&dummy_project),
+        NextBlocks::new(false),
+    )?;
+    let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
+        Step::from_block(
+            else_block,
+            else_block_id,
+            blocks,
+            &dummy_context,
+            &Rc::downgrade(&dummy_project),
+            NextBlocks::new(false),
+        )?
+    } else {
+        Rc::new(Step::new_empty())
+    };
+    let if_step_yields = dummy_if_step.does_yield()?;
+    let else_step_yields = dummy_else_step.does_yield()?;
+    crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
+    if !context.warp && (dummy_if_step.does_yield()? || dummy_else_step.does_yield()?) {
+        // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
+        // version inline after the branch, and the other tagges on in the substep's NextBlocks
+        // as usual, to allow for extra variable type optimisations.
+        #[expect(
+            clippy::option_if_let_else,
+            reason = "map_or_else alternative is too complex"
+        )]
+        let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
+            (
+                Some(NextBlock::ID(next_block.clone())),
+                final_next_blocks.extend_with_inner(NextBlockInfo {
+                    yield_first: false,
+                    block: NextBlock::ID(next_block.clone()),
+                }),
+            )
+        } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
+            (Some(next_block_info.block), final_next_blocks.clone())
+        } else {
+            (
+                None,
+                final_next_blocks.clone(), // preserve termination behaviour
+            )
+        };
+        let final_if_step = {
+            let s = Step::from_block(
+                if_block.0,
+                if_block.1,
+                blocks,
+                context,
+                &context.target()?.project(),
+                next_blocks.clone(),
+            )?;
+            crate::log("recompiled if_step with correct next blocks");
+            s
+        };
+        let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
+            let s = Step::from_block(
+                else_block,
+                else_block_id,
+                blocks,
+                context,
+                &context.target()?.project(),
+                next_blocks,
+            )?;
+            crate::log("recompiled else step with correct next blocks");
+            s
+        } else {
+            let opcode = match next_block {
+                Some(NextBlock::ID(id)) => {
+                    let next_block = blocks
+                        .get(&id)
+                        .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
+                    crate::log(format!("got NextBlock::Id({id:?})").as_str());
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Inline(Step::from_block(
+                            next_block,
+                            id.clone(),
+                            blocks,
+                            context,
+                            &context.target()?.project(),
+                            next_blocks,
+                        )?),
+                    })]
+                }
+                Some(NextBlock::Step(step)) => {
+                    let rcstep = step
+                        .upgrade()
+                        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
+                    crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Inline(rcstep),
+                    })]
+                }
+                None => {
+                    crate::log("no next block after if!");
+                    if next_blocks.terminating() {
+                        crate::log("terminating after if/else");
+                        vec![IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::None,
+                        })]
+                    } else {
+                        crate::log("not terminating, at end of if/else");
+                        vec![]
+                    }
+                }
+            };
+            Rc::new(Step::new(
+                None,
+                context.clone(),
+                opcode,
+                context.target()?.project(),
+            ))
+        };
+        *should_break = true;
+        Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
+            branch_if: final_if_step,
+            branch_else: final_else_step,
+        })])
+    } else {
+        let final_if_step = Step::from_block(
+            if_block.0,
+            if_block.1,
+            blocks,
+            context,
+            &context.target()?.project(),
+            NextBlocks::new(false),
+        )?;
+        let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
+            Step::from_block(
+                else_block,
+                else_block_id,
+                blocks,
+                context,
+                &context.target()?.project(),
+                NextBlocks::new(false),
+            )?
+        } else {
+            Step::new_rc(None, context.clone(), vec![], &context.target()?.project())?
+        };
+        Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
+            branch_if: final_if_step,
+            branch_else: final_else_step,
+        })])
     }
 }
 
@@ -480,7 +675,8 @@ fn from_normal_block(
                             let variable = if let Some(var) = target.variables().get(&id) {
                                 var
                             } else if let Some(var) = context
-                                .project()?
+                                .target()?
+                                .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
                                 .global_variables()
@@ -518,7 +714,8 @@ fn from_normal_block(
                             let variable = if let Some(var) = target.variables().get(&id) {
                                 var
                             } else if let Some(var) = context
-                                .project()?
+                                .target()?
+                                .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
                                 .global_variables()
@@ -562,7 +759,8 @@ fn from_normal_block(
                             let variable = if let Some(var) = target.variables().get(&id) {
                                 var
                             } else if let Some(var) = context
-                                .project()?
+                                .target()?
+                                .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
                                 .global_variables()
@@ -592,78 +790,15 @@ fn from_normal_block(
                             let Some(substack_block) = blocks.get(&substack_id) else {
                                 hq_bad_proj!("SUBSTACK block doesn't seem to exist")
                             };
-                            let (next_block, if_next_blocks, else_next_blocks) =
-                                #[expect(
-                                    clippy::option_if_let_else,
-                                    reason = "map_or_else alternative is too complex"
-                                )]
-                                if let Some(ref next_block) = block_info.next {
-                                    (
-                                        Some(NextBlock::ID(next_block.clone())),
-                                        final_next_blocks.extend_with_inner(NextBlockInfo {
-                                            yield_first: false,
-                                            block: NextBlock::ID(next_block.clone()),
-                                        }),
-                                        final_next_blocks.clone(),
-                                    )
-                                } else if let (Some(next_block_info), popped_next_blocks) =
-                                    final_next_blocks.clone().pop_inner()
-                                {
-                                    (
-                                        Some(next_block_info.block),
-                                        final_next_blocks.clone(),
-                                        popped_next_blocks,
-                                    )
-                                } else {
-                                    (
-                                        None,
-                                        final_next_blocks.clone(), // preserve termination behaviour
-                                        final_next_blocks.clone(),
-                                    )
-                                };
-                            let if_step = Step::from_block(
-                                substack_block,
-                                substack_id,
+                            generate_if_else(
+                                (substack_block, substack_id),
+                                None,
+                                block_info,
+                                &final_next_blocks,
                                 blocks,
                                 context,
-                                &context.project()?,
-                                if_next_blocks,
-                            )?;
-                            let else_step = match next_block {
-                                Some(NextBlock::ID(id)) => {
-                                    let Some(next_block_block) = blocks.get(&id.clone()) else {
-                                        hq_bad_proj!("next block doesn't exist")
-                                    };
-                                    Step::from_block(
-                                        next_block_block,
-                                        id.clone(),
-                                        blocks,
-                                        context,
-                                        &context.project()?,
-                                        else_next_blocks,
-                                    )?
-                                }
-                                Some(NextBlock::Step(step)) => step
-                                    .upgrade()
-                                    .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-                                None => {
-                                    Step::new_terminating(context.clone(), &context.project()?)?
-                                }
-                            };
-                            if context.warp {
-                                vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: if_step,
-                                    branch_else: else_step,
-                                    converges_to: None,
-                                })]
-                            } else {
-                                should_break = true;
-                                vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: if_step,
-                                    branch_else: Rc::clone(&else_step),
-                                    converges_to: Some(else_step),
-                                })]
-                            }
+                                &mut should_break,
+                            )?
                         }
                         BlockOpcode::control_if_else => 'block: {
                             let BlockArrayOrId::Id(substack1_id) =
@@ -696,78 +831,15 @@ fn from_normal_block(
                             let Some(substack2_block) = blocks.get(&substack2_id) else {
                                 hq_bad_proj!("SUBSTACK2 block doesn't seem to exist")
                             };
-                            let next_blocks = block_info.next.as_ref().map_or_else(
-                                || final_next_blocks.clone(), // preserve termination behaviour
-                                |next_block| {
-                                    final_next_blocks.extend_with_inner(NextBlockInfo {
-                                        yield_first: false,
-                                        block: NextBlock::ID(next_block.clone()),
-                                    })
-                                },
-                            );
-                            let if_step = Step::from_block(
-                                substack1_block,
-                                substack1_id,
+                            generate_if_else(
+                                (substack1_block, substack1_id),
+                                Some((substack2_block, substack2_id)),
+                                block_info,
+                                &final_next_blocks,
                                 blocks,
                                 context,
-                                &context.project()?,
-                                next_blocks.clone(),
-                            )?;
-                            let else_step = Step::from_block(
-                                substack2_block,
-                                substack2_id,
-                                blocks,
-                                context,
-                                &context.project()?,
-                                next_blocks.clone(),
-                            )?;
-                            if context.warp {
-                                vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: if_step,
-                                    branch_else: else_step,
-                                    converges_to: None,
-                                })]
-                            } else {
-                                let next_step = match next_blocks.pop_inner() {
-                                    (
-                                        Some(NextBlockInfo {
-                                            block: NextBlock::ID(id),
-                                            ..
-                                        }),
-                                        next_next_blocks,
-                                    ) => {
-                                        let Some(next_block_block) = blocks.get(&id.clone()) else {
-                                            hq_bad_proj!("next block doesn't exist")
-                                        };
-                                        Step::from_block(
-                                            next_block_block,
-                                            id.clone(),
-                                            blocks,
-                                            context,
-                                            &context.project()?,
-                                            next_next_blocks,
-                                        )?
-                                    }
-                                    (
-                                        Some(NextBlockInfo {
-                                            block: NextBlock::Step(step),
-                                            ..
-                                        }),
-                                        _,
-                                    ) => step.upgrade().ok_or_else(|| {
-                                        make_hq_bug!("couldn't upgrade Weak<Step>")
-                                    })?,
-                                    (None, _) => {
-                                        Step::new_terminating(context.clone(), &context.project()?)?
-                                    }
-                                };
-                                should_break = true;
-                                vec![IrOpcode::control_if_else(ControlIfElseFields {
-                                    branch_if: if_step,
-                                    branch_else: else_step,
-                                    converges_to: Some(next_step),
-                                })]
-                            }
+                                &mut should_break,
+                            )?
                         }
                         BlockOpcode::control_repeat => {
                             let variable = RcVar(Rc::new(Variable::new(
@@ -807,7 +879,7 @@ fn from_normal_block(
                         }
                         BlockOpcode::control_repeat_until => {
                             let condition_instructions =
-                                inputs(block_info, blocks, context, &context.project()?)?;
+                                inputs(block_info, blocks, context, &context.target()?.project())?;
                             let first_condition_instructions = None;
                             let setup_instructions = vec![IrOpcode::hq_drop];
                             generate_loop(
@@ -1044,7 +1116,8 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                     let variable = if let Some(var) = target.variables().get(id) {
                         var
                     } else if let Some(var) = context
-                        .project()?
+                        .target()?
+                        .project()
                         .upgrade()
                         .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
                         .global_variables()
