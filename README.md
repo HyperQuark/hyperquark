@@ -30,7 +30,7 @@ To add a new block named `category_opcode`, if it cannot be reduced to simpler b
 - (optional) `pub struct Fields` (must be `Debug` and `Clone`)
 - `pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Vec<InternalInstruction>>;`
 - - wasm is generated using the `wasm_gen::wasm` macro. See [its README](./wasm-gen/README.md) for usage instructions, or e.g. [say.rs](./src/instructions/looks/say.rs) for an example.
-- `pub fn acceptable_inputs() -> Rc<[IrType]>;`
+- `pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>>;`
 - - these should really be base types (see BASE_TYPES in [types.rs](./src/ir/types.rs))
 - `pub fn output_type(inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Option<IrType>>;`
 - - the output type should be as restrictive as possible; loose output types can cause us to lose out on some optimisations

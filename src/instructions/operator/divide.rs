@@ -15,8 +15,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
 }
 
 // TODO: is integer division acceptable if we can prove that it will give an integer result (or if it is floored?)
-pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Float, IrType::Float])
+pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([IrType::Float, IrType::Float]))
 }
 
 pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {

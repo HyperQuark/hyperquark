@@ -1,6 +1,6 @@
 use super::proc::{procs_from_target, ProcMap};
 use super::variable::variables_from_target;
-use super::{Step, Target, Thread, Variable};
+use super::{RcVar, Step, Target, Thread};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 
@@ -10,7 +10,7 @@ pub type StepSet = IndexSet<Rc<Step>>;
 pub struct IrProject {
     threads: RefCell<Box<[Thread]>>,
     steps: RefCell<StepSet>,
-    global_variables: BTreeMap<Box<str>, Rc<Variable>>,
+    global_variables: BTreeMap<Box<str>, RcVar>,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
 
@@ -27,11 +27,11 @@ impl IrProject {
         &self.targets
     }
 
-    pub const fn global_variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
+    pub const fn global_variables(&self) -> &BTreeMap<Box<str>, RcVar> {
         &self.global_variables
     }
 
-    pub fn new(global_variables: BTreeMap<Box<str>, Rc<Variable>>) -> Self {
+    pub fn new(global_variables: BTreeMap<Box<str>, RcVar>) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(IndexSet::default()),
@@ -114,5 +114,42 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? =
             targets.into_iter().collect();
         Ok(project)
+    }
+}
+
+impl fmt::Display for IrProject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let targets = self
+            .targets()
+            .borrow()
+            .iter()
+            .map(|(id, target)| format!(r#""{id}": {target}"#))
+            .join(", ");
+        let variables = self
+            .global_variables()
+            .iter()
+            .map(|(id, var)| format!(r#""{id}": {var}"#))
+            .join(", ");
+        let threads = self
+            .threads()
+            .borrow()
+            .iter()
+            .map(|thread| format!("{thread}"))
+            .join(", ");
+        let steps = self
+            .steps()
+            .borrow()
+            .iter()
+            .map(|step| format!("{step}"))
+            .join(", ");
+        write!(
+            f,
+            r#"{{
+        "targets": {{{targets}}},
+        "global_variables": {{{variables}}},
+        "threads": [{threads}],
+        "steps": [{steps}]
+    }}"#
+        )
     }
 }

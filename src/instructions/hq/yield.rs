@@ -12,9 +12,48 @@ pub enum YieldMode {
     None,
 }
 
+impl fmt::Display for YieldMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "mode": {:?}"#,
+            match self {
+                Self::Tail(_) => "tail",
+                Self::Inline(_) => "inline",
+                Self::Schedule(_) => "schedule",
+                Self::None => "none",
+            }
+        )?;
+        match self {
+            Self::Tail(step) | Self::Inline(step) => {
+                write!(f, r#", "step": {:?}"#, step.id())?;
+            }
+            Self::Schedule(step) => {
+                write!(
+                    f,
+                    r#", "step": {:?}"#,
+                    match step.upgrade() {
+                        Some(ref rcstep) => rcstep.id(),
+                        None => return Err(fmt::Error),
+                    }
+                )?;
+            }
+            Self::None => (),
+        }
+        write!(f, "}}")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Fields {
     pub mode: YieldMode,
+}
+
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.mode, f)
+    }
 }
 
 pub fn wasm(
@@ -102,11 +141,20 @@ pub fn wasm(
                 ]
             }
         },
-        YieldMode::Inline(step) => func.compile_inner_step(step)?,
+        YieldMode::Inline(step) => {
+            hq_assert!(
+                !step.used_non_inline(),
+                "inlined step should not be marked as used non-inline"
+            );
+            func.compile_inner_step(step)?
+        }
         YieldMode::Schedule(weak_step) => {
             let step = Weak::upgrade(weak_step)
                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
-            step.make_used_non_inline()?;
+            hq_assert!(
+                step.used_non_inline(),
+                "scheduled step should be marked as used non-inline"
+            );
             match func.flags().scheduler {
                 Scheduler::CallIndirect => {
                     wasm![
@@ -145,12 +193,12 @@ pub fn wasm(
                 }
             }
         }
-        YieldMode::Tail(_) => hq_todo!(),
+        YieldMode::Tail(_) => hq_todo!("tail-calls"),
     })
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {

@@ -138,16 +138,15 @@ fn generate_branches(
         // (which i think all branches probably should?), box it.
         // TODO: split this into another function somewhere? it seems like this should
         // be useful somewhere else as well
-        if let Some(this_output) = opcode.output_type(rc_processed_inputs)? {
-            if this_output.is_base_type()
-                && !output_type
-                    .ok_or_else(|| make_hq_bug!("expected no output type but got one"))?
-                    .is_base_type()
-            {
-                #[expect(clippy::unwrap_used, reason = "asserted that type is base type")]
-                let this_base_type = this_output.base_type().unwrap();
-                wasm.append(&mut wasm![@boxed(this_base_type)]);
-            }
+        if let Some(this_output) = opcode.output_type(rc_processed_inputs)?
+            && this_output.is_base_type()
+            && !output_type
+                .ok_or_else(|| make_hq_bug!("expected no output type but got one"))?
+                .is_base_type()
+        {
+            #[expect(clippy::unwrap_used, reason = "asserted that type is base type")]
+            let this_base_type = this_output.base_type().unwrap();
+            wasm.append(&mut wasm![@boxed(this_base_type)]);
         }
         return Ok(wasm);
     }
@@ -180,7 +179,7 @@ fn generate_branches(
             ))?,
         );
         let possible_types_num = curr_input.len();
-        let allowed_input_types = opcode.acceptable_inputs()[processed_inputs.len()];
+        let allowed_input_types = opcode.acceptable_inputs()?[processed_inputs.len()];
         for (i, ty) in curr_input.iter().enumerate() {
             let base = ty
                 .base_type()
@@ -232,7 +231,7 @@ pub fn wrap_instruction(
 ) -> HQResult<Vec<InternalInstruction>> {
     let output = opcode.output_type(Rc::clone(&inputs))?;
 
-    hq_assert!(inputs.len() == opcode.acceptable_inputs().len());
+    hq_assert!(inputs.len() == opcode.acceptable_inputs()?.len());
 
     // possible base types for each input
     let base_types =

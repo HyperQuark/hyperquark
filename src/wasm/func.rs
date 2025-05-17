@@ -2,7 +2,7 @@ use super::{Registries, WasmFlags, WasmProject};
 use crate::ir::{PartialStep, RcVar, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
-use std::collections::{hash_map, HashMap};
+use alloc::collections::btree_map;
 use wasm_encoder::{
     self, CodeSection, Function, FunctionSection, Instruction as WInstruction, ValType,
 };
@@ -75,7 +75,7 @@ pub struct StepFunc {
     registries: Rc<Registries>,
     flags: WasmFlags,
     steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
-    local_variables: RefCell<HashMap<RcVar, u32>>,
+    local_variables: RefCell<BTreeMap<RcVar, u32>>,
 }
 
 impl StepFunc {
@@ -113,7 +113,7 @@ impl StepFunc {
             registries,
             flags,
             steps,
-            local_variables: RefCell::new(HashMap::default()),
+            local_variables: RefCell::new(BTreeMap::default()),
         }
     }
 
@@ -134,17 +134,25 @@ impl StepFunc {
             registries,
             flags,
             steps,
-            local_variables: RefCell::new(HashMap::default()),
+            local_variables: RefCell::new(BTreeMap::default()),
         }
     }
 
     pub fn local_variable(&self, var: &RcVar) -> HQResult<u32> {
+        crate::log!("accessing local variable for variable {}", var.id());
+        crate::log!(
+            "existing local variables: {:?}",
+            self.local_variables.borrow()
+        );
         Ok(
             match self.local_variables.try_borrow_mut()?.entry(var.clone()) {
-                hash_map::Entry::Occupied(entry) => *entry.get(),
-                hash_map::Entry::Vacant(entry) => {
-                    let index =
-                        self.local(WasmProject::ir_type_to_wasm(*var.0.possible_types())?)?;
+                btree_map::Entry::Occupied(entry) => {
+                    crate::log("local already exists, returning that");
+                    *entry.get()
+                }
+                btree_map::Entry::Vacant(entry) => {
+                    crate::log("making a new local for variable");
+                    let index = self.local(WasmProject::ir_type_to_wasm(*var.possible_types())?)?;
                     entry.insert(index);
                     index
                 }
@@ -201,6 +209,10 @@ impl StepFunc {
         registries: Rc<Registries>,
         flags: WasmFlags,
     ) -> HQResult<Self> {
+        hq_assert!(
+            step.used_non_inline(),
+            "step should be marked as used non-inline to compile normally"
+        );
         if let Some(step_func) = steps.try_borrow()?.get(&step) {
             return Ok(step_func.clone());
         }
@@ -220,7 +232,7 @@ impl StepFunc {
         let mut type_stack = vec![];
         for opcode in &*step.opcodes().try_borrow()?.clone() {
             let inputs = type_stack
-                .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
+                .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
                 .collect();
             instrs.append(&mut wrap_instruction(
                 &step_func,
@@ -240,12 +252,15 @@ impl StepFunc {
     }
 
     pub fn compile_inner_step(&self, step: &Rc<Step>) -> HQResult<Vec<Instruction>> {
-        step.make_inlined()?;
+        hq_assert!(
+            !step.used_non_inline(),
+            "inner step should NOT be marked as used non-inline"
+        );
         let mut instrs = vec![];
         let mut type_stack = vec![];
         for opcode in &*step.opcodes().try_borrow()?.clone() {
             let inputs = type_stack
-                .splice((type_stack.len() - opcode.acceptable_inputs().len()).., [])
+                .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
                 .collect();
             instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
             if let Some(output) = opcode.output_type(inputs)? {

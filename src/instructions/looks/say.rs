@@ -6,6 +6,19 @@ pub struct Fields {
     pub target_idx: u32,
 }
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "debug": {},
+        "target_idx": {},
+    }}"#,
+            self.debug, self.target_idx
+        )
+    }
+}
+
 pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
@@ -38,8 +51,8 @@ pub fn wasm(
     })
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([IrType::String.or(IrType::Number)])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([IrType::String.or(IrType::Number)]))
 }
 
 pub fn output_type(inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {

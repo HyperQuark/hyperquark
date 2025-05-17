@@ -67,11 +67,26 @@ impl Thread {
             },
             project,
             NextBlocks::new(true),
+            true,
         )?;
         Ok(Some(Self {
             event,
             first_step,
             target,
         }))
+    }
+}
+
+impl fmt::Display for Thread {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let event = self.event();
+        let first_step = self.first_step().id();
+        write!(
+            f,
+            r#"{{
+            "event": "{event:?}",
+            "first_step": "{first_step}",
+        }}"#
+        )
     }
 }

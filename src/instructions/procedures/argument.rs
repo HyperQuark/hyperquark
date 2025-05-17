@@ -4,6 +4,19 @@ use crate::wasm::{StepFunc, WasmProject};
 #[derive(Clone, Debug)]
 pub struct Fields(pub usize, pub IrType);
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "arg_index": {},
+        "arg_type": {},
+    }}"#,
+            self.0, self.1
+        )
+    }
+}
+
 pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
@@ -21,8 +34,8 @@ pub fn wasm(
     )?)])
 }
 
-pub fn acceptable_inputs(_: &Fields) -> Rc<[IrType]> {
-    Rc::from([])
+pub fn acceptable_inputs(_: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, &Fields(_, ty): &Fields) -> HQResult<Option<IrType>> {

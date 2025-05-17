@@ -57,6 +57,7 @@ pub struct Proc {
     first_step_id: Option<Box<str>>,
     proccode: Box<str>,
     context: ProcContext,
+    debug: bool,
 }
 
 impl Proc {
@@ -86,6 +87,10 @@ impl Proc {
 
     pub fn proccode(&self) -> &str {
         &self.proccode
+    }
+
+    pub const fn debug(&self) -> bool {
+        self.debug
     }
 }
 
@@ -121,16 +126,13 @@ impl Proc {
             {
                 serde_json::Value::Array(values) => values
                     .iter()
-                    .map(
-                        #[expect(
-                            clippy::wildcard_enum_match_arm,
-                            reason = "too many variants to match"
-                        )]
-                        |val| match val {
-                            serde_json::Value::String(s) => Ok(s.clone().into_boxed_str()),
-                            _ => hq_bad_proj!("non-string {id} member in"),
-                        },
-                    )
+                    .map(|val| {
+                        if let serde_json::Value::String(s) = val {
+                            Ok(s.clone().into_boxed_str())
+                        } else {
+                            hq_bad_proj!("non-string {id} member in")
+                        }
+                    })
                     .collect::<HQResult<Box<[_]>>>()?,
                 serde_json::Value::String(string_arr) => {
                     if string_arr == "[]" {
@@ -158,6 +160,7 @@ impl Proc {
         prototype: &Block,
         blocks: &BlockMap,
         target: Weak<IrTarget>,
+        sb3_target: &Sb3Target,
     ) -> HQResult<Rc<Self>> {
         hq_assert!(prototype
             .block_info()
@@ -174,20 +177,23 @@ impl Proc {
             hq_bad_proj!("proccode wasn't a string");
         };
         let arg_types = arg_types_from_proccode(proccode.as_str())?;
-        let Some(def_block) = blocks.get(
-            #[expect(
-                clippy::unwrap_used,
-                reason = "previously asserted that block_info is Some"
-            )]
-            &prototype
-                .block_info()
-                .unwrap()
-                .parent
-                .clone()
-                .ok_or_else(|| make_hq_bad_proj!("prototype block without parent"))?,
-        ) else {
+        #[expect(
+            clippy::unwrap_used,
+            reason = "previously asserted that block_info is Some"
+        )]
+        let parent_id = prototype
+            .block_info()
+            .unwrap()
+            .parent
+            .clone()
+            .ok_or_else(|| make_hq_bad_proj!("prototype block without parent"))?;
+        let Some(def_block) = blocks.get(&parent_id) else {
             hq_bad_proj!("no definition block found for {proccode}")
         };
+        let debug = sb3_target.comments.clone().iter().any(|(_id, comment)| {
+            matches!(comment.block_id.clone(), Some(d) if d == parent_id)
+                && *comment.text.clone() == *"hq-dbg"
+        });
         let first_step_id = def_block
             .block_info()
             .ok_or_else(|| make_hq_bad_proj!("special block where normal def expected"))?
@@ -225,6 +231,7 @@ impl Proc {
             warped_first_step: RefCell::new(PartialStep::None),
             first_step_id,
             context,
+            debug,
         }))
     }
 
@@ -241,15 +248,16 @@ impl Proc {
             warp: true,
             proc_context: Some(self.context.clone()),
             target: Weak::clone(&self.context.target),
-            debug: false, // TODO: allow procedures to be dbg?
+            debug: self.debug,
         };
         let step = match self.first_step_id {
-            None => Rc::new(Step::new(
+            None => Step::new_rc(
                 None,
                 step_context.clone(),
                 vec![],
-                step_context.project()?,
-            )),
+                &step_context.target()?.project(),
+                true,
+            )?,
             Some(ref id) => {
                 let block = blocks.get(id).ok_or_else(|| {
                     make_hq_bad_proj!("procedure's first step block doesn't exist")
@@ -259,8 +267,9 @@ impl Proc {
                     id.clone(),
                     blocks,
                     &step_context,
-                    &step_context.project()?,
+                    &step_context.target()?.project(),
                     NextBlocks::new(false),
+                    true,
                 )?
             }
         };
@@ -280,9 +289,43 @@ pub fn procs_from_target(sb3_target: &Sb3Target, ir_target: &Rc<IrTarget>) -> HQ
         if block_info.opcode != BlockOpcode::procedures_prototype {
             continue;
         }
-        let proc = Proc::from_prototype(block, &sb3_target.blocks, Rc::downgrade(ir_target))?;
+        let proc = Proc::from_prototype(
+            block,
+            &sb3_target.blocks,
+            Rc::downgrade(ir_target),
+            sb3_target,
+        )?;
         let proccode = proc.proccode();
         proc_map.insert(proccode.into(), proc);
     }
     Ok(())
+}
+
+impl fmt::Display for Proc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let proccode = self.proccode();
+        let always_warped = self.always_warped();
+        let nws = self
+            .non_warped_first_step()
+            .map_err(|_| fmt::Error)?
+            .clone();
+        let non_warped_step = match nws.borrow() {
+            PartialStep::Finished(step) => step.id(),
+            PartialStep::StartedCompilation | PartialStep::None => "none",
+        };
+        let ws = self.warped_first_step().map_err(|_| fmt::Error)?.clone();
+        let warped_step = match ws.borrow() {
+            PartialStep::Finished(step) => step.id(),
+            PartialStep::StartedCompilation | PartialStep::None => "none",
+        };
+        write!(
+            f,
+            r#"{{
+            "proccode": "{proccode}",
+            "always_warped": {always_warped},
+            "warped_first_step": "{warped_step}",
+            "non_warped_first_step": "{non_warped_step}"
+        }}"#
+        )
+    }
 }

@@ -1,5 +1,6 @@
 #![feature(stmt_expr_attributes)]
 #![feature(if_let_guard)]
+#![feature(let_chains)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]
@@ -85,11 +86,22 @@ pub fn log(s: &str) {
     println!("{s}");
 }
 
+#[macro_export]
+macro_rules! log {
+    ($($args:tt)+) => {{
+        $crate::log(format!($($args)+).as_str());
+    }}
+}
+
 #[cfg(feature = "compiler")]
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::FinishedWasm> {
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
     let ir_proj = sb3_proj.try_into()?;
+    crate::log("ir (before optimisation):");
+    crate::log(format!("{ir_proj}").as_str());
     optimisation::ir_optimise(&ir_proj)?;
+    crate::log("ir (after optimisation):");
+    crate::log(format!("{ir_proj}").as_str());
     wasm::WasmProject::from_ir(&ir_proj, flags)?.finish()
 }

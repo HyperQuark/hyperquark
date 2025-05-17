@@ -30,8 +30,27 @@ impl From<HQError> for JsValue {
     }
 }
 
+#[cfg(feature = "panic")]
+#[clippy::format_args]
+macro_rules! maybe_panic {
+    ($($args:tt)+) => {{
+        panic!($($args)+);
+    }}
+}
+
+#[cfg(not(feature = "panic"))]
+#[clippy::format_args]
+macro_rules! maybe_panic {
+    ($($args:tt)+) => {{}};
+}
+
 impl From<BorrowError> for HQError {
+    #[cfg_attr(
+        feature = "panic",
+        expect(unreachable_code, reason = "panic infrastructure only for debugging")
+    )]
     fn from(_e: BorrowError) -> Self {
+        maybe_panic!("couldn't borrow cell");
         Self {
             err_type: HQErrorType::InternalError,
             msg: "couldn't borrow cell".into(),
@@ -43,7 +62,12 @@ impl From<BorrowError> for HQError {
 }
 
 impl From<BorrowMutError> for HQError {
+    #[cfg_attr(
+        feature = "panic",
+        expect(unreachable_code, reason = "panic infrastructure only for debugging")
+    )]
     fn from(_e: BorrowMutError) -> Self {
+        maybe_panic!("couldn't mutably borrow cell");
         Self {
             err_type: HQErrorType::InternalError,
             msg: "couldn't mutably borrow cell".into(),
@@ -57,7 +81,8 @@ impl From<BorrowMutError> for HQError {
 #[macro_export]
 #[clippy::format_args]
 macro_rules! hq_todo {
-    () => {{
+    () => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!("todo");
         return Err($crate::HQError {
             err_type: $crate::HQErrorType::Unimplemented,
             msg: "todo".into(),
@@ -66,7 +91,8 @@ macro_rules! hq_todo {
             column: column!()
         });
     }};
-    ($($args:tt)+) => {{
+    ($($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!($($args)+);
         return Err($crate::HQError {
             err_type: $crate::HQErrorType::Unimplemented,
             msg: format!("{}", format_args!($($args)*)).into(),
@@ -80,7 +106,8 @@ macro_rules! hq_todo {
 #[macro_export]
 #[clippy::format_args]
 macro_rules! hq_bug {
-    ($($args:tt)+) => {{
+    ($($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!($($args)+);
         return Err($crate::HQError {
             err_type: $crate::HQErrorType::InternalError,
             msg: format!("{}", format_args!($($args)*)).into(),
@@ -94,8 +121,9 @@ macro_rules! hq_bug {
 #[macro_export]
 #[clippy::format_args]
 macro_rules! hq_assert {
-    ($expr:expr) => {{
+    ($expr:expr) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
         if !($expr) {
+            maybe_panic!("Assertion failed: {}", stringify!($expr));
             return Err($crate::HQError {
                 err_type: $crate::HQErrorType::InternalError,
                 msg: format!("Assertion failed: {}", stringify!($expr)).into(),
@@ -106,8 +134,9 @@ macro_rules! hq_assert {
         };
         assert!($expr);
     }};
-    ($expr:expr, $($args:tt)+) => {{
+    ($expr:expr, $($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
         if !($expr) {
+            maybe_panic!("Assertion failed: {}\nMessage: {}", stringify!($expr), format_args!($($args)*));
             return Err($crate::HQError {
                 err_type: $crate::HQErrorType::InternalError,
                 msg: format!("Assertion failed: {}\nMessage: {}", stringify!($expr), format_args!($($args)*)).into(),
@@ -123,8 +152,9 @@ macro_rules! hq_assert {
 #[macro_export]
 #[clippy::format_args]
 macro_rules! hq_assert_eq {
-    ($l:expr, $r:expr) => {{
+    ($l:expr, $r:expr) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
         if $l != $r {
+            maybe_panic!("Assertion failed: {} == {}\nLeft: {}\nRight: {}", stringify!($l), stringify!($r), $l, $r);
             return Err($crate::HQError {
                 err_type: $crate::HQErrorType::InternalError,
                 msg: format!("Assertion failed: {} == {}\nLeft: {}\nRight: {}", stringify!($l), stringify!($r), $l, $r).into(),
@@ -135,8 +165,9 @@ macro_rules! hq_assert_eq {
         };
         assert_eq!($l, $r);
     }};
-    ($l:expr, $r:expr, $($args:tt)+) => {{
+    ($l:expr, $r:expr, $($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
         if $l != $r {
+            maybe_panic!("Assertion failed: {}\nLeft: {}\nRight: {}\nMessage: {}", stringify!($l), stringify!($r), $l, $r, format_args!($($args)*));
             return Err($crate::HQError {
                 err_type: $crate::HQErrorType::InternalError,
                 msg: format!("Assertion failed: {}\nLeft: {}\nRight: {}\nMessage: {}", stringify!($l), stringify!($r), $l, $r, format_args!($($args)*)).into(),
@@ -152,7 +183,8 @@ macro_rules! hq_assert_eq {
 #[macro_export]
 #[clippy::format_args]
 macro_rules! hq_bad_proj {
-    ($($args:tt)+) => {{
+    ($($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!($($args)+);
         return Err($crate::HQError {
             err_type: $crate::HQErrorType::MalformedProject,
             msg: format!("{}", format_args!($($args)*)).into(),
@@ -163,12 +195,14 @@ macro_rules! hq_bad_proj {
     }};
 }
 
+/// for use in `ok_or_else` and similar methods
 #[macro_export]
 #[clippy::format_args]
 macro_rules! make_hq_todo {
-    ($($args:tt)+) => {{
+    ($($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!($($args)+);
         use $crate::alloc::Box<str>::ToBox<str>;
-        $crate::HQError {
+        return $crate::HQError {
             err_type: $crate::HQErrorType::Unimplemented,
             msg: format!("{}", format_args!($($args)*)).into(),
             file: file!().into(),
@@ -178,11 +212,13 @@ macro_rules! make_hq_todo {
     }};
 }
 
+/// for use in `ok_or_else` and similar methods
 #[macro_export]
 #[clippy::format_args]
 macro_rules! make_hq_bug {
-    ($($args:tt)+) => {{
-        $crate::HQError {
+    ($($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!($($args)+);
+        return $crate::HQError {
             err_type: $crate::HQErrorType::InternalError,
             msg: format!("{}", format_args!($($args)*)).into(),
             file: file!().into(),
@@ -192,11 +228,13 @@ macro_rules! make_hq_bug {
     }};
 }
 
+/// for use in `ok_or_else` and similar methods
 #[macro_export]
 #[clippy::format_args]
 macro_rules! make_hq_bad_proj {
-    ($($args:tt)+) => {{
-        $crate::HQError {
+    ($($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
+        maybe_panic!($($args)+);
+        return $crate::HQError {
             err_type: $crate::HQErrorType::MalformedProject,
             msg: format!("{}", format_args!($($args)*)).into(),
             file: file!().into(),

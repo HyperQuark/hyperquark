@@ -4,8 +4,8 @@ pub fn wasm(_func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalIns
     Ok(wasm![I32And])
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Boolean, IrType::Boolean])
+pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([IrType::Boolean, IrType::Boolean]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {

@@ -10,7 +10,6 @@ use crate::instructions::{
     },
     IrOpcode, YieldMode,
 };
-use crate::ir::Variable;
 use crate::prelude::*;
 use crate::sb3;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
@@ -19,7 +18,7 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
     let mut casts: Vec<(usize, IrType)> = vec![]; // a vector of cast targets, and where they're needed
     for (i, block) in blocks.iter().enumerate() {
-        let expected_inputs = block.acceptable_inputs();
+        let expected_inputs = block.acceptable_inputs()?;
         if type_stack.len() < expected_inputs.len() {
             hq_bug!("didn't have enough inputs on the type stack")
         }
@@ -309,12 +308,14 @@ fn generate_loop(
             context.clone(),
             substack_blocks,
             &context.target()?.project(),
+            false,
         )?;
         let condition_step = Step::new_rc(
             None,
             context.clone(),
             condition_instructions,
             &context.target()?.project(),
+            false,
         )?;
         let first_condition_step = if let Some(instrs) = first_condition_instructions {
             Some(Step::new_rc(
@@ -322,6 +323,7 @@ fn generate_loop(
                 context.clone(),
                 instrs,
                 &context.target()?.project(),
+                false,
             )?)
         } else {
             None
@@ -358,18 +360,20 @@ fn generate_loop(
                     context,
                     &context.target()?.project(),
                     outer_next_blocks,
+                    false,
                 )?
             }
             Some(NextBlock::Step(ref step)) => step
                 .upgrade()
                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-            None => Step::new_terminating(context.clone(), &context.target()?.project())?,
+            None => Step::new_terminating(context.clone(), &context.target()?.project(), false)?,
         };
         let condition_step = Step::new_rc(
             None,
             context.clone(),
             condition_instructions.clone(),
             &context.target()?.project(),
+            true,
         )?;
         let substack_blocks = from_block(
             substack_block,
@@ -386,6 +390,7 @@ fn generate_loop(
             context.clone(),
             substack_blocks,
             &context.target()?.project(),
+            false,
         )?;
         condition_step
             .opcodes_mut()?
@@ -454,6 +459,7 @@ fn generate_if_else(
         &dummy_context,
         &Rc::downgrade(&dummy_project),
         NextBlocks::new(false),
+        false,
     )?;
     let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
         Step::from_block(
@@ -463,9 +469,10 @@ fn generate_if_else(
             &dummy_context,
             &Rc::downgrade(&dummy_project),
             NextBlocks::new(false),
+            false,
         )?
     } else {
-        Rc::new(Step::new_empty())
+        Step::new_empty(&Rc::downgrade(&dummy_project), false)?
     };
     let if_step_yields = dummy_if_step.does_yield()?;
     let else_step_yields = dummy_else_step.does_yield()?;
@@ -502,6 +509,7 @@ fn generate_if_else(
                 context,
                 &context.target()?.project(),
                 next_blocks.clone(),
+                false,
             )?;
             crate::log("recompiled if_step with correct next blocks");
             s
@@ -514,6 +522,7 @@ fn generate_if_else(
                 context,
                 &context.target()?.project(),
                 next_blocks,
+                false,
             )?;
             crate::log("recompiled else step with correct next blocks");
             s
@@ -532,6 +541,7 @@ fn generate_if_else(
                             context,
                             &context.target()?.project(),
                             next_blocks,
+                            false,
                         )?),
                     })]
                 }
@@ -540,9 +550,15 @@ fn generate_if_else(
                         .upgrade()
                         .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
                     crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(rcstep),
-                    })]
+                    if rcstep.used_non_inline() {
+                        vec![IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline((*rcstep).clone(false)?),
+                        })]
+                    } else {
+                        vec![IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(rcstep),
+                        })]
+                    }
                 }
                 None => {
                     crate::log("no next block after if!");
@@ -557,12 +573,13 @@ fn generate_if_else(
                     }
                 }
             };
-            Rc::new(Step::new(
+            Step::new_rc(
                 None,
                 context.clone(),
                 opcode,
-                context.target()?.project(),
-            ))
+                &context.target()?.project(),
+                false,
+            )?
         };
         *should_break = true;
         Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
@@ -577,6 +594,7 @@ fn generate_if_else(
             context,
             &context.target()?.project(),
             NextBlocks::new(false),
+            false,
         )?;
         let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
             Step::from_block(
@@ -586,9 +604,16 @@ fn generate_if_else(
                 context,
                 &context.target()?.project(),
                 NextBlocks::new(false),
+                false,
             )?
         } else {
-            Step::new_rc(None, context.clone(), vec![], &context.target()?.project())?
+            Step::new_rc(
+                None,
+                context.clone(),
+                vec![],
+                &context.target()?.project(),
+                false,
+            )?
         };
         Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
             branch_if: final_if_step,
@@ -673,7 +698,7 @@ fn from_normal_block(
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
                             let variable = if let Some(var) = target.variables().get(&id) {
-                                var
+                                var.clone()
                             } else if let Some(var) = context
                                 .target()?
                                 .project()
@@ -682,13 +707,14 @@ fn from_normal_block(
                                 .global_variables()
                                 .get(&id)
                             {
-                                &Rc::clone(var)
+                                var.clone()
                             } else {
                                 hq_bad_proj!("variable not found")
                             };
-                            vec![IrOpcode::data_setvariableto(DataSetvariabletoFields(
-                                RcVar(Rc::clone(variable)),
-                            ))]
+                            vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                var: RefCell::new(variable),
+                                local_write: RefCell::new(false),
+                            })]
                         }
                         BlockOpcode::data_changevariableby => {
                             let sb3::Field::ValueId(_val, maybe_id) =
@@ -712,7 +738,7 @@ fn from_normal_block(
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
                             let variable = if let Some(var) = target.variables().get(&id) {
-                                var
+                                var.clone()
                             } else if let Some(var) = context
                                 .target()?
                                 .project()
@@ -721,18 +747,20 @@ fn from_normal_block(
                                 .global_variables()
                                 .get(&id)
                             {
-                                &Rc::clone(var)
+                                var.clone()
                             } else {
                                 hq_bad_proj!("variable not found")
                             };
                             vec![
-                                IrOpcode::data_variable(DataVariableFields(RcVar(Rc::clone(
-                                    variable,
-                                )))),
+                                IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(variable.clone()),
+                                    local_read: RefCell::new(false),
+                                }),
                                 IrOpcode::operator_add,
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields(RcVar(
-                                    Rc::clone(variable),
-                                ))),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(variable),
+                                    local_write: RefCell::new(false),
+                                }),
                             ]
                         }
                         BlockOpcode::data_variable => {
@@ -757,7 +785,7 @@ fn from_normal_block(
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
                             let variable = if let Some(var) = target.variables().get(&id) {
-                                var
+                                var.clone()
                             } else if let Some(var) = context
                                 .target()?
                                 .project()
@@ -766,13 +794,14 @@ fn from_normal_block(
                                 .global_variables()
                                 .get(&id)
                             {
-                                &Rc::clone(var)
+                                var.clone()
                             } else {
                                 hq_bad_proj!("variable not found")
                             };
-                            vec![IrOpcode::data_variable(DataVariableFields(RcVar(
-                                Rc::clone(variable),
-                            )))]
+                            vec![IrOpcode::data_variable(DataVariableFields {
+                                var: RefCell::new(variable),
+                                local_read: RefCell::new(false),
+                            })]
                         }
                         BlockOpcode::control_if => 'block: {
                             let BlockArrayOrId::Id(substack_id) =
@@ -842,27 +871,36 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::control_repeat => {
-                            let variable = RcVar(Rc::new(Variable::new(
-                                IrType::Int,
-                                sb3::VarVal::Float(0.0),
-                                context.warp,
-                            )));
+                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Float(0.0));
+                            let local = context.warp;
                             let condition_instructions = vec![
-                                IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                                IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(variable.clone()),
+                                    local_read: RefCell::new(local),
+                                }),
                                 IrOpcode::hq_integer(HqIntegerFields(1)),
                                 IrOpcode::operator_subtract,
-                                IrOpcode::data_teevariable(DataTeevariableFields(variable.clone())),
+                                IrOpcode::data_teevariable(DataTeevariableFields {
+                                    var: RefCell::new(variable.clone()),
+                                    local_read_write: RefCell::new(local),
+                                }),
                                 IrOpcode::hq_integer(HqIntegerFields(0)),
                                 IrOpcode::operator_gt,
                             ];
                             let first_condition_instructions = Some(vec![
-                                IrOpcode::data_variable(DataVariableFields(variable.clone())),
+                                IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(variable.clone()),
+                                    local_read: RefCell::new(local),
+                                }),
                                 IrOpcode::hq_integer(HqIntegerFields(0)),
                                 IrOpcode::operator_gt,
                             ]);
                             let setup_instructions = vec![
                                 IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields(variable)),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(variable),
+                                    local_write: RefCell::new(local),
+                                }),
                             ];
                             generate_loop(
                                 context.warp,
@@ -955,6 +993,7 @@ fn from_normal_block(
                         context,
                         project,
                         final_next_blocks.clone(),
+                        true,
                     )?)),
                 }));
                 None
@@ -983,6 +1022,7 @@ fn from_normal_block(
                                 context,
                                 project,
                                 new_next_blocks_stack,
+                                true,
                             )?)),
                         }));
                         None
@@ -1088,18 +1128,18 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
             // string
             10 => 'textBlock: {
                 // proactively convert to a number
-                if let Ok(float) = value.parse::<f64>() {
-                    if *float.to_string() == **value {
-                        break 'textBlock if float % 1.0 == 0.0 {
-                            #[expect(
-                                clippy::cast_possible_truncation,
-                                reason = "integer-ness already confirmed; `as` is saturating."
-                            )]
-                            IrOpcode::hq_integer(HqIntegerFields(float as i32))
-                        } else {
-                            IrOpcode::hq_float(HqFloatFields(float))
-                        };
-                    }
+                if let Ok(float) = value.parse::<f64>()
+                    && *float.to_string() == **value
+                {
+                    break 'textBlock if float % 1.0 == 0.0 {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "integer-ness already confirmed; `as` is saturating."
+                        )]
+                        IrOpcode::hq_integer(HqIntegerFields(float as i32))
+                    } else {
+                        IrOpcode::hq_float(HqFloatFields(float))
+                    };
                 }
                 IrOpcode::hq_text(HqTextFields(value.clone()))
             }
@@ -1114,7 +1154,7 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                         .upgrade()
                         .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
                     let variable = if let Some(var) = target.variables().get(id) {
-                        var
+                        var.clone()
                     } else if let Some(var) = context
                         .target()?
                         .project()
@@ -1123,11 +1163,14 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                         .global_variables()
                         .get(id)
                     {
-                        &Rc::clone(var)
+                        var.clone()
                     } else {
                         hq_bad_proj!("variable not found")
                     };
-                    IrOpcode::data_variable(DataVariableFields(RcVar(Rc::clone(variable))))
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(variable),
+                        local_read: RefCell::new(false),
+                    })
                 }
                 13 => hq_todo!("list input"),
                 _ => hq_bad_proj!(

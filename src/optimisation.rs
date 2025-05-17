@@ -1,9 +1,9 @@
 use crate::ir::IrProject;
 use crate::prelude::*;
 
-mod var_types;
+mod variables;
 
 pub fn ir_optimise(ir: &Rc<IrProject>) -> HQResult<()> {
-    var_types::optimise_var_types(ir)?;
+    variables::optimise_var_types(ir)?;
     Ok(())
 }

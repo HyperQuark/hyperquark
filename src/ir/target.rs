@@ -1,11 +1,11 @@
-use super::{proc::Proc, IrProject, Variable};
+use super::{proc::Proc, IrProject, RcVar};
 use crate::prelude::*;
 use core::cell::{Ref, RefMut};
 
 #[derive(Debug, Clone)]
 pub struct Target {
     is_stage: bool,
-    variables: BTreeMap<Box<str>, Rc<Variable>>,
+    variables: BTreeMap<Box<str>, RcVar>,
     project: Weak<IrProject>,
     procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
     index: u32,
@@ -16,7 +16,7 @@ impl Target {
         self.is_stage
     }
 
-    pub const fn variables(&self) -> &BTreeMap<Box<str>, Rc<Variable>> {
+    pub const fn variables(&self) -> &BTreeMap<Box<str>, RcVar> {
         &self.variables
     }
 
@@ -38,7 +38,7 @@ impl Target {
 
     pub const fn new(
         is_stage: bool,
-        variables: BTreeMap<Box<str>, Rc<Variable>>,
+        variables: BTreeMap<Box<str>, RcVar>,
         project: Weak<IrProject>,
         procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
         index: u32,
@@ -50,5 +50,32 @@ impl Target {
             procedures,
             index,
         }
+    }
+}
+
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let is_stage = self.is_stage;
+        let index = self.index;
+        let variables = self
+            .variables
+            .iter()
+            .map(|(id, var)| format!(r#""{id}": {var}"#))
+            .join(", ");
+        let procedures = self
+            .procedures
+            .borrow()
+            .iter()
+            .map(|(id, proc)| format!(r#""{id}": {proc}"#))
+            .join(", ");
+        write!(
+            f,
+            r#"{{
+        "is_stage": {is_stage},
+        "index": {index},
+        "variables": {{ {variables} }},
+        "procedures": {{ {procedures} }},
+    }}"#
+        )
     }
 }

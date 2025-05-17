@@ -235,7 +235,7 @@ impl WasmProject {
     fn threads_table_index<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         let step_func_ty = self
             .registries()
@@ -261,7 +261,7 @@ impl WasmProject {
     fn steps_table_index<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         match self.flags.scheduler {
             Scheduler::CallIndirect => self.registries().tables().register(
@@ -483,7 +483,7 @@ impl WasmProject {
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
         StepFunc::compile_step(
-            Rc::new(Step::new_empty()),
+            Step::new_empty(&Rc::downgrade(ir_project), true)?,
             &steps,
             Rc::clone(&registries),
             flags,
@@ -491,16 +491,6 @@ impl WasmProject {
         // compile every step
         for step in ir_project.steps().try_borrow()?.iter() {
             StepFunc::compile_step(Rc::clone(step), &steps, Rc::clone(&registries), flags)?;
-        }
-        // mark first steps as used in a non-inline context
-        for thread in ir_project.threads().try_borrow()?.iter() {
-            thread.first_step().make_used_non_inline()?;
-        }
-        // get rid of steps which aren't used in a non-inlined context
-        for step in ir_project.steps().try_borrow()?.iter() {
-            if *step.inline().try_borrow()? && !*step.used_non_inline().try_borrow()? {
-                steps.try_borrow_mut()?.swap_remove(step);
-            }
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
@@ -550,7 +540,7 @@ mod tests {
         let registries = Rc::new(Registries::default());
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
-            Rc::new(Step::new_empty()),
+            Step::new_empty(&Weak::new(), true).unwrap(),
             &steps,
             Rc::clone(&registries),
             WasmFlags::new(all_wasm_features()),

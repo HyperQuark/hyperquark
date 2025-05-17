@@ -33,6 +33,7 @@ ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058
 crate-type = ["cdylib", "rlib"]
 
 [profile.release]
+debug = true
 lto = true
 opt-level = "z"
 
@@ -41,4 +42,5 @@ convert_case = "0.6.0"
 
 [features]
 compiler = [] # if we only want to access flags, we don't want to additionally have all the compiler machinery
+panic = [] # if we have DWARF debugging enabled, panicking is more useful than our clunky manual error propagation
 default = ["compiler"]

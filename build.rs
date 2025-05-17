@@ -118,9 +118,10 @@ export const imports = {{
     fs::write(
         &dest_path_rs,
         format!(
-            "
+            r##"
+use core::fmt;
 /// A list of all instructions.
-#[expect(non_camel_case_types, reason = \"block opcode are snake_case\")]
+#[expect(non_camel_case_types, reason = "block opcode are snake_case")]
 #[derive(Clone, Debug)]
 pub enum IrOpcode {{
     {}
@@ -128,7 +129,7 @@ pub enum IrOpcode {{
 
 impl IrOpcode {{
     /// maps an opcode to its acceptable input types
-    pub fn acceptable_inputs(&self) -> Rc<[crate::ir::Type]> {{
+    pub fn acceptable_inputs(&self) -> HQResult<Rc<[crate::ir::Type]>> {{
         match self {{
             {}
         }}
@@ -156,14 +157,28 @@ impl IrOpcode {{
     }}
 }}
 pub mod fields {{
-    #![expect(clippy::wildcard_imports, reason = \"we don't know what we need to import\")]
+    #![expect(clippy::wildcard_imports, reason = "we don't know what we need to import")]
 
     use super::*;
 
     {}
 }}
 pub use fields::*;
-        ",
+
+impl fmt::Display for IrOpcode {{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {{
+        #![expect(clippy::match_same_arms, reason = "auto-generated file")]
+        write!(f, r#"{{{{
+            "opcode": "{{}}""#, match self {{
+                {}
+            }})?;
+        match self {{
+            {}
+        }}
+        write!(f, "}}}}")
+    }}
+}}
+        "##,
             paths.iter().map(|(_, id, fields, fields_name)| {
                 if *fields {
                     format!("{}({})", id.clone(), fields_name.clone())
@@ -203,6 +218,20 @@ pub use fields::*;
             .map(|(path, _, _, fields_name)|
                 format!("pub use {path}::Fields as {fields_name};")
             ).collect::<Vec<_>>().join("\n\t"),
+            paths.iter().map(|(_, id, fields, _)| {
+                if *fields {
+                    format!(r#"Self::{id}(_) => "{id}","#)
+                } else {
+                    format!(r#"Self::{id} => "{id}","#)
+                }
+            }).collect::<Vec<_>>().join("\n\t\t\t\t"),
+            paths.iter().map(|(_, id, fields, _)| {
+                if *fields {
+                    format!(r##"Self::{id}(fields) => {{write!(f, r#", "fields": {{fields}}"#)?;}}"##)
+                } else {
+                    format!("Self::{id} => (),")
+                }
+            }).collect::<Vec<_>>().join("\n\t\t\t\t"),
     ))
     .unwrap();
 }

@@ -69,7 +69,7 @@ pub trait Registry: Sized {
     fn register<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         self.registry()
             .try_borrow_mut()
@@ -88,7 +88,7 @@ pub trait Registry: Sized {
     fn register_override<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         self.registry()
             .try_borrow_mut()
@@ -109,7 +109,7 @@ pub trait RegistryDefault: Registry<Value: Default> {
     fn register_default<N>(&self, key: Self::Key) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         self.register(key, Self::Value::default())
     }

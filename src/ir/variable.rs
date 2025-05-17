@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use super::Type;
 use crate::{
     prelude::*,
@@ -6,71 +8,99 @@ use crate::{
 use core::cell::Ref;
 use core::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Variable {
+#[derive(Debug)]
+struct Variable {
     possible_types: RefCell<Type>,
     initial_value: VarVal,
-    local: bool,
-}
-
-impl Variable {
-    pub const fn new(ty: Type, initial_value: VarVal, local: bool) -> Self {
-        Self {
-            possible_types: RefCell::new(ty),
-            initial_value,
-            local,
-        }
-    }
-
-    pub fn add_type(&self, ty: Type) {
-        let current = *self.possible_types.borrow();
-        *self.possible_types.borrow_mut() = current.or(ty);
-    }
-
-    pub fn possible_types(&self) -> Ref<Type> {
-        self.possible_types.borrow()
-    }
-
-    pub const fn initial_value(&self) -> &VarVal {
-        &self.initial_value
-    }
-
-    pub const fn local(&self) -> bool {
-        self.local
-    }
+    id: String,
 }
 
 #[derive(Clone, Debug)]
-pub struct RcVar(pub Rc<Variable>);
+pub struct RcVar(Rc<Variable>);
+
+impl RcVar {
+    pub fn new(ty: Type, initial_value: VarVal) -> Self {
+        Self(Rc::new(Variable {
+            possible_types: RefCell::new(ty),
+            initial_value,
+            id: Uuid::new_v4().to_string(),
+        }))
+    }
+
+    pub fn add_type(&self, ty: Type) {
+        let current = *self.0.possible_types.borrow();
+        *self.0.possible_types.borrow_mut() = current.or(ty);
+    }
+
+    pub fn possible_types(&self) -> Ref<Type> {
+        self.0.possible_types.borrow()
+    }
+
+    pub fn initial_value(&self) -> &VarVal {
+        &self.0.initial_value
+    }
+
+    pub fn id(&self) -> &str {
+        &self.0.id
+    }
+}
 
 impl PartialEq for RcVar {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        self.0.id == other.0.id
+        //Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
 impl Eq for RcVar {}
 
-impl Hash for RcVar {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        core::ptr::hash(Rc::as_ptr(&self.0), state);
+impl PartialOrd for RcVar {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
-pub fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, Rc<Variable>> {
+impl Ord for RcVar {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.id.cmp(&other.0.id)
+        //Rc::as_ptr(&self.0).cmp(&Rc::as_ptr(&other.0))
+    }
+}
+
+impl Hash for RcVar {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.id.hash(state); //core::ptr::hash(Rc::as_ptr(&self.0), state);
+    }
+}
+
+pub fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, RcVar> {
     target
         .variables
         .iter()
         .map(|(id, var_info)| {
             (
                 id.clone(),
-                Rc::new(Variable::new(
+                RcVar::new(
                     Type::none(),
                     #[expect(clippy::unwrap_used, reason = "this field exists on all variants")]
                     var_info.get_1().unwrap().clone(),
-                    false,
-                )),
+                ),
             )
         })
         .collect()
+}
+
+impl fmt::Display for RcVar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let possible_types = self.0.possible_types.borrow();
+        //let id = Rc::as_ptr(&self.0) as usize;
+        let id = self.id();
+        write!(
+            f,
+            r#"{{
+            "possible_types": "{possible_types}",
+            "id": {id:?}
+        }}"#
+        )
+    }
 }

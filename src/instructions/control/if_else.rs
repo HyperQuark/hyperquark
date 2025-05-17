@@ -7,6 +7,18 @@ pub struct Fields {
     pub branch_if: Rc<Step>,
     pub branch_else: Rc<Step>,
 }
+
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "branch_if": {},
+        "branch_else": {},
+    }}"#,
+            self.branch_if, self.branch_else
+        )
+    }
 }
 
 pub fn wasm(
@@ -37,8 +49,8 @@ pub fn wasm(
     .collect())
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([IrType::Boolean])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([IrType::Boolean]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {

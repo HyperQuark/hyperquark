@@ -3,6 +3,18 @@ use super::super::prelude::*;
 #[derive(Clone, Debug)]
 pub struct Fields(pub IrType);
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "to": "{}"
+    }}"#,
+            self.0
+        )
+    }
+}
+
 fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
     let to_base_types = to.base_types().collect::<Vec<_>>();
     hq_assert!(!to_base_types.is_empty());
@@ -88,8 +100,10 @@ pub fn wasm(
     })
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([IrType::Number.or(IrType::String).or(IrType::Boolean)])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([IrType::Number
+        .or(IrType::String)
+        .or(IrType::Boolean)]))
 }
 
 pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Option<IrType>> {

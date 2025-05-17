@@ -9,8 +9,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     Ok(wasm![Call(func_index)])
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([])
+pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::new([]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {

@@ -7,6 +7,18 @@ pub struct Fields {
     pub proc: Rc<Proc>,
 }
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "proc": {:?},
+    }}"#,
+            self.proc.proccode()
+        )
+    }
+}
+
 pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
@@ -18,8 +30,8 @@ pub fn wasm(
     ])
 }
 
-pub fn acceptable_inputs(Fields { proc }: &Fields) -> Rc<[IrType]> {
-    Rc::from(proc.context().arg_types())
+pub fn acceptable_inputs(Fields { proc }: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from(proc.context().arg_types()))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
