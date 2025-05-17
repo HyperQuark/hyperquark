@@ -531,16 +531,17 @@ pub struct FinishedWasm {
 #[cfg(test)]
 mod tests {
     use super::{Registries, WasmProject};
-    use crate::ir::Step;
+    use crate::ir::{IrProject, Step};
     use crate::prelude::*;
     use crate::wasm::{flags::all_wasm_features, ExternalEnvironment, StepFunc, WasmFlags};
 
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
+        let project = Rc::new(IrProject::new(BTreeMap::default()));
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
-            Step::new_empty(&Weak::new(), true).unwrap(),
+            Step::new_empty(&Rc::downgrade(&project), true).unwrap(),
             &steps,
             Rc::clone(&registries),
             WasmFlags::new(all_wasm_features()),

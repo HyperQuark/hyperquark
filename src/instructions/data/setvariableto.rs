@@ -72,12 +72,12 @@ crate::instructions_test!(
     any_global;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
 
-                )
+
             )),
         local_write: RefCell::new(false)
     }
@@ -87,12 +87,12 @@ crate::instructions_test!(
     float_global;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
                     crate::sb3::VarVal::Float(0.0),
 
-                )
+
             )),
         local_write: RefCell::new(false)
     }
@@ -102,12 +102,12 @@ crate::instructions_test!(
     string_global;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
                     crate::sb3::VarVal::String("".into()),
 
-                )
+
             )),
         local_write: RefCell::new(false)
     }
@@ -117,12 +117,12 @@ crate::instructions_test!(
     int_global;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::QuasiInt,
                     crate::sb3::VarVal::Bool(true),
 
-                )
+
             )),
         local_write: RefCell::new(false)
     }
@@ -132,12 +132,12 @@ crate::instructions_test!(
     any_local;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
 
-                )
+
             )),
         local_write: RefCell::new(true)
     }
@@ -147,12 +147,12 @@ crate::instructions_test!(
     float_local;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
                     crate::sb3::VarVal::Float(0.0),
 
-                )
+
             )),
         local_write: RefCell::new(true)
     }
@@ -162,12 +162,12 @@ crate::instructions_test!(
     string_local;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
                     crate::sb3::VarVal::String("".into()),
 
-                )
+
             )),
         local_write: RefCell::new(true)
     }
@@ -177,12 +177,12 @@ crate::instructions_test!(
     int_local;
     data_setvariableto;
     @ super::Fields {
-        var: RefCell::new((
+        var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::QuasiInt,
                     crate::sb3::VarVal::Bool(true),
 
-                )
+
             )),
         local_write: RefCell::new(true)
     }

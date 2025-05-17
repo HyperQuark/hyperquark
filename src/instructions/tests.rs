@@ -35,6 +35,8 @@ macro_rules! instructions_test {
             };
             use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags};
 
+            #[expect(clippy::allow_attributes, reason = "might not always trigger")]
+            #[allow(unused_macros, reason = "it is not unused")]
             macro_rules! ident_as_irtype {
                 ( $_:ident ) => { IrType };
             }
@@ -83,6 +85,7 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(true) {
+
                     let Ok(output_type) = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed output_type");
                         continue;
@@ -231,6 +234,7 @@ macro_rules! instructions_test {
 
             #[test]
             fn js_functions_match_declared_types() {
+                #![allow(clippy::tuple_array_conversions, reason = "false positive")]
                 use ezno_checker::{check_project as check_js, Diagnostic, INTERNAL_DEFINITION_FILE_PATH as ts_defs};
                 use std::path::{Path, PathBuf};
                 use std::fs;

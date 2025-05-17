@@ -157,7 +157,7 @@ impl IrOpcode {{
     }}
 }}
 pub mod fields {{
-    #![expect(clippy::wildcard_imports, reason = "we don't know what we need to import")]
+    #![allow(clippy::wildcard_imports, reason = "we don't know what we need to import")]
 
     use super::*;
 
@@ -167,7 +167,7 @@ pub use fields::*;
 
 impl fmt::Display for IrOpcode {{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {{
-        #![expect(clippy::match_same_arms, reason = "auto-generated file")]
+        #![allow(clippy::match_same_arms, reason = "auto-generated file")]
         write!(f, r#"{{{{
             "opcode": "{{}}""#, match self {{
                 {}
