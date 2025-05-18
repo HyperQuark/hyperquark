@@ -3,6 +3,7 @@ use super::context::StepContext;
 use super::{Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode, Target as Sb3Target};
+use crate::wasm::WasmFlags;
 use core::cell::Ref;
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
@@ -235,7 +236,7 @@ impl Proc {
         }))
     }
 
-    pub fn compile_warped(&self, blocks: &BTreeMap<Box<str>, Block>) -> HQResult<()> {
+    pub fn compile_warped(&self, blocks: &BTreeMap<Box<str>, Block>, flags: &WasmFlags) -> HQResult<()> {
         {
             if *self.non_warped_first_step()? != PartialStep::None {
                 return Ok(());
@@ -270,6 +271,7 @@ impl Proc {
                     &step_context.target()?.project(),
                     NextBlocks::new(false),
                     true,
+                    flags
                 )?
             }
         };

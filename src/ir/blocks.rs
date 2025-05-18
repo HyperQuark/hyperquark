@@ -12,6 +12,8 @@ use crate::instructions::{
 };
 use crate::prelude::*;
 use crate::sb3;
+use crate::wasm::flags::UseIntegers;
+use crate::wasm::WasmFlags;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
 fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
@@ -91,12 +93,13 @@ pub fn from_block(
     context: &StepContext,
     project: &Weak<IrProject>,
     final_next_blocks: NextBlocks,
+    flags: &WasmFlags
 ) -> HQResult<Vec<IrOpcode>> {
     insert_casts(match block {
         Block::Normal { block_info, .. } => {
-            from_normal_block(block_info, blocks, context, project, final_next_blocks)?.to_vec()
+            from_normal_block(block_info, blocks, context, project, final_next_blocks, flags)?.to_vec()
         }
-        Block::Special(block_array) => vec![from_special_block(block_array, context)?],
+        Block::Special(block_array) => vec![from_special_block(block_array, context, flags)?],
     })
 }
 
@@ -167,6 +170,7 @@ pub fn inputs(
     blocks: &BlockMap,
     context: &StepContext,
     project: &Weak<IrProject>,
+    flags:  &WasmFlags
 ) -> HQResult<Vec<IrOpcode>> {
     Ok(input_names(block_info, context)?
         .into_iter()
@@ -190,7 +194,7 @@ pub fn inputs(
             )]
             match input {
                 Input::NoShadow(_, Some(block)) | Input::Shadow(_, Some(block), _) => match block {
-                    BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr, context)?]),
+                    BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr, context, flags)?]),
                     BlockArrayOrId::Id(id) => from_block(
                         blocks.get(id).ok_or_else(|| {
                             make_hq_bad_proj!("block for input {} doesn't exist", name)
@@ -199,6 +203,7 @@ pub fn inputs(
                         context,
                         project,
                         NextBlocks::new(false),
+                        flags
                     ),
                 },
                 _ => hq_bad_proj!("missing input block for {}", name),
@@ -278,6 +283,7 @@ fn generate_loop(
     condition_instructions: Vec<IrOpcode>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
+    flags: &WasmFlags
 ) -> HQResult<Vec<IrOpcode>> {
     let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
         Some(input) => input,
@@ -302,6 +308,7 @@ fn generate_loop(
             context,
             &context.target()?.project(),
             NextBlocks::new(false),
+            flags
         )?;
         let substack_step = Step::new_rc(
             None,
@@ -361,11 +368,13 @@ fn generate_loop(
                     &context.target()?.project(),
                     outer_next_blocks,
                     false,
+                    flags
                 )?
             }
-            Some(NextBlock::Step(ref step)) => step
+            Some(NextBlock::Step(ref step)) => (*step
                 .upgrade()
-                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?)
+            .clone(false)?,
             None => Step::new_terminating(context.clone(), &context.target()?.project(), false)?,
         };
         let condition_step = Step::new_rc(
@@ -384,6 +393,7 @@ fn generate_loop(
                 yield_first: true,
                 block: NextBlock::Step(Rc::downgrade(&condition_step)),
             }),
+            flags
         )?;
         let substack_step = Step::new_rc(
             None,
@@ -425,6 +435,7 @@ fn generate_if_else(
     blocks: &BTreeMap<Box<str>, Block>,
     context: &StepContext,
     should_break: &mut bool,
+    flags: &WasmFlags
 ) -> HQResult<Vec<IrOpcode>> {
     crate::log(
         format!(
@@ -460,6 +471,7 @@ fn generate_if_else(
         &Rc::downgrade(&dummy_project),
         NextBlocks::new(false),
         false,
+        flags
     )?;
     let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
         Step::from_block(
@@ -470,6 +482,7 @@ fn generate_if_else(
             &Rc::downgrade(&dummy_project),
             NextBlocks::new(false),
             false,
+            flags
         )?
     } else {
         Step::new_empty(&Rc::downgrade(&dummy_project), false)?
@@ -510,6 +523,7 @@ fn generate_if_else(
                 &context.target()?.project(),
                 next_blocks.clone(),
                 false,
+                flags
             )?;
             crate::log("recompiled if_step with correct next blocks");
             s
@@ -523,6 +537,7 @@ fn generate_if_else(
                 &context.target()?.project(),
                 next_blocks,
                 false,
+                flags
             )?;
             crate::log("recompiled else step with correct next blocks");
             s
@@ -542,6 +557,7 @@ fn generate_if_else(
                             &context.target()?.project(),
                             next_blocks,
                             false,
+                            flags
                         )?),
                     })]
                 }
@@ -595,6 +611,7 @@ fn generate_if_else(
             &context.target()?.project(),
             NextBlocks::new(false),
             false,
+            flags
         )?;
         let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
             Step::from_block(
@@ -605,6 +622,7 @@ fn generate_if_else(
                 &context.target()?.project(),
                 NextBlocks::new(false),
                 false,
+                flags
             )?
         } else {
             Step::new_rc(
@@ -632,6 +650,7 @@ fn from_normal_block(
     context: &StepContext,
     project: &Weak<IrProject>,
     final_next_blocks: NextBlocks,
+    flags: &WasmFlags
 ) -> HQResult<Box<[IrOpcode]>> {
     let mut curr_block = Some(block_info);
     let mut final_next_blocks = final_next_blocks;
@@ -639,7 +658,7 @@ fn from_normal_block(
     let mut should_break = false;
     while let Some(block_info) = curr_block {
         opcodes.append(
-            &mut inputs(block_info, blocks, context, project)?
+            &mut inputs(block_info, blocks, context, project, flags)?
                 .into_iter()
                 .chain(
                     #[expect(
@@ -827,6 +846,7 @@ fn from_normal_block(
                                 blocks,
                                 context,
                                 &mut should_break,
+                                flags
                             )?
                         }
                         BlockOpcode::control_if_else => 'block: {
@@ -868,6 +888,7 @@ fn from_normal_block(
                                 blocks,
                                 context,
                                 &mut should_break,
+                                flags
                             )?
                         }
                         BlockOpcode::control_repeat => {
@@ -884,17 +905,12 @@ fn from_normal_block(
                                     var: RefCell::new(variable.clone()),
                                     local_read_write: RefCell::new(local),
                                 }),
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::operator_gt,
                             ];
-                            let first_condition_instructions = Some(vec![
-                                IrOpcode::data_variable(DataVariableFields {
+                            let first_condition_instructions =
+                                Some(vec![IrOpcode::data_variable(DataVariableFields {
                                     var: RefCell::new(variable.clone()),
                                     local_read: RefCell::new(local),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::operator_gt,
-                            ]);
+                                })]);
                             let setup_instructions = vec![
                                 IrOpcode::hq_cast(HqCastFields(IrType::Int)),
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
@@ -913,11 +929,12 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
+                                flags
                             )?
                         }
                         BlockOpcode::control_repeat_until => {
                             let condition_instructions =
-                                inputs(block_info, blocks, context, &context.target()?.project())?;
+                                inputs(block_info, blocks, context, &context.target()?.project(), flags)?;
                             let first_condition_instructions = None;
                             let setup_instructions = vec![IrOpcode::hq_drop];
                             generate_loop(
@@ -931,6 +948,7 @@ fn from_normal_block(
                                 condition_instructions,
                                 true,
                                 setup_instructions,
+                                flags
                             )?
                         }
                         BlockOpcode::procedures_call => {
@@ -954,7 +972,7 @@ fn from_normal_block(
                             })?;
                             let warp = context.warp || proc.always_warped();
                             if warp {
-                                proc.compile_warped(blocks)?;
+                                proc.compile_warped(blocks, flags)?;
                                 vec![IrOpcode::procedures_call_warp(ProceduresCallWarpFields {
                                     proc: Rc::clone(proc),
                                 })]
@@ -994,6 +1012,7 @@ fn from_normal_block(
                         project,
                         final_next_blocks.clone(),
                         true,
+                        flags
                     )?)),
                 }));
                 None
@@ -1023,6 +1042,7 @@ fn from_normal_block(
                                 project,
                                 new_next_blocks_stack,
                                 true,
+                                flags
                             )?)),
                         }));
                         None
@@ -1064,7 +1084,11 @@ fn from_normal_block(
     Ok(opcodes.into_iter().collect())
 }
 
-fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResult<IrOpcode> {
+fn from_special_block(
+    block_array: &BlockArray,
+    context: &StepContext,
+    flags: &WasmFlags,
+) -> HQResult<IrOpcode> {
     Ok(match block_array {
         BlockArray::NumberOrAngle(ty, value) => match ty {
             // number, positive number or angle
@@ -1072,7 +1096,7 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                 // proactively convert to an integer if possible;
                 // if a float is needed, it will be cast at const-fold time (TODO),
                 // and if integers are disabled (TODO) a float will be emitted anyway
-                if value % 1.0 == 0.0 {
+                if flags.integers == UseIntegers::On && value % 1.0 == 0.0 {
                     #[expect(
                         clippy::cast_possible_truncation,
                         reason = "integer-ness already confirmed; `as` is saturating."
@@ -1092,7 +1116,11 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                     clippy::cast_possible_truncation,
                     reason = "integer-ness already confirmed; `as` is saturating."
                 )]
-                IrOpcode::hq_integer(HqIntegerFields(*value as i32))
+                if flags.integers == UseIntegers::On {
+                    IrOpcode::hq_integer(HqIntegerFields(*value as i32))
+                } else {
+                    IrOpcode::hq_float(HqFloatFields(*value))
+                }
             }
             _ => hq_bad_proj!("bad project json (block array of type ({}, f64))", ty),
         },
@@ -1107,7 +1135,7 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                 // proactively convert to an integer if possible;
                 // if a float is needed, it will be cast at const-fold time (TODO),
                 // and if integers are disabled (TODO) a float will be emitted anyway
-                if float % 1.0 == 0.0 {
+                if flags.integers == UseIntegers::On && float % 1.0 == 0.0 {
                     #[expect(
                         clippy::cast_possible_truncation,
                         reason = "integer-ness already confirmed; `as` is saturating."
@@ -1118,11 +1146,21 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                 }
             }
             // integer, positive integer
-            6 | 7 => IrOpcode::hq_integer(HqIntegerFields(
-                value
-                    .parse()
-                    .map_err(|_| make_hq_bug!("expected and int-parseable value"))?,
-            )),
+            6 | 7 => {
+                if flags.integers == UseIntegers::On {
+                    IrOpcode::hq_integer(HqIntegerFields(
+                        value
+                            .parse()
+                            .map_err(|_| make_hq_bug!("expected an int-parseable value"))?,
+                    ))
+                } else {
+                    IrOpcode::hq_float(HqFloatFields(
+                        value
+                            .parse()
+                            .map_err(|_| make_hq_bug!("expected a float-parseable value"))?,
+                    ))
+                }
+            }
             // colour
             9 => hq_todo!("colour inputs"),
             // string
@@ -1131,7 +1169,8 @@ fn from_special_block(block_array: &BlockArray, context: &StepContext) -> HQResu
                 if let Ok(float) = value.parse::<f64>()
                     && *float.to_string() == **value
                 {
-                    break 'textBlock if float % 1.0 == 0.0 {
+                    break 'textBlock if flags.integers == UseIntegers::On && float % 1.0 == 0.0
+                    {
                         #[expect(
                             clippy::cast_possible_truncation,
                             reason = "integer-ness already confirmed; `as` is saturating."

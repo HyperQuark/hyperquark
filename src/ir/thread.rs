@@ -2,6 +2,7 @@ use super::blocks::NextBlocks;
 use super::{Event, IrProject, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode};
+use crate::wasm::WasmFlags;
 
 #[derive(Clone, Debug)]
 pub struct Thread {
@@ -31,6 +32,7 @@ impl Thread {
         target: Weak<Target>,
         project: &Weak<IrProject>,
         debug: bool,
+        flags: &WasmFlags
     ) -> HQResult<Option<Self>> {
         let Some(block_info) = block.block_info() else {
             return Ok(None);
@@ -68,6 +70,7 @@ impl Thread {
             project,
             NextBlocks::new(true),
             true,
+            flags
         )?;
         Ok(Some(Self {
             event,

@@ -96,12 +96,19 @@ macro_rules! log {
 #[cfg(feature = "compiler")]
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::FinishedWasm> {
+    use ir::IrProject;
+    use wasm::flags::PrintIR;
+
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
-    let ir_proj = sb3_proj.try_into()?;
-    crate::log("ir (before optimisation):");
-    crate::log(format!("{ir_proj}").as_str());
+    let ir_proj = IrProject::try_from_sb3(&sb3_proj, &flags)?;
+    if flags.print_ir == PrintIR::On {
+        crate::log("ir (before optimisation):");
+        crate::log(format!("{ir_proj}").as_str());
+    }
     optimisation::ir_optimise(&ir_proj)?;
-    crate::log("ir (after optimisation):");
-    crate::log(format!("{ir_proj}").as_str());
+    if flags.print_ir == PrintIR::On {
+        crate::log("ir (after optimisation):");
+        crate::log(format!("{ir_proj}").as_str());
+    }
     wasm::WasmProject::from_ir(&ir_proj, flags)?.finish()
 }

@@ -3,6 +3,7 @@ use super::variable::variables_from_target;
 use super::{RcVar, Step, Target, Thread};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
+use crate::wasm::WasmFlags;
 
 pub type StepSet = IndexSet<Rc<Step>>;
 
@@ -47,12 +48,8 @@ impl IrProject {
             .insert(step);
         Ok(())
     }
-}
 
-impl TryFrom<Sb3Project> for Rc<IrProject> {
-    type Error = HQError;
-
-    fn try_from(sb3: Sb3Project) -> HQResult<Self> {
+    pub fn try_from_sb3(sb3: &Sb3Project, flags: &WasmFlags) -> HQResult<Rc<Self>> {
         let global_variables = variables_from_target(
             sb3.targets
                 .iter()
@@ -60,7 +57,7 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
         );
 
-        let project = Self::new(IrProject::new(global_variables));
+        let project = Rc::new(IrProject::new(global_variables));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
@@ -72,7 +69,7 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
                 let ir_target = Rc::new(Target::new(
                     target.is_stage,
                     variables,
-                    Self::downgrade(&project),
+                    Rc::downgrade(&project),
                     procedures,
                     index
                         .try_into()
@@ -87,11 +84,12 @@ impl TryFrom<Sb3Project> for Rc<IrProject> {
                             block,
                             blocks,
                             Rc::downgrade(&ir_target),
-                            &Self::downgrade(&project),
+                            &Rc::downgrade(&project),
                             target.comments.clone().iter().any(|(_id, comment)| {
                                 matches!(comment.block_id.clone(), Some(d) if &d == id)
                                     && *comment.text.clone() == *"hq-dbg"
                             }),
+                            flags
                         )
                         .transpose()?;
                         Some(thread)

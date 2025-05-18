@@ -19,6 +19,20 @@ pub enum WasmOpt {
 
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
+pub enum PrintIR {
+    On,
+    Off,
+}
+
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[wasm_bindgen]
+pub enum UseIntegers {
+    On,
+    Off,
+}
+
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[wasm_bindgen]
 pub enum Scheduler {
     TypedFuncRef,
     CallIndirect,
@@ -133,6 +147,8 @@ pub struct WasmFlags {
     pub string_type: WasmStringType,
     pub wasm_opt: WasmOpt,
     pub scheduler: Scheduler,
+    pub print_ir: PrintIR,
+    pub integers: UseIntegers,
 }
 
 #[wasm_bindgen]
@@ -171,6 +187,8 @@ impl WasmFlags {
                 WasmStringType::ExternRef
             },
             scheduler: Scheduler::CallIndirect,
+            print_ir: PrintIR::Off,
+            integers: UseIntegers::Off,
         }
     }
 
@@ -202,6 +220,15 @@ impl WasmFlags {
                 .with_wasm_features(stringmap! {
                     TypedFuncRef : vec![WasmFeature::TypedFunctionReferences]
                 }),
+            "print_ir" => FlagInfo::new()
+                .with_name("Print IR")
+                .with_description("For debugging purposes only")
+                .with_ty(ty_str!(PrintIR)),
+            "integers" => FlagInfo::new()
+                .with_name("Integers")
+                .with_description("Emit integer instructions wherever possible. May make things faster at \
+                the cost of possible overflow, or may slow things down if mixed with floats.")
+                .with_ty(ty_str!(UseIntegers)),
             _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str())
         }
     }

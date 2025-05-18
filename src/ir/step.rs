@@ -3,6 +3,7 @@ use super::{IrProject, StepContext};
 use crate::instructions::{ControlIfElseFields, HqYieldFields, IrOpcode, YieldMode};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap};
+use crate::wasm::WasmFlags;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -142,6 +143,7 @@ impl Step {
         project: &Weak<IrProject>,
         final_next_blocks: NextBlocks,
         used_non_inline: bool,
+        flags: &WasmFlags
     ) -> HQResult<Rc<Self>> {
         if used_non_inline
             && let Some(existing_step) = project
@@ -159,7 +161,7 @@ impl Step {
         Self::new_rc(
             Some(block_id),
             context.clone(),
-            blocks::from_block(block, blocks, context, project, final_next_blocks)?,
+            blocks::from_block(block, blocks, context, project, final_next_blocks, flags)?,
             project,
             used_non_inline,
         )

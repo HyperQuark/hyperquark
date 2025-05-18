@@ -39,28 +39,12 @@ use crate::sb3::VarVal;
 ///     - otherwise, write to the global instance of that variable and add the current variable type
 ///       to the intersection of its possible types
 ///
-/// Hopefully binaryen will merge all of the new uselessly created locals that this will probably
+/// Binaryen will merge all of the new uselessly created locals that this will probably
 /// create, as well as removing the unnecessary global writes.
-/// TODO: test to see if this is actually the case.
 ///
-/// The difficulty here is handling branching, and how we deal with post-branch convergence; if we
-/// have a branch, and then both branches converge to the same step afterwards, we want to know that
-/// variable writes in that converged step will definitely happen, so we can happily make new local
-/// variables rather than inflating the type of the current variable (which will happen if we can't
-/// prove that the branches converge).
-/// Luckily branch convergence can be declared on `control_if_else` by the `converges_to` field, and
-/// when we're warped, the converging branch can be accessed normally by fallthrough anyway.
-/// We just need to make sure that if convergence is explictly declared, that we return execution
-/// to the outer step when we encounter a step that we know a parallel step will converge to.
-/// In the future it might be worth actually splitting these up so the branches don't converge (which
-/// at the moment is sometimes the case in the generated WASM anyway) so that we can determine
-/// variable types with some more certainty after the branch; some investigation will be need to be
-/// done to see if the trade-off of increased code size (so worse caching) for fewer branches in
-/// WASM is worth it.
+/// TODO: recursion
 ///
-/// TODO: actually implement this
-///
-/// also TODO: is it possible to figure out the most likely type of a variable, so we can reorder type
+/// TODO: is it possible to figure out the most likely type of a variable, so we can reorder type
 /// checks and/or utilise branch hinting heuristics?
 pub fn optimise_var_types(project: &Rc<IrProject>) -> HQResult<()> {
     crate::log("optimise vars");
@@ -70,17 +54,25 @@ pub fn optimise_var_types(project: &Rc<IrProject>) -> HQResult<()> {
     )]
     let mut visited_steps = BTreeSet::default();
     for thread in project.threads().try_borrow()?.iter() {
-        visit_step(thread.first_step(), None, &mut visited_steps)?;
+        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+        visit_step(
+            &mut BTreeMap::new(),
+            thread.first_step(),
+            &None,
+            &mut visited_steps,
+        )?;
     }
     for (_, target) in project.targets().borrow().iter() {
         for (_, proc) in target.procedures()?.iter() {
             if let PartialStep::Finished(step) = proc.warped_first_step()?.clone() {
                 crate::log("got warped first step for proc");
-                visit_step(&step, None, &mut visited_steps)?;
+                #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                visit_step(&mut BTreeMap::new(), &step, &None, &mut visited_steps)?;
             }
             if let PartialStep::Finished(step) = proc.non_warped_first_step()?.clone() {
                 crate::log("got non-warped first step for proc");
-                visit_step(&step, None, &mut visited_steps)?;
+                #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                visit_step(&mut BTreeMap::new(), &step, &None, &mut visited_steps)?;
             }
         }
     }
@@ -93,22 +85,23 @@ pub fn optimise_var_types(project: &Rc<IrProject>) -> HQResult<()> {
     reason = "implementations of Eq and Ord for RcVar are independent of actual contents"
 )]
 #[expect(clippy::too_many_lines, reason = "shut up clippy")]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "seems silly to reference an option of a reference"
-)]
-fn visit_step(
+fn visit_step<'a>(
+    mut current_variable_map: &'a mut BTreeMap<RcVar, RcVar>,
     step: &Rc<Step>,
-    outer_variable_map: Option<&mut BTreeMap<RcVar, RcVar>>,
+    outer_variable_map: &'a Option<&'a mut BTreeMap<RcVar, RcVar>>,
     visited_steps: &mut BTreeSet<Rc<Step>>,
-) -> HQResult<()> {
+) -> HQResult<impl Iterator<Item = (RcVar, RcVar, bool)> + 'a> {
     if !visited_steps.insert(Rc::clone(step)) {
         // we've already visited this step.
         crate::log(format!("visited step {} but it is already visited", step.id()).as_str());
-        return Ok(());
+        //return Ok(vec![]); // we're not changing anything new
+        return Ok(generate_changed_state(
+            const { &BTreeMap::new() },
+            &const { None },
+        ));
     }
     crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
-    let mut current_variable_map = BTreeMap::new();
+    //let mut current_variable_map = BTreeMap::new();
     let mut type_stack = vec![];
     'opcode_loop: for opcode in step.opcodes().try_borrow()?.iter() {
         let expected_inputs = opcode.acceptable_inputs()?;
@@ -178,11 +171,35 @@ fn visit_step(
                     // so that steps that might *not* be yielded to in the other branch are optimised as if they might
                     // be.
                     if if_yields {
-                        visit_step(branch_if, Some(&mut current_variable_map), visited_steps)?;
-                        visit_step(branch_else, Some(&mut current_variable_map), visited_steps)?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            branch_if,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            branch_else,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
                     } else {
-                        visit_step(branch_else, Some(&mut current_variable_map), visited_steps)?;
-                        visit_step(branch_if, Some(&mut current_variable_map), visited_steps)?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            branch_else,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            branch_if,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
                     }
                 }
                 IrOpcode::control_loop(ControlLoopFields {
@@ -193,14 +210,128 @@ fn visit_step(
                 }) => {
                     crate::log("found control_loop");
                     if let Some(first_condition_step) = first_condition {
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
                         visit_step(
+                            &mut BTreeMap::new(),
                             first_condition_step,
-                            Some(&mut current_variable_map),
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
+                    } else {
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            condition,
+                            outer_variable_map,
                             visited_steps,
                         )?;
                     }
-                    visit_step(condition, Some(&mut current_variable_map), visited_steps)?;
-                    visit_step(body, Some(&mut current_variable_map), visited_steps)?;
+                    /* One pass over a loop is not always enough to get the correct variable types.
+                     * As an example, consider the following step:
+                     * ```text
+                     * set [x v] to (value of type α)
+                     * repeat (pick random (0) to (42))
+                     *  set [x v] to (funky function(x) (boxed value that could be type α or β)
+                     * end
+                     * say (x)
+                     * ```
+                     * where `funky function` is some sort of built-in function so no variable analysis
+                     * is needed. `something`'s output type is defined as:
+                     * - contains δ if either input type contains β or α;
+                     * - contains β if either input type contains δ.
+                     * Variable analysis pass:
+                     * - create new variable `x1` with type `α`
+                     * - enter loop body
+                     * - create new variable `x2` with type of the output of `funky function` with
+                     *   input types `α` and `α | β`
+                     * - so `x2`'s type is `δ`
+                     * - insert `set (x1) to (x2)` block and add `x2`'s type to `x1`
+                     * - so `x1`'s type is now `α | δ`
+                     * - assume that we're not generating a global variable for x because it's irrelevant
+                     *   for the example
+                     * The compiler thinks that `x1`'s type is `α | δ`, so the `say` block will only check
+                     * for these two types. BUT, in the second iteration `x2`'s type is `β | δ`, so if we
+                     * iterate more than once we end up with `x1` being `α | β | δ`, and the `say` block
+                     * fails to consider that case, so we will reach an `unreachable` block.
+                     * So, we need to analyse the loop body and condition repeatedly until the types of
+                     * all variables stop changing. In the output `Vec` of `visit_step`, the second `RcVar`
+                     * in each tuple element is the outer/global variable that has changed. So, we just
+                     * need to keep track of those variables' types. When we enter these steps, we need to
+                     * clone the steps themselves so they are not added to the visited steps map, and so
+                     * that when they are next visited, variable reads/writes are not skipped for already
+                     * being localised; when we clone, variables are not cloned so we need to extract
+                     * just the variables' types before we start the next iteration. Hopefully this
+                     * algorithm is deterministic, so that the same changed variables are returned every
+                     * time.
+                     * TODO: will this prematurely optimise inner steps?
+                     */
+                    let mut cloned_body = (**body).clone(false)?;
+                    let mut cloned_condition = (**body).clone(false)?;
+                    let prev_body_changed_state = visit_step(
+                        &mut BTreeMap::new(),
+                        &cloned_body,
+                        &Some(&mut current_variable_map),
+                        visited_steps,
+                    )?
+                    .map(|(_, var, _)| var)
+                    .collect::<BTreeSet<_>>();
+                    let prev_cond_changed_state = visit_step(
+                        &mut BTreeMap::new(),
+                        &cloned_condition,
+                        &Some(&mut current_variable_map),
+                        visited_steps,
+                    )?
+                    .map(|(_, var, _)| var)
+                    .collect::<BTreeSet<_>>();
+                    let mut changed_variables = prev_body_changed_state
+                        .intersection(&prev_cond_changed_state)
+                        .map(|var| (var.clone(), *var.possible_types()))
+                        .collect::<BTreeMap<_, _>>();
+                    'loop_convergence: loop {
+                        cloned_body = (**body).clone(false)?;
+                        cloned_condition = (**body).clone(false)?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            &cloned_body,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            &cloned_condition,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
+                        let mut any_var_types_changed = false;
+                        for (var, var_types) in &mut changed_variables {
+                            let new_types = *var.possible_types();
+                            if &new_types != var_types {
+                                *var_types = new_types;
+                                any_var_types_changed = true;
+                            }
+                        }
+                        if !any_var_types_changed {
+                            break 'loop_convergence;
+                        }
+                    }
+                    // now we can optimise the real steps
+                    // TODO: can we just copy the opcodes over rather than re-analysing the whole thing?
+                    #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                    visit_step(
+                        &mut BTreeMap::new(),
+                        body,
+                        &Some(&mut current_variable_map),
+                        visited_steps,
+                    )?;
+                    #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                    visit_step(
+                        &mut BTreeMap::new(),
+                        condition,
+                        &Some(&mut current_variable_map),
+                        visited_steps,
+                    )?;
                 }
                 IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
                     YieldMode::Tail(_) => {
@@ -208,7 +339,13 @@ fn visit_step(
                     }
                     YieldMode::Inline(step) => {
                         crate::log("found inline step to visit");
-                        visit_step(step, Some(&mut current_variable_map), visited_steps)?;
+                        #[expect(unused_must_use, reason = "no need to use the returned iterator")]
+                        visit_step(
+                            &mut BTreeMap::new(),
+                            step,
+                            &Some(&mut current_variable_map),
+                            visited_steps,
+                        )?;
                     }
                     YieldMode::None => {
                         crate::log("found a yield::none, breaking");
@@ -226,11 +363,16 @@ fn visit_step(
                         if let Some(rcstep) = step.upgrade()
                         //.ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
                         {
-                            visit_step(&rcstep, None, visited_steps)?;
+                            #[expect(
+                                unused_must_use,
+                                reason = "no need to use the returned iterator"
+                            )]
+                            visit_step(&mut BTreeMap::new(), &rcstep, &None, visited_steps)?;
                         } else {
                             crate::log("couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
                     what's going on here?");
                         }
+                        break 'opcode_loop;
                     }
                 },
                 _ => (),
@@ -240,30 +382,8 @@ fn visit_step(
             type_stack.push(output_type);
         }
     }
-    // At the end of the step, we need to write the values of our localised variables to either
-    // the local variables belonging to the outer scope, or to the global instance of that variable.
-    // If we've written to a variable, that variable will be present as a key in `current_variable_map`;
-    // it may also be present in `outer_variable_map`. So, we only need to iterate through the current
-    // local variables, and then as we're doing it we can check if there's an outer equivalent.
-    let final_variable_writes = current_variable_map.iter().flat_map(|(global, current)| {
-        let (to_write, local) = if let Some(ref outer_var_map) = outer_variable_map
-            && let Some(outer_var) = outer_var_map.get(global)
-        {
-            (outer_var, true)
-        } else {
-            (global, false)
-        };
-        vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(current.clone()),
-                local_read: RefCell::new(true),
-            }),
-            IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                var: RefCell::new(to_write.clone()),
-                local_write: RefCell::new(local),
-            }),
-        ]
-    });
+    let final_state_changes = generate_changed_state(current_variable_map, outer_variable_map);
+    let final_variable_writes = generate_state_backup(final_state_changes.clone());
     let post_yield = if let Some(last_op) = step.opcodes().try_borrow()?.last()
         && matches!(last_op, IrOpcode::hq_yield(_))
     {
@@ -280,5 +400,50 @@ fn visit_step(
     } else {
         step.opcodes_mut()?.extend(final_variable_writes);
     }
-    Ok(())
+    Ok(final_state_changes) //.collect())
+}
+
+/// Generate instructions to write the values of our localised variables to either the local variables
+/// belonging to the outer scope, or to the global instance of that variable.
+#[expect(
+    clippy::mutable_key_type,
+    reason = "implementations of Eq and Ord for RcVar are independent of actual contents"
+)]
+fn generate_changed_state<'a>(
+    current_variable_map: &'a BTreeMap<RcVar, RcVar>,
+    outer_variable_map: &'a Option<&mut BTreeMap<RcVar, RcVar>>,
+) -> impl Iterator<Item = (RcVar, RcVar, bool)> + Clone + 'a {
+    // If we've written to a variable, that variable will be present as a key in `current_variable_map`;
+    // it may also be present in `outer_variable_map`. So, we only need to iterate through the current
+    // local variables, and then as we're doing it we can check if there's an outer equivalent.
+    current_variable_map.iter().map(move |(global, current)| {
+        let (to_write, local) = if let Some(ref outer_var_map) = outer_variable_map
+            && let Some(outer_var) = outer_var_map.get(global)
+        {
+            (outer_var, true)
+        } else {
+            (global, false)
+        };
+        (current.clone(), to_write.clone(), local)
+    })
+}
+
+fn generate_state_backup(
+    changed_state: impl Iterator<Item = (RcVar, RcVar, bool)>,
+) -> Vec<IrOpcode> {
+    changed_state
+        .flat_map(|(current, to_write, local)| {
+            to_write.add_type(*current.possible_types());
+            vec![
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(current),
+                    local_read: RefCell::new(true),
+                }),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(to_write),
+                    local_write: RefCell::new(local),
+                }),
+            ]
+        })
+        .collect()
 }
