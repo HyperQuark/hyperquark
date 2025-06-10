@@ -32,7 +32,7 @@ impl RcVar {
         *self.0.possible_types.borrow_mut() = current.or(ty);
     }
 
-    pub fn possible_types(&self) -> Ref<Type> {
+    pub fn possible_types(&self) -> Ref<'_, Type> {
         self.0.possible_types.borrow()
     }
 

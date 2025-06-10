@@ -24,11 +24,11 @@ impl Target {
         Weak::clone(&self.project)
     }
 
-    pub fn procedures(&self) -> HQResult<Ref<BTreeMap<Box<str>, Rc<Proc>>>> {
+    pub fn procedures(&self) -> HQResult<Ref<'_, BTreeMap<Box<str>, Rc<Proc>>>> {
         Ok(self.procedures.try_borrow()?)
     }
 
-    pub fn procedures_mut(&self) -> HQResult<RefMut<BTreeMap<Box<str>, Rc<Proc>>>> {
+    pub fn procedures_mut(&self) -> HQResult<RefMut<'_, BTreeMap<Box<str>, Rc<Proc>>>> {
         Ok(self.procedures.try_borrow_mut()?)
     }
 

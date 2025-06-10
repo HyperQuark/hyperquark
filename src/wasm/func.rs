@@ -139,19 +139,19 @@ impl StepFunc {
     }
 
     pub fn local_variable(&self, var: &RcVar) -> HQResult<u32> {
-        crate::log!("accessing local variable for variable {}", var.id());
-        crate::log!(
-            "existing local variables: {:?}",
-            self.local_variables.borrow()
-        );
+        // crate::log!("accessing local variable for variable {}", var.id());
+        // crate::log!(
+        //     "existing local variables: {:?}",
+        //     self.local_variables.borrow()
+        // );
         Ok(
             match self.local_variables.try_borrow_mut()?.entry(var.clone()) {
                 btree_map::Entry::Occupied(entry) => {
-                    crate::log("local already exists, returning that");
+                    // crate::log("local already exists, returning that");
                     *entry.get()
                 }
                 btree_map::Entry::Vacant(entry) => {
-                    crate::log("making a new local for variable");
+                    // crate::log("making a new local for variable");
                     let index = self.local(WasmProject::ir_type_to_wasm(*var.possible_types())?)?;
                     entry.insert(index);
                     index

@@ -62,11 +62,11 @@ pub struct Proc {
 }
 
 impl Proc {
-    pub fn non_warped_first_step(&self) -> HQResult<Ref<PartialStep>> {
+    pub fn non_warped_first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
         Ok(self.non_warped_first_step.try_borrow()?)
     }
 
-    pub fn warped_first_step(&self) -> HQResult<Ref<PartialStep>> {
+    pub fn warped_first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
         Ok(self.warped_first_step.try_borrow()?)
     }
 

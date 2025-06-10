@@ -1,6 +1,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(if_let_guard)]
 #![feature(let_chains)]
+#![feature(try_blocks)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]

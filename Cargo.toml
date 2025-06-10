@@ -16,10 +16,10 @@ regex = "1.10.5"
 lazy-regex = "3.2.0"
 bitmask-enum = "2.2.5"
 itertools = { version = "0.13.0", default-features = false, features = ["use_alloc"] }
-split_exact = "1.1.0"
 wasm-bindgen = "0.2.92"
 serde-wasm-bindgen = "0.6.5"
 wasm-gen = { path = "wasm-gen" }
+petgraph = { version = "0.8.1", default-features = false, features = ["stable_graph"] }
 
 [dev-dependencies]
 wasmparser = "0.226.0"

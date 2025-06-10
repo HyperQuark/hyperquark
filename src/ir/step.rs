@@ -4,6 +4,7 @@ use crate::instructions::{ControlIfElseFields, HqYieldFields, IrOpcode, YieldMod
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap};
 use crate::wasm::WasmFlags;
+use core::cell::RefMut;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -129,7 +130,7 @@ impl Step {
         )
     }
 
-    pub fn opcodes_mut(&self) -> HQResult<core::cell::RefMut<Vec<IrOpcode>>> {
+    pub fn opcodes_mut(&self) -> HQResult<RefMut<'_, Vec<IrOpcode>>> {
         self.opcodes
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))
@@ -143,7 +144,7 @@ impl Step {
         project: &Weak<IrProject>,
         final_next_blocks: NextBlocks,
         used_non_inline: bool,
-        flags: &WasmFlags
+        flags: &WasmFlags,
     ) -> HQResult<Rc<Self>> {
         if used_non_inline
             && let Some(existing_step) = project
