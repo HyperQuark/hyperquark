@@ -85,7 +85,7 @@ impl VarGraph {
         &mut self,
         step: &Rc<Step>,
         outer_variable_map: &'a Option<&'a mut BTreeMap<RcVar, RcVar>>,
-        graphs: &mut BTreeMap<Rc<Step>, Self>,
+        graphs: &mut BTreeMap<Rc<Step>, Option<Self>>,
     ) -> HQResult<()> {
         if graphs.contains_key(step) {
             // we've already visited this step.
@@ -218,9 +218,10 @@ impl VarGraph {
                         }
                         YieldMode::Schedule(step) => {
                             if let Some(rcstep) = step.upgrade() {
+                                graphs.insert(Rc::clone(&rcstep), None);
                                 let mut graph = Self::new();
                                 graph.visit_step(&rcstep, &None, graphs)?;
-                                graphs.insert(rcstep, graph);
+                                graphs.insert(rcstep, Some(graph));
                             } else {
                                 crate::log("couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
                     what's going on here?");
@@ -278,20 +279,22 @@ impl VarGraph {
 /// procedure or not.
 fn visit_procedure(
     proc: &Rc<Proc>,
-    graphs: &mut BTreeMap<Rc<Step>, VarGraph>,
+    graphs: &mut BTreeMap<Rc<Step>, Option<VarGraph>>,
 ) -> HQResult<(Rc<Step>, bool)> {
     Ok(
         if let PartialStep::Finished(step) = proc.warped_first_step()?.clone() {
             crate::log("got warped first step for proc");
+            graphs.insert(Rc::clone(&step), None);
             let mut graph = VarGraph::new();
             graph.visit_step(&step, &None, graphs)?;
-            graphs.insert(Rc::clone(&step), graph);
+            graphs.insert(Rc::clone(&step), Some(graph));
             (step, true)
         } else if let PartialStep::Finished(step) = proc.non_warped_first_step()?.clone() {
             crate::log("got non-warped first step for proc");
+            graphs.insert(Rc::clone(&step), None);
             let mut graph = VarGraph::new();
             graph.visit_step(&step, &None, graphs)?;
-            graphs.insert(Rc::clone(&step), graph);
+            graphs.insert(Rc::clone(&step), Some(graph));
             (step, false)
         } else {
             hq_bug!("no finished step for procedure, whether warped or not")
@@ -304,7 +307,7 @@ fn visit_procedure(
 /// be analyzed to determine the best types for variables.
 fn split_variables_and_make_graphs(
     project: &Rc<IrProject>,
-) -> HQResult<BTreeMap<Rc<Step>, VarGraph>> {
+) -> HQResult<BTreeMap<Rc<Step>, Option<VarGraph>>> {
     crate::log("splitting variables");
     #[expect(
         clippy::mutable_key_type,
@@ -317,9 +320,10 @@ fn split_variables_and_make_graphs(
         }
     }
     for thread in project.threads().try_borrow()?.iter() {
+        graphs.insert(Rc::clone(thread.first_step()), None);
         let mut graph = VarGraph::new();
         graph.visit_step(thread.first_step(), &None, &mut graphs)?;
-        graphs.insert(Rc::clone(thread.first_step()), graph);
+        graphs.insert(Rc::clone(thread.first_step()), Some(graph));
     }
     crate::log("finished splitting variables");
     Ok(graphs)
@@ -461,7 +465,15 @@ where
 
 pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
     crate::log("carrying out variable optimisation");
-    let graphs = split_variables_and_make_graphs(project)?;
+    let graphs = split_variables_and_make_graphs(project)?
+        .into_iter()
+        .map(|(step, graph)| {
+            Ok((
+                step,
+                graph.ok_or_else(|| make_hq_bug!("found None graph in graph map"))?,
+            ))
+        })
+        .collect::<HQResult<BTreeMap<_, _>>>()?;
     crate::log!("graphs num: {}", graphs.len());
     for graph in graphs.values() {
         crate::log!(
