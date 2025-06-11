@@ -20,23 +20,32 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
     let mut casts: Vec<(usize, IrType)> = vec![]; // a vector of cast targets, and where they're needed
     for (i, block) in blocks.iter().enumerate() {
-        let expected_inputs = block.acceptable_inputs()?;
+        let mut expected_inputs = block
+            .acceptable_inputs()?
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
         if type_stack.len() < expected_inputs.len() {
             hq_bug!("didn't have enough inputs on the type stack")
         }
         let actual_inputs: Vec<_> = type_stack
             .splice((type_stack.len() - expected_inputs.len()).., [])
             .collect();
-        for (&expected, actual) in core::iter::zip(expected_inputs.iter(), actual_inputs) {
+        for (j, (expected, actual)) in
+            core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
+        {
             if !expected
                 .base_types()
                 .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
             {
                 casts.push((actual.1, expected));
+                expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
+                    .output_type(Rc::new([actual.0]))?
+                    .ok_or_else(|| make_hq_bug!("hq_cast returned no output type"))?;
             }
         }
         // TODO: make this more specific by using the actual input types post-cast
-        if let Some(output) = block.output_type(expected_inputs)? {
+        if let Some(output) = block.output_type(Rc::from(expected_inputs))? {
             type_stack.push((output, i));
         }
     }
@@ -93,12 +102,18 @@ pub fn from_block(
     context: &StepContext,
     project: &Weak<IrProject>,
     final_next_blocks: NextBlocks,
-    flags: &WasmFlags
+    flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
     insert_casts(match block {
-        Block::Normal { block_info, .. } => {
-            from_normal_block(block_info, blocks, context, project, final_next_blocks, flags)?.to_vec()
-        }
+        Block::Normal { block_info, .. } => from_normal_block(
+            block_info,
+            blocks,
+            context,
+            project,
+            final_next_blocks,
+            flags,
+        )?
+        .to_vec(),
         Block::Special(block_array) => vec![from_special_block(block_array, context, flags)?],
     })
 }
@@ -170,7 +185,7 @@ pub fn inputs(
     blocks: &BlockMap,
     context: &StepContext,
     project: &Weak<IrProject>,
-    flags:  &WasmFlags
+    flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
     Ok(input_names(block_info, context)?
         .into_iter()
@@ -194,7 +209,9 @@ pub fn inputs(
             )]
             match input {
                 Input::NoShadow(_, Some(block)) | Input::Shadow(_, Some(block), _) => match block {
-                    BlockArrayOrId::Array(arr) => Ok(vec![from_special_block(arr, context, flags)?]),
+                    BlockArrayOrId::Array(arr) => {
+                        Ok(vec![from_special_block(arr, context, flags)?])
+                    }
                     BlockArrayOrId::Id(id) => from_block(
                         blocks.get(id).ok_or_else(|| {
                             make_hq_bad_proj!("block for input {} doesn't exist", name)
@@ -203,7 +220,7 @@ pub fn inputs(
                         context,
                         project,
                         NextBlocks::new(false),
-                        flags
+                        flags,
                     ),
                 },
                 _ => hq_bad_proj!("missing input block for {}", name),
@@ -283,7 +300,7 @@ fn generate_loop(
     condition_instructions: Vec<IrOpcode>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
-    flags: &WasmFlags
+    flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
     let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
         Some(input) => input,
@@ -308,7 +325,7 @@ fn generate_loop(
             context,
             &context.target()?.project(),
             NextBlocks::new(false),
-            flags
+            flags,
         )?;
         let substack_step = Step::new_rc(
             None,
@@ -368,7 +385,7 @@ fn generate_loop(
                     &context.target()?.project(),
                     outer_next_blocks,
                     false,
-                    flags
+                    flags,
                 )?
             }
             Some(NextBlock::Step(ref step)) => (*step
@@ -393,7 +410,7 @@ fn generate_loop(
                 yield_first: true,
                 block: NextBlock::Step(Rc::downgrade(&condition_step)),
             }),
-            flags
+            flags,
         )?;
         let substack_step = Step::new_rc(
             None,
@@ -427,6 +444,7 @@ fn generate_loop(
     clippy::too_many_lines,
     reason = "difficult to split up; will probably be condensed in future"
 )]
+#[expect(clippy::too_many_arguments, reason = "will fix later. maybe.")]
 fn generate_if_else(
     if_block: (&Block, Box<str>),
     maybe_else_block: Option<(&Block, Box<str>)>,
@@ -435,7 +453,7 @@ fn generate_if_else(
     blocks: &BTreeMap<Box<str>, Block>,
     context: &StepContext,
     should_break: &mut bool,
-    flags: &WasmFlags
+    flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
     crate::log(
         format!(
@@ -471,7 +489,7 @@ fn generate_if_else(
         &Rc::downgrade(&dummy_project),
         NextBlocks::new(false),
         false,
-        flags
+        flags,
     )?;
     let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
         Step::from_block(
@@ -482,7 +500,7 @@ fn generate_if_else(
             &Rc::downgrade(&dummy_project),
             NextBlocks::new(false),
             false,
-            flags
+            flags,
         )?
     } else {
         Step::new_empty(&Rc::downgrade(&dummy_project), false)?
@@ -492,7 +510,7 @@ fn generate_if_else(
     crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
     if !context.warp && (dummy_if_step.does_yield()? || dummy_else_step.does_yield()?) {
         // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
-        // version inline after the branch, and the other tagges on in the substep's NextBlocks
+        // version inline after the branch, and the other tagged on in the substep's NextBlocks
         // as usual, to allow for extra variable type optimisations.
         #[expect(
             clippy::option_if_let_else,
@@ -523,7 +541,7 @@ fn generate_if_else(
                 &context.target()?.project(),
                 next_blocks.clone(),
                 false,
-                flags
+                flags,
             )?;
             crate::log("recompiled if_step with correct next blocks");
             s
@@ -537,7 +555,7 @@ fn generate_if_else(
                 &context.target()?.project(),
                 next_blocks,
                 false,
-                flags
+                flags,
             )?;
             crate::log("recompiled else step with correct next blocks");
             s
@@ -557,7 +575,7 @@ fn generate_if_else(
                             &context.target()?.project(),
                             next_blocks,
                             false,
-                            flags
+                            flags,
                         )?),
                     })]
                 }
@@ -611,7 +629,7 @@ fn generate_if_else(
             &context.target()?.project(),
             NextBlocks::new(false),
             false,
-            flags
+            flags,
         )?;
         let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
             Step::from_block(
@@ -622,7 +640,7 @@ fn generate_if_else(
                 &context.target()?.project(),
                 NextBlocks::new(false),
                 false,
-                flags
+                flags,
             )?
         } else {
             Step::new_rc(
@@ -650,7 +668,7 @@ fn from_normal_block(
     context: &StepContext,
     project: &Weak<IrProject>,
     final_next_blocks: NextBlocks,
-    flags: &WasmFlags
+    flags: &WasmFlags,
 ) -> HQResult<Box<[IrOpcode]>> {
     let mut curr_block = Some(block_info);
     let mut final_next_blocks = final_next_blocks;
@@ -846,7 +864,7 @@ fn from_normal_block(
                                 blocks,
                                 context,
                                 &mut should_break,
-                                flags
+                                flags,
                             )?
                         }
                         BlockOpcode::control_if_else => 'block: {
@@ -888,7 +906,7 @@ fn from_normal_block(
                                 blocks,
                                 context,
                                 &mut should_break,
-                                flags
+                                flags,
                             )?
                         }
                         BlockOpcode::control_repeat => {
@@ -929,12 +947,17 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
-                                flags
+                                flags,
                             )?
                         }
                         BlockOpcode::control_repeat_until => {
-                            let condition_instructions =
-                                inputs(block_info, blocks, context, &context.target()?.project(), flags)?;
+                            let condition_instructions = inputs(
+                                block_info,
+                                blocks,
+                                context,
+                                &context.target()?.project(),
+                                flags,
+                            )?;
                             let first_condition_instructions = None;
                             let setup_instructions = vec![IrOpcode::hq_drop];
                             generate_loop(
@@ -948,7 +971,7 @@ fn from_normal_block(
                                 condition_instructions,
                                 true,
                                 setup_instructions,
-                                flags
+                                flags,
                             )?
                         }
                         BlockOpcode::procedures_call => {
@@ -1012,7 +1035,7 @@ fn from_normal_block(
                         project,
                         final_next_blocks.clone(),
                         true,
-                        flags
+                        flags,
                     )?)),
                 }));
                 None
@@ -1042,7 +1065,7 @@ fn from_normal_block(
                                 project,
                                 new_next_blocks_stack,
                                 true,
-                                flags
+                                flags,
                             )?)),
                         }));
                         None
@@ -1095,7 +1118,7 @@ fn from_special_block(
             4 | 5 | 8 => {
                 // proactively convert to an integer if possible;
                 // if a float is needed, it will be cast at const-fold time (TODO),
-                // and if integers are disabled (TODO) a float will be emitted anyway
+                // and if integers are disabled a float will be emitted anyway
                 if flags.integers == UseIntegers::On && value % 1.0 == 0.0 {
                     #[expect(
                         clippy::cast_possible_truncation,
@@ -1134,7 +1157,7 @@ fn from_special_block(
                     .map_err(|_| make_hq_bug!("expected a float-parseable value"))?;
                 // proactively convert to an integer if possible;
                 // if a float is needed, it will be cast at const-fold time (TODO),
-                // and if integers are disabled (TODO) a float will be emitted anyway
+                // and if integers are disabled a float will be emitted anyway
                 if flags.integers == UseIntegers::On && float % 1.0 == 0.0 {
                     #[expect(
                         clippy::cast_possible_truncation,
@@ -1169,8 +1192,7 @@ fn from_special_block(
                 if let Ok(float) = value.parse::<f64>()
                     && *float.to_string() == **value
                 {
-                    break 'textBlock if flags.integers == UseIntegers::On && float % 1.0 == 0.0
-                    {
+                    break 'textBlock if flags.integers == UseIntegers::On && float % 1.0 == 0.0 {
                         #[expect(
                             clippy::cast_possible_truncation,
                             reason = "integer-ness already confirmed; `as` is saturating."
