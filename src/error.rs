@@ -167,10 +167,10 @@ macro_rules! hq_assert_eq {
     }};
     ($l:expr, $r:expr, $($args:tt)+) => {#[cfg_attr(feature = "panic", expect(unreachable_code, reason = "panic infrastructure only for debugging"))]{
         if $l != $r {
-            maybe_panic!("Assertion failed: {}\nLeft: {}\nRight: {}\nMessage: {}", stringify!($l), stringify!($r), $l, $r, format_args!($($args)*));
+            maybe_panic!("Assertion failed: {} == {}\nLeft: {}\nRight: {}\nMessage: {}", stringify!($l), stringify!($r), $l, $r, format_args!($($args)*));
             return Err($crate::HQError {
                 err_type: $crate::HQErrorType::InternalError,
-                msg: format!("Assertion failed: {}\nLeft: {}\nRight: {}\nMessage: {}", stringify!($l), stringify!($r), $l, $r, format_args!($($args)*)).into(),
+                msg: format!("Assertion failed: {} == {}\nLeft: {}\nRight: {}\nMessage: {}", stringify!($l), stringify!($r), $l, $r, format_args!($($args)*)).into(),
                 file: file!().into(),
                 line: line!(),
                 column: column!()

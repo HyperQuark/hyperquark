@@ -1,6 +1,11 @@
 use super::proc::{procs_from_target, ProcMap};
-use super::variable::variables_from_target;
-use super::{RcVar, Step, Target, Thread};
+use super::variable::{variables_from_target, TargetVars};
+use super::{Step, Target, Thread};
+use crate::instructions::{
+    DataSetvariabletoFields, DataTeevariableFields, DataVariableFields, IrOpcode,
+    ProceduresArgumentFields,
+};
+use crate::ir::{used_vars, PartialStep, Proc, ProcContext, RcVar, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 use crate::wasm::WasmFlags;
@@ -11,7 +16,7 @@ pub type StepSet = IndexSet<Rc<Step>>;
 pub struct IrProject {
     threads: RefCell<Box<[Thread]>>,
     steps: RefCell<StepSet>,
-    global_variables: BTreeMap<Box<str>, RcVar>,
+    global_variables: TargetVars,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
 
@@ -28,11 +33,11 @@ impl IrProject {
         &self.targets
     }
 
-    pub const fn global_variables(&self) -> &BTreeMap<Box<str>, RcVar> {
+    pub const fn global_variables(&self) -> &TargetVars {
         &self.global_variables
     }
 
-    pub fn new(global_variables: BTreeMap<Box<str>, RcVar>) -> Self {
+    pub fn new(global_variables: TargetVars) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(IndexSet::default()),
@@ -64,7 +69,11 @@ impl IrProject {
             .iter()
             .enumerate()
             .map(|(index, target)| {
-                let variables = variables_from_target(target);
+                let variables = if target.is_stage {
+                    BTreeMap::new()
+                } else {
+                    variables_from_target(target)
+                };
                 let procedures = RefCell::new(ProcMap::new());
                 let ir_target = Rc::new(Target::new(
                     target.is_stage,
@@ -89,7 +98,7 @@ impl IrProject {
                                 matches!(comment.block_id.clone(), Some(d) if &d == id)
                                     && *comment.text.clone() == *"hq-dbg"
                             }),
-                            flags
+                            flags,
                         )
                         .transpose()?;
                         Some(thread)
@@ -111,8 +120,94 @@ impl IrProject {
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? =
             targets.into_iter().collect();
+        let global_vars = used_vars(project.global_variables());
+        for target in project.targets().try_borrow()?.values() {
+            let target_vars = used_vars(target.variables());
+            fixup_proc_types(target, &global_vars, &target_vars)?;
+        }
+        for step in project.steps().try_borrow()?.iter() {
+            let target_vars = used_vars(step.context().target()?.variables());
+            fixup_proc_calls(step, &global_vars, &target_vars)?;
+        }
         Ok(project)
     }
+}
+
+/// Add inputs + outputs to procedures corresponding to global/target variables
+fn fixup_proc_types(
+    target: &Rc<Target>,
+    global_vars: &[RcVar],
+    target_vars: &[RcVar],
+) -> HQResult<()> {
+    for procedure in target.procedures()?.values() {
+        procedure.context().arg_vars().try_borrow_mut()?.extend(
+            (0..(global_vars.len() + target_vars.len()))
+                .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false))),
+        );
+        procedure.context().return_vars().try_borrow_mut()?.extend(
+            (0..(global_vars.len() + target_vars.len()))
+                .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false))),
+        );
+        if !procedure.context().always_warped() {
+            hq_todo!("non-warped procedure for fixup_target_procs")
+        }
+        let PartialStep::Finished(step) = &*procedure.first_step()? else {
+            hq_bug!("found unfinished procedure step")
+        };
+        {
+            let mut opcodes = step.opcodes_mut()?;
+            opcodes.extend(
+                global_vars
+                    .iter()
+                    .chain(target_vars)
+                    .map(|var| {
+                        Ok(IrOpcode::data_variable(DataVariableFields {
+                            var: RefCell::new(var.clone()),
+                            local_read: RefCell::new(false),
+                        }))
+                    })
+                    .collect::<HQResult<Box<[_]>>>()?,
+            );
+        }
+        fixup_proc_calls(step, global_vars, target_vars)?;
+    }
+
+    Ok(())
+}
+
+/// Pass variables into procedure calls, and read them on return
+fn fixup_proc_calls(step: &Rc<Step>, global_vars: &[RcVar], target_vars: &[RcVar]) -> HQResult<()> {
+    let mut call_indices = vec![];
+    for (index, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
+        if matches!(opcode, IrOpcode::procedures_call_warp(_)) {
+            call_indices.push(index);
+        }
+    }
+    step.opcodes_mut()?
+        .reserve_exact(call_indices.len() * (global_vars.len() + target_vars.len()) * 2);
+    for call_index in call_indices.iter().rev() {
+        #[expect(clippy::range_plus_one, reason = "x+1..=x doesn't make much sense")]
+        step.opcodes_mut()?.splice(
+            (call_index + 1)..(call_index + 1),
+            global_vars.iter().chain(target_vars).rev().map(|var| {
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(var.clone()),
+                    local_write: RefCell::new(false),
+                })
+            }),
+        );
+        step.opcodes_mut()?.splice(
+            call_index..call_index,
+            global_vars.iter().chain(target_vars).map(|var| {
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(var.clone()),
+                    local_read: RefCell::new(false),
+                })
+            }),
+        );
+    }
+
+    Ok(())
 }
 
 impl fmt::Display for IrProject {

@@ -1,11 +1,11 @@
 use super::{proc::Proc, IrProject, RcVar};
-use crate::prelude::*;
+use crate::{ir::variable::TargetVars, prelude::*};
 use core::cell::{Ref, RefMut};
 
 #[derive(Debug, Clone)]
 pub struct Target {
     is_stage: bool,
-    variables: BTreeMap<Box<str>, RcVar>,
+    variables: TargetVars,
     project: Weak<IrProject>,
     procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
     index: u32,
@@ -16,7 +16,7 @@ impl Target {
         self.is_stage
     }
 
-    pub const fn variables(&self) -> &BTreeMap<Box<str>, RcVar> {
+    pub const fn variables(&self) -> &TargetVars {
         &self.variables
     }
 
@@ -38,7 +38,7 @@ impl Target {
 
     pub const fn new(
         is_stage: bool,
-        variables: BTreeMap<Box<str>, RcVar>,
+        variables: TargetVars,
         project: Weak<IrProject>,
         procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
         index: u32,

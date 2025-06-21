@@ -101,7 +101,7 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::new([IrType::Number
+    Ok(Rc::from([IrType::Number
         .or(IrType::String)
         .or(IrType::Boolean)]))
 }

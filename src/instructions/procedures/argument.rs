@@ -1,8 +1,8 @@
 use super::super::prelude::*;
-use crate::wasm::{StepFunc, WasmProject};
+use crate::{ir::RcVar, wasm::{StepFunc, WasmProject}};
 
 #[derive(Clone, Debug)]
-pub struct Fields(pub usize, pub IrType);
+pub struct Fields(pub usize, pub RcVar);
 
 impl fmt::Display for Fields {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -10,7 +10,7 @@ impl fmt::Display for Fields {
             f,
             r#"{{
         "arg_index": {},
-        "arg_type": {},
+        "arg_var": {},
     }}"#,
             self.0, self.1
         )
@@ -20,10 +20,10 @@ impl fmt::Display for Fields {
 pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
-    Fields(index, ty): &Fields,
+    Fields(index, var): &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     hq_assert!(
-        WasmProject::ir_type_to_wasm(*ty)?
+        WasmProject::ir_type_to_wasm(*var.possible_types())?
             == *func.params().get(*index).ok_or_else(|| make_hq_bug!(
                 "proc argument index was out of bounds for func params"
             ))?,
@@ -38,8 +38,8 @@ pub fn acceptable_inputs(_: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, &Fields(_, ty): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(ty))
+pub fn output_type(_inputs: Rc<[IrType]>, Fields(_, var): &Fields) -> HQResult<Option<IrType>> {
+    Ok(Some(*var.possible_types()))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

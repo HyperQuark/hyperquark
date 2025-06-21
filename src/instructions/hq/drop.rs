@@ -5,7 +5,7 @@ pub fn wasm(_func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalIns
 }
 
 pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::new([IrType::Number.or(IrType::String)]))
+    Ok(Rc::from([IrType::Number.or(IrType::String)]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {

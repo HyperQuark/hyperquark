@@ -40,7 +40,7 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
             {
                 casts.push((actual.1, expected));
                 expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
-                    .output_type(Rc::new([actual.0]))?
+                    .output_type(Rc::from([actual.0]))?
                     .ok_or_else(|| make_hq_bug!("hq_cast returned no output type"))?;
             }
         }
@@ -272,18 +272,13 @@ fn procedure_argument(
     else {
         return Ok(arg_type.default_block());
     };
-    let expected_type = proc_context
-        .arg_types()
+    let arg_vars_cell = proc_context.arg_vars();
+    let arg_vars = arg_vars_cell.try_borrow()?;
+    let arg_var = arg_vars
         .get(index)
         .ok_or_else(|| make_hq_bad_proj!("argument index not in range of argumenttypes"))?;
-    hq_assert!(
-        (arg_type == ProcArgType::Boolean && *expected_type == IrType::Boolean)
-            || (arg_type == ProcArgType::StringNumber
-                && (*expected_type == IrType::String || *expected_type == IrType::Number)),
-        "argument block doesn't match actual argument type"
-    );
     Ok(vec![IrOpcode::procedures_argument(
-        ProceduresArgumentFields(index, *expected_type),
+        ProceduresArgumentFields(index, arg_var.clone()),
     )])
 }
 
@@ -748,8 +743,10 @@ fn from_normal_block(
                             } else {
                                 hq_bad_proj!("variable not found")
                             };
+                            *variable.is_used.try_borrow_mut()? = true;
+                            crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                var: RefCell::new(variable),
+                                var: RefCell::new(variable.var.clone()),
                                 local_write: RefCell::new(false),
                             })]
                         }
@@ -788,14 +785,16 @@ fn from_normal_block(
                             } else {
                                 hq_bad_proj!("variable not found")
                             };
+                            *variable.is_used.try_borrow_mut()? = true;
+                            crate::log!("marked variable {:?} as used", id);
                             vec![
                                 IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(variable.clone()),
+                                    var: RefCell::new(variable.var.clone()),
                                     local_read: RefCell::new(false),
                                 }),
                                 IrOpcode::operator_add,
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(variable),
+                                    var: RefCell::new(variable.var.clone()),
                                     local_write: RefCell::new(false),
                                 }),
                             ]
@@ -835,8 +834,10 @@ fn from_normal_block(
                             } else {
                                 hq_bad_proj!("variable not found")
                             };
+                            *variable.is_used.try_borrow_mut()? = true;
+                            crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_variable(DataVariableFields {
-                                var: RefCell::new(variable),
+                                var: RefCell::new(variable.var.clone()),
                                 local_read: RefCell::new(false),
                             })]
                         }
@@ -993,7 +994,7 @@ fn from_normal_block(
                             let proc = procs.get(proccode.as_str()).ok_or_else(|| {
                                 make_hq_bad_proj!("non-existant proccode on procedures_call")
                             })?;
-                            let warp = context.warp || proc.always_warped();
+                            let warp = context.warp || proc.context().always_warped();
                             if warp {
                                 proc.compile_warped(blocks, flags)?;
                                 vec![IrOpcode::procedures_call_warp(ProceduresCallWarpFields {
@@ -1228,8 +1229,10 @@ fn from_special_block(
                     } else {
                         hq_bad_proj!("variable not found")
                     };
+                    *variable.is_used.try_borrow_mut()? = true;
+                    crate::log!("marked variable {:?} as used", id);
                     IrOpcode::data_variable(DataVariableFields {
-                        var: RefCell::new(variable),
+                        var: RefCell::new(variable.var.clone()),
                         local_read: RefCell::new(false),
                     })
                 }

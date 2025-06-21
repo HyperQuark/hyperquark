@@ -48,7 +48,7 @@ impl RcVar {
 impl PartialEq for RcVar {
     fn eq(&self, other: &Self) -> bool {
         self.0.id == other.0.id
-        //Rc::ptr_eq(&self.0, &other.0)
+        // Rc::ptr_eq(self.0.get_ref(), other.0.get_ref())
     }
 }
 
@@ -73,19 +73,57 @@ impl Hash for RcVar {
     }
 }
 
-pub fn variables_from_target(target: &Sb3Target) -> BTreeMap<Box<str>, RcVar> {
+#[derive(Debug)]
+pub struct TargetVar {
+    pub var: RcVar,
+    /// this MUST not be modified once the IrProject is emitted, i.e. once optimisation has begun
+    pub is_used: RefCell<bool>,
+}
+
+impl fmt::Display for TargetVar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{ "var": {}, "is_used": {} }}"#,
+            self.var,
+            *self.is_used.borrow()
+        )
+    }
+}
+
+pub type TargetVars = BTreeMap<Box<str>, Rc<TargetVar>>;
+
+pub fn variables_from_target(target: &Sb3Target) -> TargetVars {
     target
         .variables
         .iter()
         .map(|(id, var_info)| {
             (
                 id.clone(),
-                RcVar::new(
-                    Type::none(),
-                    #[expect(clippy::unwrap_used, reason = "this field exists on all variants")]
-                    var_info.get_1().unwrap().clone(),
-                ),
+                Rc::new(TargetVar {
+                    var: RcVar::new(
+                        Type::none(),
+                        #[expect(
+                            clippy::unwrap_used,
+                            reason = "this field exists on all variants"
+                        )]
+                        var_info.get_1().unwrap().clone(),
+                    ),
+                    is_used: RefCell::new(false),
+                }),
             )
+        })
+        .collect()
+}
+
+pub fn used_vars(vars: &TargetVars) -> Box<[RcVar]> {
+    vars.values()
+        .filter_map(|var| {
+            if *var.is_used.borrow() {
+                Some(var.var.clone())
+            } else {
+                None
+            }
         })
         .collect()
 }

@@ -13,6 +13,7 @@
     clippy::missing_errors_doc,
     reason = "Too many Results everywhere to document every possible error case. Errors should be self-descriptive and user readable anyway."
 )]
+#![allow(clippy::too_many_arguments, reason = "unavoidable at this stage")]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
     clippy::alloc_instead_of_core,
@@ -53,6 +54,8 @@ pub use error::{HQError, HQErrorType, HQResult};
 
 mod registry;
 
+mod rc;
+
 /// commonly used _things_ which would be nice not to have to type out every time
 pub mod prelude {
     pub use crate::registry::{Registry, RegistryDefault};
@@ -60,12 +63,15 @@ pub mod prelude {
     pub use alloc::borrow::Cow;
     pub use alloc::boxed::Box;
     pub use alloc::collections::{BTreeMap, BTreeSet};
-    pub use alloc::rc::{Rc, Weak};
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;
     pub use core::borrow::Borrow;
     pub use core::cell::RefCell;
     pub use core::fmt;
+    pub use core::pin::Pin;
+    pub use core::marker::PhantomPinned;
+
+    pub use crate::rc::{Rc, Weak};
 
     use core::hash::BuildHasherDefault;
     use hashers::fnv::FNV1aHasher64;

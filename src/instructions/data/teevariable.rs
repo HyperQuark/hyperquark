@@ -60,7 +60,7 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs(Fields { var, .. }: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::new([if var.try_borrow()?.possible_types().is_none() {
+    Ok(Rc::from([if var.try_borrow()?.possible_types().is_none() {
         IrType::Any
     } else {
         *var.try_borrow()?.possible_types()

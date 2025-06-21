@@ -195,13 +195,13 @@ fn generate_branches(
             if !allowed_input_types.base_types().any(|ty| ty == base) {
                 wasm.append(
                     &mut IrOpcode::hq_cast(HqCastFields(allowed_input_types))
-                        .wasm(func, Rc::new([*ty]))?,
+                        .wasm(func, Rc::from([*ty]))?,
                 );
             }
             let mut vec_processed_inputs = processed_inputs.to_vec();
             vec_processed_inputs.push(
                 IrOpcode::hq_cast(HqCastFields(allowed_input_types))
-                    .output_type(Rc::new([*ty]))?
+                    .output_type(Rc::from([*ty]))?
                     .ok_or_else(|| make_hq_bug!("hq_cast output type was None"))?,
             );
             wasm.append(&mut generate_branches(

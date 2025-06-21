@@ -1,5 +1,5 @@
 use super::{Registries, WasmFlags, WasmProject};
-use crate::ir::{PartialStep, RcVar, Step};
+use crate::ir::{used_vars, PartialStep, RcVar, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
 use alloc::collections::btree_map;
@@ -50,8 +50,9 @@ impl Instruction {
                 WInstruction::I32Const(step_index)
             }
             Self::LazyWarpedProcCall(proc) => {
-                let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {
-                    hq_bug!("tried to use uncompiled warped procedure step")
+                hq_assert!(proc.context().always_warped(), "tried to use LazyWarpedProcCall on a non-warped step");
+                let PartialStep::Finished(ref step) = *proc.first_step()? else {
+                    hq_bug!("tried to use uncompiled procedure step")
                 };
                 let step_index: u32 = steps
                     .try_borrow()?
@@ -71,7 +72,7 @@ pub struct StepFunc {
     locals: RefCell<Vec<ValType>>,
     instructions: RefCell<Vec<Instruction>>,
     params: Box<[ValType]>,
-    output: Option<ValType>,
+    output: Box<[ValType]>,
     registries: Rc<Registries>,
     flags: WasmFlags,
     steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
@@ -109,7 +110,7 @@ impl StepFunc {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
             params: Box::new([ValType::I32]),
-            output: None,
+            output: Box::new([]),
             registries,
             flags,
             steps,
@@ -121,7 +122,7 @@ impl StepFunc {
     /// currently only used in testing to validate types
     pub fn new_with_types(
         params: Box<[ValType]>,
-        output: Option<ValType>,
+        output: Box<[ValType]>,
         registries: Rc<Registries>,
         steps: Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         flags: WasmFlags,
@@ -194,10 +195,10 @@ impl StepFunc {
             func.instruction(&instruction.eval(steps, imported_func_count)?);
         }
         func.instruction(&wasm_encoder::Instruction::End);
-        let type_index = self.registries().types().register_default((
-            self.params.into(),
-            self.output.map_or_else(Vec::new, |output| vec![output]),
-        ))?;
+        let type_index = self
+            .registries()
+            .types()
+            .register_default((self.params.into(), self.output.into()))?;
         funcs.function(type_index);
         code.function(&func);
         Ok(())
@@ -218,13 +219,29 @@ impl StepFunc {
         }
         let step_func = if let Some(ref proc_context) = step.context().proc_context {
             let arg_types = proc_context
-                .arg_types()
+                .arg_vars()
+                .try_borrow()?
                 .iter()
-                .copied()
-                .map(WasmProject::ir_type_to_wasm)
+                .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
                 .collect::<HQResult<Box<[_]>>>()?;
-            let input_types = arg_types.iter().chain(&[ValType::I32]).copied().collect();
-            Self::new_with_types(input_types, None, registries, Rc::clone(steps), flags)
+            let params = arg_types
+                .iter()
+                .chain(&[ValType::I32])
+                .copied()
+                .collect();
+            let outputs = proc_context
+                .return_vars()
+                .try_borrow()?
+                .iter()
+                .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
+                .collect::<HQResult<Box<[_]>>>()?;
+            Self::new_with_types(
+                params,
+                outputs,
+                registries,
+                Rc::clone(steps),
+                flags,
+            )
         } else {
             Self::new(registries, Rc::clone(steps), flags)
         };

@@ -66,10 +66,10 @@ macro_rules! instructions_test {
             #[test]
             fn output_type_fails_when_wasm_fails() {
                 for ($($type_arg,)*) in types_iter(true) {
-                    let output_type_result = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?);
+                    let output_type_result = output_type(Rc::from([$($type_arg,)*]), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
                     let step_func = StepFunc::new(Rc::clone(&registries), Default::default(), flags());
-                    let wasm_result = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?);
+                    let wasm_result = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
                         (Err(HQError { err_type: e1, .. }), Err(HQError { err_type: e2, .. })) => {
@@ -86,7 +86,7 @@ macro_rules! instructions_test {
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(true) {
 
-                    let Ok(output_type) = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) else {
+                    let Ok(output_type) = output_type(Rc::from([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed output_type");
                         continue;
                     };
@@ -94,11 +94,11 @@ macro_rules! instructions_test {
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
-                        Some(output) => Some(WasmProject::ir_type_to_wasm(output)?),
-                        None => None,
+                        Some(output) => vec![WasmProject::ir_type_to_wasm(output)?],
+                        None => vec![],
                         };
-                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), Default::default(), flags());
-                    let Ok(wasm) = wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?) else {
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), Default::default(), flags());
+                    let Ok(wasm) = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed wasm");
                         continue;
                     };
@@ -151,7 +151,7 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_wrapped_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(false) {
-                    let Ok(output_type) = output_type(Rc::new([$($type_arg,)*]), $(&$fields)?) else {
+                    let Ok(output_type) = output_type(Rc::from([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed output_type");
                         continue;
                     };
@@ -160,12 +160,12 @@ macro_rules! instructions_test {
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
-                        Some(output) => Some(WasmProject::ir_type_to_wasm(output)?),
-                        None => None,
+                        Some(output) => vec![WasmProject::ir_type_to_wasm(output)?],
+                        None => vec![],
                         };
                     println!("{result:?}");
-                    let step_func = StepFunc::new_with_types(params.into(), result, Rc::clone(&registries), Default::default(), flags());
-                    let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::new([$($type_arg,)*]), &$crate::instructions::IrOpcode::$opcode$(($fields))?) {
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), Default::default(), flags());
+                    let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::from([$($type_arg,)*]), &$crate::instructions::IrOpcode::$opcode$(($fields))?) {
                         Ok(a) => a,
                         Err(e) => {
                             println!("skipping failed wasm (message: {})", e.msg);
@@ -242,7 +242,7 @@ macro_rules! instructions_test {
                 for ($($type_arg,)*) in types_iter(true) {
                     let registries = Rc::new(Registries::default());
                     let step_func = StepFunc::new(Rc::clone(&registries), Default::default(), flags());
-                    if wasm(&step_func, Rc::new([$($type_arg,)*]), $(&$fields)?).is_err() {
+                    if wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?).is_err() {
                         println!("skipping failed wasm");
                         continue;
                     };

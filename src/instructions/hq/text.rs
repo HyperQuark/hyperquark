@@ -43,7 +43,7 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::new([]))
+    Ok(Rc::from([]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Option<IrType>> {

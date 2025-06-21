@@ -31,7 +31,7 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs(Fields { proc }: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::from(proc.context().arg_types()))
+    Ok(proc.context().arg_vars().try_borrow()?.iter().map(|var| *var.possible_types()).collect())
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
