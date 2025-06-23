@@ -708,6 +708,8 @@ fn from_normal_block(
                         BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
                         BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
                         BlockOpcode::operator_not => vec![IrOpcode::operator_not],
+                        BlockOpcode::operator_and => vec![IrOpcode::operator_and],
+                        BlockOpcode::operator_or => vec![IrOpcode::operator_or],
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =
                                 block_info.fields.get("VARIABLE").ok_or_else(|| {
