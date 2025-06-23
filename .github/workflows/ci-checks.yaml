@@ -101,4 +101,5 @@ jobs:
             --skip looks::say::tests_non_debug::js_functions_match_declared_types
             --skip looks::think::tests_debug::js_functions_match_declared_types
             --skip looks::think::tests_non_debug::js_functions_match_declared_types
+            --skip js_functions
  

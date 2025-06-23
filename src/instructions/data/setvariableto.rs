@@ -71,7 +71,7 @@ pub const REQUESTS_SCREEN_REFRESH: bool = false;
 crate::instructions_test!(
     any_global;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
@@ -86,7 +86,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     float_global;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
@@ -101,7 +101,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     string_global;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
@@ -116,7 +116,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     int_global;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::QuasiInt,
@@ -131,7 +131,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     any_local;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
@@ -146,7 +146,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     float_local;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
@@ -161,7 +161,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     string_local;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
@@ -176,7 +176,7 @@ crate::instructions_test!(
 crate::instructions_test!(
     int_local;
     data_setvariableto;
-    @ super::Fields {
+    t @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::QuasiInt,
