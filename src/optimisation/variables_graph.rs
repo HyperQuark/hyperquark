@@ -130,7 +130,7 @@ impl VarGraph {
                         } else {
                             let new_node = self.add_node(Some((
                                 vec![var.try_borrow()?.clone()],
-                                type_stack.drain(..).collect(),
+                                mem::take(type_stack),
                             )));
                             let last_node = *self.exit_node().borrow();
                             self.add_edge(last_node, new_node, EdgeType::Forward);
@@ -151,7 +151,7 @@ impl VarGraph {
                         *locality.try_borrow_mut()? = true;
                         let new_node = self.add_node(Some((
                             vec![var.try_borrow()?.clone()],
-                            type_stack.drain(..).collect(),
+                            mem::take(type_stack),
                         )));
                         let last_node = *self.exit_node().borrow();
                         self.add_edge(last_node, new_node, EdgeType::Forward);
@@ -183,13 +183,13 @@ impl VarGraph {
                             *local_read.try_borrow_mut()? = true;
                         } else if let Some(proc_context) = maybe_proc_context {
                             let target = step.context().target()?;
-                            let project = target
+                            let project = step
                                 .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?;
                             let global_vars = used_vars(project.global_variables());
                             let target_vars = used_vars(target.variables());
-                            if let Some((var_index, global_var)) = global_vars
+                            if let Some((var_index, _)) = global_vars
                                 .iter()
                                 .chain(&target_vars)
                                 .find_position(|v| *v == &*var.borrow())
@@ -301,7 +301,7 @@ impl VarGraph {
                         // crate::log!("found proc call. type stack: {type_stack:?}");
                         let entry_node = self.add_node(Some((
                             proc.context().arg_vars().try_borrow()?.clone(),
-                            type_stack.drain(..).collect(),
+                            mem::take(type_stack),
                         )));
                         let last_node = *self.exit_node().borrow();
                         self.add_edge(last_node, entry_node, EdgeType::Forward);
@@ -315,9 +315,6 @@ impl VarGraph {
                         );
                     }
                     IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
-                        YieldMode::Tail(_) => {
-                            hq_todo!("tail-call yield in variable splitting pass")
-                        }
                         YieldMode::Inline(step) => {
                             // crate::log("found inline step to visit");
                             self.visit_step(

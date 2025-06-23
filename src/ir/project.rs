@@ -1,11 +1,8 @@
 use super::proc::{procs_from_target, ProcMap};
 use super::variable::{variables_from_target, TargetVars};
 use super::{Step, Target, Thread};
-use crate::instructions::{
-    DataSetvariabletoFields, DataTeevariableFields, DataVariableFields, IrOpcode,
-    ProceduresArgumentFields,
-};
-use crate::ir::{used_vars, PartialStep, Proc, ProcContext, RcVar, Type as IrType};
+use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
+use crate::ir::{used_vars, PartialStep, RcVar, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 use crate::wasm::WasmFlags;
@@ -46,14 +43,6 @@ impl IrProject {
         }
     }
 
-    pub fn register_step(&self, step: Rc<Step>) -> HQResult<()> {
-        self.steps()
-            .try_borrow_mut()
-            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
-            .insert(step);
-        Ok(())
-    }
-
     pub fn try_from_sb3(sb3: &Sb3Project, flags: &WasmFlags) -> HQResult<Rc<Self>> {
         let global_variables = variables_from_target(
             sb3.targets
@@ -62,7 +51,7 @@ impl IrProject {
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
         );
 
-        let project = Rc::new(IrProject::new(global_variables));
+        let project = Rc::new(Self::new(global_variables));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
@@ -92,7 +81,7 @@ impl IrProject {
                         let thread = Thread::try_from_top_block(
                             block,
                             blocks,
-                            Rc::downgrade(&ir_target),
+                            &Rc::downgrade(&ir_target),
                             &Rc::downgrade(&project),
                             target.comments.clone().iter().any(|(_id, comment)| {
                                 matches!(comment.block_id.clone(), Some(d) if &d == id)

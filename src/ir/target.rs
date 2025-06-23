@@ -1,4 +1,4 @@
-use super::{proc::Proc, IrProject, RcVar};
+use super::{proc::Proc, IrProject};
 use crate::{ir::variable::TargetVars, prelude::*};
 use core::cell::{Ref, RefMut};
 
@@ -12,7 +12,7 @@ pub struct Target {
 }
 
 impl Target {
-    pub const fn is_stage(&self) -> bool {
+    pub const fn _is_stage(&self) -> bool {
         self.is_stage
     }
 

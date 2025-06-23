@@ -6,7 +6,6 @@ use wasm_encoder::{ConstExpr, HeapType, MemArg};
 
 #[derive(Clone, Debug)]
 pub enum YieldMode {
-    Tail(Rc<Step>),
     Inline(Rc<Step>),
     Schedule(Weak<Step>),
     None,
@@ -19,14 +18,13 @@ impl fmt::Display for YieldMode {
             r#"{{
         "mode": {:?}"#,
             match self {
-                Self::Tail(_) => "tail",
                 Self::Inline(_) => "inline",
                 Self::Schedule(_) => "schedule",
                 Self::None => "none",
             }
         )?;
         match self {
-            Self::Tail(step) | Self::Inline(step) => {
+            Self::Inline(step) => {
                 write!(f, r#", "step": {:?}"#, step.id())?;
             }
             Self::Schedule(step) => {
@@ -193,7 +191,6 @@ pub fn wasm(
                 }
             }
         }
-        YieldMode::Tail(_) => hq_todo!("tail-calls"),
     })
 }
 

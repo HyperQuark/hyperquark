@@ -20,12 +20,6 @@ pub enum PartialStep {
     Finished(Rc<Step>),
 }
 
-impl PartialStep {
-    pub const fn is_finished(&self) -> bool {
-        matches!(self, Self::Finished(_))
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct ProcContext {
     arg_vars: Rc<RefCell<Vec<RcVar>>>,
@@ -54,10 +48,6 @@ impl ProcContext {
         Rc::clone(&self.return_vars)
     }
 
-    pub fn target(&self) -> Weak<IrTarget> {
-        Weak::clone(&self.target)
-    }
-
     pub const fn always_warped(&self) -> bool {
         self.always_warped
     }
@@ -77,24 +67,12 @@ impl Proc {
         Ok(self.first_step.try_borrow()?)
     }
 
-    #[expect(
-        clippy::borrowed_box,
-        reason = "reference is inside borrow so difficult to unbox"
-    )]
-    pub const fn first_step_id(&self) -> Option<&Box<str>> {
-        self.first_step_id.as_ref()
-    }
-
     pub const fn context(&self) -> &ProcContext {
         &self.context
     }
 
     pub fn proccode(&self) -> &str {
         &self.proccode
-    }
-
-    pub const fn debug(&self) -> bool {
-        self.debug
     }
 }
 
@@ -221,7 +199,7 @@ impl Proc {
             arg_ids,
             arg_names,
             target,
-            return_vars: Default::default(),
+            return_vars: Rc::new(RefCell::new(vec![])),
             always_warped: warp,
         };
         Ok(Rc::new(Self {
@@ -318,9 +296,21 @@ impl fmt::Display for Proc {
             PartialStep::StartedCompilation | PartialStep::None => "none",
         };
         let arg_vars_cell = &self.context().arg_vars();
-        let arg_vars = format!("[{}]", RefCell::borrow(arg_vars_cell).iter().map(|var| format!("{var}")).join(", "));
+        let arg_vars = format!(
+            "[{}]",
+            RefCell::borrow(arg_vars_cell)
+                .iter()
+                .map(|var| format!("{var}"))
+                .join(", ")
+        );
         let ret_vars_cell = &self.context().return_vars();
-        let ret_vars = format!("[{}]", RefCell::borrow(ret_vars_cell).iter().map(|var| format!("{var}")).join(", "));
+        let ret_vars = format!(
+            "[{}]",
+            RefCell::borrow(ret_vars_cell)
+                .iter()
+                .map(|var| format!("{var}"))
+                .join(", ")
+        );
         write!(
             f,
             r#"{{

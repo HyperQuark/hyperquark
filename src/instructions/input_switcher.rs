@@ -220,10 +220,6 @@ fn generate_branches(
     Ok(wasm)
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "passing an Rc by reference doesn't make much sense a lot of the time"
-)]
 pub fn wrap_instruction(
     func: &StepFunc,
     inputs: Rc<[IrType]>,

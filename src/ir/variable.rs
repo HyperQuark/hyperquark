@@ -11,6 +11,7 @@ use core::hash::{Hash, Hasher};
 #[derive(Debug)]
 struct Variable {
     possible_types: RefCell<Type>,
+    #[expect(unused, reason = "will be used in the future")]
     initial_value: VarVal,
     id: String,
 }
@@ -36,7 +37,7 @@ impl RcVar {
         self.0.possible_types.borrow()
     }
 
-    pub fn initial_value(&self) -> &VarVal {
+    pub fn _initial_value(&self) -> &VarVal {
         &self.0.initial_value
     }
 
@@ -76,7 +77,7 @@ impl Hash for RcVar {
 #[derive(Debug)]
 pub struct TargetVar {
     pub var: RcVar,
-    /// this MUST not be modified once the IrProject is emitted, i.e. once optimisation has begun
+    /// this MUST not be modified once the `IrProject` is emitted, i.e. once optimisation has begun
     pub is_used: RefCell<bool>,
 }
 

@@ -1171,6 +1171,7 @@ fn from_special_block(
             }
             // integer, positive integer
             6 | 7 => {
+                #[expect(clippy::redundant_else, reason = "false positive")]
                 if flags.integers == UseIntegers::On {
                     IrOpcode::hq_integer(HqIntegerFields(
                         value

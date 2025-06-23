@@ -8,7 +8,6 @@ use crate::wasm::WasmFlags;
 pub struct Thread {
     event: Event,
     first_step: Rc<Step>,
-    target: Weak<Target>,
 }
 
 impl Thread {
@@ -20,16 +19,12 @@ impl Thread {
         &self.first_step
     }
 
-    pub fn target(&self) -> Weak<Target> {
-        Weak::clone(&self.target)
-    }
-
     /// tries to construct a thread from a top-level block.
     /// Returns Ok(None) if the top-level block is not a valid event or if there is no next block.
     pub fn try_from_top_block(
         block: &Block,
         blocks: &BlockMap,
-        target: Weak<Target>,
+        target: &Weak<Target>,
         project: &Weak<IrProject>,
         debug: bool,
         flags: &WasmFlags
@@ -62,7 +57,7 @@ impl Thread {
             next_id.clone(),
             blocks,
             &StepContext {
-                target: Weak::clone(&target),
+                target: Weak::clone(target),
                 proc_context: None,
                 warp: false, // steps from top blocks are never warped
                 debug,
@@ -75,7 +70,6 @@ impl Thread {
         Ok(Some(Self {
             event,
             first_step,
-            target,
         }))
     }
 }

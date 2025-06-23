@@ -1,6 +1,6 @@
 use super::{Registries, WasmFlags, WasmProject};
 use crate::instructions::{IrOpcode, ProceduresCallWarpFields};
-use crate::ir::{used_vars, PartialStep, RcVar, Step};
+use crate::ir::{PartialStep, RcVar, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
 use alloc::collections::btree_map;
@@ -76,7 +76,6 @@ pub struct StepFunc {
     output: Box<[ValType]>,
     registries: Rc<Registries>,
     flags: WasmFlags,
-    steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
     local_variables: RefCell<BTreeMap<RcVar, u32>>,
 }
 
@@ -93,10 +92,6 @@ impl StepFunc {
         &self.instructions
     }
 
-    pub fn steps(&self) -> Rc<RefCell<IndexMap<Rc<Step>, Self>>> {
-        Rc::clone(&self.steps)
-    }
-
     pub fn params(&self) -> &[ValType] {
         &self.params
     }
@@ -104,7 +99,6 @@ impl StepFunc {
     /// creates a new step function, with one paramter
     pub fn new(
         registries: Rc<Registries>,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         flags: WasmFlags,
     ) -> Self {
         Self {
@@ -114,7 +108,6 @@ impl StepFunc {
             output: Box::new([]),
             registries,
             flags,
-            steps,
             local_variables: RefCell::new(BTreeMap::default()),
         }
     }
@@ -125,7 +118,6 @@ impl StepFunc {
         params: Box<[ValType]>,
         output: Box<[ValType]>,
         registries: Rc<Registries>,
-        steps: Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         flags: WasmFlags,
     ) -> Self {
         Self {
@@ -135,7 +127,6 @@ impl StepFunc {
             output,
             registries,
             flags,
-            steps,
             local_variables: RefCell::new(BTreeMap::default()),
         }
     }
@@ -176,7 +167,7 @@ impl StepFunc {
         &self,
         instructions: impl IntoIterator<Item = Instruction>,
     ) -> HQResult<()> {
-        self.instructions
+        self.instructions()
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
             .extend(instructions);
@@ -192,7 +183,7 @@ impl StepFunc {
         imported_func_count: u32,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
-        for instruction in self.instructions.take() {
+        for instruction in self.instructions().take() {
             func.instruction(&instruction.eval(steps, imported_func_count)?);
         }
         func.instruction(&wasm_encoder::Instruction::End);
@@ -240,11 +231,10 @@ impl StepFunc {
                 params,
                 outputs,
                 registries,
-                Rc::clone(steps),
                 flags,
             )
         } else {
-            Self::new(registries, Rc::clone(steps), flags)
+            Self::new(registries, flags)
         };
         let mut instrs = vec![];
         let mut type_stack = vec![];
