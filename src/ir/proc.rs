@@ -317,12 +317,18 @@ impl fmt::Display for Proc {
             PartialStep::Finished(step) => step.id(),
             PartialStep::StartedCompilation | PartialStep::None => "none",
         };
+        let arg_vars_cell = &self.context().arg_vars();
+        let arg_vars = format!("[{}]", RefCell::borrow(arg_vars_cell).iter().map(|var| format!("{var}")).join(", "));
+        let ret_vars_cell = &self.context().return_vars();
+        let ret_vars = format!("[{}]", RefCell::borrow(ret_vars_cell).iter().map(|var| format!("{var}")).join(", "));
         write!(
             f,
             r#"{{
             "proccode": "{proccode}",
             "always_warped": {always_warped},
-            "first_step": "{step}"
+            "first_step": "{step}",
+            "arg_vars": {arg_vars},
+            "return_vars": {ret_vars}
         }}"#
         )
     }

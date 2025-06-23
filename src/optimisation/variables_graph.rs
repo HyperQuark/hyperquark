@@ -12,6 +12,7 @@ use crate::ir::{used_vars, IrProject, PartialStep, Proc, RcVar, Step, Type as Ir
 use crate::prelude::*;
 use crate::sb3::VarVal;
 use core::hash::{Hash, Hasher};
+use core::mem;
 
 use petgraph::dot::{Config as DotConfig, Dot};
 use petgraph::graph::{EdgeIndex, NodeIndex};
@@ -87,6 +88,7 @@ impl VarGraph {
         step: &Rc<Step>,
         outer_variable_map: &'a Option<&'a mut BTreeMap<RcVar, RcVar>>,
         graphs: &mut BTreeMap<Rc<Step>, Option<Self>>,
+        type_stack: &mut Vec<StackElement>,
     ) -> HQResult<()> {
         if let Some(Some(_)) = graphs.get(step) {
             // we've already visited this step.
@@ -97,7 +99,6 @@ impl VarGraph {
         let maybe_proc_context = step.context().proc_context.as_ref();
         let mut current_variable_map = const { BTreeMap::new() };
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
-        let mut type_stack: Vec<StackElement> = vec![];
         'opcode_loop: for (i, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
             // crate::log!("opcode: {opcode:?}");
             // let's just assume that input types match up.
@@ -118,13 +119,23 @@ impl VarGraph {
                             .insert(var.try_borrow()?.clone(), new_variable.clone());
                         *var.try_borrow_mut()? = new_variable;
                         *locality.try_borrow_mut()? = true;
-                        let new_node = self.add_node(Some((
-                            vec![var.try_borrow()?.clone()],
-                            type_stack.drain(..).collect(),
-                        )));
-                        let last_node = *self.exit_node().borrow();
-                        self.add_edge(last_node, new_node, EdgeType::Forward);
-                        *self.exit_node().borrow_mut() = new_node;
+                        if type_stack.is_empty() {
+                            let mut graph = self.graph().borrow_mut();
+                            let Some(Some((vars, _))) =
+                                graph.node_weight_mut(*self.exit_node().borrow())
+                            else {
+                                hq_bug!("")
+                            };
+                            vars.push(var.try_borrow()?.clone());
+                        } else {
+                            let new_node = self.add_node(Some((
+                                vec![var.try_borrow()?.clone()],
+                                type_stack.drain(..).collect(),
+                            )));
+                            let last_node = *self.exit_node().borrow();
+                            self.add_edge(last_node, new_node, EdgeType::Forward);
+                            *self.exit_node().borrow_mut() = new_node;
+                        }
                     }
                     IrOpcode::data_teevariable(DataTeevariableFields {
                         var,
@@ -159,7 +170,7 @@ impl VarGraph {
                         {
                             // crate::log("local variable instance found");
                             Some(current_var.clone())
-                        } else if let Some(ref outer_var_map) = outer_variable_map
+                        } else if let Some(outer_var_map) = outer_variable_map
                             && let Some(outer_var) = outer_var_map.get(&var.try_borrow()?.clone())
                         {
                             // crate::log("outer variable instance found");
@@ -171,23 +182,35 @@ impl VarGraph {
                             *var.try_borrow_mut()? = new_var;
                             *local_read.try_borrow_mut()? = true;
                         } else if let Some(proc_context) = maybe_proc_context {
-                            if let Some((arg_index, arg_var)) = proc_context
-                                .arg_vars()
-                                .try_borrow()?
+                            let target = step.context().target()?;
+                            let project = target
+                                .project()
+                                .upgrade()
+                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?;
+                            let global_vars = used_vars(project.global_variables());
+                            let target_vars = used_vars(target.variables());
+                            if let Some((var_index, global_var)) = global_vars
                                 .iter()
+                                .chain(&target_vars)
                                 .find_position(|v| *v == &*var.borrow())
                             {
+                                let arg_vars_cell = proc_context.arg_vars();
+                                let arg_vars = arg_vars_cell.try_borrow()?;
+                                let arg_var = arg_vars
+                                    .get(var_index)
+                                    .ok_or_else(|| make_hq_bug!("var index out of bounds"))?;
                                 // crate::log("inserting var->arg replacement");
                                 opcode_replacements.push((
                                     i,
                                     IrOpcode::procedures_argument(ProceduresArgumentFields(
-                                        arg_index,
+                                        var_index,
                                         arg_var.clone(),
                                     )),
                                 ));
                                 type_stack.push(StackElement::Var(arg_var.clone()));
                                 break 'opcode_block;
                             }
+                            hq_bug!("couldn't find variable in global & target vars")
                         }
                         type_stack.push(StackElement::Var(var.try_borrow()?.clone()));
                         // crate::log!("stack: {type_stack:?}");
@@ -198,15 +221,26 @@ impl VarGraph {
                     }) => {
                         // crate::log("found control_if_else");
                         let last_node = *self.exit_node().borrow();
-                        self.visit_step(branch_if, &Some(&mut current_variable_map), graphs)?;
+                        self.visit_step(
+                            branch_if,
+                            &Some(&mut current_variable_map),
+                            graphs,
+                            type_stack,
+                        )?;
                         let if_branch_exit = *self.exit_node().borrow();
                         *self.exit_node().borrow_mut() = last_node;
-                        self.visit_step(branch_else, &Some(&mut current_variable_map), graphs)?;
+                        self.visit_step(
+                            branch_else,
+                            &Some(&mut current_variable_map),
+                            graphs,
+                            type_stack,
+                        )?;
                         let else_branch_exit = *self.exit_node().borrow();
                         *self.exit_node().borrow_mut() = self.add_node(None);
                         let exit_node = *self.exit_node().borrow();
                         self.add_edge(if_branch_exit, exit_node, EdgeType::Forward);
                         self.add_edge(else_branch_exit, exit_node, EdgeType::Forward);
+                        type_stack.clear();
                     }
                     IrOpcode::control_loop(ControlLoopFields {
                         first_condition,
@@ -220,13 +254,21 @@ impl VarGraph {
                                 first_condition_step,
                                 &Some(&mut current_variable_map),
                                 graphs,
+                                type_stack,
                             )?;
+                            type_stack.clear(); // we consume the top item on the type stack as an i32.eqz
                             let first_cond_exit = *self.exit_node().borrow();
                             let header_node = self.add_node(None);
                             self.add_edge(first_cond_exit, header_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = header_node;
-                            self.visit_step(body, &Some(&mut current_variable_map), graphs)?;
-                            self.visit_step(condition, outer_variable_map, graphs)?;
+                            self.visit_step(
+                                body,
+                                &Some(&mut current_variable_map),
+                                graphs,
+                                type_stack,
+                            )?;
+                            self.visit_step(condition, outer_variable_map, graphs, type_stack)?;
+                            type_stack.clear();
                             let cond_exit = *self.exit_node().borrow();
                             self.add_edge(cond_exit, header_node, EdgeType::BackLink);
                             *self.exit_node().borrow_mut() = cond_exit;
@@ -235,8 +277,14 @@ impl VarGraph {
                             let last_node = *self.exit_node().borrow();
                             self.add_edge(last_node, header_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = header_node;
-                            self.visit_step(condition, outer_variable_map, graphs)?;
-                            self.visit_step(body, &Some(&mut current_variable_map), graphs)?;
+                            self.visit_step(condition, outer_variable_map, graphs, type_stack)?;
+                            type_stack.clear();
+                            self.visit_step(
+                                body,
+                                &Some(&mut current_variable_map),
+                                graphs,
+                                type_stack,
+                            )?;
                             let body_exit = *self.exit_node().borrow();
                             self.add_edge(body_exit, header_node, EdgeType::BackLink);
                             *self.exit_node().borrow_mut() = body_exit;
@@ -250,6 +298,7 @@ impl VarGraph {
                         type_stack.push(StackElement::Var(var.clone()));
                     }
                     IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) => {
+                        // crate::log!("found proc call. type stack: {type_stack:?}");
                         let entry_node = self.add_node(Some((
                             proc.context().arg_vars().try_borrow()?.clone(),
                             type_stack.drain(..).collect(),
@@ -271,7 +320,12 @@ impl VarGraph {
                         }
                         YieldMode::Inline(step) => {
                             // crate::log("found inline step to visit");
-                            self.visit_step(step, &Some(&mut current_variable_map), graphs)?;
+                            self.visit_step(
+                                step,
+                                &Some(&mut current_variable_map),
+                                graphs,
+                                type_stack,
+                            )?;
                         }
                         YieldMode::None => {
                             // crate::log("found a yield::none, breaking");
@@ -281,7 +335,7 @@ impl VarGraph {
                             if let Some(rcstep) = step.upgrade() {
                                 graphs.insert(Rc::clone(&rcstep), None);
                                 let mut graph = Self::new();
-                                graph.visit_step(&rcstep, &None, graphs)?;
+                                graph.visit_step(&rcstep, &None, graphs, &mut vec![])?;
                                 graphs.insert(rcstep, Some(graph));
                             } else {
                                 crate::log("couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
@@ -314,14 +368,18 @@ impl VarGraph {
                 }
             }
         }
-        if !type_stack.is_empty() {
-            let Some(proc_context) = maybe_proc_context else {
-                hq_bug!("found dangling type stack for non-proc step")
-            };
+        if !type_stack.is_empty()
+            && step.used_non_inline()
+            && let Some(proc_context) = maybe_proc_context
+        {
             // crate::log!("found spare items on type stack at end of step visit: {type_stack:?}");
+            // crate::log!(
+            //     "return vars: {}",
+            //     proc_context.return_vars().try_borrow()?.len()
+            // );
             let new_node = self.add_node(Some((
                 proc_context.return_vars().try_borrow()?.clone(),
-                type_stack,
+                mem::take(type_stack),
             )));
             let last_node = *self.exit_node().borrow();
             self.add_edge(last_node, new_node, EdgeType::Forward);
@@ -373,7 +431,7 @@ fn visit_procedure(
         if let PartialStep::Finished(step) = proc.first_step()?.clone() {
             graphs.insert(Rc::clone(&step), None);
             let mut graph = VarGraph::new();
-            graph.visit_step(&step, &None, graphs)?;
+            graph.visit_step(&step, &None, graphs, &mut vec![])?;
             graphs.insert(Rc::clone(&step), Some(graph));
             (step, proc.context().always_warped())
         } else {
@@ -402,7 +460,7 @@ fn split_variables_and_make_graphs(
     for thread in project.threads().try_borrow()?.iter() {
         graphs.insert(Rc::clone(thread.first_step()), None);
         let mut graph = VarGraph::new();
-        graph.visit_step(thread.first_step(), &None, &mut graphs)?;
+        graph.visit_step(thread.first_step(), &None, &mut graphs, &mut vec![])?;
         graphs.insert(Rc::clone(thread.first_step()), Some(graph));
     }
     crate::log("finished splitting variables");
@@ -460,9 +518,9 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
         match el {
             StackElement::Opcode(op) => {
                 let inputs_len = op.acceptable_inputs()?.len();
-                crate::log!("opcode: {op}");
-                crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
-                crate::log!("stack: {:?}", stack);
+                // crate::log!("opcode: {op}");
+                // crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
+                // crate::log!("stack: {:?}", stack);
                 let inputs: Rc<[_]> = stack.splice((stack.len() - inputs_len).., []).collect();
                 if let Some(output) = op.output_type(inputs)? {
                     stack.push(output);
@@ -484,7 +542,7 @@ fn visit_node(
     if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
         // crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
-        crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
+        // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),

@@ -1,4 +1,5 @@
 use super::{Registries, WasmFlags, WasmProject};
+use crate::instructions::{IrOpcode, ProceduresCallWarpFields};
 use crate::ir::{used_vars, PartialStep, RcVar, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
@@ -258,6 +259,8 @@ impl StepFunc {
             )?);
             if let Some(output) = opcode.output_type(inputs)? {
                 type_stack.push(output);
+            } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode {
+                type_stack.extend(proc.context().return_vars().try_borrow()?.iter().map(|var| **var.possible_types().borrow()));
             }
         }
         step_func.add_instructions(instrs)?;

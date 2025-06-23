@@ -121,6 +121,7 @@ impl IrProject {
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? =
             targets.into_iter().collect();
         let global_vars = used_vars(project.global_variables());
+        crate::log!("global_vars: {global_vars:?}");
         for target in project.targets().try_borrow()?.values() {
             let target_vars = used_vars(target.variables());
             fixup_proc_types(target, &global_vars, &target_vars)?;
@@ -161,6 +162,7 @@ fn fixup_proc_types(
                     .iter()
                     .chain(target_vars)
                     .map(|var| {
+                        crate::log!("{var}");
                         Ok(IrOpcode::data_variable(DataVariableFields {
                             var: RefCell::new(var.clone()),
                             local_read: RefCell::new(false),

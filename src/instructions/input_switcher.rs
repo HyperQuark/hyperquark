@@ -229,6 +229,12 @@ pub fn wrap_instruction(
     inputs: Rc<[IrType]>,
     opcode: &IrOpcode,
 ) -> HQResult<Vec<InternalInstruction>> {
+    if matches!(opcode, &IrOpcode::procedures_call_warp(_)) {
+        // we don't want to unbox inputs to procedures, because... reasons
+        // TODO: can we carry out monomorphisation on procedures?
+        return opcode.wasm(func, inputs)
+    }
+
     let output = opcode.output_type(Rc::clone(&inputs))?;
 
     hq_assert!(inputs.len() == opcode.acceptable_inputs()?.len());

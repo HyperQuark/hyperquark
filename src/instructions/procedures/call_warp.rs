@@ -34,6 +34,9 @@ pub fn acceptable_inputs(Fields { proc }: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(proc.context().arg_vars().try_borrow()?.iter().map(|var| *var.possible_types()).collect())
 }
 
+// for now, this block is a special case because it actually has multiple return values! (because of
+// variable shennanigans.) This is handled in src/wasm/func.rs > StepFunc::compile_step.
+// TODO: make output_type return a vec rather than an option
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
     Ok(None)
 }
