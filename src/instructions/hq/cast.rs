@@ -107,6 +107,7 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Option<IrType>> {
+    crate::log!("{:?}", inputs[0]);
     Ok(Some(
         inputs[0]
             .base_types()
@@ -167,7 +168,7 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Optio
             .collect::<HQResult<Vec<_>>>()?
             .into_iter()
             .reduce(IrType::or)
-            .ok_or_else(|| make_hq_bug!("input was empty"))?,
+            .ok_or_else(|| make_hq_bug!("input type was empty"))?,
     ))
 }
 

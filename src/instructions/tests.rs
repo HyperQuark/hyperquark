@@ -127,11 +127,12 @@ macro_rules! instructions_test {
                     });
 
                     let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
+                    let imported_global_count: u32 = registries.strings().registry().borrow().len().try_into().unwrap();
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count)?;
+                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count, imported_global_count)?;
                     registries.types().clone().finish(&mut types);
                     registries.tables().clone().finish(&imports, &mut tables, &mut exports);
-                    registries.globals().clone().finish(&imports, &mut globals, &mut exports);
+                    registries.globals().clone().finish(&imports, &mut globals, &mut exports, imported_global_count);
 
                     module.section(&types);
                     module.section(&imports);
@@ -199,11 +200,12 @@ macro_rules! instructions_test {
                         memory64: false,
                     });
                     let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
+                    let imported_global_count: u32 = registries.strings().registry().borrow().len().try_into().unwrap();
                     registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count)?;
+                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count, imported_global_count)?;
                     registries.types().clone().finish(&mut types);
                     registries.tables().clone().finish(&imports, &mut tables, &mut exports);
-                    registries.globals().clone().finish(&imports, &mut globals, &mut exports);
+                    registries.globals().clone().finish(&imports, &mut globals, &mut exports, imported_global_count);
 
                     module.section(&types);
                     module.section(&imports);

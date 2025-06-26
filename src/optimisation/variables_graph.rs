@@ -11,6 +11,8 @@ use crate::instructions::{
 use crate::ir::{used_vars, IrProject, PartialStep, Proc, RcVar, Step, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::VarVal;
+
+use core::convert::identity;
 use core::hash::{Hash, Hasher};
 use core::mem;
 
@@ -56,6 +58,12 @@ impl Hash for VarGraph {
     }
 }
 
+enum MaybeGraph {
+    Started,
+    Inlined,
+    Finished(VarGraph),
+}
+
 impl VarGraph {
     pub fn new() -> Self {
         let mut graph = StableDiGraph::new();
@@ -82,23 +90,26 @@ impl VarGraph {
         self.graph().borrow_mut().add_edge(a, b, weight)
     }
 
+    /// Visits a step to split its variables and construct a variable graph for it.
+    /// Optionally returns the next step to visit.
     #[expect(clippy::too_many_lines, reason = "difficult to split")]
     fn visit_step<'a>(
         &mut self,
         step: &Rc<Step>,
         outer_variable_map: &'a Option<&'a mut BTreeMap<RcVar, RcVar>>,
-        graphs: &mut BTreeMap<Rc<Step>, Option<Self>>,
+        graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>,
         type_stack: &mut Vec<StackElement>,
-    ) -> HQResult<()> {
-        if let Some(Some(_)) = graphs.get(step) {
+    ) -> HQResult<Option<Rc<Step>>> {
+        if let Some(MaybeGraph::Inlined | MaybeGraph::Finished(_)) = graphs.get(step) {
             // we've already visited this step.
             crate::log(format!("visited step {} but it is already visited", step.id()).as_str());
-            return Ok(());
+            return Ok(None);
         }
-        // crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
+        crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
         let maybe_proc_context = step.context().proc_context.as_ref();
         let mut current_variable_map = const { BTreeMap::new() };
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
+        let mut next_step = None;
         'opcode_loop: for (i, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
             // crate::log!("opcode: {opcode:?}");
             // let's just assume that input types match up.
@@ -221,20 +232,24 @@ impl VarGraph {
                     }) => {
                         // crate::log("found control_if_else");
                         let last_node = *self.exit_node().borrow();
+                        graphs.insert(Rc::clone(branch_if), MaybeGraph::Started);
                         self.visit_step(
                             branch_if,
                             &Some(&mut current_variable_map),
                             graphs,
                             type_stack,
                         )?;
+                        graphs.insert(Rc::clone(branch_if), MaybeGraph::Inlined);
                         let if_branch_exit = *self.exit_node().borrow();
                         *self.exit_node().borrow_mut() = last_node;
+                        graphs.insert(Rc::clone(branch_else), MaybeGraph::Started);
                         self.visit_step(
                             branch_else,
                             &Some(&mut current_variable_map),
                             graphs,
                             type_stack,
                         )?;
+                        graphs.insert(Rc::clone(branch_else), MaybeGraph::Inlined);
                         let else_branch_exit = *self.exit_node().borrow();
                         *self.exit_node().borrow_mut() = self.add_node(None);
                         let exit_node = *self.exit_node().borrow();
@@ -250,24 +265,35 @@ impl VarGraph {
                     }) => {
                         // crate::log("found control_loop");
                         if let Some(first_condition_step) = first_condition {
+                            graphs.insert(Rc::clone(first_condition_step), MaybeGraph::Started);
                             self.visit_step(
                                 first_condition_step,
                                 &Some(&mut current_variable_map),
                                 graphs,
                                 type_stack,
                             )?;
+                            graphs.insert(Rc::clone(first_condition_step), MaybeGraph::Inlined);
                             type_stack.clear(); // we consume the top item on the type stack as an i32.eqz
                             let first_cond_exit = *self.exit_node().borrow();
                             let header_node = self.add_node(None);
                             self.add_edge(first_cond_exit, header_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = header_node;
+                            graphs.insert(Rc::clone(body), MaybeGraph::Started);
                             self.visit_step(
                                 body,
                                 &Some(&mut current_variable_map),
                                 graphs,
                                 type_stack,
                             )?;
-                            self.visit_step(condition, outer_variable_map, graphs, type_stack)?;
+                            graphs.insert(Rc::clone(body), MaybeGraph::Inlined);
+                            graphs.insert(Rc::clone(condition), MaybeGraph::Started);
+                            self.visit_step(
+                                condition,
+                                &Some(&mut current_variable_map),
+                                graphs,
+                                type_stack,
+                            )?;
+                            graphs.insert(Rc::clone(condition), MaybeGraph::Inlined);
                             type_stack.clear();
                             let cond_exit = *self.exit_node().borrow();
                             self.add_edge(cond_exit, header_node, EdgeType::BackLink);
@@ -277,14 +303,23 @@ impl VarGraph {
                             let last_node = *self.exit_node().borrow();
                             self.add_edge(last_node, header_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = header_node;
-                            self.visit_step(condition, outer_variable_map, graphs, type_stack)?;
+                            graphs.insert(Rc::clone(condition), MaybeGraph::Started);
+                            self.visit_step(
+                                condition,
+                                &Some(&mut current_variable_map),
+                                graphs,
+                                type_stack,
+                            )?;
+                            graphs.insert(Rc::clone(condition), MaybeGraph::Inlined);
                             type_stack.clear();
+                            graphs.insert(Rc::clone(body), MaybeGraph::Started);
                             self.visit_step(
                                 body,
                                 &Some(&mut current_variable_map),
                                 graphs,
                                 type_stack,
                             )?;
+                            graphs.insert(Rc::clone(body), MaybeGraph::Inlined);
                             let body_exit = *self.exit_node().borrow();
                             self.add_edge(body_exit, header_node, EdgeType::BackLink);
                             *self.exit_node().borrow_mut() = body_exit;
@@ -300,7 +335,13 @@ impl VarGraph {
                     IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) => {
                         // crate::log!("found proc call. type stack: {type_stack:?}");
                         let entry_node = self.add_node(Some((
-                            proc.context().arg_vars().try_borrow()?.clone(),
+                            proc.context()
+                                .arg_vars()
+                                .try_borrow()?
+                                .iter()
+                                .rev()
+                                .cloned()
+                                .collect(),
                             mem::take(type_stack),
                         )));
                         let last_node = *self.exit_node().borrow();
@@ -317,12 +358,14 @@ impl VarGraph {
                     IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
                         YieldMode::Inline(step) => {
                             // crate::log("found inline step to visit");
+                            graphs.insert(Rc::clone(step), MaybeGraph::Started);
                             self.visit_step(
                                 step,
                                 &Some(&mut current_variable_map),
                                 graphs,
                                 type_stack,
                             )?;
+                            graphs.insert(Rc::clone(step), MaybeGraph::Inlined);
                         }
                         YieldMode::None => {
                             // crate::log("found a yield::none, breaking");
@@ -330,10 +373,7 @@ impl VarGraph {
                         }
                         YieldMode::Schedule(step) => {
                             if let Some(rcstep) = step.upgrade() {
-                                graphs.insert(Rc::clone(&rcstep), None);
-                                let mut graph = Self::new();
-                                graph.visit_step(&rcstep, &None, graphs, &mut vec![])?;
-                                graphs.insert(rcstep, Some(graph));
+                                next_step = Some(rcstep);
                             } else {
                                 crate::log("couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
                     what's going on here?");
@@ -375,7 +415,13 @@ impl VarGraph {
             //     proc_context.return_vars().try_borrow()?.len()
             // );
             let new_node = self.add_node(Some((
-                proc_context.return_vars().try_borrow()?.clone(),
+                proc_context
+                    .return_vars()
+                    .try_borrow()?
+                    .iter()
+                    .rev()
+                    .cloned()
+                    .collect(),
                 mem::take(type_stack),
             )));
             let last_node = *self.exit_node().borrow();
@@ -413,28 +459,32 @@ impl VarGraph {
         } else {
             step.opcodes_mut()?.extend(final_variable_writes);
         }
-        Ok(())
+        Ok(next_step)
     }
+}
+
+fn visit_step_recursively(
+    step: Rc<Step>,
+    graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>,
+) -> HQResult<()> {
+    let mut maybe_next_step = Some(step);
+    while let Some(next_step) = maybe_next_step {
+        graphs.insert(Rc::clone(&next_step), MaybeGraph::Started);
+        let mut graph = VarGraph::new();
+        maybe_next_step = graph.visit_step(&next_step, &None, graphs, &mut vec![])?;
+        graphs.insert(Rc::clone(&next_step), MaybeGraph::Finished(graph));
+    }
+    Ok(())
 }
 
 /// Visits a procedure. Returns the found step, and a boolean indicating if the step was for a warped
 /// procedure or not.
-fn visit_procedure(
-    proc: &Rc<Proc>,
-    graphs: &mut BTreeMap<Rc<Step>, Option<VarGraph>>,
-) -> HQResult<(Rc<Step>, bool)> {
+fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>) -> HQResult<()> {
     crate::log("visiting procedure");
-    Ok(
-        if let PartialStep::Finished(step) = proc.first_step()?.clone() {
-            graphs.insert(Rc::clone(&step), None);
-            let mut graph = VarGraph::new();
-            graph.visit_step(&step, &None, graphs, &mut vec![])?;
-            graphs.insert(Rc::clone(&step), Some(graph));
-            (step, proc.context().always_warped())
-        } else {
-            hq_bug!("no finished step for procedure")
-        },
-    )
+    if let PartialStep::Finished(step) = proc.first_step()?.clone() {
+        visit_step_recursively(step, graphs)?;
+    }
+    Ok(())
 }
 
 /// Splits variables at every write site, and ensures that outer/global variables are then written
@@ -442,7 +492,7 @@ fn visit_procedure(
 /// be analyzed to determine the best types for variables.
 fn split_variables_and_make_graphs(
     project: &Rc<IrProject>,
-) -> HQResult<BTreeMap<Rc<Step>, Option<VarGraph>>> {
+) -> HQResult<BTreeMap<Rc<Step>, MaybeGraph>> {
     crate::log("splitting variables");
     #[expect(
         clippy::mutable_key_type,
@@ -455,10 +505,8 @@ fn split_variables_and_make_graphs(
         }
     }
     for thread in project.threads().try_borrow()?.iter() {
-        graphs.insert(Rc::clone(thread.first_step()), None);
-        let mut graph = VarGraph::new();
-        graph.visit_step(thread.first_step(), &None, &mut graphs, &mut vec![])?;
-        graphs.insert(Rc::clone(thread.first_step()), Some(graph));
+        let step = Rc::clone(thread.first_step());
+        visit_step_recursively(step, &mut graphs)?;
     }
     crate::log("finished splitting variables");
     Ok(graphs)
@@ -545,7 +593,7 @@ fn visit_node(
             reduced_stack.len(),
             "variables stack should have the same length as the corresponding type stack"
         );
-        for (var, new_type) in vars.iter().zip(reduced_stack) {
+        for (var, new_type) in vars.iter().rev().zip(reduced_stack) {
             if !var.possible_types().contains(new_type) {
                 changed_vars.insert(var.clone());
             }
@@ -585,6 +633,13 @@ where
     loop {
         let mut changed_vars: BTreeSet<RcVar> = BTreeSet::new();
         for graph in graphs.clone() {
+            crate::log!(
+                "{:?}exit node: {:?}",
+                Dot::with_config(&*graph.graph().borrow(), &[
+                    //DotConfig::NodeIndexLabel
+                    ]),
+                *graph.exit_node().borrow()
+            );
             hq_assert!(
                 {
                     let inner_graph = graph.graph().try_borrow()?;
@@ -614,20 +669,15 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
     let graphs = split_variables_and_make_graphs(project)?
         .into_iter()
         .map(|(step, graph)| {
-            Ok((
-                step,
-                graph.ok_or_else(|| make_hq_bug!("found None graph in graph map"))?,
-            ))
+            Ok(match graph {
+                MaybeGraph::Started => hq_bug!("found unfinished and non-inlined var graph"),
+                MaybeGraph::Inlined => None,
+                MaybeGraph::Finished(finished_graph) => Some((step, finished_graph)),
+            })
         })
+        .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
     crate::log!("graphs num: {}", graphs.len());
-    for graph in graphs.values() {
-        crate::log!(
-            "{:?}exit node: {:?}",
-            Dot::with_config(&*graph.graph().borrow(), &[DotConfig::NodeIndexLabel]),
-            *graph.exit_node().borrow()
-        );
-    }
     iterate_graphs(&graphs.values())?;
     Ok(())
 }

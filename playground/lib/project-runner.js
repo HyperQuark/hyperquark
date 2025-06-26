@@ -116,14 +116,14 @@ export default async (
     });
   }
   WebAssembly.instantiate(wasm_bytes, imports, {
-    builtins
+    builtins,
+    importedStringConstants: '',
   })
     .then(async ({ instance }) => {
       const {
         flag_clicked,
         tick,
         memory,
-        strings,
         step_funcs,
         vars_num,
         threads_count,
@@ -133,13 +133,7 @@ export default async (
         noop,
         unreachable_dbg
       } = instance.exports;
-      strings.grow(Object.entries(string_consts).length);
-      for (const [i, str] of Object.entries(string_consts || {})) {
-        // @ts-ignore
-        strings.set(i, str);
-      }
       updatePenColor = (i) => null;//upc(i - 1);
-      strings_tbl = strings;
       window.memory = memory;
       window.flag_clicked = flag_clicked;
       window.tick = tick;

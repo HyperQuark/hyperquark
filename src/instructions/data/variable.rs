@@ -34,7 +34,7 @@ pub fn wasm(
             .registries()
             .variables()
             .register(&*var.try_borrow()?)?;
-        Ok(wasm![GlobalGet(global_index)])
+        Ok(wasm![#LazyGlobalGet(global_index)])
     }
 }
 

@@ -28,17 +28,8 @@ pub fn wasm(
         .strings()
         .register_default(fields.0.clone())?;
     Ok(wasm![
-        I32Const(string_idx),
-        TableGet(func.registries().tables().register(
-            "strings".into(),
-            TableOptions {
-                element_type: RefType::EXTERNREF,
-                min: 0,
-                max: None,
-                // this default gets fixed up in src/wasm/tables.rs
-                init: None,
-            }
-        )?,),
+        // string imports always come before any other global, so we don't need to use #LazyGlobalGet
+        GlobalGet(string_idx),
     ])
 }
 

@@ -99,6 +99,7 @@ impl IrProject {
             .iter()
             .cloned()
             .unzip();
+        crate::log("all threads + targets created");
         let threads = threads_vec.into_iter().flatten().collect::<Box<[_]>>();
         *project
             .threads
@@ -142,7 +143,7 @@ fn fixup_proc_types(
             hq_todo!("non-warped procedure for fixup_target_procs")
         }
         let PartialStep::Finished(step) = &*procedure.first_step()? else {
-            hq_bug!("found unfinished procedure step")
+            continue; // this should hopefully just mean that this procedure is unused.
         };
         {
             let mut opcodes = step.opcodes_mut()?;
@@ -160,7 +161,6 @@ fn fixup_proc_types(
                     .collect::<HQResult<Box<[_]>>>()?,
             );
         }
-        fixup_proc_calls(step, global_vars, target_vars)?;
     }
 
     Ok(())

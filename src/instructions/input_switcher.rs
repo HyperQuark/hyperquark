@@ -291,7 +291,7 @@ pub fn wrap_instruction(
             ),
         )?;
 
-        wasm.append(&mut wasm![I32Const(1), GlobalSet(refresh_requested),]);
+        wasm.append(&mut wasm![I32Const(1), #LazyGlobalSet(refresh_requested),]);
     }
     Ok(wasm)
 }

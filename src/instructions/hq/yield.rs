@@ -129,12 +129,12 @@ pub fn wasm(
                 )?;
                 wasm![
                     LocalGet(0),
-                    GlobalGet(noop_global),
+                    #LazyGlobalGet(noop_global),
                     TableSet(threads_table),
-                    GlobalGet(threads_count),
+                    #LazyGlobalGet(threads_count),
                     I32Const(1),
                     I32Sub,
-                    GlobalSet(threads_count),
+                    #LazyGlobalSet(threads_count),
                     Return
                 ]
             }

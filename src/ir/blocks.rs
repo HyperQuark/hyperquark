@@ -34,13 +34,13 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
         for (j, (expected, actual)) in
             core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
         {
-            if !expected
+            if !expected.is_none() && !expected
                 .base_types()
                 .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
             {
                 casts.push((actual.1, expected));
                 expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
-                    .output_type(Rc::from([actual.0]))?
+                    .output_type(Rc::from([if actual.0.is_none() { IrType::Any } else { actual.0 }]))?
                     .ok_or_else(|| make_hq_bug!("hq_cast returned no output type"))?;
             }
         }

@@ -86,16 +86,13 @@ impl WasmProject {
             page_size_log2: None,
         });
 
-        let strings = self.registries().strings().clone().finish();
+        self.registries().strings().clone().finish(&mut imports);
 
         self.registries().tables().register_override::<usize>(
             "strings".into(),
             TableOptions {
                 element_type: RefType::EXTERNREF,
-                min: strings
-                    .len()
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("strings length out of bounds"))?,
+                min: 0,
                 // TODO: use js string imports for preknown strings
                 max: None,
                 init: None,
@@ -112,6 +109,7 @@ impl WasmProject {
                 &mut codes,
                 self.steps(),
                 self.imported_func_count()?,
+                self.imported_global_count()?,
             )?;
         }
 
@@ -169,7 +167,7 @@ impl WasmProject {
         self.registries()
             .globals()
             .clone()
-            .finish(&imports, &mut globals, &mut exports);
+            .finish(&imports, &mut globals, &mut exports, self.imported_global_count()?);
 
         module
             .section(&types)
@@ -189,7 +187,6 @@ impl WasmProject {
 
         Ok(FinishedWasm {
             wasm_bytes: wasm_bytes.into_boxed_slice(),
-            strings,
             target_names: self
                 .target_names
                 .into_iter()
@@ -206,6 +203,16 @@ impl WasmProject {
             .len()
             .try_into()
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
+    }
+
+    fn imported_global_count(&self) -> HQResult<u32> {
+        self.registries()
+            .strings()
+            .registry()
+            .try_borrow()?
+            .len()
+            .try_into()
+            .map_err(|_| make_hq_bug!("string registry len out of bounds"))
     }
 
     fn unreachable_dbg_func(
@@ -316,7 +323,7 @@ impl WasmProject {
                         Drop,
                     ],
                     Scheduler::CallIndirect => wasm![
-                        GlobalGet(threads_count),
+                        #LazyGlobalGet(threads_count),
                         I32Const(4),
                         I32Mul,
                         I32Const(
@@ -335,18 +342,18 @@ impl WasmProject {
             .collect::<HQResult<Vec<_>>>()?;
 
         for instruction in instrs {
-            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?)?);
+            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?, self.imported_global_count()?)?);
         }
         for instruction in wasm![
-            GlobalGet(threads_count),
+            #LazyGlobalGet(threads_count),
             I32Const(
                 i32::try_from(indices.len())
                     .map_err(|_| make_hq_bug!("indices len out of bounds"))?
             ),
             I32Add,
-            GlobalSet(threads_count)
+            #LazyGlobalSet(threads_count)
         ] {
-            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?)?);
+            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?, self.imported_global_count()?)?);
         }
         func.instruction(&Instruction::End);
 
@@ -412,7 +419,7 @@ impl WasmProject {
         let instructions = match self.flags.scheduler {
             crate::wasm::flags::Scheduler::CallIndirect => wasm![
                 // For call_indirect: read step indices from linear memory and call_indirect
-                GlobalGet(threads_count),
+                #LazyGlobalGet(threads_count),
                 LocalTee(1),
                 I32Eqz,
                 BrIf(0),
@@ -460,7 +467,7 @@ impl WasmProject {
             ],
         };
         for instr in instructions {
-            tick_func.instruction(&instr.eval(self.steps(), self.imported_func_count()?)?);
+            tick_func.instruction(&instr.eval(self.steps(), self.imported_func_count()?, self.imported_global_count()?)?);
         }
         tick_func.instruction(&Instruction::End);
         funcs.function(
@@ -522,8 +529,6 @@ impl WasmProject {
 pub struct FinishedWasm {
     #[wasm_bindgen(getter_with_clone)]
     pub wasm_bytes: Box<[u8]>,
-    #[wasm_bindgen(getter_with_clone)]
-    pub strings: Vec<String>,
     #[wasm_bindgen(getter_with_clone)]
     pub target_names: Vec<String>,
 }

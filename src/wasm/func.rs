@@ -14,6 +14,8 @@ pub enum Instruction {
     LazyStepRef(Weak<Step>),
     LazyStepIndex(Weak<Step>),
     LazyWarpedProcCall(Rc<Proc>),
+    LazyGlobalGet(u32),
+    LazyGlobalSet(u32),
 }
 
 impl Instruction {
@@ -21,6 +23,7 @@ impl Instruction {
         &self,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         imported_func_count: u32,
+        imported_global_count: u32,
     ) -> HQResult<WInstruction<'static>> {
         Ok(match self {
             Self::Immediate(instr) => instr.clone(),
@@ -51,7 +54,10 @@ impl Instruction {
                 WInstruction::I32Const(step_index)
             }
             Self::LazyWarpedProcCall(proc) => {
-                hq_assert!(proc.context().always_warped(), "tried to use LazyWarpedProcCall on a non-warped step");
+                hq_assert!(
+                    proc.context().always_warped(),
+                    "tried to use LazyWarpedProcCall on a non-warped step"
+                );
                 let PartialStep::Finished(ref step) = *proc.first_step()? else {
                     hq_bug!("tried to use uncompiled procedure step")
                 };
@@ -62,6 +68,14 @@ impl Instruction {
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 WInstruction::Call(imported_func_count + step_index)
+            }
+            Self::LazyGlobalGet(idx) => {
+                crate::log!("global get {idx}. imported globals: {imported_global_count}");
+                WInstruction::GlobalGet(idx + imported_global_count)
+            }
+            Self::LazyGlobalSet(idx) => {
+                crate::log!("global get {idx}. imported globals: {imported_global_count}");
+                WInstruction::GlobalSet(idx + imported_global_count)
             }
         })
     }
@@ -97,10 +111,7 @@ impl StepFunc {
     }
 
     /// creates a new step function, with one paramter
-    pub fn new(
-        registries: Rc<Registries>,
-        flags: WasmFlags,
-    ) -> Self {
+    pub fn new(registries: Rc<Registries>, flags: WasmFlags) -> Self {
         Self {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
@@ -181,10 +192,11 @@ impl StepFunc {
         code: &mut CodeSection,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         imported_func_count: u32,
+        imported_global_count: u32,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions().take() {
-            func.instruction(&instruction.eval(steps, imported_func_count)?);
+            func.instruction(&instruction.eval(steps, imported_func_count, imported_global_count)?);
         }
         func.instruction(&wasm_encoder::Instruction::End);
         let type_index = self
@@ -216,23 +228,14 @@ impl StepFunc {
                 .iter()
                 .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
                 .collect::<HQResult<Box<[_]>>>()?;
-            let params = arg_types
-                .iter()
-                .chain(&[ValType::I32])
-                .copied()
-                .collect();
+            let params = arg_types.iter().chain(&[ValType::I32]).copied().collect();
             let outputs = proc_context
                 .return_vars()
                 .try_borrow()?
                 .iter()
                 .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
                 .collect::<HQResult<Box<[_]>>>()?;
-            Self::new_with_types(
-                params,
-                outputs,
-                registries,
-                flags,
-            )
+            Self::new_with_types(params, outputs, registries, flags)
         } else {
             Self::new(registries, flags)
         };
@@ -249,8 +252,15 @@ impl StepFunc {
             )?);
             if let Some(output) = opcode.output_type(inputs)? {
                 type_stack.push(output);
-            } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode {
-                type_stack.extend(proc.context().return_vars().try_borrow()?.iter().map(|var| **var.possible_types().borrow()));
+            } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode
+            {
+                type_stack.extend(
+                    proc.context()
+                        .return_vars()
+                        .try_borrow()?
+                        .iter()
+                        .map(|var| **var.possible_types().borrow()),
+                );
             }
         }
         step_func.add_instructions(instrs)?;

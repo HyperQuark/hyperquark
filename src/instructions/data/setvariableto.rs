@@ -44,11 +44,11 @@ pub fn wasm(
             .variables()
             .register(&*var.try_borrow()?)?;
         if var.try_borrow()?.possible_types().is_base_type() {
-            Ok(wasm![GlobalSet(global_index)])
+            Ok(wasm![#LazyGlobalSet(global_index)])
         } else {
             Ok(wasm![
                 @boxed(t1),
-                GlobalSet(global_index),
+                #LazyGlobalSet(global_index),
             ])
         }
     }
