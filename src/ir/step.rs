@@ -94,6 +94,14 @@ impl Step {
                 .try_borrow_mut()
                 .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
                 .insert(Rc::clone(&step));
+        } else {
+            project
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?
+                .inlined_steps()
+                .try_borrow_mut()
+                .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+                .insert(Rc::clone(&step));
         }
         Ok(step)
     }
@@ -156,11 +164,16 @@ impl Step {
                 .iter()
                 .find(|step| step.id == block_id)
         {
-            crate::log(format!("step from_block already exists! (id: {block_id:?})").as_str());
+            crate::log(format!("step from_block already exists! (id: {block_id:?}); returning early").as_str());
             return Ok(Rc::clone(existing_step));
         }
+        let id = if used_non_inline {
+            Some(block_id)
+        } else {
+            None
+        };
         Self::new_rc(
-            Some(block_id),
+            id,
             context.clone(),
             blocks::from_block(block, blocks, context, project, final_next_blocks, flags)?,
             project,

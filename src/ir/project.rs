@@ -13,6 +13,7 @@ pub type StepSet = IndexSet<Rc<Step>>;
 pub struct IrProject {
     threads: RefCell<Box<[Thread]>>,
     steps: RefCell<StepSet>,
+    inlined_steps: RefCell<StepSet>,
     global_variables: TargetVars,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
@@ -24,6 +25,10 @@ impl IrProject {
 
     pub const fn steps(&self) -> &RefCell<StepSet> {
         &self.steps
+    }
+
+    pub const fn inlined_steps(&self) -> &RefCell<StepSet> {
+        &self.inlined_steps
     }
 
     pub const fn targets(&self) -> &RefCell<IndexMap<Box<str>, Rc<Target>>> {
@@ -38,6 +43,7 @@ impl IrProject {
         Self {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(IndexSet::default()),
+            inlined_steps: RefCell::new(IndexSet::default()),
             global_variables,
             targets: RefCell::new(IndexMap::default()),
         }
@@ -117,6 +123,10 @@ impl IrProject {
             fixup_proc_types(target, &global_vars, &target_vars)?;
         }
         for step in project.steps().try_borrow()?.iter() {
+            let target_vars = used_vars(step.context().target()?.variables());
+            fixup_proc_calls(step, &global_vars, &target_vars)?;
+        }
+        for step in project.inlined_steps().try_borrow()?.iter() {
             let target_vars = used_vars(step.context().target()?.variables());
             fixup_proc_calls(step, &global_vars, &target_vars)?;
         }
@@ -226,13 +236,20 @@ impl fmt::Display for IrProject {
             .iter()
             .map(|step| format!("{step}"))
             .join(", ");
+        let inlined_steps = self
+            .inlined_steps()
+            .borrow()
+            .iter()
+            .map(|step| format!("{step}"))
+            .join(", ");
         write!(
             f,
             r#"{{
         "targets": {{{targets}}},
         "global_variables": {{{variables}}},
         "threads": [{threads}],
-        "steps": [{steps}]
+        "steps": [{steps}],
+        "inlined_steps": [{inlined_steps}]
     }}"#
         )
     }

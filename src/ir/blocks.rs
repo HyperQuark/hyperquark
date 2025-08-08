@@ -512,6 +512,7 @@ fn generate_if_else(
             reason = "map_or_else alternative is too complex"
         )]
         let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
+            crate::log("got next block from block_info.next");
             (
                 Some(NextBlock::ID(next_block.clone())),
                 final_next_blocks.extend_with_inner(NextBlockInfo {
@@ -520,8 +521,10 @@ fn generate_if_else(
                 }),
             )
         } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
+            crate::log("got next block from popping from final_next_blocks");
             (Some(next_block_info.block), final_next_blocks.clone())
         } else {
+            crate::log("no next block found");
             (
                 None,
                 final_next_blocks.clone(), // preserve termination behaviour
@@ -560,18 +563,18 @@ fn generate_if_else(
                     let next_block = blocks
                         .get(&id)
                         .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                    crate::log(format!("got NextBlock::Id({id:?})").as_str());
+                    crate::log(format!("got NextBlock::Id({id:?}), creating step from_block").as_str());
                     vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(Step::from_block(
+                        mode: YieldMode::Inline((*Step::from_block(
                             next_block,
                             id.clone(),
                             blocks,
                             context,
                             &context.target()?.project(),
                             next_blocks,
-                            false,
+                            true,
                             flags,
-                        )?),
+                        )?).clone(false)?)
                     })]
                 }
                 Some(NextBlock::Step(step)) => {
@@ -592,7 +595,7 @@ fn generate_if_else(
                 None => {
                     crate::log("no next block after if!");
                     if next_blocks.terminating() {
-                        crate::log("terminating after if/else");
+                        crate::log("terminating after if/else\n");
                         vec![IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::None,
                         })]

@@ -196,7 +196,11 @@ impl StepFunc {
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions().take() {
-            func.instruction(&instruction.eval(steps, imported_func_count, imported_global_count)?);
+            func.instruction(&instruction.eval(
+                steps,
+                imported_func_count,
+                imported_global_count,
+            )?);
         }
         func.instruction(&wasm_encoder::Instruction::End);
         let type_index = self
@@ -206,6 +210,37 @@ impl StepFunc {
         funcs.function(type_index);
         code.function(&func);
         Ok(())
+    }
+
+    fn compile_instructions(
+        step_func: &StepFunc,
+        opcodes: &Vec<IrOpcode>,
+    ) -> HQResult<Vec<Instruction>> {
+        let mut instrs = vec![];
+        let mut type_stack = vec![];
+        for opcode in opcodes {
+            let inputs = type_stack
+                .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
+                .collect();
+            instrs.append(&mut wrap_instruction(
+                &step_func,
+                Rc::clone(&inputs),
+                opcode,
+            )?);
+            if let Some(output) = opcode.output_type(inputs)? {
+                type_stack.push(output);
+            } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode
+            {
+                type_stack.extend(
+                    proc.context()
+                        .return_vars()
+                        .try_borrow()?
+                        .iter()
+                        .map(|var| **var.possible_types().borrow()),
+                );
+            }
+        }
+        Ok(instrs)
     }
 
     pub fn compile_step(
@@ -239,30 +274,8 @@ impl StepFunc {
         } else {
             Self::new(registries, flags)
         };
-        let mut instrs = vec![];
-        let mut type_stack = vec![];
-        for opcode in &*step.opcodes().try_borrow()?.clone() {
-            let inputs = type_stack
-                .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
-                .collect();
-            instrs.append(&mut wrap_instruction(
-                &step_func,
-                Rc::clone(&inputs),
-                opcode,
-            )?);
-            if let Some(output) = opcode.output_type(inputs)? {
-                type_stack.push(output);
-            } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode
-            {
-                type_stack.extend(
-                    proc.context()
-                        .return_vars()
-                        .try_borrow()?
-                        .iter()
-                        .map(|var| **var.possible_types().borrow()),
-                );
-            }
-        }
+        let instrs =
+            Self::compile_instructions(&step_func, &*step.opcodes().try_borrow()?)?;
         step_func.add_instructions(instrs)?;
         steps
             .try_borrow_mut()
@@ -276,17 +289,6 @@ impl StepFunc {
             !step.used_non_inline(),
             "inner step should NOT be marked as used non-inline"
         );
-        let mut instrs = vec![];
-        let mut type_stack = vec![];
-        for opcode in &*step.opcodes().try_borrow()?.clone() {
-            let inputs = type_stack
-                .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
-                .collect();
-            instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
-            if let Some(output) = opcode.output_type(inputs)? {
-                type_stack.push(output);
-            }
-        }
-        Ok(instrs)
+        Self::compile_instructions(self, &*step.opcodes().try_borrow()?)
     }
 }
