@@ -15,6 +15,7 @@ use crate::sb3::VarVal;
 use core::convert::identity;
 use core::hash::{Hash, Hasher};
 use core::mem;
+use std::collections::btree_map::{Entry, OccupiedEntry};
 
 use petgraph::dot::{Config as DotConfig, Dot};
 use petgraph::graph::{EdgeIndex, NodeIndex};
@@ -100,12 +101,27 @@ impl VarGraph {
         type_stack: &mut Vec<StackElement>,
         next_steps: &mut Vec<Rc<Step>>,
     ) -> HQResult<()> {
+        crate::log!(
+            "searched in graphs for step {}, got {}",
+            step.id(),
+            match graphs.get(step) {
+                Some(MaybeGraph::Started) => "Started",
+                Some(MaybeGraph::Inlined) => "Inlined",
+                Some(MaybeGraph::Finished(_)) => "Finished",
+                None => "None",
+            }
+        );
         if let Some(MaybeGraph::Inlined | MaybeGraph::Finished(_)) = graphs.get(step) {
             // we've already visited this step.
             crate::log(format!("visited step {} but it is already visited", step.id()).as_str());
             return Ok(());
         }
         crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
+        crate::log!(
+            "currently visited/started steps: {:?}",
+            graphs.keys().map(|step| step.id()).collect::<Box<[_]>>()
+        );
+        // crate::log!("hash of step: {:?}", graphs.);
         let maybe_proc_context = step.context().proc_context.as_ref();
         let mut current_variable_map = const { BTreeMap::new() };
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
@@ -120,15 +136,14 @@ impl VarGraph {
                         local_write: locality,
                     }) => {
                         crate::log!("found a variable write operation, type stack: {type_stack:?}");
-                        if *locality.try_borrow()? {
-                            // crate::log("variable is already local; skipping");
-                            break 'opcode_block;
+                        let already_local = *locality.try_borrow()?;
+                        if !already_local {
+                            let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
+                            current_variable_map
+                                .insert(var.try_borrow()?.clone(), new_variable.clone());
+                            *var.try_borrow_mut()? = new_variable;
+                            *locality.try_borrow_mut()? = true;
                         }
-                        let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
-                        current_variable_map
-                            .insert(var.try_borrow()?.clone(), new_variable.clone());
-                        *var.try_borrow_mut()? = new_variable;
-                        *locality.try_borrow_mut()? = true;
                         if type_stack.is_empty() {
                             let mut graph = self.graph().borrow_mut();
                             let Some(Some((vars, _))) =
@@ -137,7 +152,7 @@ impl VarGraph {
                                 hq_bug!("")
                             };
                             vars.push(var.try_borrow()?.clone());
-                        } else {
+                        } else if !type_stack.is_empty() {
                             let new_node = self.add_node(Some((
                                 vec![var.try_borrow()?.clone()],
                                 mem::take(type_stack),
@@ -146,16 +161,16 @@ impl VarGraph {
                             self.add_edge(last_node, new_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = new_node;
                         }
-                        crate::log!(
-                            "{:?}exit node: {:?}",
-                            Dot::with_config(
-                                &*self.graph().borrow(),
-                                &[
-                    //DotConfig::NodeIndexLabel
-                    ]
-                            ),
-                            *self.exit_node().borrow()
-                        );
+                        //     crate::log!(
+                        //         "{:?}exit node: {:?}",
+                        //         Dot::with_config(
+                        //             &*self.graph().borrow(),
+                        //             &[
+                        // //DotConfig::NodeIndexLabel
+                        // ]
+                        //         ),
+                        //         *self.exit_node().borrow()
+                        //     );
                         crate::log!("type stack: {type_stack:?}");
                     }
                     IrOpcode::data_teevariable(DataTeevariableFields {
@@ -242,6 +257,7 @@ impl VarGraph {
                         branch_else,
                     }) => {
                         crate::log("found control_if_else");
+                        type_stack.clear(); // the top item on the stack should be consumed by control_if_else
                         let last_node = *self.exit_node().borrow();
                         graphs.insert(Rc::clone(branch_if), MaybeGraph::Started);
                         self.visit_step(
@@ -491,10 +507,20 @@ fn visit_step_recursively(
 ) -> HQResult<()> {
     let next_steps = &mut vec![step];
     while let Some(next_step) = next_steps.pop() {
-        graphs.insert(Rc::clone(&next_step), MaybeGraph::Started);
-        let mut graph = VarGraph::new();
-        graph.visit_step(&next_step, &None, graphs, &mut vec![], next_steps)?;
-        graphs.insert(Rc::clone(&next_step), MaybeGraph::Finished(graph));
+        let entry = graphs.entry(Rc::clone(&next_step));
+        // it can happen that the same step can be visited from multiple different points,
+        // especially where if/elses are involved. If this is the case, we don't want to revisit
+        // that step, as it may have been modified during the last pass, in which case another
+        // visit will apply the same modifications again, and various things will be duplicated
+        // and will cause problems. For that reason, we only visit this step if the current entry
+        // for that step is vacant.
+        if let Entry::Vacant(vacant_entry) = entry {
+            let mut graph = VarGraph::new();
+            vacant_entry.insert(MaybeGraph::Started);
+            graph.visit_step(&next_step, &None, graphs, &mut vec![], next_steps)?;
+            graphs.insert(Rc::clone(&next_step), MaybeGraph::Finished(graph));
+            crate::log!("finished graph for step {}", next_step.id());
+        }
     }
     Ok(())
 }
@@ -504,6 +530,7 @@ fn visit_step_recursively(
 fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>) -> HQResult<()> {
     crate::log("visiting procedure");
     if let PartialStep::Finished(step) = proc.first_step()?.clone() {
+        crate::log!("visiting procedure's step: {}", step.id());
         visit_step_recursively(step, graphs)?;
     }
     Ok(())
@@ -515,7 +542,7 @@ fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>)
 fn split_variables_and_make_graphs(
     project: &Rc<IrProject>,
 ) -> HQResult<BTreeMap<Rc<Step>, MaybeGraph>> {
-    crate::log("splitting variables");
+    crate::log("splitting variables and making graphs");
     #[expect(
         clippy::mutable_key_type,
         reason = "implementation of Ord for Step relies on `id` field only, which is immutable"
@@ -528,9 +555,10 @@ fn split_variables_and_make_graphs(
     }
     for thread in project.threads().try_borrow()?.iter() {
         let step = Rc::clone(thread.first_step());
+        crate::log!("visiting (recursively) step from thread: {}", step.id());
         visit_step_recursively(step, &mut graphs)?;
     }
-    crate::log("finished splitting variables");
+    crate::log("finished splitting variables and making graphs");
     Ok(graphs)
 }
 
@@ -588,7 +616,10 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
                 // crate::log!("opcode: {op}");
                 // crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
                 // crate::log!("stack: {:?}", stack);
-                let inputs: Rc<[_]> = stack.splice((stack.len() - inputs_len).., []).collect();
+                let inputs: Rc<[_]> = stack
+                    .splice((stack.len() - inputs_len).., [])
+                    .map(|ty: IrType| if ty.is_none() { IrType::Any } else { ty })
+                    .collect();
                 if let Some(output) = op.output_type(inputs)? {
                     stack.push(output);
                 }
