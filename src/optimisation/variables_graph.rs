@@ -12,12 +12,11 @@ use crate::ir::{used_vars, IrProject, PartialStep, Proc, RcVar, Step, Type as Ir
 use crate::prelude::*;
 use crate::sb3::VarVal;
 
+use alloc::collections::btree_map::Entry;
 use core::convert::identity;
 use core::hash::{Hash, Hasher};
 use core::mem;
-use std::collections::btree_map::{Entry, OccupiedEntry};
 
-use petgraph::dot::{Config as DotConfig, Dot};
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{stable_graph::StableDiGraph, Incoming as EdgeIn, Outgoing as EdgeOut};
@@ -101,26 +100,26 @@ impl VarGraph {
         type_stack: &mut Vec<StackElement>,
         next_steps: &mut Vec<Rc<Step>>,
     ) -> HQResult<()> {
-        crate::log!(
-            "searched in graphs for step {}, got {}",
-            step.id(),
-            match graphs.get(step) {
-                Some(MaybeGraph::Started) => "Started",
-                Some(MaybeGraph::Inlined) => "Inlined",
-                Some(MaybeGraph::Finished(_)) => "Finished",
-                None => "None",
-            }
-        );
+        // crate::log!(
+        //     "searched in graphs for step {}, got {}",
+        //     step.id(),
+        //     match graphs.get(step) {
+        //         Some(MaybeGraph::Started) => "Started",
+        //         Some(MaybeGraph::Inlined) => "Inlined",
+        //         Some(MaybeGraph::Finished(_)) => "Finished",
+        //         None => "None",
+        //     }
+        // );
         if let Some(MaybeGraph::Inlined | MaybeGraph::Finished(_)) = graphs.get(step) {
             // we've already visited this step.
-            crate::log(format!("visited step {} but it is already visited", step.id()).as_str());
+            // crate::log(format!("visited step {} but it is already visited", step.id()).as_str());
             return Ok(());
         }
-        crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
-        crate::log!(
-            "currently visited/started steps: {:?}",
-            graphs.keys().map(|step| step.id()).collect::<Box<[_]>>()
-        );
+        // crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
+        // crate::log!(
+        //     "currently visited/started steps: {:?}",
+        //     graphs.keys().map(|step| step.id()).collect::<Box<[_]>>()
+        // );
         // crate::log!("hash of step: {:?}", graphs.);
         let maybe_proc_context = step.context().proc_context.as_ref();
         let mut current_variable_map = const { BTreeMap::new() };
@@ -135,7 +134,7 @@ impl VarGraph {
                         var,
                         local_write: locality,
                     }) => {
-                        crate::log!("found a variable write operation, type stack: {type_stack:?}");
+                        // crate::log!("found a variable write operation, type stack: {type_stack:?}");
                         let already_local = *locality.try_borrow()?;
                         if !already_local {
                             let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
@@ -171,13 +170,13 @@ impl VarGraph {
                         //         ),
                         //         *self.exit_node().borrow()
                         //     );
-                        crate::log!("type stack: {type_stack:?}");
+                        // crate::log!("type stack: {type_stack:?}");
                     }
                     IrOpcode::data_teevariable(DataTeevariableFields {
                         var,
                         local_read_write: locality,
                     }) => {
-                        crate::log("found a variable tee operation");
+                        // crate::log("found a variable tee operation");
                         if *locality.try_borrow()? {
                             break 'opcode_block;
                         }
@@ -196,7 +195,7 @@ impl VarGraph {
                         type_stack.push(StackElement::Var(var.try_borrow()?.clone()));
                     }
                     IrOpcode::data_variable(DataVariableFields { var, local_read }) => {
-                        crate::log("found a variable read operation");
+                        // crate::log("found a variable read operation");
                         if *local_read.try_borrow()? {
                             type_stack.push(StackElement::Var(var.try_borrow()?.clone()));
                             // crate::log("variable is already local; skipping");
@@ -256,7 +255,7 @@ impl VarGraph {
                         branch_if,
                         branch_else,
                     }) => {
-                        crate::log("found control_if_else");
+                        // crate::log("found control_if_else");
                         type_stack.clear(); // the top item on the stack should be consumed by control_if_else
                         let last_node = *self.exit_node().borrow();
                         graphs.insert(Rc::clone(branch_if), MaybeGraph::Started);
@@ -364,11 +363,11 @@ impl VarGraph {
                         *self.exit_node().borrow_mut() = new_node;
                     }
                     IrOpcode::procedures_argument(ProceduresArgumentFields(_, var)) => {
-                        crate::log("found proc argument.");
+                        // crate::log("found proc argument.");
                         type_stack.push(StackElement::Var(var.clone()));
                     }
                     IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) => {
-                        crate::log!("found proc call. type stack: {type_stack:?}");
+                        // crate::log!("found proc call. type stack: {type_stack:?}");
                         let entry_node = self.add_node(Some((
                             proc.context()
                                 .arg_vars()
@@ -389,11 +388,11 @@ impl VarGraph {
                                 .iter()
                                 .map(|var| StackElement::Var(var.clone())),
                         );
-                        crate::log!("type stack after proc call: {type_stack:?}");
+                        // crate::log!("type stack after proc call: {type_stack:?}");
                     }
                     IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
                         YieldMode::Inline(step) => {
-                            crate::log("found inline step to visit");
+                            // crate::log("found inline step to visit");
                             graphs.insert(Rc::clone(step), MaybeGraph::Started);
                             self.visit_step(
                                 step,
@@ -405,11 +404,11 @@ impl VarGraph {
                             graphs.insert(Rc::clone(step), MaybeGraph::Inlined);
                         }
                         YieldMode::None => {
-                            crate::log("found a yield::none, breaking");
+                            // crate::log("found a yield::none, breaking");
                             break 'opcode_loop;
                         }
                         YieldMode::Schedule(step) => {
-                            crate::log("found a scheduled step, scheduling and breaking");
+                            // crate::log("found a scheduled step, scheduling and breaking");
                             if let Some(rcstep) = step.upgrade() {
                                 next_steps.push(rcstep);
                             } else {
@@ -447,7 +446,7 @@ impl VarGraph {
             && step.used_non_inline()
             && let Some(proc_context) = maybe_proc_context
         {
-            crate::log!("found spare items on type stack at end of step visit: {type_stack:?}");
+            // crate::log!("found spare items on type stack at end of step visit: {type_stack:?}");
             // crate::log!(
             //     "return vars: {}",
             //     proc_context.return_vars().try_borrow()?.len()
@@ -519,7 +518,7 @@ fn visit_step_recursively(
             vacant_entry.insert(MaybeGraph::Started);
             graph.visit_step(&next_step, &None, graphs, &mut vec![], next_steps)?;
             graphs.insert(Rc::clone(&next_step), MaybeGraph::Finished(graph));
-            crate::log!("finished graph for step {}", next_step.id());
+            // crate::log!("finished graph for step {}", next_step.id());
         }
     }
     Ok(())
@@ -528,9 +527,9 @@ fn visit_step_recursively(
 /// Visits a procedure. Returns the found step, and a boolean indicating if the step was for a warped
 /// procedure or not.
 fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>) -> HQResult<()> {
-    crate::log("visiting procedure");
+    // crate::log("visiting procedure");
     if let PartialStep::Finished(step) = proc.first_step()?.clone() {
-        crate::log!("visiting procedure's step: {}", step.id());
+        // crate::log!("visiting procedure's step: {}", step.id());
         visit_step_recursively(step, graphs)?;
     }
     Ok(())
@@ -542,7 +541,7 @@ fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>)
 fn split_variables_and_make_graphs(
     project: &Rc<IrProject>,
 ) -> HQResult<BTreeMap<Rc<Step>, MaybeGraph>> {
-    crate::log("splitting variables and making graphs");
+    // crate::log("splitting variables and making graphs");
     #[expect(
         clippy::mutable_key_type,
         reason = "implementation of Ord for Step relies on `id` field only, which is immutable"
@@ -555,10 +554,10 @@ fn split_variables_and_make_graphs(
     }
     for thread in project.threads().try_borrow()?.iter() {
         let step = Rc::clone(thread.first_step());
-        crate::log!("visiting (recursively) step from thread: {}", step.id());
+        // crate::log!("visiting (recursively) step from thread: {}", step.id());
         visit_step_recursively(step, &mut graphs)?;
     }
-    crate::log("finished splitting variables and making graphs");
+    // crate::log("finished splitting variables and making graphs");
     Ok(graphs)
 }
 
@@ -686,16 +685,16 @@ where
     loop {
         let mut changed_vars: BTreeSet<RcVar> = BTreeSet::new();
         for graph in graphs.clone() {
-            crate::log!(
-                "{:?}exit node: {:?}",
-                Dot::with_config(
-                    &*graph.graph().borrow(),
-                    &[
-                    //DotConfig::NodeIndexLabel
-                    ]
-                ),
-                *graph.exit_node().borrow()
-            );
+            // crate::log!(
+            //     "{:?}exit node: {:?}",
+            //     Dot::with_config(
+            //         &*graph.graph().borrow(),
+            //         &[
+            //         //DotConfig::NodeIndexLabel
+            //         ]
+            //     ),
+            //     *graph.exit_node().borrow()
+            // );
             hq_assert!(
                 {
                     let inner_graph = graph.graph().try_borrow()?;
@@ -721,7 +720,7 @@ where
 }
 
 pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
-    crate::log("carrying out variable optimisation");
+    // crate::log("carrying out variable optimisation");
     let graphs = split_variables_and_make_graphs(project)?
         .into_iter()
         .map(|(step, graph)| {
@@ -733,10 +732,7 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
         })
         .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
-    crate::log!("graphs num: {}", graphs.len());
-    iterate_graphs(&graphs.iter().map(|(step, graph)| {
-        crate::log!("iterating over graph corresponding to step: {}", step.id());
-        graph
-    }))?;
+    // crate::log!("graphs num: {}", graphs.len());
+    iterate_graphs(&graphs.values())?;
     Ok(())
 }

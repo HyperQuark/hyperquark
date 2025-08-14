@@ -68,8 +68,8 @@ pub mod prelude {
     pub use core::borrow::Borrow;
     pub use core::cell::RefCell;
     pub use core::fmt;
-    pub use core::pin::Pin;
     pub use core::marker::PhantomPinned;
+    pub use core::pin::Pin;
 
     pub use crate::rc::{Rc, Weak};
 

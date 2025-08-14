@@ -1,7 +1,4 @@
-use crate::wasm::TableOptions;
-
 use super::super::prelude::*;
-use wasm_encoder::RefType;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Box<str>);

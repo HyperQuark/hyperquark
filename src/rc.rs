@@ -106,7 +106,10 @@ where
     }
 }
 
-impl<T> Ord for Rc<T> where T: Ord {
+impl<T> Ord for Rc<T>
+where
+    T: Ord,
+{
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         Ord::cmp(&self.0, &other.0)
     }

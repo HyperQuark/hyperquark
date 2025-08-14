@@ -1,5 +1,8 @@
 use super::super::prelude::*;
-use crate::{ir::RcVar, wasm::{StepFunc, WasmProject}};
+use crate::{
+    ir::RcVar,
+    wasm::{StepFunc, WasmProject},
+};
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub usize, pub RcVar);

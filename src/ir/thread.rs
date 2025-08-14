@@ -27,7 +27,7 @@ impl Thread {
         target: &Weak<Target>,
         project: &Weak<IrProject>,
         debug: bool,
-        flags: &WasmFlags
+        flags: &WasmFlags,
     ) -> HQResult<Option<Self>> {
         let Some(block_info) = block.block_info() else {
             return Ok(None);
@@ -65,12 +65,9 @@ impl Thread {
             project,
             NextBlocks::new(true),
             true,
-            flags
+            flags,
         )?;
-        Ok(Some(Self {
-            event,
-            first_step,
-        }))
+        Ok(Some(Self { event, first_step }))
     }
 }
 

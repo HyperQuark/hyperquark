@@ -158,9 +158,7 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Optio
                                 ))
                         }
                         (IrType::QuasiInt, IrType::String) => IrType::StringNumber,
-                        (other_from, other_to) if other_to.contains(other_from) => {
-                            other_from
-                        }
+                        (other_from, other_to) if other_to.contains(other_from) => other_from,
                         _ => hq_bug!("bad cast: {} -> {}", from, to),
                     },
                 )

@@ -17,4 +17,4 @@ pub use step::Step;
 use target::Target;
 use thread::Thread;
 pub use types::Type;
-pub use variable::{RcVar, used_vars};
+pub use variable::{used_vars, RcVar};

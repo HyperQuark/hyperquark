@@ -34,13 +34,18 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
         for (j, (expected, actual)) in
             core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
         {
-            if !expected.is_none() && !expected
-                .base_types()
-                .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
+            if !expected.is_none()
+                && !expected
+                    .base_types()
+                    .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
             {
                 casts.push((actual.1, expected));
                 expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
-                    .output_type(Rc::from([if actual.0.is_none() { IrType::Any } else { actual.0 }]))?
+                    .output_type(Rc::from([if actual.0.is_none() {
+                        IrType::Any
+                    } else {
+                        actual.0
+                    }]))?
                     .ok_or_else(|| make_hq_bug!("hq_cast returned no output type"))?;
             }
         }
@@ -563,18 +568,23 @@ fn generate_if_else(
                     let next_block = blocks
                         .get(&id)
                         .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                    crate::log(format!("got NextBlock::Id({id:?}), creating step from_block").as_str());
+                    crate::log(
+                        format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
+                    );
                     vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline((*Step::from_block(
-                            next_block,
-                            id.clone(),
-                            blocks,
-                            context,
-                            &context.target()?.project(),
-                            next_blocks,
-                            true,
-                            flags,
-                        )?).clone(false)?)
+                        mode: YieldMode::Inline(
+                            (*Step::from_block(
+                                next_block,
+                                id.clone(),
+                                blocks,
+                                context,
+                                &context.target()?.project(),
+                                next_blocks,
+                                true,
+                                flags,
+                            )?)
+                            .clone(false)?,
+                        ),
                     })]
                 }
                 Some(NextBlock::Step(step)) => {
@@ -1175,7 +1185,8 @@ fn from_special_block(
                 }
             }
             // integer, positive integer
-            6 | 7 => {
+            6 | 7 =>
+            {
                 #[expect(clippy::redundant_else, reason = "false positive")]
                 if flags.integers == UseIntegers::On {
                     IrOpcode::hq_integer(HqIntegerFields(

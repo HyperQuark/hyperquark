@@ -212,21 +212,14 @@ impl StepFunc {
         Ok(())
     }
 
-    fn compile_instructions(
-        step_func: &StepFunc,
-        opcodes: &Vec<IrOpcode>,
-    ) -> HQResult<Vec<Instruction>> {
+    fn compile_instructions(&self, opcodes: &Vec<IrOpcode>) -> HQResult<Vec<Instruction>> {
         let mut instrs = vec![];
         let mut type_stack = vec![];
         for opcode in opcodes {
             let inputs = type_stack
                 .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
                 .collect();
-            instrs.append(&mut wrap_instruction(
-                &step_func,
-                Rc::clone(&inputs),
-                opcode,
-            )?);
+            instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
             if let Some(output) = opcode.output_type(inputs)? {
                 type_stack.push(output);
             } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode
@@ -274,8 +267,7 @@ impl StepFunc {
         } else {
             Self::new(registries, flags)
         };
-        let instrs =
-            Self::compile_instructions(&step_func, &*step.opcodes().try_borrow()?)?;
+        let instrs = Self::compile_instructions(&step_func, &*step.opcodes().try_borrow()?)?;
         step_func.add_instructions(instrs)?;
         steps
             .try_borrow_mut()

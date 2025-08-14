@@ -164,10 +164,12 @@ impl WasmProject {
         exports.export("memory", ExportKind::Memory, 0);
         exports.export("noop", ExportKind::Func, self.imported_func_count()?);
 
-        self.registries()
-            .globals()
-            .clone()
-            .finish(&imports, &mut globals, &mut exports, self.imported_global_count()?);
+        self.registries().globals().clone().finish(
+            &imports,
+            &mut globals,
+            &mut exports,
+            self.imported_global_count()?,
+        );
 
         module
             .section(&types)
@@ -342,7 +344,11 @@ impl WasmProject {
             .collect::<HQResult<Vec<_>>>()?;
 
         for instruction in instrs {
-            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?, self.imported_global_count()?)?);
+            func.instruction(&instruction.eval(
+                self.steps(),
+                self.imported_func_count()?,
+                self.imported_global_count()?,
+            )?);
         }
         for instruction in wasm![
             #LazyGlobalGet(threads_count),
@@ -353,7 +359,11 @@ impl WasmProject {
             I32Add,
             #LazyGlobalSet(threads_count)
         ] {
-            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?, self.imported_global_count()?)?);
+            func.instruction(&instruction.eval(
+                self.steps(),
+                self.imported_func_count()?,
+                self.imported_global_count()?,
+            )?);
         }
         func.instruction(&Instruction::End);
 
@@ -467,7 +477,11 @@ impl WasmProject {
             ],
         };
         for instr in instructions {
-            tick_func.instruction(&instr.eval(self.steps(), self.imported_func_count()?, self.imported_global_count()?)?);
+            tick_func.instruction(&instr.eval(
+                self.steps(),
+                self.imported_func_count()?,
+                self.imported_global_count()?,
+            )?);
         }
         tick_func.instruction(&Instruction::End);
         funcs.function(
