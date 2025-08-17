@@ -575,7 +575,7 @@ fn generate_changed_state<'a>(
     // it may also be present in `outer_variable_map`. So, we only need to iterate through the current
     // local variables, and then as we're doing it we can check if there's an outer equivalent.
     current_variable_map.iter().map(move |(global, current)| {
-        let (to_write, local) = if let Some(ref outer_var_map) = outer_variable_map
+        let (to_write, local) = if let Some(outer_var_map) = outer_variable_map
             && let Some(outer_var) = outer_var_map.get(global)
         {
             (outer_var, true)
