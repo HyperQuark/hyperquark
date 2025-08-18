@@ -114,11 +114,7 @@ impl Type {
     }
 
     pub const fn none_if_false(condition: bool, if_true: Self) -> Self {
-        if condition {
-            if_true
-        } else {
-            Self::none()
-        }
+        if condition { if_true } else { Self::none() }
     }
 }
 
@@ -132,5 +128,25 @@ impl fmt::Display for Type {
                 None => format!("{self:?}"),
             }
         )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ReturnType {
+    None,
+    Singleton(Type),
+    MultiValue(Rc<[Type]>),
+}
+
+impl ReturnType {
+    pub fn singleton_or_else<E, F>(self, err: F) -> Result<Type, E>
+    where
+        F: FnOnce() -> E,
+    {
+        if let Self::Singleton(ty) = self {
+            Ok(ty)
+        } else {
+            Err(err())
+        }
     }
 }

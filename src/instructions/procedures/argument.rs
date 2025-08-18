@@ -41,8 +41,8 @@ pub fn acceptable_inputs(_: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields(_, var): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(*var.possible_types()))
+pub fn output_type(_inputs: Rc<[IrType]>, Fields(_, var): &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(*var.possible_types()))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

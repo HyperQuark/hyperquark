@@ -34,8 +34,8 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(match &**val {
+pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(match &**val {
         bool if bool.to_lowercase() == "true" || bool.to_lowercase() == "false" => {
             IrType::StringBoolean
         }

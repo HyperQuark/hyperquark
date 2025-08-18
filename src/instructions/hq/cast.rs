@@ -106,9 +106,9 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
         .or(IrType::Boolean)]))
 }
 
-pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Option<IrType>> {
+pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<ReturnType> {
     crate::log!("{:?}", inputs[0]);
-    Ok(Some(
+    Ok(Singleton(
         inputs[0]
             .base_types()
             .map(|from| Ok((from, best_cast_candidate(from, to)?)))

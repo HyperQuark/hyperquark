@@ -8,7 +8,9 @@ use crate::instructions::{
     DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallWarpFields, YieldMode,
 };
-use crate::ir::{used_vars, IrProject, PartialStep, Proc, RcVar, Step, Type as IrType};
+use crate::ir::{
+    IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, insert_casts, used_vars,
+};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 
@@ -19,7 +21,7 @@ use core::mem;
 
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
-use petgraph::{stable_graph::StableDiGraph, Incoming as EdgeIn, Outgoing as EdgeOut};
+use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut, stable_graph::StableDiGraph};
 
 #[derive(Clone, Debug)]
 enum StackElement {
@@ -233,7 +235,11 @@ impl VarGraph {
                                 let arg_vars_cell = proc_context.arg_vars();
                                 let arg_vars = arg_vars_cell.try_borrow()?;
                                 let arg_var = arg_vars
-                                    .get(var_index)
+                                    .get(
+                                        var_index + arg_vars.len()
+                                            - global_vars.len()
+                                            - target_vars.len(),
+                                    )
                                     .ok_or_else(|| make_hq_bug!("var index out of bounds"))?;
                                 // crate::log("inserting var->arg replacement");
                                 opcode_replacements.push((
@@ -412,31 +418,39 @@ impl VarGraph {
                             if let Some(rcstep) = step.upgrade() {
                                 next_steps.push(rcstep);
                             } else {
-                                crate::log("couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
-                    what's going on here?");
+                                crate::warn(
+                                    "couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
+                    what's going on here?",
+                                );
                             }
                             break 'opcode_loop;
                         }
                     },
                     _ => {
                         let inputs_len = opcode.acceptable_inputs()?.len();
-                        if let Some(output) = opcode
-                            .output_type(core::iter::repeat_n(IrType::Any, inputs_len).collect())?
-                        {
-                            // crate::log("other opcode; has output type");
-                            if inputs_len == 0 {
-                                type_stack.push(StackElement::Type(output));
-                                // crate::log("no inputs so pushing type");
-                                // crate::log!("stack: {type_stack:?}");
-                            } else {
-                                type_stack.push(StackElement::Opcode(opcode.clone()));
-                                // crate::log("inputs so pushing op");
-                                // crate::log!("stack: {type_stack:?}");
+                        let output = opcode
+                            .output_type(core::iter::repeat_n(IrType::Any, inputs_len).collect())?;
+                        match output {
+                            ReturnType::Singleton(output_ty) => {
+                                // crate::log("other opcode; has output type");
+                                if inputs_len == 0 {
+                                    type_stack.push(StackElement::Type(output_ty));
+                                    // crate::log("no inputs so pushing type");
+                                    // crate::log!("stack: {type_stack:?}");
+                                } else {
+                                    type_stack.push(StackElement::Opcode(opcode.clone()));
+                                    // crate::log("inputs so pushing op");
+                                    // crate::log!("stack: {type_stack:?}");
+                                }
                             }
-                        } else {
-                            type_stack.clear();
-                            // crate::log("other opcode, no output type so clearing type stack");
-                            // crate::log!("stack: {type_stack:?}");
+                            ReturnType::MultiValue(outputs) => {
+                                if inputs_len == 0 {
+                                    type_stack.extend(outputs.into_iter().copied().map(StackElement::Type));
+                                } else {
+                                    type_stack.push(StackElement::Opcode(opcode.clone()));
+                                }
+                            }
+                            ReturnType::None => type_stack.clear(),
                         }
                     }
                 }
@@ -619,9 +633,12 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
                     .splice((stack.len() - inputs_len).., [])
                     .map(|ty: IrType| if ty.is_none() { IrType::Any } else { ty })
                     .collect();
-                if let Some(output) = op.output_type(inputs)? {
-                    stack.push(output);
-                }
+                let output = op.output_type(inputs)?;
+                match output {
+                    ReturnType::Singleton(ty) => stack.push(ty),
+                    ReturnType::MultiValue(tys) => stack.extend(tys.into_iter().copied()),
+                    ReturnType::None => (),
+                };
             }
             StackElement::Type(ty) => stack.push(*ty),
             StackElement::Var(var) => stack.push(*var.possible_types()),
@@ -721,8 +738,9 @@ where
 
 pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
     // crate::log("carrying out variable optimisation");
-    let graphs = split_variables_and_make_graphs(project)?
-        .into_iter()
+    let maybe_graphs = split_variables_and_make_graphs(project)?;
+    let graphs = maybe_graphs
+        .iter()
         .map(|(step, graph)| {
             Ok(match graph {
                 MaybeGraph::Started => hq_bug!("found unfinished and non-inlined var graph"),
@@ -733,6 +751,10 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
         .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
     // crate::log!("graphs num: {}", graphs.len());
-    iterate_graphs(&graphs.values())?;
+    iterate_graphs(&graphs.values().copied())?;
+    for step in maybe_graphs.keys() {
+        crate::log!("inserting casts for step {}", step.id());
+        insert_casts(&mut *step.opcodes_mut()?)?;
+    }
     Ok(())
 }

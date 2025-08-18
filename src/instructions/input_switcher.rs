@@ -1,8 +1,8 @@
 //! Provides the logic for having boxed input types to blocks
 
-use super::prelude::*;
 use super::HqCastFields;
 use super::IrOpcode;
+use super::prelude::*;
 use crate::wasm::GlobalExportable;
 use crate::wasm::GlobalMutable;
 use crate::wasm::TableOptions;
@@ -128,7 +128,7 @@ fn generate_branches(
     processed_inputs: &[IrType],
     remaining_inputs: &[(Box<[IrType]>, u32)], // u32 is local index
     opcode: &IrOpcode,
-    output_type: Option<IrType>,
+    output_type: ReturnType,
 ) -> HQResult<Vec<InternalInstruction>> {
     if remaining_inputs.is_empty() {
         hq_assert!(processed_inputs.iter().copied().all(IrType::is_base_type));
@@ -138,15 +138,26 @@ fn generate_branches(
         // (which i think all branches probably should?), box it.
         // TODO: split this into another function somewhere? it seems like this should
         // be useful somewhere else as well
-        if let Some(this_output) = opcode.output_type(rc_processed_inputs)?
-            && this_output.is_base_type()
-            && !output_type
-                .ok_or_else(|| make_hq_bug!("expected no output type but got one"))?
-                .is_base_type()
-        {
-            #[expect(clippy::unwrap_used, reason = "asserted that type is base type")]
-            let this_base_type = this_output.base_type().unwrap();
-            wasm.append(&mut wasm![@boxed(this_base_type)]);
+        match output_type {
+            ReturnType::Singleton(out_ty) => {
+                let this_output = opcode.output_type(rc_processed_inputs)?;
+                if let ReturnType::Singleton(this_output_ty) = this_output
+                    && this_output_ty.is_base_type()
+                    && !out_ty.is_base_type()
+                {
+                    #[expect(clippy::unwrap_used, reason = "asserted that type is base type")]
+                    let this_base_type = this_output_ty.base_type().unwrap();
+                    wasm.append(&mut wasm![@boxed(this_base_type)]);
+                } else if let ReturnType::MultiValue(_) = this_output {
+                    crate::warn(
+                        "found multi-valued output type for this block in `generate_branches`... suspicious.",
+                    )
+                }
+            }
+            ReturnType::None => (),
+            ReturnType::MultiValue(_) => {
+                crate::warn("found multi-valued output type in `generate_branches`... suspicious.")
+            }
         }
         return Ok(wasm);
     }
@@ -171,10 +182,14 @@ fn generate_branches(
                     .copied()
                     .map(WasmProject::ir_type_to_wasm)
                     .collect::<HQResult<Vec<_>>>()?,
-                if let Some(out_ty) = output_type {
-                    vec![WasmProject::ir_type_to_wasm(out_ty)?]
-                } else {
-                    vec![]
+                match output_type {
+                    ReturnType::Singleton(out_ty) => vec![WasmProject::ir_type_to_wasm(out_ty)?],
+                    ReturnType::MultiValue(ref out_tys) => out_tys
+                        .into_iter()
+                        .copied()
+                        .map(WasmProject::ir_type_to_wasm)
+                        .collect::<HQResult<_>>()?,
+                    ReturnType::None => vec![],
                 },
             ))?,
         );
@@ -202,14 +217,16 @@ fn generate_branches(
             vec_processed_inputs.push(
                 IrOpcode::hq_cast(HqCastFields(allowed_input_types))
                     .output_type(Rc::from([*ty]))?
-                    .ok_or_else(|| make_hq_bug!("hq_cast output type was None"))?,
+                    .singleton_or_else(|| {
+                        make_hq_bug!("hq_cast output type was None or multi-valued")
+                    })?,
             );
             wasm.append(&mut generate_branches(
                 func,
                 &vec_processed_inputs,
                 &remaining_inputs[1..],
                 opcode,
-                output_type,
+                output_type.clone(),
             )?);
         }
         wasm.extend(core::iter::repeat_n(

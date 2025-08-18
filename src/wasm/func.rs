@@ -1,6 +1,6 @@
 use super::{Registries, WasmFlags, WasmProject};
 use crate::instructions::{IrOpcode, ProceduresCallWarpFields};
-use crate::ir::{PartialStep, RcVar, Step};
+use crate::ir::{PartialStep, RcVar, ReturnType, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
 use alloc::collections::btree_map;
@@ -220,18 +220,11 @@ impl StepFunc {
                 .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
                 .collect();
             instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
-            if let Some(output) = opcode.output_type(inputs)? {
-                type_stack.push(output);
-            } else if let IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) = opcode
-            {
-                type_stack.extend(
-                    proc.context()
-                        .return_vars()
-                        .try_borrow()?
-                        .iter()
-                        .map(|var| **var.possible_types().borrow()),
-                );
-            }
+            match opcode.output_type(inputs)? {
+                ReturnType::Singleton(output) => type_stack.push(output),
+                ReturnType::MultiValue(outputs) => type_stack.extend(outputs.into_iter().copied()),
+                ReturnType::None => (),
+            };
         }
         Ok(instrs)
     }

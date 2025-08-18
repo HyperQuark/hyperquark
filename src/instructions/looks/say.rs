@@ -55,11 +55,11 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([IrType::String.or(IrType::Number)]))
 }
 
-pub fn output_type(inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
+pub fn output_type(inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
     if !(IrType::Number.or(IrType::String).contains(inputs[0])) {
         hq_todo!("unimplemented input type: {:?}", inputs)
     }
-    Ok(None)
+    Ok(ReturnType::None)
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = true;

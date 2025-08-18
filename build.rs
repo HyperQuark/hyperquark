@@ -20,59 +20,55 @@ fn main() {
     let mut paths = Vec::new();
     let mut ts_paths = Vec::new();
     visit_dirs(Path::new(base_dir), &mut |entry| {
-        if let Some(ext) = entry.path().extension() {
-            if ext == "rs" {
-                if let Ok(relative_path) = entry.path().strip_prefix(base_dir) {
-                    let components: Vec<_> = relative_path
-                        .components()
-                        .filter_map(|comp| comp.as_os_str().to_str())
-                        .collect();
+        if let Some(ext) = entry.path().extension()
+            && ext == "rs"
+            && let Ok(relative_path) = entry.path().strip_prefix(base_dir)
+        {
+            let components: Vec<_> = relative_path
+                .components()
+                .filter_map(|comp| comp.as_os_str().to_str())
+                .collect();
 
-                    if components.len() == 2 {
-                        let category = components[0];
-                        let opcode = components[1].trim_end_matches(".rs");
-                        let contents =
-                            fs::read_to_string(format!("src/instructions/{category}/{opcode}.rs"))
-                                .unwrap();
-                        let fields = contents.contains("pub struct Fields");
-                        let fields_name =
-                            format!("{category}_{opcode}_fields").to_case(Case::Pascal);
-                        paths.push((
-                            format!(
-                                "{}::{}",
-                                category,
-                                match opcode {
-                                    "yield" | "loop" => format!("r#{opcode}"),
-                                    _ => opcode.to_string(),
-                                }
-                            ),
-                            format!("{category}_{opcode}",),
-                            fields,
-                            fields_name,
-                        ));
-                    }
-                }
+            if components.len() == 2 {
+                let category = components[0];
+                let opcode = components[1].trim_end_matches(".rs");
+                let contents =
+                    fs::read_to_string(format!("src/instructions/{category}/{opcode}.rs")).unwrap();
+                let fields = contents.contains("pub struct Fields");
+                let fields_name = format!("{category}_{opcode}_fields").to_case(Case::Pascal);
+                paths.push((
+                    format!(
+                        "{}::{}",
+                        category,
+                        match opcode {
+                            "yield" | "loop" => format!("r#{opcode}"),
+                            _ => opcode.to_string(),
+                        }
+                    ),
+                    format!("{category}_{opcode}",),
+                    fields,
+                    fields_name,
+                ));
             }
         }
     });
     visit_dirs(Path::new("js"), &mut |entry| {
-        if let Some(ext) = entry.path().extension() {
-            if ext == "ts" {
-                if let Ok(relative_path) = entry.path().strip_prefix("js") {
-                    let components: Vec<_> = relative_path
-                        .components()
-                        .filter_map(|comp| comp.as_os_str().to_str())
-                        .collect();
+        if let Some(ext) = entry.path().extension()
+            && ext == "ts"
+            && let Ok(relative_path) = entry.path().strip_prefix("js")
+        {
+            let components: Vec<_> = relative_path
+                .components()
+                .filter_map(|comp| comp.as_os_str().to_str())
+                .collect();
 
-                    if components.len() == 2 {
-                        let category = components[0];
-                        if category == "compiler" || category == "no-compiler" {
-                            return;
-                        }
-                        let func = components[1].trim_end_matches(".ts");
-                        ts_paths.push((category.to_string(), func.to_string()));
-                    }
+            if components.len() == 2 {
+                let category = components[0];
+                if category == "compiler" || category == "no-compiler" {
+                    return;
                 }
+                let func = components[1].trim_end_matches(".ts");
+                ts_paths.push((category.to_string(), func.to_string()));
             }
         }
     });
@@ -143,7 +139,7 @@ impl IrOpcode {{
     }}
     
     /// maps an opcode to its output type
-    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
+    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType> {{
         match self {{
             {}
         }}
@@ -237,15 +233,15 @@ impl fmt::Display for IrOpcode {{
 }
 
 fn visit_dirs(dir: &Path, cb: &mut dyn FnMut(&fs::DirEntry)) {
-    if dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    visit_dirs(&path, cb);
-                } else {
-                    cb(&entry);
-                }
+    if dir.is_dir()
+        && let Ok(entries) = fs::read_dir(dir)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                visit_dirs(&path, cb);
+            } else {
+                cb(&entry);
             }
         }
     }

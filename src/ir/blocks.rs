@@ -2,21 +2,22 @@ use super::context::StepContext;
 use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
+    IrOpcode, YieldMode,
     fields::{
         ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
         DataVariableFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
         HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
         ProceduresCallWarpFields,
     },
-    IrOpcode, YieldMode,
 };
+use crate::ir::ReturnType;
 use crate::prelude::*;
 use crate::sb3;
-use crate::wasm::flags::UseIntegers;
 use crate::wasm::WasmFlags;
+use crate::wasm::flags::UseIntegers;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
-fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
+pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
     let mut casts: Vec<(usize, IrType)> = vec![]; // a vector of cast targets, and where they're needed
     for (i, block) in blocks.iter().enumerate() {
@@ -26,7 +27,10 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
             .copied()
             .collect::<Vec<_>>();
         if type_stack.len() < expected_inputs.len() {
-            hq_bug!("didn't have enough inputs on the type stack")
+            hq_bug!(
+                "didn't have enough inputs on the type stack\nat block {:?}",
+                block
+            );
         }
         let actual_inputs: Vec<_> = type_stack
             .splice((type_stack.len() - expected_inputs.len()).., [])
@@ -39,6 +43,15 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
                     .base_types()
                     .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
             {
+                if matches!(
+                    block,
+                    IrOpcode::data_setvariableto(_) | IrOpcode::data_teevariable(_)
+                ) {
+                    hq_bug!(
+                        "attempted to insert a cast before a variable set/tee operation - variables should \
+                        encompass all possible types, rather than causing values to be coerced"
+                    )
+                }
                 casts.push((actual.1, expected));
                 expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
                     .output_type(Rc::from([if actual.0.is_none() {
@@ -46,18 +59,24 @@ fn insert_casts(mut blocks: Vec<IrOpcode>) -> HQResult<Vec<IrOpcode>> {
                     } else {
                         actual.0
                     }]))?
-                    .ok_or_else(|| make_hq_bug!("hq_cast returned no output type"))?;
+                    .singleton_or_else(|| {
+                        make_hq_bug!("hq_cast returned no output type, or multiple output types")
+                    })?;
             }
         }
         // TODO: make this more specific by using the actual input types post-cast
-        if let Some(output) = block.output_type(Rc::from(expected_inputs))? {
-            type_stack.push((output, i));
+        match block.output_type(Rc::from(expected_inputs))? {
+            ReturnType::Singleton(output) => type_stack.push((output, i)),
+            ReturnType::MultiValue(outputs) => {
+                type_stack.extend(outputs.into_iter().copied().zip(core::iter::repeat(i)))
+            }
+            ReturnType::None => (),
         }
     }
     for (pos, ty) in casts.into_iter().rev() {
         blocks.insert(pos + 1, IrOpcode::hq_cast(HqCastFields(ty)));
     }
-    Ok(blocks)
+    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -109,7 +128,7 @@ pub fn from_block(
     final_next_blocks: NextBlocks,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
-    insert_casts(match block {
+    let mut opcodes = match block {
         Block::Normal { block_info, .. } => from_normal_block(
             block_info,
             blocks,
@@ -120,7 +139,9 @@ pub fn from_block(
         )?
         .to_vec(),
         Block::Special(block_array) => vec![from_special_block(block_array, context, flags)?],
-    })
+    };
+    insert_casts(&mut opcodes)?;
+    Ok(opcodes)
 }
 
 pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Vec<String>> {

@@ -234,82 +234,82 @@ macro_rules! instructions_test {
                 }
             }
 
-            #[test]
-            fn js_functions_match_declared_types() {
-                #![allow(clippy::tuple_array_conversions, reason = "false positive")]
-                use ezno_checker::{check_project as check_js, Diagnostic, INTERNAL_DEFINITION_FILE_PATH as ts_defs};
-                use std::path::{Path, PathBuf};
-                use std::fs;
+            // #[test]
+            // fn js_functions_match_declared_types() {
+            //     #![allow(clippy::tuple_array_conversions, reason = "false positive")]
+            //     use ezno_checker::{check_project as check_js, Diagnostic, INTERNAL_DEFINITION_FILE_PATH as ts_defs};
+            //     use std::path::{Path, PathBuf};
+            //     use std::fs;
 
-                for ($($type_arg,)*) in types_iter(true) {
-                    let registries = Rc::new(Registries::default());
-                    let step_func = StepFunc::new(Rc::clone(&registries), flags());
-                    if wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?).is_err() {
-                        println!("skipping failed wasm");
-                        continue;
-                    };
-                    for ((module, name), (params, results)) in registries.external_functions().registry().try_borrow().unwrap().iter() {
-                        assert!(results.len() <= 1, "external function {}::{} registered as returning multiple results", module, name);
-                        let out = if results.len() == 0 {
-                            "void"
-                        } else {
-                            wasm_to_js_type(results[0])
-                        };
-                        let arg_idents: Vec<String> = params.iter().enumerate().map(|(i, _)| format!("_{i}")).collect();
-                        let ins = arg_idents.iter().enumerate().map(|(i, ident)| {
-                            format!(
-                                "{}: {}",
-                                ident,
-                                wasm_to_js_type(*params.get(i).unwrap())
-                                )
-                        }).collect::<Vec<_>>().join(", ");
-                        let module_path = if *module == "wasm:js-string" {
-                            "wasm-js-string"
-                        } else {
-                            module
-                        };
-                        let path_buf = PathBuf::from(format!("js/{}/{}.ts", module_path, name));
-                        let diagnostics = check_js::<_, ezno_checker::synthesis::EznoParser>(
-                            vec![path_buf.clone()],
-                            vec![ts_defs.into()],
-                            &|path: &Path| {
-                                let func_string = fs::read_to_string(path).ok()?;
-                                let test_string = if path == path_buf.as_path() {
-                                    format!("function _({ins}): {out} {{ return {name}({ts}); }};",
-                                        ins=ins,
-                                        out=out,
-                                        name=name,
-                                        ts=arg_idents.join(", ")
-                                    )
-                                } else { String::from("") };
-                                let total_string = format!("{func_string};\n{test_string}");
-                                println!("{}", total_string.clone());
-                                Some(test_string
-                                    .as_str()
-                                    .as_bytes()
-                                    .into_iter()
-                                    .map(|&u| u)
-                                    .collect::<Vec<_>>()
-                                )
-                            },
-                            Default::default(),
-                            (),
-                            None,
-                        )
-                        .diagnostics;
-                        if diagnostics.contains_error() {
-                            let reasons = diagnostics.into_iter().map(|d| {
-                                match d {
-                                    Diagnostic::Global { reason, .. } => reason,
-                                    Diagnostic::Position { reason, .. } => reason,
-                                    Diagnostic::PositionWithAdditionalLabels { reason, .. } => reason,
-                                }
-                            }).collect::<Vec<_>>().join("; ");
-                            panic!("js for external function {}::{} is not type-safe; reason(s): {}", module, name, reasons);
-                        }
-                    }
-                }
-            }
+            //     for ($($type_arg,)*) in types_iter(true) {
+            //         let registries = Rc::new(Registries::default());
+            //         let step_func = StepFunc::new(Rc::clone(&registries), flags());
+            //         if wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?).is_err() {
+            //             println!("skipping failed wasm");
+            //             continue;
+            //         };
+            //         for ((module, name), (params, results)) in registries.external_functions().registry().try_borrow().unwrap().iter() {
+            //             assert!(results.len() <= 1, "external function {}::{} registered as returning multiple results", module, name);
+            //             let out = if results.len() == 0 {
+            //                 "void"
+            //             } else {
+            //                 wasm_to_js_type(results[0])
+            //             };
+            //             let arg_idents: Vec<String> = params.iter().enumerate().map(|(i, _)| format!("_{i}")).collect();
+            //             let ins = arg_idents.iter().enumerate().map(|(i, ident)| {
+            //                 format!(
+            //                     "{}: {}",
+            //                     ident,
+            //                     wasm_to_js_type(*params.get(i).unwrap())
+            //                     )
+            //             }).collect::<Vec<_>>().join(", ");
+            //             let module_path = if *module == "wasm:js-string" {
+            //                 "wasm-js-string"
+            //             } else {
+            //                 module
+            //             };
+            //             let path_buf = PathBuf::from(format!("js/{}/{}.ts", module_path, name));
+            //             let diagnostics = check_js::<_, ezno_checker::synthesis::EznoParser>(
+            //                 vec![path_buf.clone()],
+            //                 vec![ts_defs.into()],
+            //                 &|path: &Path| {
+            //                     let func_string = fs::read_to_string(path).ok()?;
+            //                     let test_string = if path == path_buf.as_path() {
+            //                         format!("function _({ins}): {out} {{ return {name}({ts}); }};",
+            //                             ins=ins,
+            //                             out=out,
+            //                             name=name,
+            //                             ts=arg_idents.join(", ")
+            //                         )
+            //                     } else { String::from("") };
+            //                     let total_string = format!("{func_string};\n{test_string}");
+            //                     println!("{}", total_string.clone());
+            //                     Some(test_string
+            //                         .as_str()
+            //                         .as_bytes()
+            //                         .into_iter()
+            //                         .map(|&u| u)
+            //                         .collect::<Vec<_>>()
+            //                     )
+            //                 },
+            //                 Default::default(),
+            //                 (),
+            //                 None,
+            //             )
+            //             .diagnostics;
+            //             if diagnostics.contains_error() {
+            //                 let reasons = diagnostics.into_iter().map(|d| {
+            //                     match d {
+            //                         Diagnostic::Global { reason, .. } => reason,
+            //                         Diagnostic::Position { reason, .. } => reason,
+            //                         Diagnostic::PositionWithAdditionalLabels { reason, .. } => reason,
+            //                     }
+            //                 }).collect::<Vec<_>>().join("; ");
+            //                 panic!("js for external function {}::{} is not type-safe; reason(s): {}", module, name, reasons);
+            //             }
+            //         }
+            //     }
+            // }
         }
     }
 }

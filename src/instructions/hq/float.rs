@@ -32,8 +32,8 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(match val {
+pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(match val {
         0.0 => IrType::FloatZero,
         f64::INFINITY => IrType::FloatPosInf,
         f64::NEG_INFINITY => IrType::FloatNegInf,

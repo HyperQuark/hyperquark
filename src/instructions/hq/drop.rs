@@ -8,8 +8,8 @@ pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([IrType::Number.or(IrType::String)]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
-    Ok(None)
+pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
+    Ok(ReturnType::None)
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

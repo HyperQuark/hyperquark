@@ -86,6 +86,7 @@ pub mod prelude {
 #[wasm_bindgen(js_namespace=console)]
 extern "C" {
     pub fn log(s: &str);
+    pub fn warn(s: &str);
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -97,6 +98,18 @@ pub fn log(s: &str) {
 macro_rules! log {
     ($($args:tt)+) => {{
         $crate::log(format!($($args)+).as_str());
+    }}
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub fn warn(s: &str) {
+    println!("{s}");
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($args:tt)+) => {{
+        $crate::warn(format!($($args)+).as_str());
     }}
 }
 

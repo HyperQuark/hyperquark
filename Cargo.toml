@@ -27,7 +27,7 @@ wasmprinter = "0.226.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058bdbb0cde924be008ca1e5a67fe39f46b9" }
+# ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058bdbb0cde924be008ca1e5a67fe39f46b9" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

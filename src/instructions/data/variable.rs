@@ -42,8 +42,8 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields { var, .. }: &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(if var.borrow().possible_types().is_none() {
+pub fn output_type(_inputs: Rc<[IrType]>, Fields { var, .. }: &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(if var.borrow().possible_types().is_none() {
         IrType::Any
     } else {
         *var.borrow().possible_types()

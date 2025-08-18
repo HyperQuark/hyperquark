@@ -69,8 +69,8 @@ pub fn acceptable_inputs(Fields { var, .. }: &Fields) -> HQResult<Rc<[IrType]>> 
     ]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields { var, .. }: &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(*var.try_borrow()?.possible_types()))
+pub fn output_type(_inputs: Rc<[IrType]>, Fields { var, .. }: &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(*var.try_borrow()?.possible_types()))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

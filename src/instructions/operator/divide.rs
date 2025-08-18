@@ -19,7 +19,7 @@ pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([IrType::Float, IrType::Float]))
 }
 
-pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
+pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
     hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
@@ -30,7 +30,7 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
     let maybe_zero = t1.maybe_zero() || t1.maybe_nan(); // TODO: can this be narrowed to +/-0?
     let maybe_infinity = t2.maybe_zero() || t2.maybe_nan(); // TODO: can this be narrowed to +/-infinity?
     let maybe_nan = t1.maybe_zero() && t2.maybe_zero();
-    Ok(Some(
+    Ok(Singleton(
         IrType::none_if_false(maybe_positive, IrType::FloatPos)
             .or(IrType::none_if_false(maybe_negative, IrType::FloatNeg))
             .or(IrType::none_if_false(maybe_zero, IrType::FloatZero))

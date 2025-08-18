@@ -32,8 +32,8 @@ pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([IrType::Int, IrType::String]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
-    Ok(Some(IrType::String))
+pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
+    Ok(Singleton(IrType::String))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
