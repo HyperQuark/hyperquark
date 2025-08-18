@@ -28,7 +28,7 @@ export function target_names(): Array<string> {
 
 export function update_bubble(target_index: number, verb: "say" | "think", text: string) {
     check_setup();
-    if (_target_bubbles[target_index] === null) {
+    if (!_target_bubbles[target_index]) {
         _target_bubbles[target_index] = _renderer.createSkin(
             "text",
             "sprite",
