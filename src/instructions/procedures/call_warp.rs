@@ -74,13 +74,14 @@ pub fn acceptable_inputs(Fields { proc }: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, Fields { proc }: &Fields) -> HQResult<ReturnType> {
-    Ok(MultiValue(proc
-        .context()
-        .return_vars()
-        .try_borrow()?
-        .iter()
-        .map(|var| *var.possible_types())
-        .collect()))
+    Ok(MultiValue(
+        proc.context()
+            .return_vars()
+            .try_borrow()?
+            .iter()
+            .map(|var| *var.possible_types())
+            .collect(),
+    ))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

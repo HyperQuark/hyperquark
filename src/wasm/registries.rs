@@ -1,6 +1,6 @@
 use super::{
-    ExternalFunctionRegistry, GlobalRegistry, StringRegistry, TableRegistry, TypeRegistry,
-    VariableRegistry, SpriteRegistry
+    ExternalFunctionRegistry, GlobalRegistry, SpriteRegistry, StringRegistry, TableRegistry,
+    TypeRegistry, VariableRegistry,
 };
 use crate::prelude::*;
 

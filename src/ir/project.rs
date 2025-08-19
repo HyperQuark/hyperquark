@@ -1,9 +1,9 @@
-use super::proc::{procs_from_target, ProcMap};
-use super::variable::{variables_from_target, TargetVars};
+use super::proc::{ProcMap, procs_from_target};
+use super::variable::{TargetVars, variables_from_target};
 use super::{Step, Target, Thread};
 use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
 use crate::ir::target::IrCostume;
-use crate::ir::{used_vars, PartialStep, RcVar, Type as IrType};
+use crate::ir::{PartialStep, RcVar, Type as IrType, used_vars};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 use crate::wasm::WasmFlags;
@@ -71,7 +71,8 @@ impl IrProject {
                     variables_from_target(target)
                 };
                 let procedures = RefCell::new(ProcMap::new());
-                let costumes = target.costumes
+                let costumes = target
+                    .costumes
                     .iter()
                     .map(|costume| {
                         IrCostume {
@@ -90,7 +91,7 @@ impl IrProject {
                     index
                         .try_into()
                         .map_err(|_| make_hq_bug!("target index out of bounds"))?,
-                        costumes
+                    costumes,
                 ));
                 procs_from_target(target, &ir_target)?;
                 let blocks = &target.blocks;

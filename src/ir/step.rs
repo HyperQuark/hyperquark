@@ -108,7 +108,11 @@ impl Step {
     }
 
     /// Creates a totally empty noop step. This should not be used outside of wasm module generation.
-    pub fn new_empty(project: &Weak<IrProject>, used_non_inline: bool, target: Rc<Target>) -> HQResult<Rc<Self>> {
+    pub fn new_empty(
+        project: &Weak<IrProject>,
+        used_non_inline: bool,
+        target: Rc<Target>,
+    ) -> HQResult<Rc<Self>> {
         Self::new_rc(
             None,
             StepContext {

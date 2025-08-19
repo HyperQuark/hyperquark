@@ -445,7 +445,9 @@ impl VarGraph {
                             }
                             ReturnType::MultiValue(outputs) => {
                                 if inputs_len == 0 {
-                                    type_stack.extend(outputs.into_iter().copied().map(StackElement::Type));
+                                    type_stack.extend(
+                                        outputs.into_iter().copied().map(StackElement::Type),
+                                    );
                                 } else {
                                     type_stack.push(StackElement::Opcode(opcode.clone()));
                                 }

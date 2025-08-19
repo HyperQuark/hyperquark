@@ -44,7 +44,6 @@ function setup(renderer, project_json, assets, target_names) {
   const target_skins = project_json.targets.map((target, index) => {
     const realCostume = target.costumes[target.currentCostume];
     const costume = costumes[index][target.currentCostume];
-    console.log(costume, realCostume);
     if (costume.dataFormat.toLowerCase() !== "svg") {
       throw new Error("todo: non-svg costumes");
     }
@@ -55,9 +54,7 @@ function setup(renderer, project_json, assets, target_names) {
     if (!target.is_stage) {
       drawable.updateVisible(!!target.visible);
       drawable.updatePosition([target.x, target.y]);
-      if (target.rotation) {
-        drawable.updateDirection(target.rotation);
-      }
+      drawable.updateDirection(target.direction);
       drawable.updateScale([target.size, target.size]);
     }
     return [skin, drawableId];

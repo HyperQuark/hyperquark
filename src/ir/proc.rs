@@ -10,7 +10,7 @@ use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode, Target as Sb3Target};
 use crate::wasm::WasmFlags;
 use core::cell::Ref;
-use lazy_regex::{lazy_regex, Lazy};
+use lazy_regex::{Lazy, lazy_regex};
 use regex::Regex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -138,9 +138,11 @@ impl Proc {
         target: Rc<IrTarget>,
         sb3_target: &Sb3Target,
     ) -> HQResult<Rc<Self>> {
-        hq_assert!(prototype
-            .block_info()
-            .is_some_and(|info| info.opcode == BlockOpcode::procedures_prototype));
+        hq_assert!(
+            prototype
+                .block_info()
+                .is_some_and(|info| info.opcode == BlockOpcode::procedures_prototype)
+        );
         #[expect(
             clippy::unwrap_used,
             reason = "previously asserted that block_info is Some"
@@ -274,12 +276,8 @@ pub fn procs_from_target(sb3_target: &Sb3Target, ir_target: &Rc<IrTarget>) -> HQ
         if block_info.opcode != BlockOpcode::procedures_prototype {
             continue;
         }
-        let proc = Proc::from_prototype(
-            block,
-            &sb3_target.blocks,
-            Rc::clone(ir_target),
-            sb3_target,
-        )?;
+        let proc =
+            Proc::from_prototype(block, &sb3_target.blocks, Rc::clone(ir_target), sb3_target)?;
         let proccode = proc.proccode();
         proc_map.insert(proccode.into(), proc);
     }
