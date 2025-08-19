@@ -87,7 +87,7 @@ pub enum StepTarget {
     /// Holds the WASM index of the sprite.
     ///
     /// This is not necessarily the same as the IR index, as it
-    /// is obtained from the SpriteRegistry, as the stage is not a sprite but holds a target index
+    /// is obtained from the `SpriteRegistry`, as the stage is not a sprite but holds a target index
     /// in the IR.
     Sprite(u32),
 }
@@ -124,11 +124,11 @@ impl StepFunc {
         &self.params
     }
 
-    pub fn target(&self) -> StepTarget {
+    pub const fn target(&self) -> StepTarget {
         self.target
     }
 
-    pub fn target_index(&self) -> u32 {
+    pub const fn target_index(&self) -> u32 {
         self.target_index
     }
 
@@ -255,9 +255,9 @@ impl StepFunc {
             instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
             match opcode.output_type(inputs)? {
                 ReturnType::Singleton(output) => type_stack.push(output),
-                ReturnType::MultiValue(outputs) => type_stack.extend(outputs.into_iter().copied()),
+                ReturnType::MultiValue(outputs) => type_stack.extend(outputs.iter().copied()),
                 ReturnType::None => (),
-            };
+            }
         }
         Ok(instrs)
     }

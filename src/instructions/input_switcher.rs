@@ -151,12 +151,12 @@ fn generate_branches(
                 } else if let ReturnType::MultiValue(_) = this_output {
                     crate::warn(
                         "found multi-valued output type for this block in `generate_branches`... suspicious.",
-                    )
+                    );
                 }
             }
             ReturnType::None => (),
             ReturnType::MultiValue(_) => {
-                crate::warn("found multi-valued output type in `generate_branches`... suspicious.")
+                crate::warn("found multi-valued output type in `generate_branches`... suspicious.");
             }
         }
         return Ok(wasm);
@@ -185,7 +185,7 @@ fn generate_branches(
                 match output_type {
                     ReturnType::Singleton(out_ty) => vec![WasmProject::ir_type_to_wasm(out_ty)?],
                     ReturnType::MultiValue(ref out_tys) => out_tys
-                        .into_iter()
+                        .iter()
                         .copied()
                         .map(WasmProject::ir_type_to_wasm)
                         .collect::<HQResult<_>>()?,

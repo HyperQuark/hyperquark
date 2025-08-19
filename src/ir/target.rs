@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::sb3::CostumeDataFormat;
 use core::cell::{Ref, RefMut};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrCostume {
     pub name: Box<str>,
     pub data_format: CostumeDataFormat,
@@ -46,7 +46,7 @@ impl Target {
         self.index
     }
 
-    pub const fn costumes(&self) -> &Box<[IrCostume]> {
+    pub const fn costumes(&self) -> &[IrCostume] {
         &self.costumes
     }
 

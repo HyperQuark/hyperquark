@@ -14,6 +14,10 @@
     reason = "Too many Results everywhere to document every possible error case. Errors should be self-descriptive and user readable anyway."
 )]
 #![allow(clippy::too_many_arguments, reason = "unavoidable at this stage")]
+#![allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "too many false positives on WasmFlags, which will grow in future"
+)]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
     clippy::alloc_instead_of_core,

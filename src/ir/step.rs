@@ -87,6 +87,7 @@ impl Step {
             Weak::clone(project),
             used_non_inline,
         ));
+        #[expect(clippy::redundant_else, reason = "clippy false positive")]
         if used_non_inline {
             project
                 .upgrade()

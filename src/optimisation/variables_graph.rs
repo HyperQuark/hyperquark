@@ -446,7 +446,7 @@ impl VarGraph {
                             ReturnType::MultiValue(outputs) => {
                                 if inputs_len == 0 {
                                     type_stack.extend(
-                                        outputs.into_iter().copied().map(StackElement::Type),
+                                        outputs.iter().copied().map(StackElement::Type),
                                     );
                                 } else {
                                     type_stack.push(StackElement::Opcode(opcode.clone()));
@@ -638,9 +638,9 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
                 let output = op.output_type(inputs)?;
                 match output {
                     ReturnType::Singleton(ty) => stack.push(ty),
-                    ReturnType::MultiValue(tys) => stack.extend(tys.into_iter().copied()),
+                    ReturnType::MultiValue(tys) => stack.extend(tys.iter().copied()),
                     ReturnType::None => (),
-                };
+                }
             }
             StackElement::Type(ty) => stack.push(*ty),
             StackElement::Var(var) => stack.push(*var.possible_types()),

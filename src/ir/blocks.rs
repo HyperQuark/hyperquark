@@ -68,7 +68,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
         match block.output_type(Rc::from(expected_inputs))? {
             ReturnType::Singleton(output) => type_stack.push((output, i)),
             ReturnType::MultiValue(outputs) => {
-                type_stack.extend(outputs.into_iter().copied().zip(core::iter::repeat(i)));
+                type_stack.extend(outputs.iter().copied().zip(core::iter::repeat(i)));
             }
             ReturnType::None => (),
         }
@@ -491,7 +491,7 @@ fn generate_if_else(
         Rc::downgrade(&dummy_project),
         RefCell::new(context.target().procedures()?.clone()),
         0,
-        context.target().costumes().clone(),
+        context.target().costumes().into(),
     ));
     dummy_project
         .targets()

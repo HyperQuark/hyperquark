@@ -21,7 +21,7 @@ impl StepContext {
             .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))
     }
 
-    pub fn target(&self) -> &Rc<Target> {
+    pub const fn target(&self) -> &Rc<Target> {
         &self.target
     }
 }
