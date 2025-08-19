@@ -26,7 +26,7 @@ pub struct ProcContext {
     return_vars: Rc<RefCell<Vec<RcVar>>>,
     arg_ids: Box<[Box<str>]>,
     arg_names: Box<[Box<str>]>,
-    target: Weak<IrTarget>,
+    target: Rc<IrTarget>,
     /// whether a procedure is 'run without screen refresh'
     always_warped: bool,
 }
@@ -135,7 +135,7 @@ impl Proc {
     pub fn from_prototype(
         prototype: &Block,
         blocks: &BlockMap,
-        target: Weak<IrTarget>,
+        target: Rc<IrTarget>,
         sb3_target: &Sb3Target,
     ) -> HQResult<Rc<Self>> {
         hq_assert!(prototype
@@ -231,7 +231,7 @@ impl Proc {
         let step_context = StepContext {
             warp: true,
             proc_context: Some(self.context.clone()),
-            target: Weak::clone(&self.context.target),
+            target: Rc::clone(&self.context.target),
             debug: self.debug,
         };
         let step = match self.first_step_id {
@@ -239,7 +239,7 @@ impl Proc {
                 None,
                 step_context.clone(),
                 vec![],
-                &step_context.target()?.project(),
+                &step_context.target().project(),
                 true,
             )?,
             Some(ref id) => {
@@ -251,7 +251,7 @@ impl Proc {
                     id.clone(),
                     blocks,
                     &step_context,
-                    &step_context.target()?.project(),
+                    &step_context.target().project(),
                     NextBlocks::new(false),
                     true,
                     flags,
@@ -277,7 +277,7 @@ pub fn procs_from_target(sb3_target: &Sb3Target, ir_target: &Rc<IrTarget>) -> HQ
         let proc = Proc::from_prototype(
             block,
             &sb3_target.blocks,
-            Rc::downgrade(ir_target),
+            Rc::clone(ir_target),
             sb3_target,
         )?;
         let proccode = proc.proccode();

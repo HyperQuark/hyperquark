@@ -220,7 +220,7 @@ impl VarGraph {
                             *var.try_borrow_mut()? = new_var;
                             *local_read.try_borrow_mut()? = true;
                         } else if let Some(proc_context) = maybe_proc_context {
-                            let target = step.context().target()?;
+                            let target = step.context().target();
                             let project = step
                                 .project()
                                 .upgrade()

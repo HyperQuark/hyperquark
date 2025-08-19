@@ -1,5 +1,5 @@
 use super::{Registries, WasmFlags, WasmProject};
-use crate::instructions::{IrOpcode, ProceduresCallWarpFields};
+use crate::instructions::IrOpcode;
 use crate::ir::{PartialStep, RcVar, ReturnType, Step};
 use crate::prelude::*;
 use crate::{instructions::wrap_instruction, ir::Proc};
@@ -81,6 +81,17 @@ impl Instruction {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum StepTarget {
+    Stage,
+    /// Holds the WASM index of the sprite.
+    ///
+    /// This is not necessarily the same as the IR index, as it
+    /// is obtained from the SpriteRegistry, as the stage is not a sprite but holds a target index
+    /// in the IR.
+    Sprite(u32),
+}
+
 /// representation of a step's function
 #[derive(Clone)]
 pub struct StepFunc {
@@ -91,6 +102,9 @@ pub struct StepFunc {
     registries: Rc<Registries>,
     flags: WasmFlags,
     local_variables: RefCell<BTreeMap<RcVar, u32>>,
+    target: StepTarget,
+    // the actual target index, for interfacing with js
+    target_index: u32,
 }
 
 impl StepFunc {
@@ -110,8 +124,21 @@ impl StepFunc {
         &self.params
     }
 
+    pub fn target(&self) -> StepTarget {
+        self.target
+    }
+
+    pub fn target_index(&self) -> u32 {
+        self.target_index
+    }
+
     /// creates a new step function, with one paramter
-    pub fn new(registries: Rc<Registries>, flags: WasmFlags) -> Self {
+    pub fn new(
+        registries: Rc<Registries>,
+        flags: WasmFlags,
+        target: StepTarget,
+        target_index: u32,
+    ) -> Self {
         Self {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
@@ -120,6 +147,8 @@ impl StepFunc {
             registries,
             flags,
             local_variables: RefCell::new(BTreeMap::default()),
+            target,
+            target_index,
         }
     }
 
@@ -130,6 +159,8 @@ impl StepFunc {
         output: Box<[ValType]>,
         registries: Rc<Registries>,
         flags: WasmFlags,
+        target: StepTarget,
+        target_index: u32,
     ) -> Self {
         Self {
             locals: RefCell::new(vec![]),
@@ -139,6 +170,8 @@ impl StepFunc {
             registries,
             flags,
             local_variables: RefCell::new(BTreeMap::default()),
+            target,
+            target_index,
         }
     }
 
@@ -242,6 +275,16 @@ impl StepFunc {
         if let Some(step_func) = steps.try_borrow()?.get(&step) {
             return Ok(step_func.clone());
         }
+        let target = if step.context().target().is_stage() {
+            StepTarget::Stage
+        } else {
+            StepTarget::Sprite(
+                registries
+                    .sprites()
+                    .register_default(Rc::clone(step.context().target()))?,
+            )
+        };
+        let target_index = step.context().target().index();
         let step_func = if let Some(ref proc_context) = step.context().proc_context {
             let arg_types = proc_context
                 .arg_vars()
@@ -256,9 +299,9 @@ impl StepFunc {
                 .iter()
                 .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
                 .collect::<HQResult<Box<[_]>>>()?;
-            Self::new_with_types(params, outputs, registries, flags)
+            Self::new_with_types(params, outputs, registries, flags, target, target_index)
         } else {
-            Self::new(registries, flags)
+            Self::new(registries, flags, target, target_index)
         };
         let instrs = Self::compile_instructions(&step_func, &*step.opcodes().try_borrow()?)?;
         step_func.add_instructions(instrs)?;

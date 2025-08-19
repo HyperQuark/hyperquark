@@ -1,6 +1,7 @@
 use super::blocks::{self, NextBlocks};
 use super::{IrProject, StepContext};
 use crate::instructions::{ControlIfElseFields, HqYieldFields, IrOpcode, YieldMode};
+use crate::ir::Target;
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap};
 use crate::wasm::WasmFlags;
@@ -107,11 +108,11 @@ impl Step {
     }
 
     /// Creates a totally empty noop step. This should not be used outside of wasm module generation.
-    pub fn new_empty(project: &Weak<IrProject>, used_non_inline: bool) -> HQResult<Rc<Self>> {
+    pub fn new_empty(project: &Weak<IrProject>, used_non_inline: bool, target: Rc<Target>) -> HQResult<Rc<Self>> {
         Self::new_rc(
             None,
             StepContext {
-                target: Weak::new(),
+                target,
                 warp: false,
                 proc_context: None,
                 debug: false,

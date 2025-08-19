@@ -24,7 +24,7 @@ impl Thread {
     pub fn try_from_top_block(
         block: &Block,
         blocks: &BlockMap,
-        target: &Weak<Target>,
+        target: &Rc<Target>,
         project: &Weak<IrProject>,
         debug: bool,
         flags: &WasmFlags,
@@ -57,7 +57,7 @@ impl Thread {
             next_id.clone(),
             blocks,
             &StepContext {
-                target: Weak::clone(target),
+                target: Rc::clone(target),
                 proc_context: None,
                 warp: false, // steps from top blocks are never warped
                 debug,

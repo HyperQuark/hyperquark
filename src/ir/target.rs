@@ -1,6 +1,15 @@
-use super::{proc::Proc, IrProject};
-use crate::{ir::variable::TargetVars, prelude::*};
+use super::{IrProject, proc::Proc};
+use crate::ir::variable::TargetVars;
+use crate::prelude::*;
+use crate::sb3::CostumeDataFormat;
 use core::cell::{Ref, RefMut};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IrCostume {
+    pub name: Box<str>,
+    pub data_format: CostumeDataFormat,
+    pub md5ext: Box<str>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Target {
@@ -9,10 +18,11 @@ pub struct Target {
     project: Weak<IrProject>,
     procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
     index: u32,
+    costumes: Box<[IrCostume]>,
 }
 
 impl Target {
-    pub const fn _is_stage(&self) -> bool {
+    pub const fn is_stage(&self) -> bool {
         self.is_stage
     }
 
@@ -36,12 +46,17 @@ impl Target {
         self.index
     }
 
+    pub const fn costumes(&self) -> &Box<[IrCostume]> {
+        &self.costumes
+    }
+
     pub const fn new(
         is_stage: bool,
         variables: TargetVars,
         project: Weak<IrProject>,
         procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
         index: u32,
+        costumes: Box<[IrCostume]>,
     ) -> Self {
         Self {
             is_stage,
@@ -49,6 +64,7 @@ impl Target {
             project,
             procedures,
             index,
+            costumes,
         }
     }
 }
@@ -79,3 +95,17 @@ impl fmt::Display for Target {
         )
     }
 }
+
+impl core::hash::Hash for Target {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.index().hash(state);
+    }
+}
+
+impl core::cmp::PartialEq for Target {
+    fn eq(&self, other: &Self) -> bool {
+        self.index() == other.index()
+    }
+}
+
+impl core::cmp::Eq for Target {}

@@ -68,7 +68,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
         match block.output_type(Rc::from(expected_inputs))? {
             ReturnType::Singleton(output) => type_stack.push((output, i)),
             ReturnType::MultiValue(outputs) => {
-                type_stack.extend(outputs.into_iter().copied().zip(core::iter::repeat(i)))
+                type_stack.extend(outputs.into_iter().copied().zip(core::iter::repeat(i)));
             }
             ReturnType::None => (),
         }
@@ -148,10 +148,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
     let opcode = &block_info.opcode;
     // target and procs need to be declared outside of the match block
     // to prevent lifetime issues
-    let target = context
-        .target
-        .upgrade()
-        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Target>"))?;
+    let target = context.target();
     let procs = target.procedures()?;
     Ok(
         #[expect(
@@ -176,7 +173,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::sensing_dayssince2000
             | BlockOpcode::data_variable
             | BlockOpcode::argument_reporter_boolean
-            | BlockOpcode::argument_reporter_string_number => vec![],
+            | BlockOpcode::argument_reporter_string_number
+            | BlockOpcode::looks_costume => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -184,6 +182,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::operator_not => vec!["OPERAND"],
             BlockOpcode::control_repeat => vec!["TIMES"],
             BlockOpcode::operator_length => vec!["STRING"],
+            BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
             BlockOpcode::procedures_call => {
                 let serde_json::Value::String(proccode) = block_info
                     .mutation
@@ -344,7 +343,7 @@ fn generate_loop(
             substack_block,
             blocks,
             context,
-            &context.target()?.project(),
+            &context.target().project(),
             NextBlocks::new(false),
             flags,
         )?;
@@ -352,14 +351,14 @@ fn generate_loop(
             None,
             context.clone(),
             substack_blocks,
-            &context.target()?.project(),
+            &context.target().project(),
             false,
         )?;
         let condition_step = Step::new_rc(
             None,
             context.clone(),
             condition_instructions,
-            &context.target()?.project(),
+            &context.target().project(),
             false,
         )?;
         let first_condition_step = if let Some(instrs) = first_condition_instructions {
@@ -367,7 +366,7 @@ fn generate_loop(
                 None,
                 context.clone(),
                 instrs,
-                &context.target()?.project(),
+                &context.target().project(),
                 false,
             )?)
         } else {
@@ -403,7 +402,7 @@ fn generate_loop(
                     id,
                     blocks,
                     context,
-                    &context.target()?.project(),
+                    &context.target().project(),
                     outer_next_blocks,
                     false,
                     flags,
@@ -413,20 +412,20 @@ fn generate_loop(
                 .upgrade()
                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?)
             .clone(false)?,
-            None => Step::new_terminating(context.clone(), &context.target()?.project(), false)?,
+            None => Step::new_terminating(context.clone(), &context.target().project(), false)?,
         };
         let condition_step = Step::new_rc(
             None,
             context.clone(),
             condition_instructions.clone(),
-            &context.target()?.project(),
+            &context.target().project(),
             true,
         )?;
         let substack_blocks = from_block(
             substack_block,
             blocks,
             context,
-            &context.target()?.project(),
+            &context.target().project(),
             NextBlocks::new(false).extend_with_inner(NextBlockInfo {
                 yield_first: true,
                 block: NextBlock::Step(Rc::downgrade(&condition_step)),
@@ -437,7 +436,7 @@ fn generate_loop(
             None,
             context.clone(),
             substack_blocks,
-            &context.target()?.project(),
+            &context.target().project(),
             false,
         )?;
         condition_step
@@ -488,10 +487,11 @@ fn generate_if_else(
     let dummy_project = Rc::new(IrProject::new(this_project.global_variables().clone()));
     let dummy_target = Rc::new(Target::new(
         false,
-        context.target()?.variables().clone(),
+        context.target().variables().clone(),
         Rc::downgrade(&dummy_project),
-        RefCell::new(context.target()?.procedures()?.clone()),
+        RefCell::new(context.target().procedures()?.clone()),
         0,
+        context.target().costumes().clone(),
     ));
     dummy_project
         .targets()
@@ -499,7 +499,7 @@ fn generate_if_else(
         .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
         .insert("".into(), Rc::clone(&dummy_target));
     let dummy_context = StepContext {
-        target: Rc::downgrade(&dummy_target),
+        target: Rc::clone(&dummy_target),
         ..context.clone()
     };
     let dummy_if_step = Step::from_block(
@@ -524,7 +524,11 @@ fn generate_if_else(
             flags,
         )?
     } else {
-        Step::new_empty(&Rc::downgrade(&dummy_project), false)?
+        Step::new_empty(
+            &Rc::downgrade(&dummy_project),
+            false,
+            Rc::clone(&dummy_target),
+        )?
     };
     let if_step_yields = dummy_if_step.does_yield()?;
     let else_step_yields = dummy_else_step.does_yield()?;
@@ -562,7 +566,7 @@ fn generate_if_else(
                 if_block.1,
                 blocks,
                 context,
-                &context.target()?.project(),
+                &context.target().project(),
                 next_blocks.clone(),
                 false,
                 flags,
@@ -576,7 +580,7 @@ fn generate_if_else(
                 else_block_id,
                 blocks,
                 context,
-                &context.target()?.project(),
+                &context.target().project(),
                 next_blocks,
                 false,
                 flags,
@@ -599,7 +603,7 @@ fn generate_if_else(
                                 id.clone(),
                                 blocks,
                                 context,
-                                &context.target()?.project(),
+                                &context.target().project(),
                                 next_blocks,
                                 true,
                                 flags,
@@ -640,7 +644,7 @@ fn generate_if_else(
                 None,
                 context.clone(),
                 opcode,
-                &context.target()?.project(),
+                &context.target().project(),
                 false,
             )?
         };
@@ -655,7 +659,7 @@ fn generate_if_else(
             if_block.1,
             blocks,
             context,
-            &context.target()?.project(),
+            &context.target().project(),
             NextBlocks::new(false),
             false,
             flags,
@@ -666,7 +670,7 @@ fn generate_if_else(
                 else_block_id,
                 blocks,
                 context,
-                &context.target()?.project(),
+                &context.target().project(),
                 NextBlocks::new(false),
                 false,
                 flags,
@@ -676,7 +680,7 @@ fn generate_if_else(
                 None,
                 context.clone(),
                 vec![],
-                &context.target()?.project(),
+                &context.target().project(),
                 false,
             )?
         };
@@ -719,19 +723,11 @@ fn from_normal_block(
                         BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
                         BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
                             debug: context.debug,
-                            target_idx: context
-                                .target
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Target>"))?
-                                .index(),
+                            target_idx: context.target().index(),
                         })],
                         BlockOpcode::looks_think => vec![IrOpcode::looks_think(LooksThinkFields {
                             debug: context.debug,
-                            target_idx: context
-                                .target
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Target>"))?
-                                .index(),
+                            target_idx: context.target().index(),
                         })],
                         BlockOpcode::operator_join => vec![IrOpcode::operator_join],
                         BlockOpcode::operator_length => vec![IrOpcode::operator_length],
@@ -761,14 +757,11 @@ fn from_normal_block(
                                     "invalid project.json - null variable id for VARIABLE field"
                                 )
                             })?;
-                            let target = context
-                                .target
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
+                            let target = context.target();
                             let variable = if let Some(var) = target.variables().get(&id) {
                                 var.clone()
                             } else if let Some(var) = context
-                                .target()?
+                                .target()
                                 .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
@@ -803,14 +796,11 @@ fn from_normal_block(
                                     "invalid project.json - null variable id for VARIABLE field"
                                 )
                             })?;
-                            let target = context
-                                .target
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
+                            let target = context.target();
                             let variable = if let Some(var) = target.variables().get(&id) {
                                 var.clone()
                             } else if let Some(var) = context
-                                .target()?
+                                .target()
                                 .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
@@ -852,14 +842,11 @@ fn from_normal_block(
                                     "invalid project.json - null variable id for VARIABLE field"
                                 )
                             })?;
-                            let target = context
-                                .target
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
+                            let target = context.target();
                             let variable = if let Some(var) = target.variables().get(&id) {
                                 var.clone()
                             } else if let Some(var) = context
-                                .target()?
+                                .target()
                                 .project()
                                 .upgrade()
                                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
@@ -992,7 +979,7 @@ fn from_normal_block(
                                 block_info,
                                 blocks,
                                 context,
-                                &context.target()?.project(),
+                                &context.target().project(),
                                 flags,
                             )?;
                             let first_condition_instructions = None;
@@ -1012,10 +999,7 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::procedures_call => {
-                            let target = context
-                                .target
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Target>"))?;
+                            let target = context.target();
                             let procs = target.procedures()?;
                             let serde_json::Value::String(proccode) = block_info
                                 .mutation
@@ -1045,6 +1029,38 @@ fn from_normal_block(
                         }
                         BlockOpcode::argument_reporter_string_number => {
                             procedure_argument(ProcArgType::StringNumber, block_info, context)?
+                        }
+                        BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+                        BlockOpcode::looks_costume => {
+                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
+                                block_info.fields.get("COSTUME").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field COSTUME"
+                                    )
+                                })?;
+                            let sb3::VarVal::String(name) = val.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null costume name for COSTUME field"
+                                )
+                            })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - COSTUME field is not of type String"
+                                );
+                            };
+                            let index = context
+                                .target()
+                                .costumes()
+                                .iter()
+                                .position(|costume| costume.name == name)
+                                .ok_or_else(|| {
+                                    make_hq_bad_proj!("missing costume with name {}", name)
+                                })?;
+                            vec![IrOpcode::hq_integer(HqIntegerFields(
+                                index
+                                    .try_into()
+                                    .map_err(|_| make_hq_bug!("costume index out of bounds"))?,
+                            ))]
                         }
                         other => hq_todo!("unimplemented block: {:?}", other),
                     },
@@ -1249,14 +1265,11 @@ fn from_special_block(
             match ty {
                 11 => hq_todo!("broadcast input"),
                 12 => {
-                    let target = context
-                        .target
-                        .upgrade()
-                        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
+                    let target = context.target();
                     let variable = if let Some(var) = target.variables().get(id) {
                         var.clone()
                     } else if let Some(var) = context
-                        .target()?
+                        .target()
                         .project()
                         .upgrade()
                         .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?

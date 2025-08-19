@@ -47,11 +47,8 @@ If the block *can* be reduced to simpler steps, only carry out steps 3 and 4 abo
 
 |    name       |                           number of bytes                            | optional? | description                                                                                                                                                                                                                                                                                                        |
 | :-----------: | :------------------------------------------------------------------: | :-------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| redraw_requested |                                 4                                  |    no     | if a redraw has been requested or not                                                                                                                                                                                                                                                                            |
-| thread_num | 4 | no | the number of currently running threads |
-| vars | 16 \* number of global & local variables | yes | see [variables](#variables) |
-| sprite_info | 80 \* number of sprites (i.e. `target num - 1`) | yes | see [sprite info](#sprite-info)
-| threads | 4 \* thread_num | no | imdices of the next step funcs of currently running threads |
+| sprite_info | 80 \* number of sprites (i.e. `target num - 1`) | yes | see [src/wasm/sprite.rs](./src/wasm/sprite.rs)
+| threads | 4 \* thread_num | present iff using the CallIndirect scheduler | indices of the next step funcs of currently running threads |
 <!--|    pen        |                       360 \* 480 \* 4 = 691200                       |    yes    | present if pen is used; the pen layer: 4 bytes for each rgba pixel, from left to right, top to bottom                                                                                                                                                                                                              |
 | spriteData    |                      43(?) \* number of sprites                      |    yes    | for each sprite (**not target**), 4 bytes each (1 f32 each) for: x, y, size, direction, costume number, pitch, pan,layer number; plus 1 byte each for: colour effect, ghost effect, mosaic effect, whirl effect, pixelate effect, fisheye effect, brightness effect, volume, visibility, rotation style, draggable |
 | stageData     |                                  8                                   |    no     | 4 bytes each for: backdrop number; plus 1 byte each for: volume, video state, tempo, video transparency                                                                                                                                                                                                            |
@@ -59,42 +56,7 @@ If the block *can* be reduced to simpler steps, only carry out steps 3 and 4 abo
 -->
 <!--| cloneVars     | 300 \* 12 \* max amount of local variables in any one sprite |    yes    | if clones can be present, local variables for those clones                                                                                                                                                                                                                                                         |
 -->
-### Sprite info
 
-| byte | type | name | description |
-| :--: | :--: | :--: | :---------: |
-| 0-7  | f64  |  x   | x pos       |
-| 8-15  | f64 |  y   | y pos       |
-| 16-19 | f32 | pen_color | hue of pen (0-100) |
-| 20-23 | f32 | pen_saturation | saturation of pen (0-100) |
-| 24-27 | f32 | pen_brightness | value of pen (0-100) |
-| 28-31 | f32 | pen_transparency | transparency of pen (0-100) |
-| 32-47 | f32(x4) | pen_color4f | rgba color of pen [(0-1)x4] |
-| 48-55 | f64 | pen_size | pen radius |
-| 56 | i8 | pen_down | `1` if pen down else `0` |
-| 57 | i8 | visible | `1` if sprite is visible else `0` |
-| 58-59 | - | padding | reserved |
-| 60-63 | i32 | costume | the current costume number, 0-indexed |
-| 64-71 | f64 | size | sprite size |
-| 72-79 | f64 | rotation | sprite rotation, in scratch angles (0 = up, 90 = right) |
-<!--| 56-57 | ?   | padding | padding |--> 
-
-### Variables
-
-| byte | description                          |
-| :--: | :-----------------------------------: |
-| 0-3  | identifies the [type](#variable-types) of the variable  |
-| 4-7 | padding
-| 8-15 | identifies the value of the variable |
-
-#### Variable types
-
-| value |            type           | variable value type | value description                                                         |
-| :---: | :-----------------------: | :-----------------: | :-----------------------------------------------------------------------: |
-| 0x00  |           float64         |        `f64`        |                            a float                               |
-| 0x01  |           bool64          |        `i64`        |   an integer - only the least significant bit is used   |
-| 0x02  | externref string (64 bit) |        `i64`        | wrapped to a 32 bit pointer to an `externref` value in the `anyref` table |
-| 0x03 | int64 | `i64` | a 64-bit integer |
 
 ### Memory layout guarantees
 

@@ -2,6 +2,7 @@ use super::proc::{procs_from_target, ProcMap};
 use super::variable::{variables_from_target, TargetVars};
 use super::{Step, Target, Thread};
 use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
+use crate::ir::target::IrCostume;
 use crate::ir::{used_vars, PartialStep, RcVar, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
@@ -70,6 +71,17 @@ impl IrProject {
                     variables_from_target(target)
                 };
                 let procedures = RefCell::new(ProcMap::new());
+                let costumes = target.costumes
+                    .iter()
+                    .map(|costume| {
+                        IrCostume {
+                            name: costume.name.clone(),
+                            data_format: costume.data_format,
+                            md5ext: costume.md5ext.clone(),
+                            //data: load_asset(costume.md5ext.as_str()),
+                        }
+                    })
+                    .collect();
                 let ir_target = Rc::new(Target::new(
                     target.is_stage,
                     variables,
@@ -78,6 +90,7 @@ impl IrProject {
                     index
                         .try_into()
                         .map_err(|_| make_hq_bug!("target index out of bounds"))?,
+                        costumes
                 ));
                 procs_from_target(target, &ir_target)?;
                 let blocks = &target.blocks;
@@ -87,7 +100,7 @@ impl IrProject {
                         let thread = Thread::try_from_top_block(
                             block,
                             blocks,
-                            &Rc::downgrade(&ir_target),
+                            &Rc::clone(&ir_target),
                             &Rc::downgrade(&project),
                             target.comments.clone().iter().any(|(_id, comment)| {
                                 matches!(comment.block_id.clone(), Some(d) if &d == id)
@@ -123,11 +136,11 @@ impl IrProject {
             fixup_proc_types(target, &global_vars, &target_vars)?;
         }
         for step in project.steps().try_borrow()?.iter() {
-            let target_vars = used_vars(step.context().target()?.variables());
+            let target_vars = used_vars(step.context().target().variables());
             fixup_proc_calls(step, &global_vars, &target_vars)?;
         }
         for step in project.inlined_steps().try_borrow()?.iter() {
-            let target_vars = used_vars(step.context().target()?.variables());
+            let target_vars = used_vars(step.context().target().variables());
             fixup_proc_calls(step, &global_vars, &target_vars)?;
         }
         Ok(project)

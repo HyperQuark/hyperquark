@@ -120,7 +120,7 @@ Promise.all(
       r1 => Promise.all(
         target.costumes.map(
           ({ md5ext, dataFormat }) => new Promise(
-            r2 => load_asset(md5ext).then(data => r2([md5ext, [dataFormat, data]]))
+            r2 => load_asset(md5ext).then(data => r2([md5ext, { dataFormat, data }]))
           )
         )
       ).then(r1)

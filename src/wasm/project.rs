@@ -1,6 +1,6 @@
 use super::flags::Scheduler;
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries, TableOptions};
-use crate::ir::{Event, IrProject, Step, Type as IrType};
+use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{StepFunc, WasmFlags};
 use itertools::Itertools;
@@ -262,8 +262,11 @@ impl WasmProject {
                     max: None,
                     // default to noop, just so the module validates.
                     init: Some(ConstExpr::ref_func(self.imported_func_count()?)),
-                }),
-            Scheduler::CallIndirect => hq_bug!("tried to access threads_table_index outside of `WasmProject::Finish` when the scheduler is not TypedFuncRef")
+                },
+            ),
+            Scheduler::CallIndirect => hq_bug!(
+                "tried to access threads_table_index outside of `WasmProject::Finish` when the scheduler is not TypedFuncRef"
+            ),
         }
     }
 
@@ -279,9 +282,12 @@ impl WasmProject {
                     element_type: RefType::FUNCREF,
                     min: 0,
                     max: None,
-                    init: None
-                }),
-            Scheduler::TypedFuncRef => hq_bug!("tried to access steps_table_index outside of `WasmProject::Finish` when the scheduler is not CallIndirect")
+                    init: None,
+                },
+            ),
+            Scheduler::TypedFuncRef => hq_bug!(
+                "tried to access steps_table_index outside of `WasmProject::Finish` when the scheduler is not CallIndirect"
+            ),
         }
     }
 
@@ -504,7 +510,18 @@ impl WasmProject {
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
         StepFunc::compile_step(
-            Step::new_empty(&Rc::downgrade(ir_project), true)?,
+            Step::new_empty(
+                &Rc::downgrade(ir_project),
+                true,
+                Rc::new(IrTarget::new(
+                    false,
+                    BTreeMap::default(),
+                    Weak::new(),
+                    RefCell::new(BTreeMap::default()),
+                    0,
+                    Box::new([]),
+                )),
+            )?,
             &steps,
             Rc::clone(&registries),
             flags,
@@ -552,7 +569,7 @@ mod tests {
     use super::{Registries, WasmProject};
     use crate::ir::{IrProject, Step};
     use crate::prelude::*;
-    use crate::wasm::{flags::all_wasm_features, ExternalEnvironment, StepFunc, WasmFlags};
+    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags, flags::all_wasm_features};
 
     #[test]
     fn empty_project_is_valid_wasm() {
@@ -560,7 +577,19 @@ mod tests {
         let project = Rc::new(IrProject::new(BTreeMap::default()));
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
-            Step::new_empty(&Rc::downgrade(&project), true).unwrap(),
+            Step::new_empty(
+                &Rc::downgrade(&project),
+                true,
+                Rc::new(IrTarget::new(
+                    false,
+                    BTreeMap::default(),
+                    Weak::new(),
+                    RefCell::new(BTreeMap::default()),
+                    0,
+                    Box::new([]),
+                )),
+            )
+            .unwrap(),
             &steps,
             Rc::clone(&registries),
             WasmFlags::new(all_wasm_features()),
