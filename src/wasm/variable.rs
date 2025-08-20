@@ -17,10 +17,11 @@ impl VariableRegistry {
 
     pub fn register(&self, var: &RcVar) -> HQResult<u32> {
         self.globals().register(
-            format!("__rcvar_{:p}", Rc::as_ptr(&var.0)).into(),
+            // format!("__rcvar_{:p}", Rc::as_ptr(&var.0)).into(),
+            format!("__rcvar_{}", var.id()).into(),
             (
-                WasmProject::ir_type_to_wasm(*var.0.possible_types())?,
-                match var.0.possible_types().base_type() {
+                WasmProject::ir_type_to_wasm(*var.possible_types())?,
+                match var.possible_types().base_type() {
                     Some(IrType::Float) => ConstExpr::f64_const(0.0),
                     Some(IrType::QuasiInt) => ConstExpr::i32_const(0),
                     Some(IrType::String) => ConstExpr::ref_null(HeapType::EXTERN),

@@ -1,20 +1,57 @@
 use super::super::prelude::*;
 use crate::ir::Step;
 use crate::wasm::TableOptions;
-use crate::wasm::{flags::Scheduler, GlobalExportable, GlobalMutable, StepFunc};
+use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, flags::Scheduler};
 use wasm_encoder::{ConstExpr, HeapType, MemArg};
 
 #[derive(Clone, Debug)]
 pub enum YieldMode {
-    Tail(Rc<Step>),
     Inline(Rc<Step>),
     Schedule(Weak<Step>),
     None,
 }
 
+impl fmt::Display for YieldMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "mode": {:?}"#,
+            match self {
+                Self::Inline(_) => "inline",
+                Self::Schedule(_) => "schedule",
+                Self::None => "none",
+            }
+        )?;
+        match self {
+            Self::Inline(step) => {
+                write!(f, r#", "step": {:?}"#, step.id())?;
+            }
+            Self::Schedule(step) => {
+                write!(
+                    f,
+                    r#", "step": {:?}"#,
+                    match step.upgrade() {
+                        Some(ref rcstep) => rcstep.id(),
+                        None => return Err(fmt::Error),
+                    }
+                )?;
+            }
+            Self::None => (),
+        }
+        write!(f, "}}")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Fields {
     pub mode: YieldMode,
+}
+
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.mode, f)
+    }
 }
 
 pub fn wasm(
@@ -92,21 +129,30 @@ pub fn wasm(
                 )?;
                 wasm![
                     LocalGet(0),
-                    GlobalGet(noop_global),
+                    #LazyGlobalGet(noop_global),
                     TableSet(threads_table),
-                    GlobalGet(threads_count),
+                    #LazyGlobalGet(threads_count),
                     I32Const(1),
                     I32Sub,
-                    GlobalSet(threads_count),
+                    #LazyGlobalSet(threads_count),
                     Return
                 ]
             }
         },
-        YieldMode::Inline(step) => func.compile_inner_step(step)?,
+        YieldMode::Inline(step) => {
+            hq_assert!(
+                !step.used_non_inline(),
+                "inlined step should not be marked as used non-inline"
+            );
+            func.compile_inner_step(step)?
+        }
         YieldMode::Schedule(weak_step) => {
             let step = Weak::upgrade(weak_step)
                 .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
-            step.make_used_non_inline()?;
+            hq_assert!(
+                step.used_non_inline(),
+                "scheduled step should be marked as used non-inline"
+            );
             match func.flags().scheduler {
                 Scheduler::CallIndirect => {
                     wasm![
@@ -145,16 +191,15 @@ pub fn wasm(
                 }
             }
         }
-        YieldMode::Tail(_) => hq_todo!(),
     })
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
-    Ok(None)
+pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
+    Ok(ReturnType::None)
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

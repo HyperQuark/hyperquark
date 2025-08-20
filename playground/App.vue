@@ -9,7 +9,7 @@ const hq_version = import.meta.env.VITE_HQ_VERSION_NAME;
 </script>
 
 <template>
-  <div v-if="!is_prod" id="dev-banner">This is a development preview of HyperQuark. Please find the most recent stable version at <a href="https://hyperquark.edgecompute.app">https://hyperquark.edgecompute.app</a></div>.
+  <div v-if="!is_prod" id="dev-banner">This is a development preview of HyperQuark. Please find the most recent stable version at <a href="https://hyperquark.edgecompute.app">https://hyperquark.edgecompute.app</a></div>
   <div class="wrapper">
     <nav>
       <RouterLink to="/"><img alt="HyperQuark logo" class="logo" src="/logo.png" />HyperQuark <span v-if="!!hq_version" id="hq-version">{{ hq_version }}</span></RouterLink>

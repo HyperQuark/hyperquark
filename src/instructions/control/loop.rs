@@ -12,6 +12,24 @@ pub struct Fields {
     pub flip_if: bool,
 }
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        if let Some(ref step) = self.first_condition {
+            write!(f, r#""first_condition": {step},"#)?;
+        }
+        write!(
+            f,
+            r#"
+        "condition": {},
+        "body": {},
+        "flip_if": {}
+    }}"#,
+            self.condition, self.body, self.flip_if
+        )
+    }
+}
+
 pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
@@ -47,12 +65,12 @@ pub fn wasm(
         .collect())
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
-    Ok(None)
+pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
+    Ok(ReturnType::None)
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

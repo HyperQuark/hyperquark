@@ -20,59 +20,55 @@ fn main() {
     let mut paths = Vec::new();
     let mut ts_paths = Vec::new();
     visit_dirs(Path::new(base_dir), &mut |entry| {
-        if let Some(ext) = entry.path().extension() {
-            if ext == "rs" {
-                if let Ok(relative_path) = entry.path().strip_prefix(base_dir) {
-                    let components: Vec<_> = relative_path
-                        .components()
-                        .filter_map(|comp| comp.as_os_str().to_str())
-                        .collect();
+        if let Some(ext) = entry.path().extension()
+            && ext == "rs"
+            && let Ok(relative_path) = entry.path().strip_prefix(base_dir)
+        {
+            let components: Vec<_> = relative_path
+                .components()
+                .filter_map(|comp| comp.as_os_str().to_str())
+                .collect();
 
-                    if components.len() == 2 {
-                        let category = components[0];
-                        let opcode = components[1].trim_end_matches(".rs");
-                        let contents =
-                            fs::read_to_string(format!("src/instructions/{category}/{opcode}.rs"))
-                                .unwrap();
-                        let fields = contents.contains("pub struct Fields");
-                        let fields_name =
-                            format!("{category}_{opcode}_fields").to_case(Case::Pascal);
-                        paths.push((
-                            format!(
-                                "{}::{}",
-                                category,
-                                match opcode {
-                                    "yield" | "loop" => format!("r#{opcode}"),
-                                    _ => opcode.to_string(),
-                                }
-                            ),
-                            format!("{category}_{opcode}",),
-                            fields,
-                            fields_name,
-                        ));
-                    }
-                }
+            if components.len() == 2 {
+                let category = components[0];
+                let opcode = components[1].trim_end_matches(".rs");
+                let contents =
+                    fs::read_to_string(format!("src/instructions/{category}/{opcode}.rs")).unwrap();
+                let fields = contents.contains("pub struct Fields");
+                let fields_name = format!("{category}_{opcode}_fields").to_case(Case::Pascal);
+                paths.push((
+                    format!(
+                        "{}::{}",
+                        category,
+                        match opcode {
+                            "yield" | "loop" => format!("r#{opcode}"),
+                            _ => opcode.to_string(),
+                        }
+                    ),
+                    format!("{category}_{opcode}",),
+                    fields,
+                    fields_name,
+                ));
             }
         }
     });
     visit_dirs(Path::new("js"), &mut |entry| {
-        if let Some(ext) = entry.path().extension() {
-            if ext == "ts" {
-                if let Ok(relative_path) = entry.path().strip_prefix("js") {
-                    let components: Vec<_> = relative_path
-                        .components()
-                        .filter_map(|comp| comp.as_os_str().to_str())
-                        .collect();
+        if let Some(ext) = entry.path().extension()
+            && ext == "ts"
+            && let Ok(relative_path) = entry.path().strip_prefix("js")
+        {
+            let components: Vec<_> = relative_path
+                .components()
+                .filter_map(|comp| comp.as_os_str().to_str())
+                .collect();
 
-                    if components.len() == 2 {
-                        let category = components[0];
-                        if category == "compiler" || category == "no-compiler" {
-                            return;
-                        }
-                        let func = components[1].trim_end_matches(".ts");
-                        ts_paths.push((category.to_string(), func.to_string()));
-                    }
+            if components.len() == 2 {
+                let category = components[0];
+                if category == "compiler" || category == "no-compiler" {
+                    return;
                 }
+                let func = components[1].trim_end_matches(".ts");
+                ts_paths.push((category.to_string(), func.to_string()));
             }
         }
     });
@@ -118,9 +114,10 @@ export const imports = {{
     fs::write(
         &dest_path_rs,
         format!(
-            "
+            r##"
+use core::fmt;
 /// A list of all instructions.
-#[expect(non_camel_case_types, reason = \"block opcode are snake_case\")]
+#[expect(non_camel_case_types, reason = "block opcode are snake_case")]
 #[derive(Clone, Debug)]
 pub enum IrOpcode {{
     {}
@@ -128,7 +125,7 @@ pub enum IrOpcode {{
 
 impl IrOpcode {{
     /// maps an opcode to its acceptable input types
-    pub fn acceptable_inputs(&self) -> Rc<[crate::ir::Type]> {{
+    pub fn acceptable_inputs(&self) -> HQResult<Rc<[crate::ir::Type]>> {{
         match self {{
             {}
         }}
@@ -142,7 +139,7 @@ impl IrOpcode {{
     }}
     
     /// maps an opcode to its output type
-    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<Option<crate::ir::Type>> {{
+    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType> {{
         match self {{
             {}
         }}
@@ -156,14 +153,28 @@ impl IrOpcode {{
     }}
 }}
 pub mod fields {{
-    #![expect(clippy::wildcard_imports, reason = \"we don't know what we need to import\")]
+    #![allow(clippy::wildcard_imports, reason = "we don't know what we need to import")]
 
     use super::*;
 
     {}
 }}
 pub use fields::*;
-        ",
+
+impl fmt::Display for IrOpcode {{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {{
+        #![allow(clippy::match_same_arms, reason = "auto-generated file")]
+        write!(f, r#"{{{{
+            "opcode": "{{}}""#, match self {{
+                {}
+            }})?;
+        match self {{
+            {}
+        }}
+        write!(f, "}}}}")
+    }}
+}}
+        "##,
             paths.iter().map(|(_, id, fields, fields_name)| {
                 if *fields {
                     format!("{}({})", id.clone(), fields_name.clone())
@@ -203,20 +214,34 @@ pub use fields::*;
             .map(|(path, _, _, fields_name)|
                 format!("pub use {path}::Fields as {fields_name};")
             ).collect::<Vec<_>>().join("\n\t"),
+            paths.iter().map(|(_, id, fields, _)| {
+                if *fields {
+                    format!(r#"Self::{id}(_) => "{id}","#)
+                } else {
+                    format!(r#"Self::{id} => "{id}","#)
+                }
+            }).collect::<Vec<_>>().join("\n\t\t\t\t"),
+            paths.iter().map(|(_, id, fields, _)| {
+                if *fields {
+                    format!(r##"Self::{id}(fields) => {{write!(f, r#", "fields": {{fields}}"#)?;}}"##)
+                } else {
+                    format!("Self::{id} => (),")
+                }
+            }).collect::<Vec<_>>().join("\n\t\t\t\t"),
     ))
     .unwrap();
 }
 
 fn visit_dirs(dir: &Path, cb: &mut dyn FnMut(&fs::DirEntry)) {
-    if dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    visit_dirs(&path, cb);
-                } else {
-                    cb(&entry);
-                }
+    if dir.is_dir()
+        && let Ok(entries) = fs::read_dir(dir)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                visit_dirs(&path, cb);
+            } else {
+                cb(&entry);
             }
         }
     }

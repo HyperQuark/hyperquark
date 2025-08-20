@@ -2,12 +2,12 @@ use super::blocks::NextBlocks;
 use super::{Event, IrProject, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap, BlockOpcode};
+use crate::wasm::WasmFlags;
 
 #[derive(Clone, Debug)]
 pub struct Thread {
     event: Event,
     first_step: Rc<Step>,
-    target: Weak<Target>,
 }
 
 impl Thread {
@@ -19,18 +19,15 @@ impl Thread {
         &self.first_step
     }
 
-    pub fn target(&self) -> Weak<Target> {
-        Weak::clone(&self.target)
-    }
-
     /// tries to construct a thread from a top-level block.
     /// Returns Ok(None) if the top-level block is not a valid event or if there is no next block.
     pub fn try_from_top_block(
         block: &Block,
         blocks: &BlockMap,
-        target: Weak<Target>,
+        target: &Rc<Target>,
         project: &Weak<IrProject>,
         debug: bool,
+        flags: &WasmFlags,
     ) -> HQResult<Option<Self>> {
         let Some(block_info) = block.block_info() else {
             return Ok(None);
@@ -60,18 +57,30 @@ impl Thread {
             next_id.clone(),
             blocks,
             &StepContext {
-                target: Weak::clone(&target),
+                target: Rc::clone(target),
                 proc_context: None,
                 warp: false, // steps from top blocks are never warped
                 debug,
             },
             project,
             NextBlocks::new(true),
+            true,
+            flags,
         )?;
-        Ok(Some(Self {
-            event,
-            first_step,
-            target,
-        }))
+        Ok(Some(Self { event, first_step }))
+    }
+}
+
+impl fmt::Display for Thread {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let event = self.event();
+        let first_step = self.first_step().id();
+        write!(
+            f,
+            r#"{{
+            "event": "{event:?}",
+            "first_step": "{first_step}",
+        }}"#
+        )
     }
 }

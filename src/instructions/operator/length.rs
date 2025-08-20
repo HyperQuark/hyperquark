@@ -9,12 +9,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     Ok(wasm![Call(func_index)])
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::String])
+pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([IrType::String]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
-    Ok(Some(IrType::IntPos))
+pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
+    Ok(Singleton(IrType::IntPos))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

@@ -190,12 +190,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     })
 }
 
-pub fn acceptable_inputs() -> Rc<[IrType]> {
-    Rc::new([IrType::Any, IrType::Any])
+pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([IrType::Any, IrType::Any]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<Option<IrType>> {
-    Ok(Some(IrType::Boolean))
+pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
+    Ok(Singleton(IrType::Boolean))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

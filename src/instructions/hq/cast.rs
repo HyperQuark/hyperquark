@@ -3,6 +3,18 @@ use super::super::prelude::*;
 #[derive(Clone, Debug)]
 pub struct Fields(pub IrType);
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "to": "{}"
+    }}"#,
+            self.0
+        )
+    }
+}
+
 fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
     let to_base_types = to.base_types().collect::<Vec<_>>();
     hq_assert!(!to_base_types.is_empty());
@@ -88,19 +100,73 @@ pub fn wasm(
     })
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([IrType::Number.or(IrType::String).or(IrType::Boolean)])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([IrType::Number
+        .or(IrType::String)
+        .or(IrType::Boolean)]))
 }
 
-pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(
+pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<ReturnType> {
+    crate::log!("{:?}", inputs[0]);
+    Ok(Singleton(
         inputs[0]
             .base_types()
-            .map(|from| best_cast_candidate(from, to))
+            .map(|from| Ok((from, best_cast_candidate(from, to)?)))
+            .collect::<HQResult<Vec<_>>>()?
+            .into_iter()
+            .map(|(from, to_candidate)| {
+                Ok(
+                    match (
+                        from.base_type()
+                            .ok_or_else(|| make_hq_bug!("type has no base type"))?,
+                        to_candidate,
+                    ) {
+                        (IrType::String, IrType::Float) => IrType::none_if_false(
+                            from.contains(IrType::StringNumber),
+                            IrType::FloatNotNan,
+                        )
+                        .or(IrType::none_if_false(
+                            from.intersects(IrType::StringBoolean.or(IrType::StringNan)),
+                            IrType::FloatNan,
+                        )),
+                        (IrType::String, IrType::QuasiInt) => IrType::QuasiInt,
+                        (IrType::Float, IrType::String) => IrType::none_if_false(
+                            from.contains(IrType::FloatNan),
+                            IrType::StringNan,
+                        )
+                        .or(IrType::none_if_false(
+                            from.intersects(IrType::FloatNotNan),
+                            IrType::StringNumber,
+                        )),
+                        (IrType::Float, IrType::QuasiInt) => {
+                            IrType::none_if_false(from.maybe_negative(), IrType::IntNeg)
+                                .or(IrType::none_if_false(from.maybe_positive(), IrType::IntPos))
+                                .or(IrType::none_if_false(
+                                    from.maybe_zero() || from.maybe_nan(),
+                                    IrType::IntZero,
+                                ))
+                        }
+                        (IrType::QuasiInt, IrType::Float) => {
+                            IrType::none_if_false(from.maybe_negative(), IrType::FloatNegInt)
+                                .or(IrType::none_if_false(
+                                    from.maybe_positive(),
+                                    IrType::FloatPosInt,
+                                ))
+                                .or(IrType::none_if_false(
+                                    from.maybe_zero(),
+                                    IrType::FloatPosZero,
+                                ))
+                        }
+                        (IrType::QuasiInt, IrType::String) => IrType::StringNumber,
+                        (other_from, other_to) if other_to.contains(other_from) => other_from,
+                        _ => hq_bug!("bad cast: {} -> {}", from, to),
+                    },
+                )
+            })
             .collect::<HQResult<Vec<_>>>()?
             .into_iter()
             .reduce(IrType::or)
-            .ok_or_else(|| make_hq_bug!("input was empty"))?,
+            .ok_or_else(|| make_hq_bug!("input type was empty"))?,
     ))
 }
 

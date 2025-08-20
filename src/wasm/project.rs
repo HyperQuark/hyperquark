@@ -1,6 +1,6 @@
 use super::flags::Scheduler;
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries, TableOptions};
-use crate::ir::{Event, IrProject, Step, Type as IrType};
+use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::{StepFunc, WasmFlags};
 use itertools::Itertools;
@@ -26,7 +26,11 @@ pub struct WasmProject {
 }
 
 impl WasmProject {
-    #[expect(dead_code, reason = "pub item may be used in the future")]
+    #![expect(
+        clippy::allow_attributes,
+        reason = "can't use expect because false in test mode"
+    )]
+    #[allow(dead_code, reason = "not dead in test mode")]
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         Self {
             flags,
@@ -86,16 +90,13 @@ impl WasmProject {
             page_size_log2: None,
         });
 
-        let strings = self.registries().strings().clone().finish();
+        self.registries().strings().clone().finish(&mut imports);
 
         self.registries().tables().register_override::<usize>(
             "strings".into(),
             TableOptions {
                 element_type: RefType::EXTERNREF,
-                min: strings
-                    .len()
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("strings length out of bounds"))?,
+                min: 0,
                 // TODO: use js string imports for preknown strings
                 max: None,
                 init: None,
@@ -112,6 +113,7 @@ impl WasmProject {
                 &mut codes,
                 self.steps(),
                 self.imported_func_count()?,
+                self.imported_global_count()?,
             )?;
         }
 
@@ -166,10 +168,12 @@ impl WasmProject {
         exports.export("memory", ExportKind::Memory, 0);
         exports.export("noop", ExportKind::Func, self.imported_func_count()?);
 
-        self.registries()
-            .globals()
-            .clone()
-            .finish(&imports, &mut globals, &mut exports);
+        self.registries().globals().clone().finish(
+            &imports,
+            &mut globals,
+            &mut exports,
+            self.imported_global_count()?,
+        );
 
         module
             .section(&types)
@@ -189,7 +193,6 @@ impl WasmProject {
 
         Ok(FinishedWasm {
             wasm_bytes: wasm_bytes.into_boxed_slice(),
-            strings,
             target_names: self
                 .target_names
                 .into_iter()
@@ -206,6 +209,16 @@ impl WasmProject {
             .len()
             .try_into()
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
+    }
+
+    fn imported_global_count(&self) -> HQResult<u32> {
+        self.registries()
+            .strings()
+            .registry()
+            .try_borrow()?
+            .len()
+            .try_into()
+            .map_err(|_| make_hq_bug!("string registry len out of bounds"))
     }
 
     fn unreachable_dbg_func(
@@ -235,7 +248,7 @@ impl WasmProject {
     fn threads_table_index<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         let step_func_ty = self
             .registries()
@@ -253,15 +266,18 @@ impl WasmProject {
                     max: None,
                     // default to noop, just so the module validates.
                     init: Some(ConstExpr::ref_func(self.imported_func_count()?)),
-                }),
-            Scheduler::CallIndirect => hq_bug!("tried to access threads_table_index outside of `WasmProject::Finish` when the scheduler is not TypedFuncRef")
+                },
+            ),
+            Scheduler::CallIndirect => hq_bug!(
+                "tried to access threads_table_index outside of `WasmProject::Finish` when the scheduler is not TypedFuncRef"
+            ),
         }
     }
 
     fn steps_table_index<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: core::fmt::Debug,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         match self.flags.scheduler {
             Scheduler::CallIndirect => self.registries().tables().register(
@@ -270,9 +286,12 @@ impl WasmProject {
                     element_type: RefType::FUNCREF,
                     min: 0,
                     max: None,
-                    init: None
-                }),
-            Scheduler::TypedFuncRef => hq_bug!("tried to access steps_table_index outside of `WasmProject::Finish` when the scheduler is not CallIndirect")
+                    init: None,
+                },
+            ),
+            Scheduler::TypedFuncRef => hq_bug!(
+                "tried to access steps_table_index outside of `WasmProject::Finish` when the scheduler is not CallIndirect"
+            ),
         }
     }
 
@@ -316,7 +335,7 @@ impl WasmProject {
                         Drop,
                     ],
                     Scheduler::CallIndirect => wasm![
-                        GlobalGet(threads_count),
+                        #LazyGlobalGet(threads_count),
                         I32Const(4),
                         I32Mul,
                         I32Const(
@@ -335,18 +354,26 @@ impl WasmProject {
             .collect::<HQResult<Vec<_>>>()?;
 
         for instruction in instrs {
-            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?)?);
+            func.instruction(&instruction.eval(
+                self.steps(),
+                self.imported_func_count()?,
+                self.imported_global_count()?,
+            )?);
         }
         for instruction in wasm![
-            GlobalGet(threads_count),
+            #LazyGlobalGet(threads_count),
             I32Const(
                 i32::try_from(indices.len())
                     .map_err(|_| make_hq_bug!("indices len out of bounds"))?
             ),
             I32Add,
-            GlobalSet(threads_count)
+            #LazyGlobalSet(threads_count)
         ] {
-            func.instruction(&instruction.eval(self.steps(), self.imported_func_count()?)?);
+            func.instruction(&instruction.eval(
+                self.steps(),
+                self.imported_func_count()?,
+                self.imported_global_count()?,
+            )?);
         }
         func.instruction(&Instruction::End);
 
@@ -412,7 +439,7 @@ impl WasmProject {
         let instructions = match self.flags.scheduler {
             crate::wasm::flags::Scheduler::CallIndirect => wasm![
                 // For call_indirect: read step indices from linear memory and call_indirect
-                GlobalGet(threads_count),
+                #LazyGlobalGet(threads_count),
                 LocalTee(1),
                 I32Eqz,
                 BrIf(0),
@@ -460,7 +487,11 @@ impl WasmProject {
             ],
         };
         for instr in instructions {
-            tick_func.instruction(&instr.eval(self.steps(), self.imported_func_count()?)?);
+            tick_func.instruction(&instr.eval(
+                self.steps(),
+                self.imported_func_count()?,
+                self.imported_global_count()?,
+            )?);
         }
         tick_func.instruction(&Instruction::End);
         funcs.function(
@@ -483,7 +514,18 @@ impl WasmProject {
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
         StepFunc::compile_step(
-            Rc::new(Step::new_empty()),
+            Step::new_empty(
+                &Rc::downgrade(ir_project),
+                true,
+                Rc::new(IrTarget::new(
+                    false,
+                    BTreeMap::default(),
+                    Weak::new(),
+                    RefCell::new(BTreeMap::default()),
+                    0,
+                    Box::new([]),
+                )),
+            )?,
             &steps,
             Rc::clone(&registries),
             flags,
@@ -491,16 +533,6 @@ impl WasmProject {
         // compile every step
         for step in ir_project.steps().try_borrow()?.iter() {
             StepFunc::compile_step(Rc::clone(step), &steps, Rc::clone(&registries), flags)?;
-        }
-        // mark first steps as used in a non-inline context
-        for thread in ir_project.threads().try_borrow()?.iter() {
-            thread.first_step().make_used_non_inline()?;
-        }
-        // get rid of steps which aren't used in a non-inlined context
-        for step in ir_project.steps().try_borrow()?.iter() {
-            if *step.inline().try_borrow()? && !*step.used_non_inline().try_borrow()? {
-                steps.try_borrow_mut()?.swap_remove(step);
-            }
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
@@ -533,24 +565,35 @@ pub struct FinishedWasm {
     #[wasm_bindgen(getter_with_clone)]
     pub wasm_bytes: Box<[u8]>,
     #[wasm_bindgen(getter_with_clone)]
-    pub strings: Vec<String>,
-    #[wasm_bindgen(getter_with_clone)]
     pub target_names: Vec<String>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Registries, WasmProject};
-    use crate::ir::Step;
+    use crate::ir::{IrProject, Step, Target as IrTarget};
     use crate::prelude::*;
-    use crate::wasm::{flags::all_wasm_features, ExternalEnvironment, StepFunc, WasmFlags};
+    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags, flags::all_wasm_features};
 
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
+        let project = Rc::new(IrProject::new(BTreeMap::default()));
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
-            Rc::new(Step::new_empty()),
+            Step::new_empty(
+                &Rc::downgrade(&project),
+                true,
+                Rc::new(IrTarget::new(
+                    false,
+                    BTreeMap::default(),
+                    Weak::new(),
+                    RefCell::new(BTreeMap::default()),
+                    0,
+                    Box::new([]),
+                )),
+            )
+            .unwrap(),
             &steps,
             Rc::clone(&registries),
             WasmFlags::new(all_wasm_features()),

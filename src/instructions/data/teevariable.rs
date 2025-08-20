@@ -4,17 +4,37 @@ use super::super::prelude::*;
 use crate::ir::RcVar;
 
 #[derive(Debug, Clone)]
-pub struct Fields(pub RcVar);
+pub struct Fields {
+    pub var: RefCell<RcVar>,
+    pub local_read_write: RefCell<bool>,
+}
+
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "variable": {},
+        "local_read_write": {}
+    }}"#,
+            self.var.borrow(),
+            self.local_read_write.borrow()
+        )
+    }
+}
 
 pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
-    Fields(variable): &Fields,
+    Fields {
+        var,
+        local_read_write,
+    }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let t1 = inputs[0];
-    if variable.0.local() {
-        let local_index: u32 = func.local_variable(variable)?;
-        if variable.0.possible_types().is_base_type() {
+    if *local_read_write.try_borrow()? {
+        let local_index: u32 = func.local_variable(&*var.try_borrow()?)?;
+        if var.borrow().possible_types().is_base_type() {
             Ok(wasm![LocalTee(local_index)])
         } else {
             Ok(wasm![
@@ -23,29 +43,34 @@ pub fn wasm(
             ])
         }
     } else {
-        let global_index: u32 = func.registries().variables().register(variable)?;
-        if variable.0.possible_types().is_base_type() {
-            Ok(wasm![GlobalSet(global_index), GlobalGet(global_index)])
+        let global_index: u32 = func
+            .registries()
+            .variables()
+            .register(&*var.try_borrow()?)?;
+        if var.borrow().possible_types().is_base_type() {
+            Ok(wasm![#LazyGlobalSet(global_index), #LazyGlobalGet(global_index)])
         } else {
             Ok(wasm![
                 @boxed(t1),
-                GlobalSet(global_index),
-                GlobalGet(global_index)
+                #LazyGlobalSet(global_index),
+                #LazyGlobalGet(global_index)
             ])
         }
     }
 }
 
-pub fn acceptable_inputs(Fields(rcvar): &Fields) -> Rc<[IrType]> {
-    Rc::new([if rcvar.0.possible_types().is_none() {
-        IrType::Any
-    } else {
-        *rcvar.0.possible_types()
-    }])
+pub fn acceptable_inputs(Fields { var, .. }: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([
+        if var.try_borrow()?.possible_types().is_none() {
+            IrType::Any
+        } else {
+            *var.try_borrow()?.possible_types()
+        },
+    ]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields(rcvar): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(*rcvar.0.possible_types()))
+pub fn output_type(_inputs: Rc<[IrType]>, Fields { var, .. }: &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(*var.try_borrow()?.possible_types()))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
@@ -54,134 +79,125 @@ crate::instructions_test!(
     any_global;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
-                    false
-                )
-            )
-        )
-    )
+
+                ))
+            ,
+        local_read_write: RefCell::new(false),
+    }
 );
 
 crate::instructions_test!(
     float_global;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::Float,
                     crate::sb3::VarVal::Float(0.0),
-                    false
-                )
-            )
-        )
-    )
+
+                ))
+            ,
+        local_read_write: RefCell::new(false),
+    }
 );
 
 crate::instructions_test!(
     string_global;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::String,
                     crate::sb3::VarVal::String("".into()),
-                    false
-                )
-            )
-        )
-    )
+
+                ))
+            ,
+        local_read_write: RefCell::new(false),
+    }
 );
 
 crate::instructions_test!(
     int_global;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::QuasiInt,
                     crate::sb3::VarVal::Bool(true),
-                    false
-                )
-            )
-        )
-    )
+
+                ))
+            ,
+        local_read_write: RefCell::new(false),
+    }
 );
 
 crate::instructions_test!(
     any_local;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
-                    true
+
                 )
-            )
-        )
-    )
+            ),
+        local_read_write: RefCell::new(true),
+    }
 );
 
 crate::instructions_test!(
     float_local;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::Float,
                     crate::sb3::VarVal::Float(0.0),
-                    true
+
                 )
-            )
-        )
-    )
+            ),
+        local_read_write: RefCell::new(true),
+    }
 );
 
 crate::instructions_test!(
     string_local;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::String,
                     crate::sb3::VarVal::String("".into()),
-                    true
-                )
-            )
-        )
-    )
+
+
+            )),
+        local_read_write: RefCell::new(true),
+    }
 );
 
 crate::instructions_test!(
     int_local;
     data_teevariable;
     t
-    @ super::Fields(
-        super::RcVar(
-            Rc::new(
-                crate::ir::Variable::new(
+    @ super::Fields {
+        var: RefCell::new(
+                crate::ir::RcVar::new(
                     IrType::QuasiInt,
                     crate::sb3::VarVal::Bool(true),
-                    true
-                )
-            )
-        )
-    )
+
+            )),
+        local_read_write: RefCell::new(true),
+    }
 );

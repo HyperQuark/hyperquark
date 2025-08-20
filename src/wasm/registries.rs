@@ -1,6 +1,6 @@
 use super::{
-    ExternalFunctionRegistry, GlobalRegistry, StringRegistry, TableRegistry, TypeRegistry,
-    VariableRegistry,
+    ExternalFunctionRegistry, GlobalRegistry, SpriteRegistry, StringRegistry, TableRegistry,
+    TypeRegistry, VariableRegistry,
 };
 use crate::prelude::*;
 
@@ -11,6 +11,7 @@ pub struct Registries {
     tables: TableRegistry,
     globals: Rc<GlobalRegistry>,
     variables: VariableRegistry,
+    sprites: SpriteRegistry,
 }
 
 impl Default for Registries {
@@ -24,6 +25,7 @@ impl Default for Registries {
             external_functions: ExternalFunctionRegistry::default(),
             tables: TableRegistry::default(),
             types: TypeRegistry::default(),
+            sprites: SpriteRegistry::default(),
         }
     }
 }
@@ -51,5 +53,9 @@ impl Registries {
 
     pub const fn variables(&self) -> &VariableRegistry {
         &self.variables
+    }
+
+    pub const fn sprites(&self) -> &SpriteRegistry {
+        &self.sprites
     }
 }

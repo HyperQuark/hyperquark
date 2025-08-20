@@ -23,6 +23,7 @@ usage()
   echo "  -s     run wasm-opt with -Os"
   echo "  -z     run wasm-opt with -Oz"
   echo "  -v     verbose output"
+  echo "  -D     enable DWARF debuggin and panicking"
   exit 1
 }
 
@@ -41,7 +42,7 @@ set_variable()
 
 unset VITE WASM PROD;
 QUIET=1;
-while getopts 'dpVWoszvh' c
+while getopts 'dpVWoszvhD' c
 do
   case $c in
     d) set_variable PROD 0 ;;
@@ -51,6 +52,7 @@ do
     o) set_variable WOPT 0 ;;
     s) set_variable WOPT 1 ;;
     z) set_variable WOPT 2 ;;
+    D) set_variable DWARF 1 ;;
     v) unset QUIET ;;
     h|?) usage ;;
   esac
@@ -68,27 +70,36 @@ if [ -z $WOPT ]; then
     set_variable WOPT 0;
   fi
 fi
+
+if [ -z DWARF ]; then
+  if [ $PROD = "0" ]; then
+    set_variable DWARF 1;
+  else 
+    set_variable DWARF 0;
+  fi
+fi
+
 [ $VITE = "0" ] && [ $WASM = "0" ] && [ $WOPT = "0" ] && echo "exiting (nothing to build)" && exit 0
 
 if [ $WASM = "1" ]; then
   if [ $PROD = "1" ]; then
     echo "building hyperquark (compiler) for production..."
-    cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet}
+    cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} ${DWARF:+--features="compiler panic"}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/compiler
+    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/compiler ${DWARF:+--keep-debug}
     echo "building hyperquark (no compiler) for production..."
-    cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} --no-default-features
+    cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} --no-default-features ${DWARF:+--features=panic}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/no-compiler
+    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/no-compiler ${DWARF:+--keep-debug}
   else
     echo "building hyperquark (compiler) for development..."
-    cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet}
+    cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet} ${DWARF:+--features="compiler panic"}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/compiler
+    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/compiler ${DWARF:+--keep-debug}
     echo "building hyperquark (no compiler) for development..."
-    cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet} --no-default-features
+    cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet} --no-default-features ${DWARF:+--features=panic}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/no-compiler
+    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/no-compiler ${DWARF:+--keep-debug}
   fi
   mv $(cargo outdir --no-names --quiet)/imports.ts js/imports.ts
   node opcodes.mjs

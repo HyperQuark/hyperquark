@@ -9,12 +9,13 @@ mod thread;
 mod types;
 mod variable;
 
-use context::StepContext;
+pub use blocks::insert_casts;
+pub use context::StepContext;
 pub use event::Event;
 pub use proc::{PartialStep, Proc, ProcContext};
 pub use project::IrProject;
 pub use step::Step;
-use target::Target;
+pub use target::Target;
 use thread::Thread;
-pub use types::Type;
-pub use variable::{RcVar, Variable};
+pub use types::{ReturnType, Type};
+pub use variable::{RcVar, used_vars};

@@ -1,17 +1,18 @@
-import { getSettings } from './settings.js';
-import { imports } from './imports.js';
-import { useDebugModeStore } from '../stores/debug.js';
-import { setup as sharedSetup } from '../../js/shared.ts'
-await import('../assets/renderer.js');
+import { getSettings } from "./settings.js";
+import { imports } from "./imports.js";
+import { useDebugModeStore } from "../stores/debug.js";
+import { setup as sharedSetup, is_setup, renderer as get_renderer } from "../../js/shared.ts";
+// This does not work in vite dev mode! Only works in build mode.
+const RenderWebGL = await import("../assets/renderer.js").default;
 
 const debugModeStore = useDebugModeStore();
 
 function createSkin(renderer, type, layer, ...params) {
   let drawableId = renderer.createDrawable(layer.toString());
   const realType = {
-    pen: 'Pen',
-    text: 'Text',
-    svg: 'SVG'
+    pen: "Pen",
+    text: "Text",
+    svg: "SVG",
   }[type.toLowerCase()];
   let skin = renderer[`create${realType}Skin`](...params);
   renderer.updateDrawableSkinId(drawableId, skin);
@@ -19,58 +20,74 @@ function createSkin(renderer, type, layer, ...params) {
 }
 
 const spriteInfoLen = 80;
-let _setup = false;
 
-function setup(renderer, project_json, assets, target_names) {
-  if (_setup) return;
-  _setup = true;
-  renderer.getDrawable = id => renderer._allDrawables[id];
-  renderer.getSkin = id => renderer._allSkins[id];
-  renderer.createSkin = (type, layer, ...params) => createSkin(renderer, type, layer, ...params);
+function setup(canvas, project_json, assets, target_names) {
+  if (is_setup()) return;
 
-  const costumes = project_json.targets.map(
-    (target, index) => target.costumes.map(
-      ({ md5ext }) => assets[md5ext]
-    )
+  let renderer = new RenderWebGL(canvas);
+
+  renderer.getDrawable = (id) => renderer._allDrawables[id];
+  renderer.getSkin = (id) => renderer._allSkins[id];
+  renderer.createSkin = (type, layer, ...params) =>
+    createSkin(renderer, type, layer, ...params);
+
+  const costumes = project_json.targets.map((target, index) =>
+    target.costumes.map(({ md5ext }) => assets[md5ext])
   );
 
-  const costumeNameMap = project_json.targets.map(
-    target => Object.fromEntries(target.costumes.map(
-      ({ name }, index) => [name, index]
-    ))
+  const costumeNameMap = project_json.targets.map((target) =>
+    Object.fromEntries(target.costumes.map(({ name }, index) => [name, index]))
   );
 
   // @ts-ignore
   window.renderer = renderer;
   renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
   //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
-  const pen_skin = createSkin(renderer, "pen", "pen")[0];
+  const pen_skin = renderer.createSkin("pen", "pen")[0];
 
   const target_skins = project_json.targets.map((target, index) => {
     const realCostume = target.costumes[target.currentCostume];
     const costume = costumes[index][target.currentCostume];
-    const [skin, drawableId] = createSkin(renderer, costume[0], 'sprite', costume[1], [realCostume.rotationCenterX, realCostume.rotationCenterY]);
+    if (costume.dataFormat.toLowerCase() !== "svg") {
+      throw new Error("todo: non-svg costumes");
+    }
+
+    const [skin, drawableId] = renderer.createSkin(costume.dataFormat, 'sprite', costume.data, [realCostume.rotationCenterX, realCostume.rotationCenterY]);
+
     const drawable = renderer.getDrawable(drawableId);
     if (!target.is_stage) {
-      drawable.updateVisible(target.visible);
+      drawable.updateVisible(!!target.visible);
       drawable.updatePosition([target.x, target.y]);
-      drawable.updateDirection(target.rotation);
+      drawable.updateDirection(target.direction);
       drawable.updateScale([target.size, target.size]);
     }
     return [skin, drawableId];
   });
-  console.log(target_skins)
+  console.log(target_skins);
 
-  sharedSetup(target_names, renderer);
+  sharedSetup(target_names, renderer, pen_skin, target_skins, costumes);
 }
 
 // @ts-ignore
 export default async (
-  { framerate = 30, turbo, renderer, wasm_bytes, target_names, string_consts, project_json, assets } = {
-    framerate: 30, turbo: false,
+  {
+    framerate = 30,
+    turbo,
+    canvas,
+    wasm_bytes,
+    target_names,
+    string_consts,
+    project_json,
+    assets,
+  } = {
+    framerate: 30,
+    turbo: false,
   }
 ) => {
-  if (debugModeStore.debug) window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: 'application/wasm' })));
+  if (debugModeStore.debug)
+    window.open(
+      URL.createObjectURL(new Blob([wasm_bytes], { type: "application/wasm" }))
+    );
   const framerate_wait = Math.round(1000 / framerate);
   let assert;
   let exit;
@@ -78,9 +95,11 @@ export default async (
   let output_div;
   let text_div;
 
-  setup(renderer, project_json, assets, target_names);
+  setup(canvas, project_json, assets, target_names);
 
-  console.log('green flag setup complete')
+  const renderer = get_renderer();
+
+  console.log("green flag setup complete");
 
   let strings_tbl;
 
@@ -89,12 +108,14 @@ export default async (
   let sprite_info_offset = 0;
 
   const settings = getSettings();
-  const builtins = [...(settings['js-string-builtins'] ? ['js-string'] : [])]
+  const builtins = [...(settings["js-string-builtins"] ? ["js-string"] : [])];
 
   try {
-    if (!WebAssembly.validate(wasm_bytes, {
-      builtins
-    })) {
+    if (
+      !WebAssembly.validate(wasm_bytes, {
+        builtins,
+      })
+    ) {
       throw Error();
     }
   } catch {
@@ -116,14 +137,14 @@ export default async (
     });
   }
   WebAssembly.instantiate(wasm_bytes, imports, {
-    builtins
+    builtins,
+    importedStringConstants: "",
   })
     .then(async ({ instance }) => {
       const {
         flag_clicked,
         tick,
         memory,
-        strings,
         step_funcs,
         vars_num,
         threads_count,
@@ -131,15 +152,9 @@ export default async (
         upc,
         threads,
         noop,
-        unreachable_dbg
+        unreachable_dbg,
       } = instance.exports;
-      strings.grow(Object.entries(string_consts).length);
-      for (const [i, str] of Object.entries(string_consts || {})) {
-        // @ts-ignore
-        strings.set(i, str);
-      }
-      updatePenColor = (i) => null;//upc(i - 1);
-      strings_tbl = strings;
+      updatePenColor = (i) => null; //upc(i - 1);
       window.memory = memory;
       window.flag_clicked = flag_clicked;
       window.tick = tick;
@@ -150,10 +165,10 @@ export default async (
             memArr[i] = 0;
           }
         } else {
-        for (let i = 0; i < threads.length; i++) {
-          threads.set(i, noop);
+          for (let i = 0; i < threads.length; i++) {
+            threads.set(i, noop);
+          }
         }
-      }
         threads_count.value = 0;
       };
       // @ts-ignore
@@ -176,7 +191,10 @@ export default async (
         // expose the module to devtools
         unreachable_dbg();
       } catch (error) {
-        console.info('synthetic error to expose wasm modulee to devtools:', error)
+        console.info(
+          "synthetic error to expose wasm module to devtools:",
+          error
+        );
       }
       flag_clicked();
       start_time = Date.now();
@@ -185,7 +203,8 @@ export default async (
         renderer.draw();
         const thisTickStartTime = Date.now();
         // @ts-ignore
-        $innertickloop: do {//for (const _ of [1]) {
+        $innertickloop: do {
+          //for (const _ of [1]) {
           // @ts-ignore
           tick();
           // @ts-ignore
@@ -193,9 +212,10 @@ export default async (
             break $outertickloop;
           }
         } while (
-          (Date.now() - thisTickStartTime) < (framerate_wait * 0.8) &&
-          (!turbo && requests_refresh.value === 0)
-        )
+          Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
+          !turbo &&
+          requests_refresh.value === 0
+        );
         // @ts-ignore
         requests_refresh.value = 0;
         if (framerate_wait > 0) {

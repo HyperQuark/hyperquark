@@ -8,6 +8,19 @@ pub struct Fields {
     pub branch_else: Rc<Step>,
 }
 
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "branch_if": {},
+        "branch_else": {},
+    }}"#,
+            self.branch_if, self.branch_else
+        )
+    }
+}
+
 pub fn wasm(
     func: &StepFunc,
     _inputs: Rc<[IrType]>,
@@ -36,12 +49,12 @@ pub fn wasm(
     .collect())
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([IrType::Boolean])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([IrType::Boolean]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<Option<IrType>> {
-    Ok(None)
+pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
+    Ok(ReturnType::None)
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

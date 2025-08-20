@@ -13,3 +13,4 @@
 /playground/dist/
 /.vite/
 /.vscode/
+rustc-ice*

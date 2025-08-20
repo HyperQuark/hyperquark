@@ -1,10 +1,19 @@
-use crate::wasm::TableOptions;
-
 use super::super::prelude::*;
-use wasm_encoder::RefType;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Box<str>);
+
+impl fmt::Display for Fields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"{{
+        "value": {:?}
+    }}"#,
+            self.0
+        )
+    }
+}
 
 pub fn wasm(
     func: &StepFunc,
@@ -16,26 +25,17 @@ pub fn wasm(
         .strings()
         .register_default(fields.0.clone())?;
     Ok(wasm![
-        I32Const(string_idx),
-        TableGet(func.registries().tables().register(
-            "strings".into(),
-            TableOptions {
-                element_type: RefType::EXTERNREF,
-                min: 0,
-                max: None,
-                // this default gets fixed up in src/wasm/tables.rs
-                init: None,
-            }
-        )?,),
+        // string imports always come before any other global, so we don't need to use #LazyGlobalGet
+        GlobalGet(string_idx),
     ])
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> Rc<[IrType]> {
-    Rc::new([])
+pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Option<IrType>> {
-    Ok(Some(match &**val {
+pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(match &**val {
         bool if bool.to_lowercase() == "true" || bool.to_lowercase() == "false" => {
             IrType::StringBoolean
         }

@@ -1,7 +1,7 @@
 [package]
 name = "hyperquark"
-version = "0.0.0"
-edition = "2021"
+version = "0.0.5"
+edition = "2024"
 publish = false
 
 [dependencies]
@@ -16,10 +16,10 @@ regex = "1.10.5"
 lazy-regex = "3.2.0"
 bitmask-enum = "2.2.5"
 itertools = { version = "0.13.0", default-features = false, features = ["use_alloc"] }
-split_exact = "1.1.0"
 wasm-bindgen = "0.2.92"
 serde-wasm-bindgen = "0.6.5"
 wasm-gen = { path = "wasm-gen" }
+petgraph = { version = "0.8.1", default-features = false, features = ["stable_graph"] }
 
 [dev-dependencies]
 wasmparser = "0.226.0"
@@ -27,18 +27,25 @@ wasmprinter = "0.226.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058bdbb0cde924be008ca1e5a67fe39f46b9" }
+# ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058bdbb0cde924be008ca1e5a67fe39f46b9" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [profile.release]
+debug = true
 lto = true
 opt-level = "z"
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "-C", "link-args=-z stack-size=4194304",
+]
 
 [build-dependencies]
 convert_case = "0.6.0"
 
 [features]
 compiler = [] # if we only want to access flags, we don't want to additionally have all the compiler machinery
+panic = [] # if we have DWARF debugging enabled, panicking is more useful than our clunky manual error propagation
 default = ["compiler"]

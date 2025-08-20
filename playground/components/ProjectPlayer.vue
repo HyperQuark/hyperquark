@@ -49,9 +49,6 @@ const load_asset = async (md5ext) => {
     error.value = `failed to load asset ${md5ext}\n${e.stack}`
   }
 }
-onMounted(() => {
-  renderer = new Renderer(canvas.value);
-});
 //set_attr('load_asset', load_asset);
 let wasmBytes;
 let success;
@@ -120,7 +117,7 @@ Promise.all(
       r1 => Promise.all(
         target.costumes.map(
           ({ md5ext, dataFormat }) => new Promise(
-            r2 => load_asset(md5ext).then(data => r2([md5ext, [dataFormat, data]]))
+            r2 => load_asset(md5ext).then(data => r2([md5ext, { dataFormat, data }]))
           )
         )
       ).then(r1)
@@ -136,7 +133,7 @@ function greenFlag() {
   }
   runProject({
     framerate: 30,
-    renderer,
+    canvas: canvas.value,
     turbo: turbo.value,
     wasm_bytes: wasmBytes,
     string_consts: wasmProject.strings,

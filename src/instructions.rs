@@ -31,9 +31,10 @@ pub use input_switcher::wrap_instruction;
 pub use hq::r#yield::YieldMode;
 
 mod prelude {
-    pub use crate::ir::Type as IrType;
+    pub use crate::ir::{ReturnType, Type as IrType};
     pub use crate::prelude::*;
     pub use crate::wasm::{InternalInstruction, StepFunc};
+    pub use ReturnType::{MultiValue, Singleton};
     pub use wasm_encoder::{RefType, ValType};
     pub use wasm_gen::wasm;
 
