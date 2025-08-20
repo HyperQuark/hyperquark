@@ -28,12 +28,12 @@ macro_rules! instructions_test {
 
             use super::{wasm, output_type, acceptable_inputs};
             use $crate::prelude::*;
-            use $crate::ir::Type as IrType;
+            use $crate::ir::{Type as IrType, ReturnType};
             use wasm_encoder::{
                 CodeSection, ExportSection, FunctionSection, GlobalSection, HeapType, ImportSection,
                 Module, RefType, TableSection, TypeSection, MemorySection, MemoryType, ValType,
             };
-            use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags};
+            use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags, StepTarget};
 
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]
             #[allow(unused_macros, reason = "it is not unused")]
@@ -68,7 +68,7 @@ macro_rules! instructions_test {
                 for ($($type_arg,)*) in types_iter(true) {
                     let output_type_result = output_type(Rc::from([$($type_arg,)*]), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
-                    let step_func = StepFunc::new(Rc::clone(&registries), flags());
+                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
                     let wasm_result = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
@@ -94,10 +94,11 @@ macro_rules! instructions_test {
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
-                        Some(output) => vec![WasmProject::ir_type_to_wasm(output)?],
-                        None => vec![],
+                        ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
+                        ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
+                        ReturnType::None => vec![],
                         };
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags());
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
                     let Ok(wasm) = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed wasm");
                         continue;
@@ -161,11 +162,12 @@ macro_rules! instructions_test {
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
-                        Some(output) => vec![WasmProject::ir_type_to_wasm(output)?],
-                        None => vec![],
-                        };
+                        ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
+                        ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
+                        ReturnType::None => vec![],
+                    };
                     println!("{result:?}");
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags());
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
                     let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::from([$($type_arg,)*]), &$crate::instructions::IrOpcode::$opcode$(($fields))?) {
                         Ok(a) => a,
                         Err(e) => {

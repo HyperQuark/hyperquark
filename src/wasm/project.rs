@@ -567,7 +567,7 @@ pub struct FinishedWasm {
 #[cfg(test)]
 mod tests {
     use super::{Registries, WasmProject};
-    use crate::ir::{IrProject, Step};
+    use crate::ir::{IrProject, Step, Target as IrTarget};
     use crate::prelude::*;
     use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags, flags::all_wasm_features};
 
