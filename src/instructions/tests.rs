@@ -28,12 +28,12 @@ macro_rules! instructions_test {
 
             use super::{wasm, output_type, acceptable_inputs};
             use $crate::prelude::*;
-            use $crate::ir::{Type as IrType, ReturnType};
+            use $crate::ir::{Type as IrType, ReturnType, Step, Target as IrTarget, IrProject};
             use wasm_encoder::{
                 CodeSection, ExportSection, FunctionSection, GlobalSection, HeapType, ImportSection,
                 Module, RefType, TableSection, TypeSection, MemorySection, MemoryType, ValType,
             };
-            use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags, StepTarget};
+            use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
 
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]
             #[allow(unused_macros, reason = "it is not unused")]
@@ -90,14 +90,16 @@ macro_rules! instructions_test {
                         println!("skipping failed output_type");
                         continue;
                     };
-                    let registries = Rc::new(Registries::default());
+                    let ir = Rc::new(IrProject::new(BTreeMap::default()));
+                    let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
+                    let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
                         ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
                         ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
                         ReturnType::None => vec![],
-                        };
+                    };
                     let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
                     let Ok(wasm) = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed wasm");
@@ -108,42 +110,23 @@ macro_rules! instructions_test {
                     }
                     step_func.add_instructions(wasm)?;
 
-                    let mut module = Module::new();
+                    proj.steps()
+                        .borrow_mut()
+                        .insert(Step::new_empty(
+                            &Rc::downgrade(&ir),
+                            true,
+                            Rc::new(IrTarget::new(
+                                false,
+                                BTreeMap::default(),
+                                Weak::new(),
+                                RefCell::new(BTreeMap::default()),
+                                0,
+                                Box::new([]),
+                            )),
+                        )
+                        .unwrap(), step_func);
 
-                    let mut imports = ImportSection::new();
-                    let mut types = TypeSection::new();
-                    let mut tables = TableSection::new();
-                    let mut functions = FunctionSection::new();
-                    let mut codes = CodeSection::new();
-                    let mut memories = MemorySection::new();
-                    let mut exports = ExportSection::new();
-                    let mut globals = GlobalSection::new();
-
-                    memories.memory(MemoryType {
-                        minimum: 1,
-                        maximum: None,
-                        memory64: false,
-                        shared: false,
-                        page_size_log2: None,
-                    });
-
-                    let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
-                    let imported_global_count: u32 = registries.strings().registry().borrow().len().try_into().unwrap();
-                    registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count, imported_global_count)?;
-                    registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(&imports, &mut tables, &mut exports);
-                    registries.globals().clone().finish(&imports, &mut globals, &mut exports, imported_global_count);
-
-                    module.section(&types);
-                    module.section(&imports);
-                    module.section(&functions);
-                    module.section(&tables);
-                    module.section(&memories);
-                    module.section(&globals);
-                    module.section(&codes);
-
-                    let wasm_bytes = module.finish();
+                    let wasm_bytes = proj.finish().unwrap().wasm_bytes;
 
                     wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($type_arg,)*), err.message()))?;
                 }
@@ -158,7 +141,9 @@ macro_rules! instructions_test {
                         continue;
                     };
                     println!("{output_type:?}");
-                    let registries = Rc::new(Registries::default());
+                    let ir = Rc::new(IrProject::new(BTreeMap::default()));
+                    let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
+                    let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
                     let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
@@ -183,41 +168,23 @@ macro_rules! instructions_test {
 
                     println!("{:?}", step_func.instructions().borrow());
 
-                    let mut module = Module::new();
+                    proj.steps()
+                        .borrow_mut()
+                        .insert(Step::new_empty(
+                            &Rc::downgrade(&ir),
+                            true,
+                            Rc::new(IrTarget::new(
+                                false,
+                                BTreeMap::default(),
+                                Weak::new(),
+                                RefCell::new(BTreeMap::default()),
+                                0,
+                                Box::new([]),
+                            )),
+                        )
+                        .unwrap(), step_func);
 
-                    let mut imports = ImportSection::new();
-                    let mut types = TypeSection::new();
-                    let mut tables = TableSection::new();
-                    let mut functions = FunctionSection::new();
-                    let mut codes = CodeSection::new();
-                    let mut memories = MemorySection::new();
-                    let mut exports = ExportSection::new();
-                    let mut globals = GlobalSection::new();
-
-                    memories.memory(MemoryType {
-                        minimum: 1,
-                        maximum: None,
-                        page_size_log2: None,
-                        shared: false,
-                        memory64: false,
-                    });
-                    let imported_func_count: u32 = registries.external_functions().registry().borrow().len().try_into().unwrap();
-                    let imported_global_count: u32 = registries.strings().registry().borrow().len().try_into().unwrap();
-                    registries.external_functions().clone().finish(&mut imports, registries.types())?;
-                    step_func.finish(&mut functions, &mut codes, &Default::default(), imported_func_count, imported_global_count)?;
-                    registries.types().clone().finish(&mut types);
-                    registries.tables().clone().finish(&imports, &mut tables, &mut exports);
-                    registries.globals().clone().finish(&imports, &mut globals, &mut exports, imported_global_count);
-
-                    module.section(&types);
-                    module.section(&imports);
-                    module.section(&functions);
-                    module.section(&tables);
-                    module.section(&memories);
-                    module.section(&globals);
-                    module.section(&codes);
-
-                    let wasm_bytes = module.finish();
+                    let wasm_bytes = proj.finish().unwrap().wasm_bytes;
 
                     wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($type_arg,)*), err.message()))?;
                 }

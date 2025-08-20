@@ -57,7 +57,7 @@ impl Step {
         )
     }
 
-    fn new(
+    pub fn new(
         id: Option<Box<str>>,
         context: StepContext,
         opcodes: Vec<IrOpcode>,

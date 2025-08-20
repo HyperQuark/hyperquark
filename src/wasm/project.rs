@@ -26,7 +26,6 @@ pub struct WasmProject {
 }
 
 impl WasmProject {
-    #[expect(dead_code, reason = "pub item may be used in the future")]
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         Self {
             flags,

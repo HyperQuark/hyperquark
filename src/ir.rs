@@ -10,7 +10,7 @@ mod types;
 mod variable;
 
 pub use blocks::insert_casts;
-use context::StepContext;
+pub use context::StepContext;
 pub use event::Event;
 pub use proc::{PartialStep, Proc, ProcContext};
 pub use project::IrProject;
