@@ -26,6 +26,8 @@ pub struct WasmProject {
 }
 
 impl WasmProject {
+    #![expect(clippy::allow_attributes, reason = "can't use expect because false in test mode")]
+    #[allow(dead_code, reason = "not dead in test mode")]
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         Self {
             flags,

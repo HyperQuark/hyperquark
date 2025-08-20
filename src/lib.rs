@@ -1,6 +1,5 @@
 #![feature(stmt_expr_attributes)]
 #![feature(if_let_guard)]
-#![feature(let_chains)]
 #![feature(try_blocks)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
@@ -32,7 +31,6 @@
     clippy::shadow_reuse,
     clippy::std_instead_of_alloc,
     clippy::std_instead_of_core,
-    clippy::string_to_string,
     clippy::unwrap_used,
     clippy::wildcard_enum_match_arm
 )]

@@ -29,10 +29,7 @@ macro_rules! instructions_test {
             use super::{wasm, output_type, acceptable_inputs};
             use $crate::prelude::*;
             use $crate::ir::{Type as IrType, ReturnType, Step, Target as IrTarget, IrProject};
-            use wasm_encoder::{
-                CodeSection, ExportSection, FunctionSection, GlobalSection, HeapType, ImportSection,
-                Module, RefType, TableSection, TypeSection, MemorySection, MemoryType, ValType,
-            };
+            use wasm_encoder::ValType;
             use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
 
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]
@@ -191,17 +188,17 @@ macro_rules! instructions_test {
                 Ok(())
             }
 
-            fn wasm_to_js_type(ty: ValType) -> &'static str {
-                match ty {
-                    ValType::I32 => "Integer",
-                    ValType::F64 => "number",
-                    ValType::EXTERNREF | ValType::Ref(RefType {
-                        nullable: false,
-                        heap_type: HeapType::EXTERN,
-                    }) => "string",
-                    _ => todo!("unknown js type for wasm type {:?}", ty)
-                }
-            }
+            // fn wasm_to_js_type(ty: ValType) -> &'static str {
+            //     match ty {
+            //         ValType::I32 => "Integer",
+            //         ValType::F64 => "number",
+            //         ValType::EXTERNREF | ValType::Ref(RefType {
+            //             nullable: false,
+            //             heap_type: HeapType::EXTERN,
+            //         }) => "string",
+            //         _ => todo!("unknown js type for wasm type {:?}", ty)
+            //     }
+            // }
 
             // #[test]
             // fn js_functions_match_declared_types() {
