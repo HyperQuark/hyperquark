@@ -1,8 +1,9 @@
 import { getSettings } from "./settings.js";
 import { imports } from "./imports.js";
 import { useDebugModeStore } from "../stores/debug.js";
-import { setup as sharedSetup, is_setup } from "../../js/shared.ts";
-await import("../assets/renderer.js");
+import { setup as sharedSetup, is_setup, renderer as get_renderer } from "../../js/shared.ts";
+// This does not work in vite dev mode! Only works in build mode.
+const RenderWebGL = await import("../assets/renderer.js").default;
 
 const debugModeStore = useDebugModeStore();
 
@@ -20,8 +21,11 @@ function createSkin(renderer, type, layer, ...params) {
 
 const spriteInfoLen = 80;
 
-function setup(renderer, project_json, assets, target_names) {
+function setup(canvas, project_json, assets, target_names) {
   if (is_setup()) return;
+
+  let renderer = new RenderWebGL(canvas);
+
   renderer.getDrawable = (id) => renderer._allDrawables[id];
   renderer.getSkin = (id) => renderer._allSkins[id];
   renderer.createSkin = (type, layer, ...params) =>
@@ -69,7 +73,7 @@ export default async (
   {
     framerate = 30,
     turbo,
-    renderer,
+    canvas,
     wasm_bytes,
     target_names,
     string_consts,
@@ -91,7 +95,9 @@ export default async (
   let output_div;
   let text_div;
 
-  setup(renderer, project_json, assets, target_names);
+  setup(canvas, project_json, assets, target_names);
+
+  const renderer = get_renderer();
 
   console.log("green flag setup complete");
 

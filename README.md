@@ -21,7 +21,11 @@ You may need to run `chmod +x build.sh` if it says it doesn't have permission.
 
 The build script has additonal configuration options; run `./build.sh -h` for info on these.
 
-If you experience runtime stack overflow errors in debug mode, try using the `-s` or `-z` options to enable wasm-opt; weird wasm errors in production mode may conversely be solved by *disabling* wasm-opt using the `-o` flag.
+If you experience runtime stack overflow errors in debug mode, try using the `-s` or `-z` options to enable wasm-opt, or build in production mode; weird wasm errors in production mode may conversely be solved by *disabling* wasm-opt using the `-o` flag.
+
+If an error occurs during execution and you need a stack trace, run with the `-D` flag to enable panicking with DWARF debug symbols. You need to [set up your browser to display a proper stack trace using these debug symbols](https://users.rust-lang.org/t/getting-raw-wasm-debugging-working-nicely-in-chrome-devtools/94646). You'll need to disable wasm-opt using `-o` for this to work, as wasm-opt currently crashes when it encounters DWARF.
+
+To preview the website (e.g. to run a project), use `npm run watch`. Do not just run `vite` as this will build in debug mode which doesn't work.
 
 ## Adding a new block
 
