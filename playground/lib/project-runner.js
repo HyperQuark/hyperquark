@@ -3,8 +3,8 @@ import { imports } from "./imports.js";
 import { useDebugModeStore } from "../stores/debug.js";
 import { setup as sharedSetup, is_setup, renderer as get_renderer } from "../../js/shared.ts";
 // This does not work in vite dev mode! Only works in build mode.
-const RenderWebGL = await import("../assets/renderer.js").default;
-
+const scratch_render = await import("../assets/renderer.js");
+const RenderWebGL = scratch_render.default;
 const debugModeStore = useDebugModeStore();
 
 function createSkin(renderer, type, layer, ...params) {
