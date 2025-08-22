@@ -2,19 +2,19 @@ use super::context::StepContext;
 use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
-    IrOpcode, YieldMode,
     fields::{
         ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
         DataVariableFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
         HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
         ProceduresCallWarpFields,
     },
+    IrOpcode, YieldMode,
 };
 use crate::ir::ReturnType;
 use crate::prelude::*;
 use crate::sb3;
-use crate::wasm::WasmFlags;
 use crate::wasm::flags::UseIntegers;
+use crate::wasm::WasmFlags;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
 pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
@@ -174,7 +174,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_variable
             | BlockOpcode::argument_reporter_boolean
             | BlockOpcode::argument_reporter_string_number
-            | BlockOpcode::looks_costume => vec![],
+            | BlockOpcode::looks_costume
+            | BlockOpcode::looks_size => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -184,6 +185,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::operator_length => vec!["STRING"],
             BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
             BlockOpcode::looks_setsizeto => vec!["SIZE"],
+            BlockOpcode::looks_changesizeby => vec!["CHANGE"],
             BlockOpcode::procedures_call => {
                 let serde_json::Value::String(proccode) = block_info
                     .mutation
@@ -1032,6 +1034,12 @@ fn from_normal_block(
                             procedure_argument(ProcArgType::StringNumber, block_info, context)?
                         }
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
+                        BlockOpcode::looks_size => vec![IrOpcode::looks_size],
+                        BlockOpcode::looks_changesizeby => vec![
+                            IrOpcode::looks_size,
+                            IrOpcode::operator_add,
+                            IrOpcode::looks_setsizeto,
+                        ],
                         BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
                         BlockOpcode::looks_costume => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
