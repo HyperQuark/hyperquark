@@ -183,6 +183,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::control_repeat => vec!["TIMES"],
             BlockOpcode::operator_length => vec!["STRING"],
             BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
+            BlockOpcode::looks_setsizeto => vec!["SIZE"],
             BlockOpcode::procedures_call => {
                 let serde_json::Value::String(proccode) = block_info
                     .mutation
@@ -1030,6 +1031,7 @@ fn from_normal_block(
                         BlockOpcode::argument_reporter_string_number => {
                             procedure_argument(ProcArgType::StringNumber, block_info, context)?
                         }
+                        BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
                         BlockOpcode::looks_costume => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
