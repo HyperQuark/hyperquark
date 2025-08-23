@@ -4,8 +4,9 @@ use super::super::prelude::*;
 use crate::wasm::{mem_layout, StepTarget};
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
-    let StepTarget::Sprite(wasm_target_index) = func.target() else {
-        0
+    let wasm_target_index = match func.target() {
+        StepTarget::Sprite(index) => index,
+        StepTarget::Stage => 0,
     };
     let offset = mem_layout::stage::BLOCK_SIZE
         + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
@@ -13,7 +14,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
 
     Ok(wasm![
         I32Const(0),
-        I32Store(MemArg {
+        I32Load(MemArg {
             offset: offset.into(),
             align: 2,
             memory_index: 0,

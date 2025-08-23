@@ -4,7 +4,7 @@ use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
     fields::{
         ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-        DataVariableFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
+        DataVariableFields, HqBooleanFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
         HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
         ProceduresCallWarpFields,
     },
@@ -177,7 +177,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_costume
             | BlockOpcode::looks_size
             | BlockOpcode::looks_nextcostume
-            | BlockOpcode::looks_costumenumbername => vec![],
+            | BlockOpcode::looks_costumenumbername
+            | BlockOpcode::looks_hide
+            | BlockOpcode::looks_show => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -1035,6 +1037,14 @@ fn from_normal_block(
                         BlockOpcode::argument_reporter_string_number => {
                             procedure_argument(ProcArgType::StringNumber, block_info, context)?
                         }
+                        BlockOpcode::looks_show => vec![
+                            IrOpcode::hq_boolean(HqBooleanFields(true)),
+                            IrOpcode::looks_setvisible,
+                        ],
+                        BlockOpcode::looks_hide => vec![
+                            IrOpcode::hq_boolean(HqBooleanFields(false)),
+                            IrOpcode::looks_setvisible,
+                        ],
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_size => vec![IrOpcode::looks_size],
                         BlockOpcode::looks_changesizeby => vec![
@@ -1062,16 +1072,16 @@ fn from_normal_block(
                                     "invalid project.json - NUMBER_NAME field is not of type String"
                                 );
                             };
-                            match number_name {
+                            match &*number_name {
                                 "number" => vec![IrOpcode::looks_costumenumber],
                                 "name" => hq_todo!("costume name"),
                                 _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
                             }
                         }
                         BlockOpcode::looks_nextcostume => vec![
-                            BlockOpcode::looks_costumenumber,
-                            BlockOpcode::hq_integer(HqIntegerFields(1)),
-                            BlockOpcode::looks_switchcostumeto,
+                            IrOpcode::looks_costumenumber,
+                            IrOpcode::hq_integer(HqIntegerFields(1)),
+                            IrOpcode::looks_switchcostumeto,
                         ],
                         BlockOpcode::looks_costume => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =

@@ -12,8 +12,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         ("looks", "switchcostumeto".into()),
         (vec![ValType::I32, ValType::I32], vec![]),
     )?;
-    let StepTarget::Sprite(wasm_target_index) = func.target() else {
-        0
+    let wasm_target_index = match func.target() {
+        StepTarget::Sprite(index) => index,
+        StepTarget::Stage => 0,
     };
     let offset = mem_layout::stage::BLOCK_SIZE
         + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
