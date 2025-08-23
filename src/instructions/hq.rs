@@ -1,3 +1,4 @@
+pub mod boolean;
 pub mod cast;
 pub mod drop;
 pub mod float;

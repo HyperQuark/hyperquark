@@ -177,7 +177,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_costume
             | BlockOpcode::looks_size
             | BlockOpcode::looks_nextcostume
-            | BlockOpcode::looks_costumenumbername => vec![],
+            | BlockOpcode::looks_costumenumbername
+            | BlockOpcode::looks_hide
+            | BlockOpcode::looks_show => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -1035,6 +1037,14 @@ fn from_normal_block(
                         BlockOpcode::argument_reporter_string_number => {
                             procedure_argument(ProcArgType::StringNumber, block_info, context)?
                         }
+                        BlockOpcode::looks_show => vec![
+                            IrOpcode::hq_boolean(HqBooleanFields(true)),
+                            IrOpcode::looks_setvisible,
+                        ],
+                        BlockOpcode::looks_hide => vec![
+                            IrOpcode::hq_boolean(HqBooleanFields(false)),
+                            IrOpcode::looks_setvisible,
+                        ],
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_size => vec![IrOpcode::looks_size],
                         BlockOpcode::looks_changesizeby => vec![
