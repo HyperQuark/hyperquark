@@ -1,3 +1,4 @@
+pub mod costumenumber;
 pub mod say;
 pub mod setsizeto;
 pub mod size;
