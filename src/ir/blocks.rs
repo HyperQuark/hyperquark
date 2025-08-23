@@ -175,7 +175,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::argument_reporter_boolean
             | BlockOpcode::argument_reporter_string_number
             | BlockOpcode::looks_costume
-            | BlockOpcode::looks_size => vec![],
+            | BlockOpcode::looks_size
+            | BlockOpcode::looks_nextcostume
+            | BlockOpcode::looks_costumenumbername => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -1041,6 +1043,36 @@ fn from_normal_block(
                             IrOpcode::looks_setsizeto,
                         ],
                         BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+
+                        BlockOpcode::looks_costumenumbername => {
+                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
+                                block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field NUMBER_NAME"
+                                    )
+                                })?;
+                            let sb3::VarVal::String(number_name) =
+                                val.clone().ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                    "invalid project.json - null costume name for NUMBER_NAME field"
+                                )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - NUMBER_NAME field is not of type String"
+                                );
+                            };
+                            match number_name {
+                                "number" => vec![IrOpcode::looks_costumenumber],
+                                "name" => hq_todo!("costume name"),
+                                _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
+                            }
+                        }
+                        BlockOpcode::looks_nextcostume => vec![
+                            BlockOpcode::looks_costumenumber,
+                            BlockOpcode::hq_integer(HqIntegerFields(1)),
+                            BlockOpcode::looks_switchcostumeto,
+                        ],
                         BlockOpcode::looks_costume => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
                                 block_info.fields.get("COSTUME").ok_or_else(|| {

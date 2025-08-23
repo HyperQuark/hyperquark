@@ -1,7 +1,7 @@
 use wasm_encoder::MemArg;
 
 use super::super::prelude::*;
-use crate::wasm::{StepTarget, mem_layout};
+use crate::wasm::{mem_layout, StepTarget};
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let ir_target_index: i32 = func
@@ -13,8 +13,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         (vec![ValType::I32, ValType::I32], vec![]),
     )?;
     let StepTarget::Sprite(wasm_target_index) = func.target() else {
-        hq_bad_proj!("looks_setcostumeto called in stage")
+        0
     };
+    let offset = mem_layout::stage::BLOCK_SIZE
+        + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
+        + mem_layout::sprite::COSTUME;
+
     let local_index = func.local(ValType::I32)?;
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
         wasm![
@@ -22,10 +26,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             I32Const(0),
             LocalGet(local_index),
             I32Store(MemArg {
-                offset: (mem_layout::stage::BLOCK_SIZE
-                    + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
-                    + mem_layout::sprite::COSTUME)
-                    .into(),
+                offset: offset.into(),
                 align: 2,
                 memory_index: 0,
             }),
