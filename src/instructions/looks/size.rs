@@ -19,7 +19,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
                 + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
                 + mem_layout::sprite::SIZE)
                 .into(),
-            align: 2,
+            align: 3,
             memory_index: 0,
         }),
     ])
