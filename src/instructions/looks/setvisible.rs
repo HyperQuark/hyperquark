@@ -20,12 +20,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         LocalSet(local_index),
         I32Const(0),
         LocalGet(local_index),
-        F64Store(MemArg {
+        I32Store8(MemArg {
             offset: (mem_layout::stage::BLOCK_SIZE
                 + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
                 + mem_layout::sprite::VISIBLE)
                 .into(),
-            align: 2,
+            align: 0,
             memory_index: 0,
         }),
         LocalGet(local_index),
