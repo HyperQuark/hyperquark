@@ -4,7 +4,7 @@ use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
     fields::{
         ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-        DataVariableFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
+        DataVariableFields, HqBooleanFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
         HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
         ProceduresCallWarpFields,
     },
@@ -1072,16 +1072,16 @@ fn from_normal_block(
                                     "invalid project.json - NUMBER_NAME field is not of type String"
                                 );
                             };
-                            match number_name {
+                            match &*number_name {
                                 "number" => vec![IrOpcode::looks_costumenumber],
                                 "name" => hq_todo!("costume name"),
                                 _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
                             }
                         }
                         BlockOpcode::looks_nextcostume => vec![
-                            BlockOpcode::looks_costumenumber,
-                            BlockOpcode::hq_integer(HqIntegerFields(1)),
-                            BlockOpcode::looks_switchcostumeto,
+                            IrOpcode::looks_costumenumber,
+                            IrOpcode::hq_integer(HqIntegerFields(1)),
+                            IrOpcode::looks_switchcostumeto,
                         ],
                         BlockOpcode::looks_costume => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
