@@ -1,9 +1,6 @@
-use wasm_encoder::MemArg;
-
 use super::super::prelude::*;
-use crate::wasm::{StepTarget, mem_layout};
 
-pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
+pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let func_index = func.registries().external_functions().register(
         ("pen", "clear".into()),
         (vec![], vec![]),
