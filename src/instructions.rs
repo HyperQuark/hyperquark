@@ -17,6 +17,7 @@ mod data;
 mod hq;
 mod looks;
 mod operator;
+mod pen;
 mod procedures;
 mod sensing;
 
