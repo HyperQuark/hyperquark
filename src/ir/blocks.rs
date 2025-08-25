@@ -179,7 +179,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_nextcostume
             | BlockOpcode::looks_costumenumbername
             | BlockOpcode::looks_hide
-            | BlockOpcode::looks_show => vec![],
+            | BlockOpcode::looks_show
+            | BlockOpcode::pen_penDown
+            | BlockOpcode::pen_penUp => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -1045,6 +1047,8 @@ fn from_normal_block(
                             IrOpcode::hq_boolean(HqBooleanFields(false)),
                             IrOpcode::looks_setvisible,
                         ],
+                        BlockOpcode::pen_penDown => vec![IrOpcode::pen_pendown],
+                        BlockOpcode::pen_penUp => vec![IrOpcode::pen_penup],
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_size => vec![IrOpcode::looks_size],
                         BlockOpcode::looks_changesizeby => vec![
