@@ -1048,7 +1048,7 @@ fn from_normal_block(
                             IrOpcode::hq_boolean(HqBooleanFields(false)),
                             IrOpcode::looks_setvisible,
                         ],
-                        BlovkOpcode::pen_clear => vec![IrOpcode::pen_clear],
+                        BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
                         BlockOpcode::pen_penDown => vec![IrOpcode::pen_pendown],
                         BlockOpcode::pen_penUp => vec![IrOpcode::pen_penup],
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
