@@ -182,7 +182,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_show
             | BlockOpcode::pen_penDown
             | BlockOpcode::pen_penUp
-            | BlockOpcode::pen_clear => vec![],
+            | BlockOpcode::pen_clear
+            | BlockOpcode::control_forever => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -940,6 +941,24 @@ fn from_normal_block(
                                 blocks,
                                 context,
                                 &mut should_break,
+                                flags,
+                            )?
+                        }
+                        BlockOpcode::control_forever => {
+                            let local = context.warp;
+                            let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true)];
+                            let first_condition_instructions = None;
+                            generate_loop(
+                                context.warp,
+                                &mut should_break,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                first_condition_instructions,
+                                condition_instructions,
+                                false,
+                                vec![],
                                 flags,
                             )?
                         }
