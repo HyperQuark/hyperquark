@@ -331,11 +331,12 @@ fn generate_loop(
     condition_instructions: Vec<IrOpcode>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
+    empty_instructions: Vec<IrOpcode>,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
     let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
         Some(input) => input,
-        None => return Ok(vec![IrOpcode::hq_drop]), // TODO: consider loops without input (i.e. forever)
+        None => return Ok(empty_instructions),
     }
     .get_1()
     .ok_or_else(|| make_hq_bug!(""))?
@@ -946,7 +947,7 @@ fn from_normal_block(
                         }
                         BlockOpcode::control_forever => {
                             let local = context.warp;
-                            let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true)];
+                            let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
                             let first_condition_instructions = None;
                             generate_loop(
                                 context.warp,
@@ -958,6 +959,7 @@ fn from_normal_block(
                                 first_condition_instructions,
                                 condition_instructions,
                                 false,
+                                vec![],
                                 vec![],
                                 flags,
                             )?
@@ -1000,6 +1002,7 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
+                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
@@ -1023,7 +1026,8 @@ fn from_normal_block(
                                 first_condition_instructions,
                                 condition_instructions,
                                 true,
-                                setup_instructions,
+                                setup_instructions,i
+                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
