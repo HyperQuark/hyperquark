@@ -182,7 +182,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_show
             | BlockOpcode::pen_penDown
             | BlockOpcode::pen_penUp
-            | BlockOpcode::pen_clear => vec![],
+            | BlockOpcode::pen_clear
+            | BlockOpcode::control_forever => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -330,11 +331,12 @@ fn generate_loop(
     condition_instructions: Vec<IrOpcode>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
+    empty_instructions: Vec<IrOpcode>,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
     let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
         Some(input) => input,
-        None => return Ok(vec![IrOpcode::hq_drop]), // TODO: consider loops without input (i.e. forever)
+        None => return Ok(empty_instructions),
     }
     .get_1()
     .ok_or_else(|| make_hq_bug!(""))?
@@ -943,6 +945,25 @@ fn from_normal_block(
                                 flags,
                             )?
                         }
+                        BlockOpcode::control_forever => {
+                            let local = context.warp;
+                            let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
+                            let first_condition_instructions = None;
+                            generate_loop(
+                                context.warp,
+                                &mut should_break,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                first_condition_instructions,
+                                condition_instructions,
+                                false,
+                                vec![],
+                                vec![],
+                                flags,
+                            )?
+                        }
                         BlockOpcode::control_repeat => {
                             let variable = RcVar::new(IrType::Int, sb3::VarVal::Float(0.0));
                             let local = context.warp;
@@ -981,6 +1002,7 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
+                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
@@ -1005,6 +1027,7 @@ fn from_normal_block(
                                 condition_instructions,
                                 true,
                                 setup_instructions,
+                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
