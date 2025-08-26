@@ -1026,7 +1026,7 @@ fn from_normal_block(
                                 first_condition_instructions,
                                 condition_instructions,
                                 true,
-                                setup_instructions,i
+                                setup_instructions,
                                 vec![IrOpcode::hq_drop],
                                 flags,
                             )?
