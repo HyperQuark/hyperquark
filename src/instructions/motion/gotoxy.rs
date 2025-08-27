@@ -29,7 +29,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 .into(),
             align: 3,
             memory_index: 0,
-        })
+        }),
         I32Const(0),
         LocalGet(y_local),
         F64Store(MemArg {
