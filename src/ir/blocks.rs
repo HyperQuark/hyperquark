@@ -170,6 +170,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
                 vec!["STRING1", "STRING2"]
             }
             BlockOpcode::operator_letter_of => vec!["LETTER", "STRING"],
+            BlockOpcode::motion_gotoxy => vec!["X", "Y"],
             BlockOpcode::sensing_dayssince2000
             | BlockOpcode::data_variable
             | BlockOpcode::argument_reporter_boolean
@@ -733,6 +734,7 @@ fn from_normal_block(
                         BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
                         BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
                         BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
+                        BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
                         BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
                             debug: context.debug,
                             target_idx: context.target().index(),
