@@ -16,6 +16,7 @@ mod control;
 mod data;
 mod hq;
 mod looks;
+mod motion;
 mod operator;
 mod pen;
 mod procedures;
