@@ -2,19 +2,19 @@ use super::context::StepContext;
 use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
+    IrOpcode, YieldMode,
     fields::{
         ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-        DataVariableFields, HqBooleanFields, HqCastFields, HqFloatFields, HqIntegerFields, HqTextFields,
-        HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
+        DataVariableFields, HqBooleanFields, HqCastFields, HqFloatFields, HqIntegerFields,
+        HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
         ProceduresCallWarpFields,
     },
-    IrOpcode, YieldMode,
 };
 use crate::ir::ReturnType;
 use crate::prelude::*;
 use crate::sb3;
-use crate::wasm::flags::UseIntegers;
 use crate::wasm::WasmFlags;
+use crate::wasm::flags::UseIntegers;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
 pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
@@ -193,7 +193,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::control_repeat => vec!["TIMES"],
             BlockOpcode::operator_length => vec!["STRING"],
             BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
-            BlockOpcode::looks_setsizeto => vec!["SIZE"],
+            BlockOpcode::looks_setsizeto | BlockOpcode::pen_setPenSizeTo => vec!["SIZE"],
             BlockOpcode::looks_changesizeby => vec!["CHANGE"],
             BlockOpcode::procedures_call => {
                 let serde_json::Value::String(proccode) = block_info
@@ -948,8 +948,8 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::control_forever => {
-                            let local = context.warp;
-                            let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
+                            let condition_instructions =
+                                vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
                             let first_condition_instructions = None;
                             generate_loop(
                                 context.warp,
@@ -1076,6 +1076,7 @@ fn from_normal_block(
                         BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
                         BlockOpcode::pen_penDown => vec![IrOpcode::pen_pendown],
                         BlockOpcode::pen_penUp => vec![IrOpcode::pen_penup],
+                        BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setpensizeto],
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_size => vec![IrOpcode::looks_size],
                         BlockOpcode::looks_changesizeby => vec![
