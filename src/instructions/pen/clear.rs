@@ -1,13 +1,11 @@
 use super::super::prelude::*;
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
-    let func_index = func.registries().external_functions().register(
-        ("pen", "clear".into()),
-        (vec![], vec![]),
-    )?;
-    Ok(wasm![
-        Call(func_index),
-    ])
+    let func_index = func
+        .registries()
+        .external_functions()
+        .register(("pen", "clear".into()), (vec![], vec![]))?;
+    Ok(wasm![Call(func_index),])
 }
 
 pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {

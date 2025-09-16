@@ -5,12 +5,12 @@ use super::IrOpcode;
 use super::prelude::*;
 use crate::wasm::GlobalExportable;
 use crate::wasm::GlobalMutable;
-use crate::wasm::TableOptions;
 use crate::wasm::WasmProject;
+use crate::wasm::StringsTable;
 use crate::{ir::Type as IrType, wasm::StepFunc};
 use itertools::Itertools;
 use wasm_encoder::ConstExpr;
-use wasm_encoder::{BlockType, Instruction as WInstruction, RefType};
+use wasm_encoder::{BlockType, Instruction as WInstruction};
 use wasm_gen::wasm;
 
 fn cast_instructions(
@@ -33,16 +33,7 @@ fn cast_instructions(
                 I32WrapI64,
             ],
             IrType::String => {
-                let table_index = func.registries().tables().register(
-                    "strings".into(),
-                    TableOptions {
-                        element_type: RefType::EXTERNREF,
-                        min: 0,
-                        // TODO: use js string imports for preknown strings
-                        max: None,
-                        init: None,
-                    },
-                )?;
+                let table_index = func.registries().tables().register::<StringsTable, _>()?;
                 wasm![
                     I64Const(BOXED_STRING_PATTERN),
                     I64And,
@@ -62,16 +53,7 @@ fn cast_instructions(
             IrType::Float => wasm![Else, LocalGet(local_idx), F64ReinterpretI64], // float guaranteed to be last so no need to check
             IrType::QuasiInt => wasm![Else, LocalGet(local_idx), I32WrapI64],
             IrType::String => {
-                let table_index = func.registries().tables().register(
-                    "strings".into(),
-                    TableOptions {
-                        element_type: RefType::EXTERNREF,
-                        min: 0,
-                        // TODO: use js string imports for preknown strings
-                        max: None,
-                        init: None,
-                    },
-                )?;
+                let table_index = func.registries().tables().register::<StringsTable, _>()?;
                 wasm![Else, LocalGet(local_idx), I32WrapI64, TableGet(table_index)]
             }
             _ => unreachable!(),
@@ -92,15 +74,7 @@ fn cast_instructions(
                 I32WrapI64,
             ],
             IrType::String => {
-                let table_index = func.registries().tables().register(
-                    "strings".into(),
-                    TableOptions {
-                        element_type: RefType::EXTERNREF,
-                        min: 0,
-                        max: None,
-                        init: None,
-                    },
-                )?;
+                let table_index = func.registries().tables().register::<StringsTable, _>()?;
                 wasm![
                     Else,
                     LocalGet(local_idx),

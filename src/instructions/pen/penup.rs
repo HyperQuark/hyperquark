@@ -7,8 +7,8 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
     let StepTarget::Sprite(wasm_target_index) = func.target() else {
         hq_bad_proj!("looks_setpendown called in stage")
     };
-    let sprite_offset = mem_layout::stage::BLOCK_SIZE + wasm_target_index * mem_layout::sprite::BLOCK_SIZE;
-    let local_index = func.local(ValType::I32)?;
+    let sprite_offset =
+        mem_layout::stage::BLOCK_SIZE + wasm_target_index * mem_layout::sprite::BLOCK_SIZE;
     Ok(wasm![
         I32Const(0),
         I32Const(0),

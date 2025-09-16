@@ -1,8 +1,19 @@
-use super::{
-    ExternalFunctionRegistry, GlobalRegistry, SpriteRegistry, StringRegistry, TableRegistry,
-    TypeRegistry, VariableRegistry,
-};
+pub mod functions;
+pub mod globals;
+pub mod strings;
+pub mod tables;
+pub mod targets;
+pub mod types;
+pub mod variables;
+
 use crate::prelude::*;
+pub use functions::ExternalFunctionRegistry;
+pub use globals::{GlobalExportable, GlobalMutable, GlobalRegistry};
+pub use strings::StringRegistry;
+pub use tables::{StepsTable, StringsTable, TableRegistry, ThreadsTable};
+pub use targets::SpriteRegistry;
+pub use types::TypeRegistry;
+pub use variables::VariableRegistry;
 
 pub struct Registries {
     strings: StringRegistry,

@@ -1,7 +1,7 @@
 use wasm_encoder::MemArg;
 
 use super::super::prelude::*;
-use crate::wasm::{mem_layout, StepTarget};
+use crate::wasm::{StepTarget, mem_layout};
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let ir_target_index: i32 = func

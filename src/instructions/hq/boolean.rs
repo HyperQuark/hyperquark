@@ -33,13 +33,14 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<ReturnType> {
-    Ok(Singleton(match val {
-        true => IrType::BooleanTrue,
-        false => IrType::BooleanFalse,
+    Ok(Singleton(if val {
+        IrType::BooleanTrue
+    } else {
+        IrType::BooleanFalse
     }))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
-crate::instructions_test! {tests_false; hq_boolean; @ super::Fields(false)} 
+crate::instructions_test! {tests_false; hq_boolean; @ super::Fields(false)}
 crate::instructions_test! {tests_true; hq_boolean; @ super::Fields(true)}

@@ -6,9 +6,9 @@ use wasm_encoder::{
 };
 
 #[derive(Copy, Clone, Debug)]
-pub struct Mutable(pub bool);
+pub struct GlobalMutable(pub bool);
 
-impl Deref for Mutable {
+impl Deref for GlobalMutable {
     type Target = bool;
     fn deref(&self) -> &bool {
         &self.0
@@ -16,16 +16,16 @@ impl Deref for Mutable {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Exportable(pub bool);
+pub struct GlobalExportable(pub bool);
 
-impl Deref for Exportable {
+impl Deref for GlobalExportable {
     type Target = bool;
     fn deref(&self) -> &bool {
         &self.0
     }
 }
 
-pub type GlobalRegistry = MapRegistry<Box<str>, (ValType, ConstExpr, Mutable, Exportable)>;
+pub type GlobalRegistry = MapRegistry<Box<str>, (ValType, ConstExpr, GlobalMutable, GlobalExportable)>;
 
 impl GlobalRegistry {
     pub fn finish(

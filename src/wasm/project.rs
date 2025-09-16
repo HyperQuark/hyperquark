@@ -1,14 +1,14 @@
 use super::flags::Scheduler;
-use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries, TableOptions};
+use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
 use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
-use crate::wasm::{StepFunc, WasmFlags};
+use crate::wasm::{StepFunc, StepsTable, ThreadsTable, WasmFlags};
 use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, ExportKind,
-    ExportSection, Function, FunctionSection, GlobalSection, HeapType, ImportSection, Instruction,
-    MemArg, MemorySection, MemoryType, Module, RefType, TableSection, TypeSection, ValType,
+    ExportSection, Function, FunctionSection, GlobalSection, ImportSection, Instruction, MemArg,
+    MemorySection, MemoryType, Module, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
@@ -92,16 +92,16 @@ impl WasmProject {
 
         self.registries().strings().clone().finish(&mut imports);
 
-        self.registries().tables().register_override::<usize>(
-            "strings".into(),
-            TableOptions {
-                element_type: RefType::EXTERNREF,
-                min: 0,
-                // TODO: use js string imports for preknown strings
-                max: None,
-                init: None,
-            },
-        )?;
+        // self.registries().tables().register_override::<usize>(
+        //     "strings".into(),
+        //     TableOptions {
+        //         element_type: RefType::EXTERNREF,
+        //         min: 0,
+        //         // TODO: use js string imports for preknown strings
+        //         max: None,
+        //         init: None,
+        //     },
+        // )?;
 
         self.registries()
             .external_functions()
@@ -127,15 +127,10 @@ impl WasmProject {
             Scheduler::CallIndirect => {
                 let step_count = self.steps().try_borrow()?.len() as u64;
                 // use register_override just in case we've accidentally defined the threads table elsewhere
-                let steps_table_index = self.registries().tables().register_override(
-                    "steps".into(),
-                    TableOptions {
-                        element_type: RefType::FUNCREF,
-                        min: step_count,
-                        max: Some(step_count),
-                        init: None,
-                    },
-                )?;
+                let steps_table_index = self
+                    .registries()
+                    .tables()
+                    .register_override::<StepsTable, _, _>(step_count)?;
                 #[expect(
                     clippy::cast_possible_truncation,
                     reason = "step count should never get near to u32::MAX"
@@ -150,6 +145,14 @@ impl WasmProject {
                 );
             }
             Scheduler::TypedFuncRef => {
+                self.registries()
+                    .tables()
+                    .register_override::<ThreadsTable, usize, _>((
+                        self.registries()
+                            .types()
+                            .register_default((vec![ValType::I32], vec![]))?,
+                        self.imported_func_count()?,
+                    ))?;
                 elements.declared(Elements::Functions(
                     (self.imported_func_count()?
                         ..functions.len() + self.imported_func_count()? - 2)
@@ -250,24 +253,8 @@ impl WasmProject {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        let step_func_ty = self
-            .registries()
-            .types()
-            .register_default((vec![ValType::I32], vec![]))?;
         match self.flags.scheduler {
-            Scheduler::TypedFuncRef => self.registries().tables().register(
-                "threads".into(),
-                TableOptions {
-                    element_type: RefType {
-                        nullable: false,
-                        heap_type: HeapType::Concrete(step_func_ty),
-                    },
-                    min: 0,
-                    max: None,
-                    // default to noop, just so the module validates.
-                    init: Some(ConstExpr::ref_func(self.imported_func_count()?)),
-                },
-            ),
+            Scheduler::TypedFuncRef => self.registries().tables().register::<ThreadsTable, _>(),
             Scheduler::CallIndirect => hq_bug!(
                 "tried to access threads_table_index outside of `WasmProject::Finish` when the scheduler is not TypedFuncRef"
             ),
@@ -280,15 +267,7 @@ impl WasmProject {
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         match self.flags.scheduler {
-            Scheduler::CallIndirect => self.registries().tables().register(
-                "steps".into(),
-                TableOptions {
-                    element_type: RefType::FUNCREF,
-                    min: 0,
-                    max: None,
-                    init: None,
-                },
-            ),
+            Scheduler::CallIndirect => self.registries().tables().register::<StepsTable, _>(),
             Scheduler::TypedFuncRef => hq_bug!(
                 "tried to access steps_table_index outside of `WasmProject::Finish` when the scheduler is not CallIndirect"
             ),

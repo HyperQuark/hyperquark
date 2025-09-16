@@ -1,8 +1,8 @@
+use super::super::WasmProject;
+use super::{GlobalExportable, GlobalMutable, GlobalRegistry};
 use crate::ir::{RcVar, Type as IrType};
 use crate::prelude::*;
 use wasm_encoder::{ConstExpr, HeapType};
-
-use super::{GlobalExportable, GlobalMutable, GlobalRegistry, WasmProject};
 
 pub struct VariableRegistry(Rc<GlobalRegistry>);
 

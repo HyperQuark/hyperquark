@@ -1,7 +1,8 @@
 use super::super::prelude::*;
 use crate::ir::Step;
-use crate::wasm::TableOptions;
-use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, flags::Scheduler};
+use crate::wasm::{
+    GlobalExportable, GlobalMutable, StepFunc, ThreadsTable, flags::Scheduler,
+};
 use wasm_encoder::{ConstExpr, HeapType, MemArg};
 
 #[derive(Clone, Debug)]
@@ -76,11 +77,6 @@ pub fn wasm(
         ),
     )?;
 
-    let step_func_ty = func
-        .registries()
-        .types()
-        .register_default((vec![ValType::I32], vec![]))?;
-
     let threads_count = func.registries().globals().register(
         "threads_count".into(),
         (
@@ -114,19 +110,7 @@ pub fn wasm(
                 ]
             }
             Scheduler::TypedFuncRef => {
-                let threads_table = func.registries().tables().register(
-                    "threads".into(),
-                    TableOptions {
-                        element_type: RefType {
-                            nullable: false,
-                            heap_type: HeapType::Concrete(step_func_ty),
-                        },
-                        min: 0,
-                        max: None,
-                        // this default gets fixed up in src/wasm/tables.rs
-                        init: None,
-                    },
-                )?;
+                let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
                 wasm![
                     LocalGet(0),
                     #LazyGlobalGet(noop_global),
@@ -169,19 +153,7 @@ pub fn wasm(
                     ]
                 }
                 Scheduler::TypedFuncRef => {
-                    let threads_table = func.registries().tables().register(
-                        "threads".into(),
-                        TableOptions {
-                            element_type: RefType {
-                                nullable: false,
-                                heap_type: HeapType::Concrete(step_func_ty),
-                            },
-                            min: 0,
-                            max: None,
-                            // this default gets fixed up in src/wasm/tables.rs
-                            init: None,
-                        },
-                    )?;
+                    let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
                     wasm![
                         LocalGet(0),
                         #LazyStepRef(Weak::clone(weak_step)),

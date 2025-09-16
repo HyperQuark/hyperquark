@@ -6,13 +6,24 @@ use crate::wasm::{StepTarget, mem_layout};
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let func_index = func.registries().external_functions().register(
         ("pen", "point".into()),
-        (vec![ValType::F64, ValType::F64, ValType::F64, ValType::F32, ValType::F32, ValType::F32, ValType::F32], vec![]),
+        (
+            vec![
+                ValType::F64,
+                ValType::F64,
+                ValType::F64,
+                ValType::F32,
+                ValType::F32,
+                ValType::F32,
+                ValType::F32,
+            ],
+            vec![],
+        ),
     )?;
     let StepTarget::Sprite(wasm_target_index) = func.target() else {
         hq_bad_proj!("looks_setpendown called in stage")
     };
-    let sprite_offset = mem_layout::stage::BLOCK_SIZE + wasm_target_index * mem_layout::sprite::BLOCK_SIZE;
-    let local_index = func.local(ValType::I32)?;
+    let sprite_offset =
+        mem_layout::stage::BLOCK_SIZE + wasm_target_index * mem_layout::sprite::BLOCK_SIZE;
     Ok(wasm![
         I32Const(0),
         I32Const(1),
