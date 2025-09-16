@@ -18,6 +18,7 @@
     clippy::trivially_copy_pass_by_ref,
     reason = "too many false positives on WasmFlags, which will grow in future"
 )]
+#![allow(clippy::missing_panics_doc, reason = "too many false positives")]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
     clippy::alloc_instead_of_core,

@@ -57,6 +57,7 @@ impl Step {
         )
     }
 
+    #[must_use]
     pub fn new(
         id: Option<Box<str>>,
         context: StepContext,

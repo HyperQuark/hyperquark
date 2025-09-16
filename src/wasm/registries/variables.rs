@@ -11,6 +11,7 @@ impl VariableRegistry {
         &self.0
     }
 
+    #[must_use]
     pub fn new(globals: &Rc<GlobalRegistry>) -> Self {
         Self(Rc::clone(globals))
     }

@@ -31,6 +31,7 @@ impl WasmProject {
         reason = "can't use expect because false in test mode"
     )]
     #[allow(dead_code, reason = "not dead in test mode")]
+    #[must_use]
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         Self {
             flags,
@@ -42,15 +43,17 @@ impl WasmProject {
         }
     }
 
+    #[must_use]
     pub fn registries(&self) -> Rc<Registries> {
         Rc::clone(&self.registries)
     }
 
-    #[expect(dead_code, reason = "pub item may be used in future")]
+    #[must_use]
     pub const fn environment(&self) -> ExternalEnvironment {
         self.environment
     }
 
+    #[must_use]
     pub const fn steps(&self) -> &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
         &self.steps
     }
@@ -166,7 +169,7 @@ impl WasmProject {
         self.registries()
             .tables()
             .clone()
-            .finish(&imports, &mut tables, &mut exports);
+            .finish(&mut tables, &mut exports);
 
         exports.export("memory", ExportKind::Memory, 0);
         exports.export("noop", ExportKind::Func, self.imported_func_count()?);

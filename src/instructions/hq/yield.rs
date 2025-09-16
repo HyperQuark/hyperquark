@@ -1,8 +1,6 @@
 use super::super::prelude::*;
 use crate::ir::Step;
-use crate::wasm::{
-    GlobalExportable, GlobalMutable, StepFunc, ThreadsTable, flags::Scheduler,
-};
+use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable, flags::Scheduler};
 use wasm_encoder::{ConstExpr, HeapType, MemArg};
 
 #[derive(Clone, Debug)]

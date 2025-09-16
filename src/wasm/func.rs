@@ -133,6 +133,7 @@ impl StepFunc {
     }
 
     /// creates a new step function, with one paramter
+    #[must_use]
     pub fn new(
         registries: Rc<Registries>,
         flags: WasmFlags,
@@ -154,6 +155,7 @@ impl StepFunc {
 
     /// creates a new step function with the specified amount of paramters.
     /// currently only used in testing to validate types
+    #[must_use]
     pub fn new_with_types(
         params: Box<[ValType]>,
         output: Box<[ValType]>,

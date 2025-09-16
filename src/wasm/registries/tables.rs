@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use wasm_encoder::{
-    ConstExpr, ExportKind, ExportSection, HeapType, ImportSection, RefType, TableSection, TableType,
+    ConstExpr, ExportKind, ExportSection, HeapType, RefType, TableSection, TableType,
 };
 
 #[derive(Clone, Debug)]
@@ -20,19 +20,14 @@ impl RegistryType for TableRegistrar {
 pub type TableRegistry = NamedRegistry<TableRegistrar>;
 
 impl TableRegistry {
-    pub fn finish(
-        self,
-        imports: &ImportSection,
-        tables: &mut TableSection,
-        exports: &mut ExportSection,
-    ) {
+    pub fn finish(self, tables: &mut TableSection, exports: &mut ExportSection) {
         for (
             key,
             TableOptions {
                 element_type,
                 min,
                 max,
-                init,
+                init: maybe_init,
             },
         ) in self.registry().take()
         {
@@ -42,7 +37,7 @@ impl TableRegistry {
             //     "threads" => Some(ConstExpr::ref_func(imports.len())),
             //     _ => init,
             // };
-            if let Some(init) = init {
+            if let Some(init) = maybe_init {
                 tables.table_with_init(
                     TableType {
                         element_type,

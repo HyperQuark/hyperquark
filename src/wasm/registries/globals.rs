@@ -25,7 +25,8 @@ impl Deref for GlobalExportable {
     }
 }
 
-pub type GlobalRegistry = MapRegistry<Box<str>, (ValType, ConstExpr, GlobalMutable, GlobalExportable)>;
+pub type GlobalRegistry =
+    MapRegistry<Box<str>, (ValType, ConstExpr, GlobalMutable, GlobalExportable)>;
 
 impl GlobalRegistry {
     pub fn finish(

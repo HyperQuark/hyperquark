@@ -40,6 +40,7 @@ impl IrProject {
         &self.global_variables
     }
 
+    #[must_use]
     pub fn new(global_variables: TargetVars) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),

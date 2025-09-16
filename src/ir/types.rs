@@ -67,10 +67,12 @@ pub enum Type {
 impl Type {
     pub const BASE_TYPES: [Self; 3] = [Self::String, Self::QuasiInt, Self::Float];
 
+    #[must_use]
     pub fn is_base_type(self) -> bool {
         (!self.is_none()) && Self::BASE_TYPES.iter().any(|ty| ty.contains(self))
     }
 
+    #[must_use]
     pub fn base_type(self) -> Option<Self> {
         if !self.is_base_type() {
             return None;
@@ -81,6 +83,7 @@ impl Type {
             .find(|&ty| ty.contains(self))
     }
 
+    #[must_use]
     pub fn base_types(self) -> Box<dyn Iterator<Item = Self>> {
         if self.is_none() {
             return Box::new(core::iter::empty());
@@ -93,26 +96,31 @@ impl Type {
         )
     }
 
+    #[must_use]
     pub const fn maybe_positive(self) -> bool {
         self.contains(Self::IntPos)
             || self.intersects(Self::FloatPos)
             || self.contains(Self::BooleanTrue)
     }
 
+    #[must_use]
     pub const fn maybe_negative(self) -> bool {
         self.contains(Self::IntNeg) || self.intersects(Self::FloatNeg)
     }
 
+    #[must_use]
     pub const fn maybe_zero(self) -> bool {
         self.contains(Self::IntZero)
             || self.contains(Self::BooleanFalse)
             || self.intersects(Self::FloatZero)
     }
 
+    #[must_use]
     pub const fn maybe_nan(self) -> bool {
         self.intersects(Self::FloatNan) || self.contains(Self::StringNan)
     }
 
+    #[must_use]
     pub const fn none_if_false(condition: bool, if_true: Self) -> Self {
         if condition { if_true } else { Self::none() }
     }

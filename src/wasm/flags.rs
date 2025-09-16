@@ -47,6 +47,7 @@ pub enum WasmFeature {
 }
 
 #[wasm_bindgen]
+#[must_use]
 pub fn all_wasm_features() -> Vec<WasmFeature> {
     use WasmFeature::{JSStringBuiltins, ReferenceTypes, TypedFunctionReferences};
     vec![ReferenceTypes, TypedFunctionReferences, JSStringBuiltins]
@@ -54,6 +55,7 @@ pub fn all_wasm_features() -> Vec<WasmFeature> {
 
 // no &self because wasm_bidgen doesn't like it
 #[wasm_bindgen]
+#[must_use]
 pub fn wasm_feature_detect_name(feat: WasmFeature) -> String {
     use WasmFeature::{JSStringBuiltins, ReferenceTypes, TypedFunctionReferences};
     match feat {
@@ -111,6 +113,7 @@ impl FlagInfo {
     }
 
     #[wasm_bindgen]
+    #[must_use]
     pub fn wasm_features(&self, flag: &str) -> Option<Vec<WasmFeature>> {
         self.wasm_features.get(flag).cloned()
     }
@@ -155,11 +158,6 @@ pub struct WasmFlags {
 impl WasmFlags {
     // these attributes should be at the item level, but they don't seem to work there.
     #![expect(
-        clippy::wrong_self_convention,
-        clippy::trivially_copy_pass_by_ref,
-        reason = "to_js taking `self` causes weird errors when wasm-fied"
-    )]
-    #![expect(
         clippy::needless_pass_by_value,
         reason = "wasm-bindgen does not support &[T]"
     )]
@@ -177,6 +175,7 @@ impl WasmFlags {
     }
 
     #[wasm_bindgen(constructor)]
+    #[must_use]
     pub fn new(wasm_features: Vec<WasmFeature>) -> Self {
         crate::log(format!("{wasm_features:?}").as_str());
         Self {
@@ -193,6 +192,7 @@ impl WasmFlags {
     }
 
     #[wasm_bindgen]
+    #[must_use]
     pub fn flag_info(flag: &str) -> FlagInfo {
         match flag {
             "string_type" => FlagInfo::new()
