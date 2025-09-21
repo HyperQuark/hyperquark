@@ -62,10 +62,24 @@ pub enum Type {
 
     Any = Self::String.or(Self::Number).bits,
 
-    Color,
+    // two different colour types are needed because calling `set pen colour to ()` without an alpha component
+    // resets the pen transparency to 0.
+    ColorRGB,
+    ColorARGB,
+
+    Color = Self::ColorRGB.or(Self::ColorARGB).bits,
+
+    AnyOrColor = Self::Any.or(Self::Color).bits,
 }
+
 impl Type {
-    pub const BASE_TYPES: [Self; 3] = [Self::String, Self::QuasiInt, Self::Float];
+    pub const BASE_TYPES: [Self; 5] = [
+        Self::String,
+        Self::QuasiInt,
+        Self::ColorRGB,
+        Self::ColorARGB,
+        Self::Float,
+    ];
 
     #[must_use]
     pub fn is_base_type(self) -> bool {
@@ -101,6 +115,7 @@ impl Type {
         self.contains(Self::IntPos)
             || self.intersects(Self::FloatPos)
             || self.contains(Self::BooleanTrue)
+            || self.contains(Self::Color)
     }
 
     #[must_use]
@@ -113,6 +128,7 @@ impl Type {
         self.contains(Self::IntZero)
             || self.contains(Self::BooleanFalse)
             || self.intersects(Self::FloatZero)
+            || self.contains(Self::Color)
     }
 
     #[must_use]

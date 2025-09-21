@@ -13,6 +13,44 @@ use wasm_encoder::ConstExpr;
 use wasm_encoder::{BlockType, Instruction as WInstruction};
 use wasm_gen::wasm;
 
+/// Takes a base type and gives the NaN-boxed pattern for that type
+fn boxed_pattern(ty: IrType) -> HQResult<i64> {
+    Ok(match ty {
+        IrType::QuasiInt => BOXED_INT_PATTERN,
+        IrType::String => BOXED_STRING_PATTERN,
+        IrType::ColorARGB => BOXED_COLOR_ARGB_PATTERN,
+        IrType::ColorRGB => BOXED_COLOR_RGB_PATTERN,
+        _ => hq_bug!("bad type for boxed pattern"),
+    })
+}
+
+fn unbox_instructions(ty: IrType, func: &StepFunc) -> HQResult<Vec<InternalInstruction>> {
+    Ok(match ty {
+        IrType::QuasiInt | IrType::ColorARGB | IrType::ColorRGB => wasm![I32WrapI64],
+        IrType::String => {
+            let table_index = func.registries().tables().register::<StringsTable, _>()?;
+            wasm![I32WrapI64, TableGet(table_index)]
+        }
+        IrType::Float => wasm![F64ReinterpretI64],
+        _ => hq_bug!("bad type for unboxing instructions"),
+    })
+}
+
+fn box_type_check(ty: IrType, if_block_type: BlockType) -> HQResult<Vec<InternalInstruction>> {
+    Ok(if ty == IrType::Float {
+        wasm![]
+    } else {
+        let box_pattern = boxed_pattern(ty)?;
+        wasm![
+            I64Const(box_pattern),
+            I64And,
+            I64Const(box_pattern),
+            I64Eq,
+            If(if_block_type),
+        ]
+    })
+}
+
 fn cast_instructions(
     pos: usize,
     base: IrType,
@@ -22,74 +60,23 @@ fn cast_instructions(
     possible_types_num: usize,
 ) -> HQResult<Vec<InternalInstruction>> {
     Ok(if pos == 0 {
-        match base {
-            IrType::QuasiInt => wasm![
-                I64Const(BOXED_INT_PATTERN),
-                I64And,
-                I64Const(BOXED_INT_PATTERN),
-                I64Eq,
-                If(if_block_type),
-                LocalGet(local_idx),
-                I32WrapI64,
-            ],
-            IrType::String => {
-                let table_index = func.registries().tables().register::<StringsTable, _>()?;
-                wasm![
-                    I64Const(BOXED_STRING_PATTERN),
-                    I64And,
-                    I64Const(BOXED_STRING_PATTERN),
-                    I64Eq,
-                    If(if_block_type),
-                    LocalGet(local_idx),
-                    I32WrapI64,
-                    TableGet(table_index),
-                ]
-            }
-            // float guaranteed to be last so no need to check
-            _ => unreachable!(),
-        }
+        box_type_check(base, if_block_type)?
+            .into_iter()
+            .chain(wasm![LocalGet(local_idx)])
+            .chain(unbox_instructions(base, func)?)
+            .collect()
     } else if pos == possible_types_num - 1 {
-        match base {
-            IrType::Float => wasm![Else, LocalGet(local_idx), F64ReinterpretI64], // float guaranteed to be last so no need to check
-            IrType::QuasiInt => wasm![Else, LocalGet(local_idx), I32WrapI64],
-            IrType::String => {
-                let table_index = func.registries().tables().register::<StringsTable, _>()?;
-                wasm![Else, LocalGet(local_idx), I32WrapI64, TableGet(table_index)]
-            }
-            _ => unreachable!(),
-        }
+        wasm![Else, LocalGet(local_idx)]
+            .into_iter()
+            .chain(unbox_instructions(base, func)?)
+            .collect()
     } else {
-        match base {
-            // float guaranteed to be last so no need to check
-            IrType::Float => wasm![Else, LocalGet(local_idx), F64ReinterpretI64],
-            IrType::QuasiInt => wasm![
-                Else,
-                LocalGet(local_idx),
-                I64Const(BOXED_INT_PATTERN),
-                I64And,
-                I64Const(BOXED_INT_PATTERN),
-                I64Eq,
-                If(if_block_type),
-                LocalGet(local_idx),
-                I32WrapI64,
-            ],
-            IrType::String => {
-                let table_index = func.registries().tables().register::<StringsTable, _>()?;
-                wasm![
-                    Else,
-                    LocalGet(local_idx),
-                    I64Const(BOXED_STRING_PATTERN),
-                    I64And,
-                    I64Const(BOXED_STRING_PATTERN),
-                    I64Eq,
-                    If(if_block_type),
-                    LocalGet(local_idx),
-                    I32WrapI64,
-                    TableGet(table_index),
-                ]
-            }
-            _ => unreachable!(),
-        }
+        wasm![Else, LocalGet(local_idx)]
+            .into_iter()
+            .chain(box_type_check(base, if_block_type)?)
+            .chain(wasm![LocalGet(local_idx)])
+            .chain(unbox_instructions(base, func)?)
+            .collect()
     })
 }
 
@@ -230,7 +217,7 @@ pub fn wrap_instruction(
     let base_types =
         // check for float last of all, because I don't think there's an easy way of checking
         // if something is *not* a canonical NaN with extra bits
-        core::iter::repeat_n([IrType::QuasiInt, IrType::String, IrType::Float].into_iter(), inputs.len())
+        core::iter::repeat_n(IrType::BASE_TYPES.into_iter(), inputs.len())
             .enumerate()
             .map(|(i, tys)| {
                 tys.filter(|ty| inputs[i].intersects(*ty)).map(|ty| ty.and(inputs[i]))

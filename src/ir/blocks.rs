@@ -5,9 +5,9 @@ use crate::instructions::{
     IrOpcode, YieldMode,
     fields::{
         ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-        DataVariableFields, HqBooleanFields, HqCastFields, HqFloatFields, HqIntegerFields,
-        HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
-        ProceduresCallWarpFields,
+        DataVariableFields, HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields,
+        HqIntegerFields, HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields,
+        ProceduresArgumentFields, ProceduresCallWarpFields,
     },
 };
 use crate::ir::ReturnType;
@@ -15,6 +15,8 @@ use crate::prelude::*;
 use crate::sb3;
 use crate::wasm::WasmFlags;
 use crate::wasm::flags::UseIntegers;
+use lazy_regex::{Lazy, lazy_regex};
+use regex::Regex;
 use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
 pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
@@ -195,6 +197,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
             BlockOpcode::looks_setsizeto | BlockOpcode::pen_setPenSizeTo => vec!["SIZE"],
             BlockOpcode::looks_changesizeby => vec!["CHANGE"],
+            BlockOpcode::pen_setPenColorToColor => vec!["COLOR"],
             BlockOpcode::procedures_call => {
                 let serde_json::Value::String(proccode) = block_info
                     .mutation
@@ -1077,6 +1080,9 @@ fn from_normal_block(
                         BlockOpcode::pen_penDown => vec![IrOpcode::pen_pendown],
                         BlockOpcode::pen_penUp => vec![IrOpcode::pen_penup],
                         BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setpensizeto],
+                        BlockOpcode::pen_setPenColorToColor => {
+                            vec![IrOpcode::pen_setpencolortocolor]
+                        }
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_size => vec![IrOpcode::looks_size],
                         BlockOpcode::looks_changesizeby => vec![
@@ -1085,7 +1091,6 @@ fn from_normal_block(
                             IrOpcode::looks_setsizeto,
                         ],
                         BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
-
                         BlockOpcode::looks_costumenumbername => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
                                 block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
@@ -1244,6 +1249,9 @@ fn from_normal_block(
     Ok(opcodes.into_iter().collect())
 }
 
+static SHORTHAND_HEX_COLOUR_REGEX: Lazy<Regex> = lazy_regex!(r#"^#?([a-f\d])([a-f\d])([a-f\d])$"#i);
+static HEX_COLOUR_REGEX: Lazy<Regex> = lazy_regex!(r#"^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$"#i);
+
 fn from_special_block(
     block_array: &BlockArray,
     context: &StepContext,
@@ -1324,7 +1332,25 @@ fn from_special_block(
                 }
             }
             // colour
-            9 => hq_todo!("colour inputs"),
+            9 => {
+                let hex = (*SHORTHAND_HEX_COLOUR_REGEX).replace(value, "$1$1$2$2$3$3");
+                if let Some(captures) = (*HEX_COLOUR_REGEX).captures(&hex) {
+                    if let box [r, g, b] = (1..4)
+                        .map(|i| &captures[i])
+                        .map(|capture| {
+                            u8::from_str_radix(capture, 16)
+                                .map_err(|_| make_hq_bug!("hex substring out of u8 bounds"))
+                        })
+                        .collect::<HQResult<Box<[_]>>>()?
+                    {
+                        IrOpcode::hq_color_rgb(HqColorRgbFields { r, g, b })
+                    } else {
+                        IrOpcode::hq_color_rgb(HqColorRgbFields { r: 0, g: 0, b: 0 })
+                    }
+                } else {
+                    IrOpcode::hq_color_rgb(HqColorRgbFields { r: 0, g: 0, b: 0 })
+                }
+            }
             // string
             10 => 'textBlock: {
                 // proactively convert to a number

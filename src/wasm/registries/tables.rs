@@ -102,8 +102,10 @@ impl NamedRegistryItem<TableOptions> for ThreadsTable {
         init: None,
     };
 }
-impl NamedRegistryItemOverride<TableOptions, (u32, u32)> for ThreadsTable {
-    fn r#override((step_func_ty, imported_func_count): (u32, u32)) -> TableOptions {
+impl NamedRegistryItemOverride<TableOptions, (u32, u32, u32)> for ThreadsTable {
+    fn r#override(
+        (step_func_ty, imported_func_count, static_func_count): (u32, u32, u32),
+    ) -> TableOptions {
         TableOptions {
             element_type: RefType {
                 nullable: false,
@@ -111,7 +113,7 @@ impl NamedRegistryItemOverride<TableOptions, (u32, u32)> for ThreadsTable {
             },
             min: 0,
             max: None,
-            init: Some(ConstExpr::ref_func(imported_func_count)),
+            init: Some(ConstExpr::ref_func(imported_func_count + static_func_count)),
         }
     }
 }

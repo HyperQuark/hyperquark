@@ -1,6 +1,7 @@
 pub mod external;
 pub mod flags;
 pub mod func;
+#[macro_use]
 pub mod mem_layout;
 pub mod project;
 pub mod registries;

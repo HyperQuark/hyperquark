@@ -16,6 +16,7 @@ pub enum Instruction {
     LazyWarpedProcCall(Rc<Proc>),
     LazyGlobalGet(u32),
     LazyGlobalSet(u32),
+    StaticFunctionCall(u32),
 }
 
 impl Instruction {
@@ -23,6 +24,7 @@ impl Instruction {
         &self,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         imported_func_count: u32,
+        static_func_count: u32,
         imported_global_count: u32,
     ) -> HQResult<WInstruction<'static>> {
         Ok(match self {
@@ -38,7 +40,7 @@ impl Instruction {
                     .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                WInstruction::RefFunc(imported_func_count + step_index)
+                WInstruction::RefFunc(imported_func_count + static_func_count + step_index)
             }
             Self::LazyStepIndex(step) => {
                 let step_index: i32 = steps
@@ -67,7 +69,7 @@ impl Instruction {
                     .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                WInstruction::Call(imported_func_count + step_index)
+                WInstruction::Call(imported_func_count + static_func_count + step_index)
             }
             Self::LazyGlobalGet(idx) => {
                 crate::log!("global get {idx}. imported globals: {imported_global_count}");
@@ -77,6 +79,7 @@ impl Instruction {
                 crate::log!("global get {idx}. imported globals: {imported_global_count}");
                 WInstruction::GlobalSet(idx + imported_global_count)
             }
+            Self::StaticFunctionCall(idx) => WInstruction::Call(imported_func_count + idx),
         })
     }
 }
@@ -227,6 +230,7 @@ impl StepFunc {
         code: &mut CodeSection,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         imported_func_count: u32,
+        static_func_count: u32,
         imported_global_count: u32,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
@@ -234,6 +238,7 @@ impl StepFunc {
             func.instruction(&instruction.eval(
                 steps,
                 imported_func_count,
+                static_func_count,
                 imported_global_count,
             )?);
         }

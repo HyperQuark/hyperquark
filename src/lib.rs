@@ -2,6 +2,7 @@
 #![feature(if_let_guard)]
 #![feature(try_blocks)]
 #![feature(associated_type_defaults)]
+#![feature(box_patterns)]
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]
@@ -19,6 +20,10 @@
     reason = "too many false positives on WasmFlags, which will grow in future"
 )]
 #![allow(clippy::missing_panics_doc, reason = "too many false positives")]
+#![allow(
+    clippy::multiple_crate_versions,
+    reason = "difficult to fix w.r.t. dependencies"
+)]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
     clippy::alloc_instead_of_core,

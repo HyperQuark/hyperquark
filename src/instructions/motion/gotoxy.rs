@@ -21,10 +21,10 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
                 ValType::F64,
                 ValType::F64,
                 ValType::F64,
-                ValType::F64,
-                ValType::F64,
-                ValType::F64,
-                ValType::F64,
+                ValType::F32,
+                ValType::F32,
+                ValType::F32,
+                ValType::F32,
             ],
             vec![],
         ),
@@ -77,39 +77,39 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
         LocalGet(x_local),
         LocalGet(y_local),
         I32Const(0),
-        F64Load(MemArg {
+        F32Load(MemArg {
             offset: (stage_layout::BLOCK_SIZE
                 + wasm_target_index * sprite_layout::BLOCK_SIZE
                 + sprite_layout::PEN_COLOR_R)
                 .into(),
-            align: 3,
+            align: 2,
             memory_index: 0
         }),
         I32Const(0),
-        F64Load(MemArg {
+        F32Load(MemArg {
+            offset: (stage_layout::BLOCK_SIZE
+                + wasm_target_index * sprite_layout::BLOCK_SIZE
+                + sprite_layout::PEN_COLOR_G)
+                .into(),
+            align: 2,
+            memory_index: 0
+        }),
+        I32Const(0),
+        F32Load(MemArg {
             offset: (stage_layout::BLOCK_SIZE
                 + wasm_target_index * sprite_layout::BLOCK_SIZE
                 + sprite_layout::PEN_COLOR_B)
                 .into(),
-            align: 3,
+            align: 2,
             memory_index: 0
         }),
         I32Const(0),
-        F64Load(MemArg {
-            offset: (stage_layout::BLOCK_SIZE
-                + wasm_target_index * sprite_layout::BLOCK_SIZE
-                + sprite_layout::PEN_COLOR_B)
-                .into(),
-            align: 3,
-            memory_index: 0
-        }),
-        I32Const(0),
-        F64Load(MemArg {
+        F32Load(MemArg {
             offset: (stage_layout::BLOCK_SIZE
                 + wasm_target_index * sprite_layout::BLOCK_SIZE
                 + sprite_layout::PEN_COLOR_A)
                 .into(),
-            align: 3,
+            align: 2,
             memory_index: 0
         }),
         Call(pen_func_index),

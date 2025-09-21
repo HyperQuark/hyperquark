@@ -63,9 +63,8 @@ impl WasmProject {
         let base = ir_type.base_type();
         Ok(match base {
             Some(IrType::Float) => ValType::F64,
-            Some(IrType::QuasiInt) => ValType::I32,
+            Some(IrType::QuasiInt | IrType::ColorARGB | IrType::ColorRGB) => ValType::I32,
             Some(IrType::String) => ValType::EXTERNREF,
-            Some(IrType::Color) => hq_todo!("colours"), //ValType::V128 // f32x4?
             None => ValType::I64, // NaN boxed value... let's worry about colors later
             Some(_) => unreachable!(),
         })
@@ -110,12 +109,20 @@ impl WasmProject {
             .external_functions()
             .clone()
             .finish(&mut imports, self.registries().types())?;
+
+        self.registries().static_functions().clone().finish(
+            &mut functions,
+            &mut codes,
+            self.registries.types(),
+        )?;
+
         for step_func in self.steps().try_borrow()?.values().cloned() {
             step_func.finish(
                 &mut functions,
                 &mut codes,
                 self.steps(),
                 self.imported_func_count()?,
+                self.static_func_count()?,
                 self.imported_global_count()?,
             )?;
         }
@@ -139,7 +146,7 @@ impl WasmProject {
                     reason = "step count should never get near to u32::MAX"
                 )]
                 let func_indices: Vec<u32> = (0..step_count)
-                    .map(|i| Ok(self.imported_func_count()? + i as u32))
+                    .map(|i| Ok(self.imported_func_count()? + self.static_func_count()? + i as u32))
                     .collect::<HQResult<_>>()?;
                 elements.active(
                     Some(steps_table_index),
@@ -155,10 +162,14 @@ impl WasmProject {
                             .types()
                             .register_default((vec![ValType::I32], vec![]))?,
                         self.imported_func_count()?,
+                        self.static_func_count()?,
                     ))?;
                 elements.declared(Elements::Functions(
-                    (self.imported_func_count()?
-                        ..functions.len() + self.imported_func_count()? - 2)
+                    (self.imported_func_count()? + self.static_func_count()?
+                        ..functions.len()
+                            + self.imported_func_count()?
+                            + self.static_func_count()?
+                            - 2)
                         .collect(),
                 ));
             }
@@ -172,7 +183,11 @@ impl WasmProject {
             .finish(&mut tables, &mut exports);
 
         exports.export("memory", ExportKind::Memory, 0);
-        exports.export("noop", ExportKind::Func, self.imported_func_count()?);
+        exports.export(
+            "noop",
+            ExportKind::Func,
+            self.imported_func_count()? + self.static_func_count()?,
+        );
 
         self.registries().globals().clone().finish(
             &imports,
@@ -215,6 +230,16 @@ impl WasmProject {
             .len()
             .try_into()
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
+    }
+
+    fn static_func_count(&self) -> HQResult<u32> {
+        self.registries()
+            .static_functions()
+            .registry()
+            .try_borrow()?
+            .len()
+            .try_into()
+            .map_err(|_| make_hq_bug!("static function map len out of bounds"))
     }
 
     fn imported_global_count(&self) -> HQResult<u32> {
@@ -305,13 +330,13 @@ impl WasmProject {
                     format!(
                         "event step idx: {}; func idx: {}",
                         i,
-                        i + self.imported_func_count()?
+                        i + self.imported_func_count()? + self.static_func_count()?
                     )
                     .as_str(),
                 );
                 Ok(match self.flags.scheduler {
                     Scheduler::TypedFuncRef => wasm![
-                        RefFunc(i + self.imported_func_count()?),
+                        RefFunc(i + self.imported_func_count()? + self.static_func_count()?),
                         I32Const(1),
                         TableGrow(self.threads_table_index()?),
                         Drop,
@@ -339,6 +364,7 @@ impl WasmProject {
             func.instruction(&instruction.eval(
                 self.steps(),
                 self.imported_func_count()?,
+                self.static_func_count()?,
                 self.imported_global_count()?,
             )?);
         }
@@ -354,6 +380,7 @@ impl WasmProject {
             func.instruction(&instruction.eval(
                 self.steps(),
                 self.imported_func_count()?,
+                self.static_func_count()?,
                 self.imported_global_count()?,
             )?);
         }
@@ -472,6 +499,7 @@ impl WasmProject {
             tick_func.instruction(&instr.eval(
                 self.steps(),
                 self.imported_func_count()?,
+                self.static_func_count()?,
                 self.imported_global_count()?,
             )?);
         }

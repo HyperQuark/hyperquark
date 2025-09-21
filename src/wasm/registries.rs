@@ -7,7 +7,7 @@ pub mod types;
 pub mod variables;
 
 use crate::prelude::*;
-pub use functions::ExternalFunctionRegistry;
+pub use functions::{ExternalFunctionRegistry, StaticFunctionRegistry};
 pub use globals::{GlobalExportable, GlobalMutable, GlobalRegistry};
 pub use strings::StringRegistry;
 pub use tables::{StepsTable, StringsTable, TableRegistry, ThreadsTable};
@@ -18,6 +18,7 @@ pub use variables::VariableRegistry;
 pub struct Registries {
     strings: StringRegistry,
     external_functions: ExternalFunctionRegistry,
+    static_functions: StaticFunctionRegistry,
     types: TypeRegistry,
     tables: TableRegistry,
     globals: Rc<GlobalRegistry>,
@@ -37,6 +38,7 @@ impl Default for Registries {
             tables: TableRegistry::default(),
             types: TypeRegistry::default(),
             sprites: SpriteRegistry::default(),
+            static_functions: StaticFunctionRegistry::default(),
         }
     }
 }
@@ -48,6 +50,10 @@ impl Registries {
 
     pub const fn external_functions(&self) -> &ExternalFunctionRegistry {
         &self.external_functions
+    }
+
+    pub const fn static_functions(&self) -> &StaticFunctionRegistry {
+        &self.static_functions
     }
 
     pub const fn types(&self) -> &TypeRegistry {

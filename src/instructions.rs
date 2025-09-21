@@ -42,6 +42,10 @@ mod prelude {
 
     /// Canonical NaN + bit 33, + string pointer in bits 1-32
     pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
-    /// Canonical NaN + bit 33, + i32 in bits 1-32
+    /// Canonical NaN + bit 34, + i32 in bits 1-32
     pub const BOXED_INT_PATTERN: i64 = 0x7ff8_0002 << 32;
+    /// Canonical NaN + bit 35, + i32 in bits 1-32
+    pub const BOXED_COLOR_RGB_PATTERN: i64 = 0x7ff8_0004 << 32;
+    /// Canonical NaN + bit 36, + i32 in bits 1-32
+    pub const BOXED_COLOR_ARGB_PATTERN: i64 = 0x7ff8_0008 << 32;
 }
