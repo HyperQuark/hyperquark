@@ -171,10 +171,10 @@ impl Step {
                 .iter()
                 .find(|step| step.id == block_id)
         {
-            crate::log(
-                format!("step from_block already exists! (id: {block_id:?}); returning early")
-                    .as_str(),
-            );
+            // crate::log(
+            //     format!("step from_block already exists! (id: {block_id:?}); returning early")
+            //         .as_str(),
+            // );
             return Ok(Rc::clone(existing_step));
         }
         let id = if used_non_inline {

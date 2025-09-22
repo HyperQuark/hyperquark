@@ -97,6 +97,6 @@ pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
     Ok(ReturnType::None)
 }
 
-pub const REQUESTS_SCREEN_REFRESH: bool = true;
+pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test! {tests; pen_setpencolortocolor; t ; }

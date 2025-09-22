@@ -12,7 +12,7 @@ use crate::instructions::{
 };
 use crate::ir::ReturnType;
 use crate::prelude::*;
-use crate::sb3;
+use crate::sb3::{self, Field, VarVal};
 use crate::wasm::WasmFlags;
 use crate::wasm::flags::UseIntegers;
 use lazy_regex::{Lazy, lazy_regex};
@@ -186,8 +186,10 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::pen_penDown
             | BlockOpcode::pen_penUp
             | BlockOpcode::pen_clear
-            | BlockOpcode::control_forever => vec![],
+            | BlockOpcode::control_forever
+            | BlockOpcode::pen_menu_colorParam => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
+            BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
             | BlockOpcode::control_repeat_until => vec!["CONDITION"],
@@ -491,14 +493,14 @@ fn generate_if_else(
     should_break: &mut bool,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
-    crate::log(
-        format!(
-            "generate_if_else (if block: {}) (else block?: {})",
-            if_block.1,
-            maybe_else_block.is_some()
-        )
-        .as_str(),
-    );
+    // crate::log(
+    //     format!(
+    //         "generate_if_else (if block: {}) (else block?: {})",
+    //         if_block.1,
+    //         maybe_else_block.is_some()
+    //     )
+    //     .as_str(),
+    // );
     let this_project = context.project()?;
     let dummy_project = Rc::new(IrProject::new(this_project.global_variables().clone()));
     let dummy_target = Rc::new(Target::new(
@@ -546,9 +548,9 @@ fn generate_if_else(
             Rc::clone(&dummy_target),
         )?
     };
-    let if_step_yields = dummy_if_step.does_yield()?;
-    let else_step_yields = dummy_else_step.does_yield()?;
-    crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
+    // let if_step_yields = dummy_if_step.does_yield()?;
+    // let else_step_yields = dummy_else_step.does_yield()?;
+    // crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
     if !context.warp && (dummy_if_step.does_yield()? || dummy_else_step.does_yield()?) {
         // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
         // version inline after the branch, and the other tagged on in the substep's NextBlocks
@@ -558,7 +560,7 @@ fn generate_if_else(
             reason = "map_or_else alternative is too complex"
         )]
         let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
-            crate::log("got next block from block_info.next");
+            // crate::log("got next block from block_info.next");
             (
                 Some(NextBlock::ID(next_block.clone())),
                 final_next_blocks.extend_with_inner(NextBlockInfo {
@@ -567,17 +569,17 @@ fn generate_if_else(
                 }),
             )
         } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
-            crate::log("got next block from popping from final_next_blocks");
+            // crate::log("got next block from popping from final_next_blocks");
             (Some(next_block_info.block), final_next_blocks.clone())
         } else {
-            crate::log("no next block found");
+            // crate::log("no next block found");
             (
                 None,
                 final_next_blocks.clone(), // preserve termination behaviour
             )
         };
         let final_if_step = {
-            let s = Step::from_block(
+            Step::from_block(
                 if_block.0,
                 if_block.1,
                 blocks,
@@ -586,12 +588,11 @@ fn generate_if_else(
                 next_blocks.clone(),
                 false,
                 flags,
-            )?;
-            crate::log("recompiled if_step with correct next blocks");
-            s
+            )?
+            // crate::log("recompiled if_step with correct next blocks");
         };
         let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
-            let s = Step::from_block(
+            Step::from_block(
                 else_block,
                 else_block_id,
                 blocks,
@@ -600,18 +601,17 @@ fn generate_if_else(
                 next_blocks,
                 false,
                 flags,
-            )?;
-            crate::log("recompiled else step with correct next blocks");
-            s
+            )?
+            // crate::log("recompiled else step with correct next blocks");
         } else {
             let opcode = match next_block {
                 Some(NextBlock::ID(id)) => {
                     let next_block = blocks
                         .get(&id)
                         .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                    crate::log(
-                        format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
-                    );
+                    // crate::log(
+                    //     format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
+                    // );
                     vec![IrOpcode::hq_yield(HqYieldFields {
                         mode: YieldMode::Inline(
                             (*Step::from_block(
@@ -632,7 +632,7 @@ fn generate_if_else(
                     let rcstep = step
                         .upgrade()
                         .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
-                    crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
+                    // crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
                     if rcstep.used_non_inline() {
                         vec![IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Inline((*rcstep).clone(false)?),
@@ -644,14 +644,14 @@ fn generate_if_else(
                     }
                 }
                 None => {
-                    crate::log("no next block after if!");
+                    // crate::log("no next block after if!");
                     if next_blocks.terminating() {
-                        crate::log("terminating after if/else\n");
+                        // crate::log("terminating after if/else\n");
                         vec![IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::None,
                         })]
                     } else {
-                        crate::log("not terminating, at end of if/else");
+                        // crate::log("not terminating, at end of if/else");
                         vec![]
                     }
                 }
@@ -790,7 +790,7 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            crate::log!("marked variable {:?} as used", id);
+                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                 var: RefCell::new(variable.var.clone()),
                                 local_write: RefCell::new(false),
@@ -829,7 +829,7 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            crate::log!("marked variable {:?} as used", id);
+                            // crate::log!("marked variable {:?} as used", id);
                             vec![
                                 IrOpcode::data_variable(DataVariableFields {
                                     var: RefCell::new(variable.var.clone()),
@@ -875,7 +875,7 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            crate::log!("marked variable {:?} as used", id);
+                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_variable(DataVariableFields {
                                 var: RefCell::new(variable.var.clone()),
                                 local_read: RefCell::new(false),
@@ -1082,6 +1082,30 @@ fn from_normal_block(
                         BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setpensizeto],
                         BlockOpcode::pen_setPenColorToColor => {
                             vec![IrOpcode::pen_setpencolortocolor]
+                        }
+                        BlockOpcode::pen_setPenColorParamTo => {
+                            vec![IrOpcode::pen_setpencolorparamto]
+                        }
+                        BlockOpcode::pen_menu_colorParam => {
+                            let maybe_val =
+                                match block_info.fields.get("colorParam").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field colorParam"
+                                    )
+                                })? {
+                                    Field::Value((v,)) | Field::ValueId(v, _) => v,
+                                };
+                            let val_varval = maybe_val.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null value for OPERATOR field"
+                                )
+                            })?;
+                            let VarVal::String(val) = val_varval else {
+                                hq_bad_proj!(
+                                    "invalid project.json - expected colorParam field to be string"
+                                );
+                            };
+                            vec![IrOpcode::hq_text(HqTextFields(val))]
                         }
                         BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
                         BlockOpcode::looks_size => vec![IrOpcode::looks_size],
@@ -1391,7 +1415,7 @@ fn from_special_block(
                         hq_bad_proj!("variable not found")
                     };
                     *variable.is_used.try_borrow_mut()? = true;
-                    crate::log!("marked variable {:?} as used", id);
+                    // crate::log!("marked variable {:?} as used", id);
                     IrOpcode::data_variable(DataVariableFields {
                         var: RefCell::new(variable.var.clone()),
                         local_read: RefCell::new(false),

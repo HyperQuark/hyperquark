@@ -177,7 +177,7 @@ fn fixup_proc_types(
                     .iter()
                     .chain(target_vars)
                     .map(|var| {
-                        crate::log!("{var}");
+                        // crate::log!("{var}");
                         Ok(IrOpcode::data_variable(DataVariableFields {
                             var: RefCell::new(var.clone()),
                             local_read: RefCell::new(false),

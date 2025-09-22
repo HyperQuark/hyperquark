@@ -72,11 +72,11 @@ impl Instruction {
                 WInstruction::Call(imported_func_count + static_func_count + step_index)
             }
             Self::LazyGlobalGet(idx) => {
-                crate::log!("global get {idx}. imported globals: {imported_global_count}");
+                // crate::log!("global get {idx}. imported globals: {imported_global_count}");
                 WInstruction::GlobalGet(idx + imported_global_count)
             }
             Self::LazyGlobalSet(idx) => {
-                crate::log!("global get {idx}. imported globals: {imported_global_count}");
+                // crate::log!("global get {idx}. imported globals: {imported_global_count}");
                 WInstruction::GlobalSet(idx + imported_global_count)
             }
             Self::StaticFunctionCall(idx) => WInstruction::Call(imported_func_count + idx),

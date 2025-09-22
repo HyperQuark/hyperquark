@@ -326,14 +326,14 @@ impl WasmProject {
             .iter()
             .enumerate()
             .map(|(position, &i)| {
-                crate::log(
-                    format!(
-                        "event step idx: {}; func idx: {}",
-                        i,
-                        i + self.imported_func_count()? + self.static_func_count()?
-                    )
-                    .as_str(),
-                );
+                // crate::log(
+                //     format!(
+                //         "event step idx: {}; func idx: {}",
+                //         i,
+                //         i + self.imported_func_count()? + self.static_func_count()?
+                //     )
+                //     .as_str(),
+                // );
                 Ok(match self.flags.scheduler {
                     Scheduler::TypedFuncRef => wasm![
                         RefFunc(i + self.imported_func_count()? + self.static_func_count()?),
