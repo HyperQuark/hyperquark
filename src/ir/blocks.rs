@@ -162,7 +162,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::operator_add
             | BlockOpcode::operator_divide
             | BlockOpcode::operator_subtract
-            | BlockOpcode::operator_multiply => vec!["NUM1", "NUM2"],
+            | BlockOpcode::operator_multiply
+            | BlockOpcode::operator_mod => vec!["NUM1", "NUM2"],
             BlockOpcode::operator_lt
             | BlockOpcode::operator_gt
             | BlockOpcode::operator_equals
@@ -737,6 +738,7 @@ fn from_normal_block(
                         BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
                         BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
                         BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
+                        BlockOpcode::operator_mod => vec![IrOpcode::operator_modulo],
                         BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
                         BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
                             debug: context.debug,

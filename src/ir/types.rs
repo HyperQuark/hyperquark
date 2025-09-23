@@ -137,6 +137,11 @@ impl Type {
     }
 
     #[must_use]
+    pub const fn maybe_inf(self) -> bool {
+        self.intersects(Self::FloatInf)
+    }
+
+    #[must_use]
     pub const fn none_if_false(condition: bool, if_true: Self) -> Self {
         if condition { if_true } else { Self::none() }
     }

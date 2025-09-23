@@ -198,6 +198,69 @@ fn generate_branches(
     Ok(wasm)
 }
 
+#[must_use]
+pub fn base_types(inputs: Rc<[IrType]>) -> Vec<Box<[IrType]>> {
+    // check for float last of all, because I don't think there's an easy way of checking
+    // if something is *not* a canonical NaN with extra bits
+    core::iter::repeat_n(IrType::BASE_TYPES.into_iter(), inputs.len())
+        .enumerate()
+        .map(|(i, tys)| {
+            tys.filter(|ty| inputs[i].intersects(*ty))
+                .map(|ty| ty.and(inputs[i]))
+                .collect::<Box<[_]>>()
+        })
+        .collect::<Vec<_>>()
+}
+
+pub fn maybe_boxed_output<F>(
+    // provided as a function so we can use it in tests
+    output_type: F,
+    inputs: Rc<[IrType]>,
+    base_types: &[Box<[IrType]>],
+) -> HQResult<ReturnType>
+where
+    F: Fn(Rc<[IrType]>) -> HQResult<ReturnType>,
+{
+    base_types
+        .iter()
+        .enumerate()
+        .map(|(i, tys)| {
+            let input = inputs[i];
+            tys.iter().map(move |ty| ty.and(input))
+        })
+        .multi_cartesian_product()
+        .map(|ins| output_type(ins.into_iter().collect()))
+        .try_reduce(|acc, el| {
+            #[expect(clippy::redundant_clone, reason = "false positives")]
+            Ok(match acc? {
+                ReturnType::None => {
+                    hq_assert!(matches!(el.clone()?, ReturnType::None));
+                    Ok(ReturnType::None)
+                }
+                ReturnType::Singleton(ty) => {
+                    if let ReturnType::Singleton(ty2) = el.clone()? {
+                        Ok(ReturnType::Singleton(ty.or(ty2)))
+                    } else {
+                        hq_bug!("")
+                    }
+                }
+                ReturnType::MultiValue(tys) => {
+                    let ReturnType::MultiValue(tys2) = el.clone()? else {
+                        hq_bug!("")
+                    };
+                    hq_assert_eq!(tys.len(), tys2.len());
+                    Ok(ReturnType::MultiValue(
+                        tys.iter()
+                            .zip(tys2.iter())
+                            .map(|(ty1, ty2)| ty1.or(*ty2))
+                            .collect(),
+                    ))
+                }
+            })
+        })?
+        .ok_or_else(|| make_hq_bug!(""))?
+}
+
 pub fn wrap_instruction(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
@@ -209,20 +272,10 @@ pub fn wrap_instruction(
         return opcode.wasm(func, inputs);
     }
 
-    let output = opcode.output_type(Rc::clone(&inputs))?;
-
     hq_assert!(inputs.len() == opcode.acceptable_inputs()?.len());
 
     // possible base types for each input
-    let base_types =
-        // check for float last of all, because I don't think there's an easy way of checking
-        // if something is *not* a canonical NaN with extra bits
-        core::iter::repeat_n(IrType::BASE_TYPES.into_iter(), inputs.len())
-            .enumerate()
-            .map(|(i, tys)| {
-                tys.filter(|ty| inputs[i].intersects(*ty)).map(|ty| ty.and(inputs[i]))
-                    .collect::<Box<[_]>>()
-            }).collect::<Vec<_>>();
+    let base_types = base_types(Rc::clone(&inputs));
 
     // sanity check; we have at least one possible input type for each input
     hq_assert!(
@@ -230,6 +283,12 @@ pub fn wrap_instruction(
         "empty input type for block {:?}",
         opcode
     );
+
+    let output = maybe_boxed_output(
+        |ins| opcode.output_type(ins),
+        Rc::clone(&inputs),
+        &base_types,
+    )?;
 
     let locals = inputs
         .iter()

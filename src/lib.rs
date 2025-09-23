@@ -1,8 +1,8 @@
-#![feature(stmt_expr_attributes)]
+#![feature(stmt_expr_attributes)] // used in error.rs for panic mode
 #![feature(if_let_guard)]
-#![feature(try_blocks)]
-#![feature(associated_type_defaults)]
+#![feature(associated_type_defaults)] // used in registry.rs for default key type for NamedRegistry
 #![feature(box_patterns)]
+#![feature(iterator_try_reduce)] // used in instructions/input_switcher.rs for building return type
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]

@@ -8,9 +8,7 @@ use crate::instructions::{
     DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallWarpFields, YieldMode,
 };
-use crate::ir::{
-    IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, used_vars,
-};
+use crate::ir::{IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, used_vars};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 

@@ -8,6 +8,7 @@ pub mod join;
 pub mod length;
 pub mod letter_of;
 pub mod lt;
+pub mod modulo;
 pub mod multiply;
 pub mod not;
 pub mod or;

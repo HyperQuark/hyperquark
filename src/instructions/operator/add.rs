@@ -63,28 +63,10 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
         IrType::none_if_false(maybe_positive, IrType::IntPos)
             .or(IrType::none_if_false(maybe_negative, IrType::IntNeg))
             .or(IrType::none_if_false(maybe_zero, IrType::IntZero))
-    } else if (IrType::QuasiInt.contains(t1) && IrType::Float.contains(t2))
-        || (IrType::QuasiInt.contains(t2) && IrType::Float.contains(t1))
-        || IrType::Float.contains(t1.or(t2))
-    {
+    } else {
         IrType::none_if_false(maybe_positive, IrType::FloatPos)
             .or(IrType::none_if_false(maybe_negative, IrType::FloatNeg))
             .or(IrType::none_if_false(maybe_zero, IrType::FloatZero))
-            .or(IrType::none_if_false(maybe_nan, IrType::FloatNan))
-    } else {
-        // there is a boxed type somewhere
-        // TODO: can these bounds be tightened? e.g. it may only be a positive int or negative float?
-        // i have no idea if that would ever work, but it would be useful for considering when
-        // addition/subtraction may give NaN (since inf-inf=nan but inf+inf=inf)
-        IrType::none_if_false(maybe_positive, IrType::FloatPos.or(IrType::IntPos))
-            .or(IrType::none_if_false(
-                maybe_negative,
-                IrType::FloatNeg.or(IrType::IntNeg),
-            ))
-            .or(IrType::none_if_false(
-                maybe_zero,
-                IrType::FloatZero.or(IrType::IntZero),
-            ))
             .or(IrType::none_if_false(maybe_nan, IrType::FloatNan))
     }))
 }
