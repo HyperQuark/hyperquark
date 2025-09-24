@@ -191,6 +191,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::control_forever
             | BlockOpcode::pen_menu_colorParam => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
+            BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
@@ -778,13 +779,29 @@ fn from_normal_block(
                                     "invalid project.json - non-string value for OPERATOR field"
                                 )
                             };
-                            vec![match operator.to_lowercase().as_str() {
-                                "abs" => IrOpcode::operator_abs,
-                                "floor" => IrOpcode::operator_floor,
-                                "ceiling" => IrOpcode::operator_ceiling,
-                                _ => hq_todo!(),
-                            }]
+                            match operator.to_lowercase().as_str() {
+                                "abs" => vec![IrOpcode::operator_abs],
+                                "floor" => vec![IrOpcode::operator_floor],
+                                "ceiling" => vec![IrOpcode::operator_ceiling],
+                                "sqrt" => vec![IrOpcode::operator_sqrt],
+                                "sin" => vec![IrOpcode::operator_sin],
+                                "cos" => vec![IrOpcode::operator_cos],
+                                "tan" => vec![IrOpcode::operator_tan],
+                                "asin" => vec![IrOpcode::operator_asin],
+                                "acos" => vec![IrOpcode::operator_acos],
+                                "atan" => vec![IrOpcode::operator_atan],
+                                "ln" => vec![
+                                    IrOpcode::operator_log,
+                                    IrOpcode::hq_float(HqFloatFields(core::f64::consts::LN_10)),
+                                    IrOpcode::operator_divide,
+                                ],
+                                "log" => vec![IrOpcode::operator_log],
+                                "e ^" => vec![IrOpcode::operator_exp],
+                                "10 ^" => vec![IrOpcode::operator_pow10],
+                                other => hq_bad_proj!("unknown mathop {}", other),
+                            }
                         }
+                        BlockOpcode::operator_random => vec![IrOpcode::operator_random],
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =
                                 block_info.fields.get("VARIABLE").ok_or_else(|| {
