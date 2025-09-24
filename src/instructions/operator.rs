@@ -15,4 +15,5 @@ pub mod modulo;
 pub mod multiply;
 pub mod not;
 pub mod or;
+pub mod sqrt;
 pub mod subtract;
