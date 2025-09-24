@@ -46,19 +46,16 @@ pub fn output_type(inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
     hq_assert_eq!(inputs.len(), 1);
     let t1 = inputs[0];
     let maybe_zero = t1.maybe_zero() || t1.maybe_nan();
+    let maybe_real = t1.intersects(IrType::FloatReal.or(IrType::IntNonZero));
     Ok(Singleton(if IrType::QuasiInt.contains(t1) {
-        IrType::none_if_false(!maybe_zero, IrType::IntPos)
+        IrType::none_if_false(maybe_real, IrType::IntPos)
             .or(IrType::none_if_false(maybe_zero, IrType::IntZero))
     } else {
-        IrType::none_if_false(!maybe_zero, IrType::FloatPosReal)
+        IrType::none_if_false(maybe_real, IrType::FloatPosReal)
             .or(IrType::none_if_false(maybe_zero, IrType::FloatZero))
             .or(IrType::none_if_false(
-                IrType::FloatPosInf.intersects(t1),
+                IrType::FloatInf.intersects(t1),
                 IrType::FloatPosInf,
-            ))
-            .or(IrType::none_if_false(
-                IrType::FloatNegInf.intersects(t1),
-                IrType::FloatNegInf,
             ))
     }))
 }
