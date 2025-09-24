@@ -1,8 +1,11 @@
+pub mod abs;
 pub mod add;
 pub mod and;
+pub mod ceiling;
 pub mod contains;
 pub mod divide;
 pub mod equals;
+pub mod floor;
 pub mod gt;
 pub mod join;
 pub mod length;

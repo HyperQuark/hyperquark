@@ -164,6 +164,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::operator_subtract
             | BlockOpcode::operator_multiply
             | BlockOpcode::operator_mod => vec!["NUM1", "NUM2"],
+            BlockOpcode::operator_mathop => vec!["NUM"],
             BlockOpcode::operator_lt
             | BlockOpcode::operator_gt
             | BlockOpcode::operator_equals
@@ -759,6 +760,31 @@ fn from_normal_block(
                         BlockOpcode::operator_not => vec![IrOpcode::operator_not],
                         BlockOpcode::operator_and => vec![IrOpcode::operator_and],
                         BlockOpcode::operator_or => vec![IrOpcode::operator_or],
+                        BlockOpcode::operator_mathop => {
+                            let (sb3::Field::Value((Some(val),))
+                            | sb3::Field::ValueId(Some(val), _)) =
+                                block_info.fields.get("OPERATOR").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field OPERATOR"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing value for OPERATOR field"
+                                )
+                            };
+                            let VarVal::String(operator) = val else {
+                                hq_bad_proj!(
+                                    "invalid project.json - non-string value for OPERATOR field"
+                                )
+                            };
+                            vec![match operator.to_lowercase().as_str() {
+                                "abs" => IrOpcode::operator_abs,
+                                "floor" => IrOpcode::operator_floor,
+                                "ceiling" => IrOpcode::operator_ceiling,
+                                _ => hq_todo!(),
+                            }]
+                        }
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =
                                 block_info.fields.get("VARIABLE").ok_or_else(|| {
