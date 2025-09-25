@@ -9,6 +9,7 @@ pub struct TableOptions {
     pub min: u64,
     pub max: Option<u64>,
     pub init: Option<ConstExpr>,
+    pub export_name: Option<&'static str>,
 }
 
 pub struct TableRegistrar;
@@ -22,17 +23,20 @@ pub type TableRegistry = NamedRegistry<TableRegistrar>;
 impl TableRegistry {
     pub fn finish(self, tables: &mut TableSection, exports: &mut ExportSection) {
         for (
-            key,
+            _key,
             TableOptions {
                 element_type,
                 min,
                 max,
                 init: maybe_init,
+                export_name,
             },
         ) in self.registry().take()
         {
             // TODO: allow choosing whether to export a table or not?
-            exports.export(&key, ExportKind::Table, tables.len());
+            if let Some(export_key) = export_name {
+                exports.export(export_key, ExportKind::Table, tables.len());
+            }
             // let maybe_init = match &*key {
             //     "threads" => Some(ConstExpr::ref_func(imports.len())),
             //     _ => init,
@@ -69,6 +73,7 @@ impl NamedRegistryItem<TableOptions> for StringsTable {
         // TODO: use js string imports for preknown strings
         max: None,
         init: None,
+        export_name: None,
     };
 }
 
@@ -79,6 +84,7 @@ impl NamedRegistryItem<TableOptions> for StepsTable {
         min: 0,
         max: None,
         init: None,
+        export_name: None,
     };
 }
 impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
@@ -88,6 +94,7 @@ impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
             min: step_count,
             max: Some(step_count),
             init: None,
+            export_name: None,
         }
     }
 }
@@ -100,6 +107,7 @@ impl NamedRegistryItem<TableOptions> for ThreadsTable {
         max: None,
         // default to noop, just so the module validates.
         init: None,
+        export_name: Some("threads"),
     };
 }
 impl NamedRegistryItemOverride<TableOptions, (u32, u32, u32)> for ThreadsTable {
@@ -114,6 +122,7 @@ impl NamedRegistryItemOverride<TableOptions, (u32, u32, u32)> for ThreadsTable {
             min: 0,
             max: None,
             init: Some(ConstExpr::ref_func(imported_func_count + static_func_count)),
+            export_name: Some("threads"),
         }
     }
 }
