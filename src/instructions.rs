@@ -25,6 +25,55 @@ mod sensing;
 #[macro_use]
 mod tests;
 
+fn boxed_output_type<F>(
+    // we provide a function so this can be used by tests without access to the whole IrOpcode enum stuff
+    outputs_func: F,
+    inputs: Rc<[crate::ir::Type]>,
+) -> HQResult<crate::ir::ReturnType>
+where
+    F: Fn(Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType>,
+{
+    use crate::ir::ReturnType;
+    crate::ir::base_types(&inputs)
+        .iter()
+        .enumerate()
+        .map(|(i, tys)| {
+            let input = inputs[i];
+            tys.iter().map(move |ty| ty.and(input))
+        })
+        .multi_cartesian_product()
+        .map(|ins| outputs_func(ins.into_iter().collect()))
+        .try_reduce(|acc, el| {
+            #[expect(clippy::redundant_clone, reason = "false positives")]
+            Ok(match acc? {
+                ReturnType::None => {
+                    hq_assert!(matches!(el.clone()?, ReturnType::None));
+                    Ok(ReturnType::None)
+                }
+                ReturnType::Singleton(ty) => {
+                    if let ReturnType::Singleton(ty2) = el.clone()? {
+                        Ok(ReturnType::Singleton(ty.or(ty2)))
+                    } else {
+                        hq_bug!("")
+                    }
+                }
+                ReturnType::MultiValue(tys) => {
+                    let ReturnType::MultiValue(tys2) = el.clone()? else {
+                        hq_bug!("")
+                    };
+                    hq_assert_eq!(tys.len(), tys2.len());
+                    Ok(ReturnType::MultiValue(
+                        tys.iter()
+                            .zip(tys2.iter())
+                            .map(|(ty1, ty2)| ty1.or(*ty2))
+                            .collect(),
+                    ))
+                }
+            })
+        })?
+        .ok_or_else(|| make_hq_bug!(""))?
+}
+
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
 
 pub mod input_switcher;

@@ -50,8 +50,17 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
                     IrOpcode::data_setvariableto(_) | IrOpcode::data_teevariable(_)
                 ) {
                     hq_bug!(
-                        "attempted to insert a cast before a variable set/tee operation - variables should \
-                        encompass all possible types, rather than causing values to be coerced"
+                        "attempted to insert a cast before a variable {} operation - variables should \
+                        encompass all possible types, rather than causing values to be coerced.
+                        Tried to cast from {} to {}, at position {}.
+                        Occurred on these opcodes: [
+                        {}
+                        ]",
+                        if matches!(block, IrOpcode::data_setvariableto(_)) { "set"} else {"tee"},
+                        actual.0,
+                        expected,
+                        actual.1,
+                        blocks.iter().map(|block| format!("{block}")).join(",\n"),
                     )
                 }
                 casts.push((actual.1, expected));

@@ -8,7 +8,9 @@ use crate::instructions::{
     DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallWarpFields, YieldMode,
 };
-use crate::ir::{IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, used_vars};
+use crate::ir::{
+    IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, insert_casts, used_vars,
+};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 
@@ -753,7 +755,7 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
     iterate_graphs(&graphs.values().copied())?;
     for step in maybe_graphs.keys() {
         crate::log!("inserting casts for step {}", step.id());
-        // insert_casts(&mut *step.opcodes_mut()?)?;
+        insert_casts(&mut *step.opcodes_mut()?)?;
     }
     Ok(())
 }

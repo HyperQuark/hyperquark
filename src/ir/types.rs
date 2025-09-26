@@ -73,6 +73,8 @@ pub enum Type {
 }
 
 impl Type {
+    // float must always be last in this list because it's more difficult to check if a boxed value
+    // *doesn't* match any other pattern
     pub const BASE_TYPES: [Self; 5] = [
         Self::String,
         Self::QuasiInt,
@@ -178,4 +180,17 @@ impl ReturnType {
             Err(err())
         }
     }
+}
+
+#[must_use]
+pub fn base_types(inputs: &[Type]) -> Box<[Box<[Type]>]> {
+    inputs
+        .iter()
+        .copied()
+        .map(|ty| {
+            Type::base_types(ty)
+                .map(|bty| bty.and(ty))
+                .collect::<Box<[_]>>()
+        })
+        .collect()
 }

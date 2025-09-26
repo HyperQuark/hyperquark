@@ -139,7 +139,7 @@ impl IrOpcode {{
     }}
     
     /// maps an opcode to its output type
-    pub fn output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType> {{
+    fn base_output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType> {{
         match self {{
             {}
         }}
@@ -150,6 +150,13 @@ impl IrOpcode {{
         match self {{
             {}
         }}
+    }}
+
+    pub fn output_type(
+        &self,
+        inputs: Rc<[crate::ir::Type]>,
+    ) -> HQResult<crate::ir::ReturnType> {{
+        boxed_output_type(|ins| self.base_output_type(ins), inputs)
     }}
 }}
 pub mod fields {{
