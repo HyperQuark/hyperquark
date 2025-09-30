@@ -182,8 +182,7 @@ impl ReturnType {
     }
 }
 
-#[must_use]
-pub fn base_types(inputs: &[Type]) -> Box<[Box<[Type]>]> {
+pub fn base_types(inputs: &[Type]) -> HQResult<Box<[Box<[Type]>]>> {
     inputs
         .iter()
         .copied()
@@ -191,6 +190,12 @@ pub fn base_types(inputs: &[Type]) -> Box<[Box<[Type]>]> {
             Type::base_types(ty)
                 .map(|bty| bty.and(ty))
                 .collect::<Box<[_]>>()
+        })
+        .map(|tys| {
+            if tys.is_empty() {
+                hq_bug!("got empty type in base_types!!!")
+            }
+            Ok(tys)
         })
         .collect()
 }

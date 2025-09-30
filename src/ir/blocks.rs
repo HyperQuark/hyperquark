@@ -27,6 +27,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>) -> HQResult<()> {
             .acceptable_inputs()?
             .iter()
             .copied()
+            .map(|ty| if ty.is_none() { IrType::Any } else { ty })
             .collect::<Vec<_>>();
         if type_stack.len() < expected_inputs.len() {
             hq_bug!(
@@ -454,6 +455,19 @@ fn generate_loop(
             &context.target().project(),
             true,
         )?;
+        let substack_step = Step::new_rc(
+            None,
+            context.clone(),
+            vec![],
+            &context.target().project(),
+            false,
+        )?;
+        condition_step
+            .opcodes_mut()?
+            .push(IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
+                branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
+            }));
         let substack_blocks = from_block(
             substack_block,
             blocks,
@@ -465,29 +479,23 @@ fn generate_loop(
             }),
             flags,
         )?;
-        let substack_step = Step::new_rc(
-            None,
-            context.clone(),
-            substack_blocks,
-            &context.target().project(),
-            false,
-        )?;
-        condition_step
-            .opcodes_mut()?
-            .push(IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
-                branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
-            }));
+        substack_step.opcodes_mut()?.extend(substack_blocks);
         Ok(setup_instructions
             .into_iter()
             .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
             .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: if flip_if {
-                    Rc::clone(&next_step)
+                    Step::clone(&next_step, false)?
                 } else {
-                    Rc::clone(&substack_step)
+                    Step::clone(&substack_step, false)?
                 },
-                branch_else: if flip_if { substack_step } else { next_step },
+                branch_else: if flip_if {
+                    Step::clone(&substack_step, false)?
+                } else {
+                    Step::clone(&next_step, false)?
+                },
+                // branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
+                // branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             })])
             .collect())
     }

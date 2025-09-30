@@ -213,7 +213,7 @@ pub fn wrap_instruction(
     hq_assert!(inputs.len() == opcode.acceptable_inputs()?.len());
 
     // possible base types for each input
-    let base_types = base_types(&inputs);
+    let base_types = base_types(&inputs)?;
 
     // sanity check; we have at least one possible input type for each input
     hq_assert!(

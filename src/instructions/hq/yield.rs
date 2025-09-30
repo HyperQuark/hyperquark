@@ -3,11 +3,23 @@ use crate::ir::Step;
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable, flags::Scheduler};
 use wasm_encoder::{ConstExpr, HeapType, MemArg};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum YieldMode {
     Inline(Rc<Step>),
     Schedule(Weak<Step>),
     None,
+}
+
+impl Clone for YieldMode {
+    fn clone(&self) -> Self {
+        match self {
+            Self::None => Self::None,
+            #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
+            Self::Inline(step) => Self::Inline(Step::clone(step, false).unwrap()),
+            // don't need to clone scheduled step as it doesn't appear in multiple contexts
+            Self::Schedule(weak_step) => Self::Schedule(Weak::clone(weak_step)),
+        }
+    }
 }
 
 impl fmt::Display for YieldMode {

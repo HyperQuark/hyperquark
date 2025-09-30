@@ -226,6 +226,7 @@ export default async (
           await waitAnimationFrame();
         }
       }
+      console.log("project stopped");
     })
     .catch((e) => {
       throw new Error("error when instantiating module:\n" + e.stack);

@@ -7,7 +7,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];
     let t2 = inputs[1];
-    crate::log!("{t2}");
+    // crate::log!("{t2}");
     Ok(if IrType::QuasiInt.contains(t1) {
         if IrType::QuasiInt.contains(t2) {
             let modulus_local = func.local(ValType::I32)?;

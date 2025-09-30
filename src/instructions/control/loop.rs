@@ -4,12 +4,27 @@ use super::super::prelude::*;
 use crate::ir::Step;
 use wasm_encoder::BlockType;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Fields {
     pub first_condition: Option<Rc<Step>>,
     pub condition: Rc<Step>,
     pub body: Rc<Step>,
     pub flip_if: bool,
+}
+
+impl Clone for Fields {
+    fn clone(&self) -> Self {
+        #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
+        Self {
+            first_condition: self
+                .first_condition
+                .as_ref()
+                .map(|step| Step::clone(step, false).unwrap()),
+            condition: Step::clone(&self.condition, false).unwrap(),
+            body: Step::clone(&self.body, false).unwrap(),
+            flip_if: self.flip_if,
+        }
+    }
 }
 
 impl fmt::Display for Fields {
