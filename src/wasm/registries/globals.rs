@@ -1,9 +1,7 @@
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use core::ops::Deref;
-use wasm_encoder::{
-    ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ImportSection, ValType,
-};
+use wasm_encoder::{ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ValType};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -31,10 +29,11 @@ pub type GlobalRegistry =
 impl GlobalRegistry {
     pub fn finish(
         self,
-        imports: &ImportSection,
         globals: &mut GlobalSection,
         exports: &mut ExportSection,
         imported_global_count: u32,
+        imported_function_count: u32,
+        static_function_count: u32,
     ) {
         for (key, (ty, suggested_initial, mutable, export)) in self.registry().take() {
             if *export {
@@ -45,7 +44,7 @@ impl GlobalRegistry {
                 );
             }
             let actual_initial = match &*key {
-                "noop_func" => ConstExpr::ref_func(imports.len()),
+                "noop_func" => ConstExpr::ref_func(imported_function_count + static_function_count),
                 _ => suggested_initial,
             };
             globals.global(

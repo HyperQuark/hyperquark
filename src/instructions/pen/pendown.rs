@@ -86,6 +86,6 @@ pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
     Ok(ReturnType::None)
 }
 
-pub const REQUESTS_SCREEN_REFRESH: bool = false;
+pub const REQUESTS_SCREEN_REFRESH: bool = true;
 
 crate::instructions_test! {tests; pen_pendown; ; }

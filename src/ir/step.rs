@@ -193,9 +193,9 @@ impl Step {
 
     pub fn does_yield(&self) -> HQResult<bool> {
         for opcode in &*self.opcodes().try_borrow()? {
-            if opcode.requests_screen_refresh() {
-                return Ok(true);
-            }
+            // if opcode.requests_screen_refresh() {
+            //     return Ok(true);
+            // }
             #[expect(clippy::wildcard_enum_match_arm, reason = "too many variants to match")]
             match opcode {
                 IrOpcode::hq_yield(HqYieldFields {

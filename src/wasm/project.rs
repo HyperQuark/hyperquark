@@ -182,6 +182,12 @@ impl WasmProject {
             .clone()
             .finish(&mut tables, &mut exports);
 
+        crate::log!(
+            "imported func count: {}, static func count: {}",
+            self.imported_func_count()?,
+            self.static_func_count()?
+        );
+
         exports.export("memory", ExportKind::Memory, 0);
         exports.export(
             "noop",
@@ -190,10 +196,11 @@ impl WasmProject {
         );
 
         self.registries().globals().clone().finish(
-            &imports,
             &mut globals,
             &mut exports,
             self.imported_global_count()?,
+            self.imported_func_count()?,
+            self.static_func_count()?,
         );
 
         module

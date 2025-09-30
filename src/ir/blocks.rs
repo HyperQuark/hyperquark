@@ -1268,27 +1268,27 @@ fn from_normal_block(
             let next_block = blocks
                 .get(next_id)
                 .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-            if opcodes
-                .last()
-                .is_some_and(super::super::instructions::IrOpcode::requests_screen_refresh)
-                && !context.warp
-            {
-                opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                    mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
-                        next_block,
-                        next_id.clone(),
-                        blocks,
-                        context,
-                        project,
-                        final_next_blocks.clone(),
-                        true,
-                        flags,
-                    )?)),
-                }));
-                None
-            } else {
-                next_block.block_info()
-            }
+            // if opcodes
+            //     .last()
+            //     .is_some_and(super::super::instructions::IrOpcode::requests_screen_refresh)
+            //     && !context.warp
+            // {
+            //     opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+            //         mode: YieldMode::Inline(Rc::downgrade(&Step::from_block(
+            //             next_block,
+            //             next_id.clone(),
+            //             blocks,
+            //             context,
+            //             project,
+            //             final_next_blocks.clone(),
+            //             true,
+            //             flags,
+            //         )?)),
+            //     }));
+            //     None
+            // } else {
+            next_block.block_info()
+            // }
         } else if let (Some(popped_next), new_next_blocks_stack) =
             final_next_blocks.clone().pop_inner()
         {
@@ -1297,11 +1297,12 @@ fn from_normal_block(
                     let next_block = blocks
                         .get(&id)
                         .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                    if (popped_next.yield_first
-                        || opcodes.last().is_some_and(
-                            super::super::instructions::IrOpcode::requests_screen_refresh,
-                        ))
-                        && !context.warp
+                    if (
+                        popped_next.yield_first
+                        // || opcodes.last().is_some_and(
+                        //     super::super::instructions::IrOpcode::requests_screen_refresh,
+                        // )
+                    ) && !context.warp
                     {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
@@ -1322,11 +1323,12 @@ fn from_normal_block(
                     }
                 }
                 NextBlock::Step(ref step) => {
-                    if (popped_next.yield_first
-                        || opcodes.last().is_some_and(
-                            super::super::instructions::IrOpcode::requests_screen_refresh,
-                        ))
-                        && !context.warp
+                    if (
+                        popped_next.yield_first
+                        // || opcodes.last().is_some_and(
+                        //     super::super::instructions::IrOpcode::requests_screen_refresh,
+                        // )
+                    ) && !context.warp
                     {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Schedule(Weak::clone(step)),

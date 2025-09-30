@@ -1,7 +1,11 @@
 import { getSettings } from "./settings.js";
 import { imports } from "./imports.js";
 import { useDebugModeStore } from "../stores/debug.js";
-import { setup as sharedSetup, is_setup, renderer as get_renderer } from "../../js/shared.ts";
+import {
+  setup as sharedSetup,
+  is_setup,
+  renderer as get_renderer,
+} from "../../js/shared.ts";
 // This does not work in vite dev mode! Only works in build mode.
 const scratch_render = await import("../assets/renderer.js");
 const RenderWebGL = scratch_render.default;
@@ -52,7 +56,12 @@ function setup(canvas, project_json, assets, target_names) {
       throw new Error("todo: non-svg costumes");
     }
 
-    const [skin, drawableId] = renderer.createSkin(costume.dataFormat, 'sprite', costume.data, [realCostume.rotationCenterX, realCostume.rotationCenterY]);
+    const [skin, drawableId] = renderer.createSkin(
+      costume.dataFormat,
+      "sprite",
+      costume.data,
+      [realCostume.rotationCenterX, realCostume.rotationCenterY]
+    );
 
     const drawable = renderer.getDrawable(drawableId);
     if (!target.is_stage) {
@@ -89,6 +98,7 @@ export default async (
       URL.createObjectURL(new Blob([wasm_bytes], { type: "application/wasm" }))
     );
   const framerate_wait = Math.round(1000 / framerate);
+  console.log("framerate_wait: %i", framerate_wait);
   let assert;
   let exit;
   let browser = false;
@@ -199,9 +209,11 @@ export default async (
       flag_clicked();
       start_time = Date.now();
       console.log("green_flag()");
+      let thisTickStartTime;
       $outertickloop: while (true) {
+        console.log('fps: %i', 1000 / (Date.now() - thisTickStartTime));
+        thisTickStartTime = Date.now();
         renderer.draw();
-        const thisTickStartTime = Date.now();
         // @ts-ignore
         $innertickloop: do {
           //for (const _ of [1]) {
@@ -219,10 +231,15 @@ export default async (
         // @ts-ignore
         requests_refresh.value = 0;
         if (framerate_wait > 0) {
+          console.log(
+            "sleeping for %i ms",
+            framerate_wait - (Date.now() - thisTickStartTime)
+          );
           await sleep(
             Math.max(0, framerate_wait - (Date.now() - thisTickStartTime))
           );
         } else {
+          console.log("waiting animation frame");
           await waitAnimationFrame();
         }
       }
