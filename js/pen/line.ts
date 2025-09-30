@@ -11,7 +11,6 @@ export function line(
     b: number,
     a: number
 ) {
-    console.log('called pen line with rgba color %n %n %n %n', r, g, b, a);
     renderer().penLine(
         pen_skin(),
         {

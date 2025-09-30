@@ -28,6 +28,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                     I32And,
                     LocalTee(temp_local),
                     If(BlockType::Result(ValType::F32)),
+                    LocalGet(temp_local),
                     F32ConvertI32S,
                     F32Const(255.0),
                     F32Div,
