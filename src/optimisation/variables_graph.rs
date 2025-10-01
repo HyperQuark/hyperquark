@@ -84,13 +84,18 @@ impl<'a> VariableMaps<'a> {
         }
     }
 
-    fn elevate(&'a self, empty_btreemap: &'a mut BTreeMap<RcVar, RcVar>) -> Self {
-        for (global, outer) in self.outer {
-            empty_btreemap.insert(global.clone(), outer.clone());
-        }
+    fn elevate(
+        &'a self,
+        empty_btreemap: &'a mut BTreeMap<RcVar, RcVar>,
+        empty_btreemap2: &'a mut BTreeMap<RcVar, RcVar>,
+    ) -> Self {
+        empty_btreemap.append(&mut self.global.clone());
+        empty_btreemap.append(&mut self.outer.clone());
+        empty_btreemap2.append(&mut self.outer.clone());
+        empty_btreemap2.append(&mut self.current.clone());
         Self {
             current: BTreeMap::new(),
-            outer: &self.current,
+            outer: empty_btreemap2,
             global: empty_btreemap,
         }
     }
@@ -293,7 +298,7 @@ impl VarGraph {
                         graphs.insert(Rc::clone(branch_if), MaybeGraph::Started);
                         self.visit_step(
                             branch_if,
-                            &mut variable_maps.elevate(&mut BTreeMap::new()),
+                            &mut variable_maps.elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                             graphs,
                             type_stack,
                             next_steps,
@@ -304,7 +309,7 @@ impl VarGraph {
                         graphs.insert(Rc::clone(branch_else), MaybeGraph::Started);
                         self.visit_step(
                             branch_else,
-                            &mut variable_maps.elevate(&mut BTreeMap::new()),
+                            &mut variable_maps.elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                             graphs,
                             type_stack,
                             next_steps,
@@ -328,7 +333,8 @@ impl VarGraph {
                             graphs.insert(Rc::clone(first_condition_step), MaybeGraph::Started);
                             self.visit_step(
                                 first_condition_step,
-                                &mut variable_maps.elevate(&mut BTreeMap::new()),
+                                &mut variable_maps
+                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -342,7 +348,8 @@ impl VarGraph {
                             graphs.insert(Rc::clone(body), MaybeGraph::Started);
                             self.visit_step(
                                 body,
-                                &mut variable_maps.elevate(&mut BTreeMap::new()),
+                                &mut variable_maps
+                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -351,7 +358,8 @@ impl VarGraph {
                             graphs.insert(Rc::clone(condition), MaybeGraph::Started);
                             self.visit_step(
                                 condition,
-                                &mut variable_maps.elevate(&mut BTreeMap::new()),
+                                &mut variable_maps
+                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -369,7 +377,8 @@ impl VarGraph {
                             graphs.insert(Rc::clone(condition), MaybeGraph::Started);
                             self.visit_step(
                                 condition,
-                                &mut variable_maps.elevate(&mut BTreeMap::new()),
+                                &mut variable_maps
+                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -379,7 +388,8 @@ impl VarGraph {
                             graphs.insert(Rc::clone(body), MaybeGraph::Started);
                             self.visit_step(
                                 body,
-                                &mut variable_maps.elevate(&mut BTreeMap::new()),
+                                &mut variable_maps
+                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -428,7 +438,8 @@ impl VarGraph {
                             graphs.insert(Rc::clone(step), MaybeGraph::Started);
                             self.visit_step(
                                 step,
-                                &mut variable_maps.elevate(&mut BTreeMap::new()),
+                                &mut variable_maps
+                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
                                 graphs,
                                 type_stack,
                                 next_steps,
