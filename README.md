@@ -1,7 +1,8 @@
 [![Discord](https://img.shields.io/discord/1095993821076131950?label=chat&logo=discord)](https://discord.gg/w5C8fdb5EQ)
 
 # HyperQuark
-Compile scratch projects to WASM
+
+HyperQuark compiles [Scratch](https://scratch.mit.edu) projects to [WebAssembly](https://webassembly.org), with the aim of running them quicker than scratch and also quicker than [TurboWarp](https://turbowarp.org), which compiles to javascript. HyperQuark is not at feature parity with scratch, but is useable for a number of projects that only use the blocks listed on the [home page](https://hyperquark.edgecompute.app). Projects listed on the homepage should function correctly, but are designed for debugging and so you may need to open up your browser's devtools (usually ctrl+shift+j/i) to see say/think block 'bubbles'.
 
 ## Prerequisites
 
