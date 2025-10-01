@@ -2,17 +2,23 @@
   <div v-show="loaded">
     <h1>{{ props.title || 'untitled' }}</h1>
     <span>by {{ props.author || 'unknown' }}</span>
-    <input type="checkbox" id="turbo" :value="turbo"> <label for="turbo">turbo mode</label>
+    <div v-if="!!id"><a :href="`https://scratch.mit.edu/projects/${props.id}/`">View on Scratch</a> | <a
+        :href="`https://turbowarp.org/${props.id}/`">View on TurboWarp</a></div>
     <details v-if="error">
       <summary>{{ errorMode }} was emitted whilst {{ errorStage }} project.</summary>
       <span v-html="error"></span>
     </details>
-    <!--<template v-else>-->
-    <br>
-    <br>
-    <button @click="greenFlag">green flag</button> <button @click="stop">stop</button>
+    <div><button @click="greenFlag">green flag</button> <button @click="stop">stop</button> <input type="checkbox"
+        id="turbo" :value="turbo"> <label for="turbo">turbo mode</label></div>
     <canvas width="480" height="360" ref="canvas"></canvas>
-    <div id="hq-output">Project output:<br></div>
+    <div class="instructions">
+      <div v-if="props.instructions">
+        <h2>Instructions</h2>{{ props.instructions }}
+      </div>
+      <div v-if="props.description">
+        <h2>Notes and credits</h2>{{ props.description }}
+      </div>
+    </div>
   </div>
   <Loading v-if='!loaded'>{{ loadingMsg }}</Loading>
 </template>
@@ -24,7 +30,7 @@ import runProject from '../lib/project-runner.js';
 import { ref, onMounted, nextTick } from 'vue';
 import { getSettings } from '../lib/settings.js';
 const Renderer = window.ScratchRender;
-const props = defineProps(['json', 'title', 'author', 'assets', 'zip']);
+const props = defineProps(['json', 'title', 'author', 'assets', 'zip', 'instructions', 'description', 'id']);
 let error = ref(null);
 let errorStage = ref("loading");
 let errorMode = ref("An error")
@@ -160,5 +166,26 @@ canvas {
   border: 1px solid black;
   background: white;
   max-width: calc((100vw - 1rem) * 0.95);
+  float: left;
+  margin-right: 1em;
+  margin-bottom: 1.5em;
+}
+
+div.instructions {
+  border-radius: 1em;
+  border: 2px solid var(--color-border);
+  padding: 1em;
+  margin: 1em;
+  width: fit-content;
+  max-width: calc((100vw - 1rem) * 0.95);
+  float: none;
+  overflow: auto;
+  min-width: 0;
+
+  &>h2 {
+    font-weight: bold;
+  }
+
+  white-space: pre-wrap;
 }
 </style>

@@ -26,9 +26,12 @@ fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
     } else {
         let mut candidates = vec![];
         for preference in match from_base {
-            IrType::QuasiInt => &[IrType::Float, IrType::String] as &[IrType],
-            IrType::Float => &[IrType::String, IrType::QuasiInt] as &[IrType],
-            IrType::String => &[IrType::Float, IrType::QuasiInt] as &[IrType],
+            IrType::QuasiInt => &[IrType::Float, IrType::String, IrType::ColorARGB] as &[IrType],
+            IrType::Float => &[IrType::String, IrType::QuasiInt, IrType::ColorARGB] as &[IrType],
+            IrType::String => &[IrType::Float, IrType::QuasiInt, IrType::ColorRGB] as &[IrType],
+            IrType::ColorRGB | IrType::ColorARGB => hq_bad_proj!(
+                "should not be casting from colour. this is probably a project using 'hacked' blocks, or a bug"
+            ),
             _ => unreachable!(),
         } {
             if to_base_types.contains(preference) {
@@ -96,6 +99,22 @@ pub fn wasm(
             IrType::QuasiInt => vec![],
             _ => hq_todo!("unimplemented cast: {:?} -> Int", from_base),
         },
+        IrType::ColorARGB => match from_base {
+            IrType::Float => wasm![I32TruncSatF64S],
+            IrType::ColorRGB | IrType::ColorARGB | IrType::QuasiInt => wasm![],
+            _ => hq_todo!("unimplemented cast: {:?} -> ColorARGB", from_base),
+        },
+        IrType::ColorRGB => match from_base {
+            IrType::ColorRGB | IrType::ColorARGB | IrType::QuasiInt => wasm![],
+            IrType::String => {
+                let func_index = func.registries().external_functions().register(
+                    ("cast", "string2colorrgb".into()),
+                    (vec![ValType::EXTERNREF], vec![ValType::I32]),
+                )?;
+                wasm![Call(func_index)]
+            }
+            _ => hq_todo!("unimplemented cast: {:?} -> ColorRGB", from_base),
+        },
         _ => hq_todo!("unimplemented cast: {:?} -> {:?}", from_base, target),
     })
 }
@@ -107,7 +126,7 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<ReturnType> {
-    crate::log!("{:?}", inputs[0]);
+    // crate::log!("{:?}", inputs[0]);
     Ok(Singleton(
         inputs[0]
             .base_types()
@@ -158,6 +177,8 @@ pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<Retur
                                 ))
                         }
                         (IrType::QuasiInt, IrType::String) => IrType::StringNumber,
+                        (_, IrType::ColorRGB) => IrType::ColorRGB,
+                        (_, IrType::ColorARGB) => IrType::ColorARGB,
                         (other_from, other_to) if other_to.contains(other_from) => other_from,
                         _ => hq_bug!("bad cast: {} -> {}", from, to),
                     },

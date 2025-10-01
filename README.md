@@ -35,7 +35,7 @@ To add a new block named `category_opcode`, if it cannot be reduced to simpler b
 - `pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<Vec<InternalInstruction>>;`
 - - wasm is generated using the `wasm_gen::wasm` macro. See [its README](./wasm-gen/README.md) for usage instructions, or e.g. [say.rs](./src/instructions/looks/say.rs) for an example.
 - `pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>>;`
-- - these should really be base types (see BASE_TYPES in [types.rs](./src/ir/types.rs))
+- - these should really be base types (see `BASE_TYPES` in [types.rs](./src/ir/types.rs))
 - `pub fn output_type(inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<ReturnType>;`
 - - the output type should be as restrictive as possible; loose output types can cause us to lose out on some optimisations
 - - Most output types should be either `ReturnType::None` or `Singleton(IrType)` (included in the module prelude); blocks can return multiple values via `MultiValue(Rc<[IrType]>)` but probably shouldn't.

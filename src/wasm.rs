@@ -1,24 +1,14 @@
-mod external;
+pub mod external;
 pub mod flags;
-mod func;
-mod globals;
+pub mod func;
+#[macro_use]
 pub mod mem_layout;
-mod project;
-mod registries;
-mod strings;
-mod tables;
-mod targets;
-mod type_registry;
-mod variable;
+pub mod project;
+pub mod registries;
 
-pub use external::{ExternalEnvironment, ExternalFunctionRegistry};
+pub use external::ExternalEnvironment;
 pub use flags::WasmFlags;
 pub use func::{Instruction as InternalInstruction, StepFunc, StepTarget};
-pub use globals::{Exportable as GlobalExportable, GlobalRegistry, Mutable as GlobalMutable};
 pub use project::{FinishedWasm, WasmProject};
 pub use registries::Registries;
-pub use strings::StringRegistry;
-pub use tables::{TableOptions, TableRegistry};
-pub use targets::SpriteRegistry;
-pub use type_registry::TypeRegistry;
-pub use variable::VariableRegistry;
+pub use registries::{GlobalExportable, GlobalMutable, StepsTable, StringsTable, ThreadsTable};

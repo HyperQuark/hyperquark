@@ -1,5 +1,7 @@
 //! 1-1 representation of `project.json` or `sprite.json` files
-//! in the `sb3` format. `sb` or `sb2` files must be converted first;
+//! in the `sb3` format.
+//!
+//! `sb` or `sb2` files must be converted first;
 //! `sb3` files must be unzipped first. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format>
 //! for a loose informal specification.
 
@@ -30,7 +32,9 @@ pub struct Comment {
     pub text: Box<str>,
 }
 
-/// A possible block opcode, encompassing the default block pallette, the pen extension,
+/// A possible block opcode.
+///
+/// Encompasses the default block pallette, the pen extension,
 /// and a few hidden but non-obsolete blocks. A block being listed here does not imply that
 /// it is supported by `HyperQuark`.
 #[expect(non_camel_case_types, reason = "opcodes are snake_case")]
@@ -262,6 +266,7 @@ pub enum Field {
 impl Field {
     // this isn't auto implemented by EnumFieldGetter because Field::Value is actually a tuple
     // in a tuple, so that serde correctly parses a single-item array
+    #[must_use]
     pub const fn get_0(&self) -> Option<&VarVal> {
         match self {
             Self::ValueId(val, _) | Self::Value((val,)) => val.as_ref(),

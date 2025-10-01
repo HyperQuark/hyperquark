@@ -133,7 +133,7 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_wrapped_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(false) {
-                    let Ok(output_type) = output_type(Rc::from([$($type_arg,)*]), $(&$fields)?) else {
+                    let Ok(output_type) = $crate::instructions::boxed_output_type(|inputs| output_type(inputs, $(&$fields)?), Rc::from([$($type_arg,)*])) else {
                         println!("skipping failed output_type");
                         continue;
                     };

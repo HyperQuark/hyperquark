@@ -122,7 +122,7 @@ pub fn wasm(input: TokenStream) -> TokenStream {
         });
         quote! { vec![#(crate::wasm::InternalInstruction::#instructions),*] }
     } else {
-        let conditions = (0..(1 << (nan_checks.len() + 2 * boxed_checks.len()))).map(|mask| {
+        let conditions = (0..(1 << (nan_checks.len() + 3 * boxed_checks.len()))).map(|mask| {
             let checks = nan_checks.iter().enumerate().map(|(i, ident)| {
                 let ident = format_ident!("{ident}");
                 let nan_check = quote! { #ident.contains(crate::ir::Type::FloatNan) };
@@ -132,20 +132,28 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 } else {
                     not_nan_check
                 }
-            }).chain(boxed_checks.iter().enumerate().map(|(i, ident)| (i * 2 + nan_checks.len(), ident)).map(|(i,ident)| {
+            }).chain(boxed_checks.iter().enumerate().map(|(i, ident)| (i * 3 + nan_checks.len(), ident)).map(|(i,ident)| {
                 let ident = format_ident!("{ident}");
                 let boxed_check = quote! { !#ident.is_base_type() };
                 let string_check = quote! { #ident.base_type() == Some(crate::ir::Type::String) };
                 let float_check = quote! { #ident.base_type() == Some(crate::ir::Type::Float) };
                 let int_check = quote! { #ident.base_type() == Some(crate::ir::Type::QuasiInt) };
+                let color_rgb_check = quote! { #ident.base_type() == Some(crate::ir::Type::ColorRGB) };
+                let color_argb_check = quote! { #ident.base_type() == Some(crate::ir::Type::ColorARGB) };
                 if (mask & ((1 << i) + (1 << (i + 1)))) == 0 {
                     boxed_check
                 } else if (mask & ((1 << i) + (1 << (i + 1)))) == 1 {
                     string_check
                 } else if (mask & ((1 << i) + (1 << (i + 1)))) == 2 {
                     float_check
-                } else {
+                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 3 {
                     int_check
+                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 4 {
+                    color_rgb_check
+                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 5 {
+                    color_argb_check
+                } else {
+                    quote! { true }
                 }
             }));
             let these_nan: HashSet<_> = nan_checks
@@ -236,6 +244,16 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                                     quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_INT_PATTERN)) },
                                     quote! { Immediate(wasm_encoder::Instruction::I64Or) },
                                 ].into_iter(), None)),
+                                4 => Some((vec![
+                                    quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_COLOR_RGB_PATTERN)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Or) },
+                                ].into_iter(), None)),
+                                5 => Some((vec![
+                                    quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_COLOR_ARGB_PATTERN)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Or) },
+                                ].into_iter(), None)),
                                 _ => panic!("invalid state")
                             }
                         } else {
@@ -260,17 +278,48 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 let __strings_table_index: u32 = func
                     .registries()
                     .tables()
-                    .register("strings".into(), crate::wasm::TableOptions {
-                        element_type: RefType::EXTERNREF,
-                        min: 0,
-                        max: None,
-                        init: None,
-                    })?;
+                    .register::<crate::wasm::StringsTable, _>(
+                    //     "strings".into(), crate::wasm::TableOptions {
+                    //     element_type: RefType::EXTERNREF,
+                    //     min: 0,
+                    //     max: None,
+                    //     init: None,
+                    // }
+                )?;
                 #(#conditions) else * else {
                     unreachable!()
                 }
             }
         }
+    }
+    .into()
+}
+
+struct WasmConstInput {
+    items: Vec<Expr>,
+}
+
+impl Parse for WasmConstInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut items = Vec::new();
+        while !input.is_empty() {
+            let item = input.parse()?;
+            items.push(item);
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            } else {
+                break;
+            }
+        }
+        Ok(WasmConstInput { items })
+    }
+}
+
+#[proc_macro]
+pub fn wasm_const(input: TokenStream) -> TokenStream {
+    let WasmConstInput { items } = syn::parse_macro_input!(input as WasmConstInput);
+    quote! {
+        &[#(  wasm_encoder::Instruction::#items ),*]
     }
     .into()
 }

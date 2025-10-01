@@ -1,6 +1,8 @@
-#![feature(stmt_expr_attributes)]
+#![feature(stmt_expr_attributes)] // used in error.rs for panic mode
 #![feature(if_let_guard)]
-#![feature(try_blocks)]
+#![feature(associated_type_defaults)] // used in registry.rs for default key type for NamedRegistry
+#![feature(box_patterns)]
+#![feature(iterator_try_reduce)] // used in instructions/input_switcher.rs for building return type
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]
@@ -16,6 +18,11 @@
 #![allow(
     clippy::trivially_copy_pass_by_ref,
     reason = "too many false positives on WasmFlags, which will grow in future"
+)]
+#![allow(clippy::missing_panics_doc, reason = "too many false positives")]
+#![allow(
+    clippy::multiple_crate_versions,
+    reason = "difficult to fix w.r.t. dependencies"
 )]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
@@ -42,25 +49,28 @@ extern crate enum_field_getter;
 use wasm_bindgen::prelude::*;
 
 #[macro_use]
-mod error;
-mod ir;
-mod optimisation;
+pub mod error;
+pub mod ir;
+pub mod optimisation;
 // pub mod ir_opt;
-mod sb3;
-mod wasm;
+pub mod sb3;
+pub mod wasm;
 #[macro_use]
-mod instructions;
+pub mod instructions;
 
 #[doc(inline)]
 pub use error::{HQError, HQErrorType, HQResult};
 
-mod registry;
+pub mod registry;
 
-mod rc;
+pub mod rc;
 
 /// commonly used _things_ which would be nice not to have to type out every time
 pub mod prelude {
-    pub use crate::registry::{Registry, RegistryDefault};
+    pub use crate::registry::{
+        NamedRegistrar, NamedRegistry, NamedRegistryItem, NamedRegistryItemOverride, Registry,
+        RegistryDefault, RegistryType,
+    };
     pub use crate::{HQError, HQResult};
     pub use alloc::borrow::Cow;
     pub use alloc::boxed::Box;

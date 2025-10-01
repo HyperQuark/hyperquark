@@ -11,7 +11,6 @@ use core::hash::{Hash, Hasher};
 #[derive(Debug)]
 struct Variable {
     possible_types: RefCell<Type>,
-    #[expect(unused, reason = "will be used in the future")]
     initial_value: VarVal,
     id: String,
 }
@@ -20,6 +19,7 @@ struct Variable {
 pub struct RcVar(Rc<Variable>);
 
 impl RcVar {
+    #[must_use]
     pub fn new(ty: Type, initial_value: VarVal) -> Self {
         Self(Rc::new(Variable {
             possible_types: RefCell::new(ty),
@@ -33,14 +33,17 @@ impl RcVar {
         *self.0.possible_types.borrow_mut() = current.or(ty);
     }
 
+    #[must_use]
     pub fn possible_types(&self) -> Ref<'_, Type> {
         self.0.possible_types.borrow()
     }
 
+    #[must_use]
     pub fn _initial_value(&self) -> &VarVal {
         &self.0.initial_value
     }
 
+    #[must_use]
     pub fn id(&self) -> &str {
         &self.0.id
     }
@@ -117,6 +120,7 @@ pub fn variables_from_target(target: &Sb3Target) -> TargetVars {
         .collect()
 }
 
+#[must_use]
 pub fn used_vars(vars: &TargetVars) -> Box<[RcVar]> {
     vars.values()
         .filter_map(|var| {

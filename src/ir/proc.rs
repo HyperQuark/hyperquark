@@ -32,22 +32,27 @@ pub struct ProcContext {
 }
 
 impl ProcContext {
+    #[must_use]
     pub fn arg_ids(&self) -> &[Box<str>] {
         &self.arg_ids
     }
 
+    #[must_use]
     pub fn arg_names(&self) -> &[Box<str>] {
         &self.arg_names
     }
 
+    #[must_use]
     pub fn arg_vars(&self) -> Rc<RefCell<Vec<RcVar>>> {
         Rc::clone(&self.arg_vars)
     }
 
+    #[must_use]
     pub fn return_vars(&self) -> Rc<RefCell<Vec<RcVar>>> {
         Rc::clone(&self.return_vars)
     }
 
+    #[must_use]
     pub const fn always_warped(&self) -> bool {
         self.always_warped
     }

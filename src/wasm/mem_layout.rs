@@ -11,6 +11,7 @@ macro_rules! size_from_type {
     (f64) => {{ 8 }};
 }
 
+#[macro_export]
 macro_rules! memory_layout {
     {
         $mod:ident
@@ -40,12 +41,27 @@ macro_rules! memory_layout {
     };
     ($mod:ident #[$attr:meta] $name:ident : $ty:tt @ $tot:expr; $(#[$attr3:meta] $name3:ident $tot3:expr;)*) => {
         pub mod $mod {
+            #![allow(clippy::empty_docs, reason = "index_counter doesn't need docs")]
+
             $(#[$attr3] pub const $name3: u32 = $tot3;)*
             #[$attr] pub const $name: u32 = $tot;
 
             pub const BLOCK_SIZE: u32 = $tot + size_from_type!($ty);
         }
     }
+}
+
+#[macro_export]
+macro_rules! index_counter {
+    {
+        $mod:ident
+        $($name:ident)+
+    } => {
+        memory_layout!(
+            $mod
+            $(#[doc=""] $name : i8)+
+        );
+    };
 }
 
 memory_layout! {

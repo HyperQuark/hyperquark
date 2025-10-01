@@ -62,15 +62,33 @@ pub enum Type {
 
     Any = Self::String.or(Self::Number).bits,
 
-    Color,
-}
-impl Type {
-    pub const BASE_TYPES: [Self; 3] = [Self::String, Self::QuasiInt, Self::Float];
+    // two different colour types are needed because calling `set pen colour to ()` without an alpha component
+    // resets the pen transparency to 0.
+    ColorRGB,
+    ColorARGB,
 
+    Color = Self::ColorRGB.or(Self::ColorARGB).bits,
+
+    AnyOrColor = Self::Any.or(Self::Color).bits,
+}
+
+impl Type {
+    // float must always be last in this list because it's more difficult to check if a boxed value
+    // *doesn't* match any other pattern
+    pub const BASE_TYPES: [Self; 5] = [
+        Self::String,
+        Self::QuasiInt,
+        Self::ColorRGB,
+        Self::ColorARGB,
+        Self::Float,
+    ];
+
+    #[must_use]
     pub fn is_base_type(self) -> bool {
         (!self.is_none()) && Self::BASE_TYPES.iter().any(|ty| ty.contains(self))
     }
 
+    #[must_use]
     pub fn base_type(self) -> Option<Self> {
         if !self.is_base_type() {
             return None;
@@ -81,6 +99,7 @@ impl Type {
             .find(|&ty| ty.contains(self))
     }
 
+    #[must_use]
     pub fn base_types(self) -> Box<dyn Iterator<Item = Self>> {
         if self.is_none() {
             return Box::new(core::iter::empty());
@@ -93,26 +112,38 @@ impl Type {
         )
     }
 
+    #[must_use]
     pub const fn maybe_positive(self) -> bool {
         self.contains(Self::IntPos)
             || self.intersects(Self::FloatPos)
             || self.contains(Self::BooleanTrue)
+            || self.contains(Self::Color)
     }
 
+    #[must_use]
     pub const fn maybe_negative(self) -> bool {
         self.contains(Self::IntNeg) || self.intersects(Self::FloatNeg)
     }
 
+    #[must_use]
     pub const fn maybe_zero(self) -> bool {
         self.contains(Self::IntZero)
             || self.contains(Self::BooleanFalse)
             || self.intersects(Self::FloatZero)
+            || self.contains(Self::Color)
     }
 
+    #[must_use]
     pub const fn maybe_nan(self) -> bool {
         self.intersects(Self::FloatNan) || self.contains(Self::StringNan)
     }
 
+    #[must_use]
+    pub const fn maybe_inf(self) -> bool {
+        self.intersects(Self::FloatInf)
+    }
+
+    #[must_use]
     pub const fn none_if_false(condition: bool, if_true: Self) -> Self {
         if condition { if_true } else { Self::none() }
     }
@@ -149,4 +180,22 @@ impl ReturnType {
             Err(err())
         }
     }
+}
+
+pub fn base_types(inputs: &[Type]) -> HQResult<Box<[Box<[Type]>]>> {
+    inputs
+        .iter()
+        .copied()
+        .map(|ty| {
+            Type::base_types(ty)
+                .map(|bty| bty.and(ty))
+                .collect::<Box<[_]>>()
+        })
+        .map(|tys| {
+            if tys.is_empty() {
+                hq_bug!("got empty type in base_types!!!")
+            }
+            Ok(tys)
+        })
+        .collect()
 }

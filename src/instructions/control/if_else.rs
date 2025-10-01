@@ -2,10 +2,20 @@ use super::super::prelude::*;
 use crate::ir::Step;
 use wasm_encoder::BlockType;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Fields {
     pub branch_if: Rc<Step>,
     pub branch_else: Rc<Step>,
+}
+
+impl Clone for Fields {
+    fn clone(&self) -> Self {
+        #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
+        Self {
+            branch_if: Step::clone(&self.branch_if, false).unwrap(),
+            branch_else: Step::clone(&self.branch_else, false).unwrap(),
+        }
+    }
 }
 
 impl fmt::Display for Fields {

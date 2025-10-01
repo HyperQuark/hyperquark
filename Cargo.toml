@@ -6,17 +6,17 @@ publish = false
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
 enum-field-getter = { path = "enum-field-getter" }
 wasm-encoder = "0.226.0"
-indexmap = { version = "2.0.0", default-features = false }
+indexmap = { version = "2.11.4", default-features = false }
 hashers = "1.0.1"
-uuid = { version = "1.4.1", default-features = false, features = ["v4", "js"] }
-regex = "1.10.5"
+uuid = { version = "1.18.1", default-features = false, features = ["v4", "js"] }
+regex = "1.11.2"
 lazy-regex = "3.2.0"
 bitmask-enum = "2.2.5"
-itertools = { version = "0.13.0", default-features = false, features = ["use_alloc"] }
-wasm-bindgen = "0.2.92"
+itertools = { version = "0.14.0", default-features = false, features = ["use_alloc"] }
+wasm-bindgen = "0.2.103"
 serde-wasm-bindgen = "0.6.5"
 wasm-gen = { path = "wasm-gen" }
 petgraph = { version = "0.8.1", default-features = false, features = ["stable_graph"] }
@@ -43,7 +43,7 @@ rustflags = [
 ]
 
 [build-dependencies]
-convert_case = "0.6.0"
+convert_case = "0.8.0"
 
 [features]
 compiler = [] # if we only want to access flags, we don't want to additionally have all the compiler machinery
