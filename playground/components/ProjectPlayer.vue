@@ -185,5 +185,7 @@ div.instructions {
   &>h2 {
     font-weight: bold;
   }
+
+  white-space: pre-wrap;
 }
 </style>
