@@ -213,7 +213,7 @@ pub enum BlockOpcode {
 }
 
 /// A scratch block - either special or not
-#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter, PartialEq)]
 #[serde(untagged)]
 pub enum Block {
     Normal {
@@ -229,7 +229,7 @@ pub enum Block {
 }
 
 /// A special representation of a scratch block.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum BlockArray {
     NumberOrAngle(u32, f64),
@@ -240,7 +240,7 @@ pub enum BlockArray {
 }
 
 /// Either a block array or a block id
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum BlockArrayOrId {
     Id(Box<str>),
@@ -248,7 +248,7 @@ pub enum BlockArrayOrId {
 }
 
 /// Possible inputs (round or predicate) in a block
-#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter, PartialEq)]
 #[serde(untagged)]
 pub enum Input {
     Shadow(u32, Option<BlockArrayOrId>, Option<BlockArrayOrId>),
@@ -256,7 +256,7 @@ pub enum Input {
 }
 
 /// Possible fields (rectangular) in a block
-#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter, PartialEq)]
 #[serde(untagged)]
 pub enum Field {
     Value((Option<VarVal>,)),
@@ -275,7 +275,7 @@ impl Field {
 }
 
 /// Represents a mutation on a block. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format#Mutations>
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Mutation {
     /// ignored - should always be "mutation"
@@ -298,7 +298,7 @@ impl Default for Mutation {
 }
 
 /// Represents a non-special block
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockInfo {
     pub opcode: BlockOpcode,

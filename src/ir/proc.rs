@@ -7,7 +7,7 @@ use super::context::StepContext;
 use super::{Step, Target as IrTarget, Type as IrType};
 use crate::ir::RcVar;
 use crate::prelude::*;
-use crate::sb3::{Block, BlockMap, BlockOpcode, Target as Sb3Target};
+use crate::sb3::{Block, BlockArrayOrId, BlockMap, BlockOpcode, Input, Target as Sb3Target};
 use crate::wasm::WasmFlags;
 use core::cell::Ref;
 use lazy_regex::{Lazy, lazy_regex};
@@ -164,13 +164,43 @@ impl Proc {
             clippy::unwrap_used,
             reason = "previously asserted that block_info is Some"
         )]
-        let parent_id = prototype
-            .block_info()
-            .unwrap()
-            .parent
-            .clone()
-            .ok_or_else(|| make_hq_bad_proj!("prototype block without parent"))?;
-        let Some(def_block) = blocks.get(&parent_id) else {
+        let Some((parent_id, def_block)) =
+            (if let Some(parent_id) = prototype.block_info().unwrap().parent.as_ref() {
+                Some((
+                    parent_id.clone(),
+                    blocks.get(parent_id).ok_or_else(|| {
+                        make_hq_bad_proj!("non-existant parent id on prototype block")
+                    })?,
+                ))
+            } else {
+                blocks
+                    .iter()
+                    .map(|(id, block)| (id.clone(), block))
+                    .try_find(|(_id, block)| {
+                        let Some(block_info) = block.block_info() else {
+                            return Ok(false);
+                        };
+                        if block_info.opcode != BlockOpcode::procedures_definition {
+                            return Ok(false);
+                        }
+                        let Some(custom_block_input) = block_info.inputs.get("custom_block") else {
+                            hq_bad_proj!("missing custom_block input");
+                        };
+                        let (Input::NoShadow(_, Some(block_arr_id))
+                        | Input::Shadow(_, Some(block_arr_id), _)) = custom_block_input
+                        else {
+                            hq_bad_proj!("nullish block array/id for custom_block input");
+                        };
+                        let BlockArrayOrId::Id(custom_block_id) = block_arr_id else {
+                            hq_bad_proj!("unexpected array-like input for custom_block input");
+                        };
+                        let Some(this_proc_prototype) = blocks.get(custom_block_id) else {
+                            hq_bad_proj!("non-existant block id specified for custom_block input");
+                        };
+                        Ok(this_proc_prototype == prototype)
+                    })?
+            })
+        else {
             hq_bad_proj!("no definition block found for {proccode}")
         };
         let debug = sb3_target.comments.clone().iter().any(|(_id, comment)| {

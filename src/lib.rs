@@ -3,6 +3,7 @@
 #![feature(associated_type_defaults)] // used in registry.rs for default key type for NamedRegistry
 #![feature(box_patterns)]
 #![feature(iterator_try_reduce)] // used in instructions/input_switcher.rs for building return type
+#![feature(try_find)] // used in ir/proc.rs for finding prototype/def blocks
 #![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]
