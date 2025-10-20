@@ -4,7 +4,7 @@
     {{error}}
   </details>
   <template v-else>
-    <span class=".inline-block">Enter a project id: <span class="projinput inline-block" tabindex=0 @focus="()=>numInput.focus()">https://scratch.mit.edu/projects/<input type="text" ref="numInput" v-model="projId"></span><button @click="handleNumInput">Go!</button></span> <span class="inline-block">or upload a project: <ProjectFileInput @error="err"></ProjectFileInput></span>
+    <span class=".inline-block">Enter a project id: <span class="projinput inline-block" tabindex=0 @focus="()=>numInput.focus()">https://scratch.mit.edu/projects/<input type="text" ref="numInput" v-model="projId"></span><button @click="handleNumInput" :disabled="goDisabled">Go!</button></span> <span class="inline-block">or upload a project: <ProjectFileInput @error="err"></ProjectFileInput></span>
   </template>
 </template>
 
@@ -18,9 +18,14 @@
   const numInput = ref(null);
   const fileInput = ref(null);
   const error = ref(null);
-
+  const goDisabled = ref(true);
   watch(projId, () => {
-    projId.value = projId.value.toString().replaceAll(/[^\d]/g, '');
+    projId.value = newVal.toString().replaceAll(/[^\d]/g, '');
+    if (projId.value === "") {
+      goDisabled.value = true;
+      return;
+    }
+    goDisabled.value = false;
   });
   
   function handleNumInput() {
