@@ -25,11 +25,7 @@
       goDisabled.value = true;
       return;
     }
-    fetch(`https://trampoline.turbowarp.org/api/projects/${projId.value}/`, { method: 'HEAD' }).then(resp => {
-      goDisabled.value = resp.status !== 200;
-    }).catch(() => {
-      goDisabled.value = true;
-    });
+    goDisabled.value = false;
   });
   
   function handleNumInput() {
