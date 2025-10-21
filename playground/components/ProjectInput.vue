@@ -19,13 +19,9 @@
   const fileInput = ref(null);
   const error = ref(null);
   const goDisabled = ref(true);
-  watch(projId, () => {
+  watch(projId, (newVal) => {
     projId.value = newVal.toString().replaceAll(/[^\d]/g, '');
-    if (projId.value === "") {
-      goDisabled.value = true;
-      return;
-    }
-    goDisabled.value = false;
+    goDisabled.value = projId.value === "";
   });
   
   function handleNumInput() {
