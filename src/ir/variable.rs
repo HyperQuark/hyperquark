@@ -120,6 +120,7 @@ pub fn variables_from_target(target: &Sb3Target) -> TargetVars {
         .collect()
 }
 
+/// A list of variables in a target that are used somewhere (whether read or written to)
 #[must_use]
 pub fn used_vars(vars: &TargetVars) -> Box<[RcVar]> {
     vars.values()
