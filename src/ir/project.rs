@@ -1,9 +1,7 @@
 use super::proc::{ProcMap, procs_from_target};
 use super::variable::{TargetVars, variables_from_target};
 use super::{Step, Target, Thread};
-use crate::instructions::{
-    DataSetvariabletoFields, DataVariableFields, IrOpcode,
-};
+use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
 use crate::ir::target::IrCostume;
 use crate::ir::{PartialStep, RcVar, Type as IrType, used_vars};
 use crate::prelude::*;

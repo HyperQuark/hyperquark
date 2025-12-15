@@ -217,7 +217,9 @@ impl Step {
 
     /// An iterator of variables that are global (in the WASM sense, not the scratch sense)
     /// in this step. Should be in a consistent order. Used for procedures.
-    pub fn globally_scoped_variables(&self) -> HQResult<impl core::iter::DoubleEndedIterator<Item = RcVar> + Clone> {
+    pub fn globally_scoped_variables(
+        &self,
+    ) -> HQResult<impl core::iter::DoubleEndedIterator<Item = RcVar> + Clone> {
         let target = self.context().target();
         let project = self
             .project()
