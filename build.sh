@@ -82,38 +82,45 @@ fi
 [ $VITE = "0" ] && [ $WASM = "0" ] && [ $WOPT = "0" ] && echo "exiting (nothing to build)" && exit 0
 
 if [ $WASM = "1" ]; then
+  mkdir -p /tmp/hq-build/js/compiler;
+  mkdir -p /tmp/hq-build/js/no-compiler;
   if [ $PROD = "1" ]; then
     echo "building hyperquark (compiler) for production..."
     cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} ${DWARF:+--features="compiler panic"}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/compiler ${DWARF:+--keep-debug}
+    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=/tmp/hq-build/js/compiler ${DWARF:+--keep-debug}
     echo "building hyperquark (no compiler) for production..."
     cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} --no-default-features ${DWARF:+--features=panic}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=js/no-compiler ${DWARF:+--keep-debug}
+    wasm-bindgen target/wasm32-unknown-unknown/release/hyperquark.wasm --out-dir=/tmp/hq-build/js/no-compiler ${DWARF:+--keep-debug}
   else
     echo "building hyperquark (compiler) for development..."
     cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet} ${DWARF:+--features="compiler panic"}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/compiler ${DWARF:+--keep-debug}
+    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=/tmp/hq-build/js/compiler ${DWARF:+--keep-debug}
     echo "building hyperquark (no compiler) for development..."
     cargo build --target=wasm32-unknown-unknown ${QUIET:+--quiet} --no-default-features ${DWARF:+--features=panic}
     echo running wasm-bindgen...
-    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=js/no-compiler ${DWARF:+--keep-debug}
+    wasm-bindgen target/wasm32-unknown-unknown/debug/hyperquark.wasm --out-dir=/tmp/hq-build/js/no-compiler ${DWARF:+--keep-debug}
   fi
-  mv $(cargo outdir --no-names --quiet)/imports.ts js/imports.ts
+  mv $(cargo outdir --no-names --quiet)/imports.ts /tmp/hq-build/js/imports.ts
   node opcodes.mjs
 fi
 if [ $WOPT = "1" ]; then
   echo running wasm-opt -Os...
-  wasm-opt -Os -g js/compiler/hyperquark_bg.wasm -o js/compiler/hyperquark_bg.wasm
-  wasm-opt -Os -g js/no-compiler/hyperquark_bg.wasm -o js/no-compiler/hyperquark_bg.wasm
+  wasm-opt -Os -g /tmp/hq-build/js/compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/compiler/hyperquark_bg.wasm
+  wasm-opt -Os -g /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm
 fi
 if [ $WOPT = "2" ]; then
   echo running wasm-opt -Oz...
-  wasm-opt -Oz -g js/compiler/hyperquark_bg.wasm -o js/compiler/hyperquark_bg.wasm
-  wasm-opt -Oz -g js/no-compiler/hyperquark_bg.wasm -o js/no-compiler/hyperquark_bg.wasm
+  wasm-opt -Oz -g /tmp/hq-build/js/compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/compiler/hyperquark_bg.wasm
+  wasm-opt -Oz -g /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm
 fi
+mkdir -p /tmp/hq-build/js-new
+cp -a js/* /tmp/hq-build/js-new/
+cp -a /tmp/hq-build/js/* /tmp/hq-build/js-new/
+rm -rf js
+mv -fT /tmp/hq-build/js-new js
 if [ $VITE = "1" ]; then
   echo running npm build...
   npm run build
