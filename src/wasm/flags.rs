@@ -1,3 +1,5 @@
+#![allow(clippy::enum_glob_use, reason = "easier and little risk of pollution")]
+
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -44,24 +46,31 @@ pub enum WasmFeature {
     ReferenceTypes,
     TypedFunctionReferences,
     JSStringBuiltins,
+    BulkMemory,
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn all_wasm_features() -> Vec<WasmFeature> {
-    use WasmFeature::{JSStringBuiltins, ReferenceTypes, TypedFunctionReferences};
-    vec![ReferenceTypes, TypedFunctionReferences, JSStringBuiltins]
+    use WasmFeature::*;
+    vec![
+        ReferenceTypes,
+        TypedFunctionReferences,
+        JSStringBuiltins,
+        BulkMemory,
+    ]
 }
 
 // no &self because wasm_bidgen doesn't like it
 #[wasm_bindgen]
 #[must_use]
 pub fn wasm_feature_detect_name(feat: WasmFeature) -> String {
-    use WasmFeature::{JSStringBuiltins, ReferenceTypes, TypedFunctionReferences};
+    use WasmFeature::*;
     match feat {
         ReferenceTypes => "referenceTypes",
         TypedFunctionReferences => "typedFunctionReferences",
         JSStringBuiltins => "jsStringBuiltins",
+        BulkMemory => "bulkMemory",
     }
     .into()
 }
@@ -218,7 +227,8 @@ impl WasmFlags {
                 CallIndirect - stores function indices, then uses CallIndirect to call them.")
                 .with_ty(ty_str!(Scheduler))
                 .with_wasm_features(stringmap! {
-                    TypedFuncRef : vec![WasmFeature::TypedFunctionReferences]
+                    TypedFuncRef : vec![WasmFeature::TypedFunctionReferences],
+                    CallIndirect : vec![WasmFeature::BulkMemory],
                 }),
             "print_ir" => FlagInfo::new()
                 .with_name("Print IR")
