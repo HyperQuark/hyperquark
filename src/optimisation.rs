@@ -3,8 +3,10 @@ use crate::prelude::*;
 
 mod ssa;
 
-pub fn ir_optimise(ir: &Rc<IrProject>) -> HQResult<()> {
+pub use ssa::SSAToken;
+
+pub fn ir_optimise(ir: &Rc<IrProject>) -> HQResult<SSAToken> {
     //variables::optimise_var_types(ir)?;
     let ssa_token = ssa::optimise_variables(ir)?;
-    Ok(())
+    Ok(ssa_token)
 }

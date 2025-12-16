@@ -525,7 +525,11 @@ impl WasmProject {
         Ok(())
     }
 
-    pub fn from_ir(ir_project: &Rc<IrProject>, flags: WasmFlags) -> HQResult<Self> {
+    pub fn from_ir(
+        ir_project: &Rc<IrProject>,
+        _ssa_token: crate::optimisation::SSAToken,
+        flags: WasmFlags,
+    ) -> HQResult<Self> {
         let steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> =
             Rc::new(RefCell::new(IndexMap::default()));
         let registries = Rc::new(Registries::default());
