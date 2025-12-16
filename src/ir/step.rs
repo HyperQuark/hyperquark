@@ -1,7 +1,7 @@
 use super::blocks::{self, NextBlocks};
 use super::{IrProject, StepContext};
 use crate::instructions::{ControlIfElseFields, HqYieldFields, IrOpcode, YieldMode};
-use crate::ir::Target;
+use crate::ir::{RcVar, Target, used_vars};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap};
 use crate::wasm::WasmFlags;
@@ -148,7 +148,7 @@ impl Step {
     pub fn opcodes_mut(&self) -> HQResult<RefMut<'_, Vec<IrOpcode>>> {
         self.opcodes
             .try_borrow_mut()
-            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow opcodes cell"))
     }
 
     pub fn from_block(
@@ -213,6 +213,32 @@ impl Step {
             }
         }
         Ok(false)
+    }
+
+    /// An iterator of variables that are global (in the WASM sense, not the scratch sense)
+    /// in this step. Should be in a consistent order. Used for procedures.
+    pub fn globally_scoped_variables(
+        &self,
+    ) -> HQResult<impl core::iter::DoubleEndedIterator<Item = RcVar> + Clone> {
+        let target = self.context().target();
+        let project = self
+            .project()
+            .upgrade()
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?;
+        let global_vars = used_vars(project.global_variables());
+        let target_vars = used_vars(target.variables());
+        Ok(global_vars.into_iter().chain(target_vars))
+    }
+
+    pub fn globally_scoped_variables_num(&self) -> HQResult<usize> {
+        let target = self.context().target();
+        let project = self
+            .project()
+            .upgrade()
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?;
+        let global_vars = used_vars(project.global_variables());
+        let target_vars = used_vars(target.variables());
+        Ok(global_vars.len() + target_vars.len())
     }
 }
 

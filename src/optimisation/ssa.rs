@@ -1,3 +1,88 @@
+//! Carry out SSA (static single assignment) transformation on the project, and fix up
+//! some variable shennanigans.
+//!
+//! The goals are:
+//! - Split variables so they are only ever written to once, and are read from the most recent
+//!   instance of the variable
+//! - Change variable reads inside procedures to argument access, if that variable hasn't been
+//!   written to inside that procedure yet
+//! - Assign the narrowest type possible to each variable
+//! - Reinsert casts to account for newly assigned variable types.
+//!
+//! This will create a lot of unnecessary variables; this is ok, as wasm-opt does local merging
+//! and should remove unnecessary tees etc. But this might be an area in which performance could
+//! be improved, if we can reduce the number of variables we need to track on our end, which
+//! will also improve wasm-opt's runtime.
+//!
+//! ## Rough description of algorithm
+//!
+//! This does not correspond exactly to the implementation, but hopefully explains the intent.
+//!
+//! ```pseudocode
+//! function split_to_SSA (step, ssa_map = {}, mut additional_opcodes):
+//!   for each opcode in step:
+//!     if opcode is a variable read and is not already local:
+//!       if opcode not in ssa_map:
+//!         if step context is in procedure:
+//!           replace opcode with the appropriate argument access
+//!       else:
+//!         replace opcode with local variable read to corresponding variable in ssa_map
+//!     if opcode is a variable write/tee to var and is not already local:
+//!       new_var := new variable
+//!       ssa_map[var] = new_var
+//!       replace opcode with local variable write/tee to new_var
+//!     if opcode yields inline to other_steps (e.g. by yield_inline, loop or if/else):
+//!       if opcode is loop:
+//!         for each globally accessible variable:
+//!           write to a new SSA with the current value of the variable
+//!           # the needless SSAs here will be removed by wasm-opt.
+//!           # TODO: can we keep track of which variables are accessed from inside each step, to simplify this step?
+//!       lower_ssa_maps := []
+//!       for each lower_step in other_steps:
+//!         append (split_to_SSA(other step, ssa_map, additional_opcodes)) to lower_ssa_maps
+//!       consolidate lower_ssa_maps into lower_ssa_map of variable : [variable]
+//!       for each (global, locals) in lower_ssa_map:
+//!         if locals.length == 1:
+//!           ssa_map[global] := locals[0]
+//!         else:
+//!           new_var := new variable
+//!           for each i, lower_step in enumerate(other_steps):
+//!             append (local variable write to new_var from locals[i])
+//!                 to additional_opcodes[lower_step]
+//!           ssa_map[global] = new_var
+//!     if opcode yields non-inline to other_step:
+//!       split_to_SSA(other_step, {}, additional_steps)
+//!   if (step is not inlined and step context is not in procedure) or (last opcode was a non-inline yield):
+//!     for (global, local) in ssa_map:
+//!       append (local variable read of local) to additional_opcodes[step]
+//!       append (global variable write of global) to additional_opcodes[step]
+//!     return {}
+//!   if step context is in procedure:
+//!     return {}
+//!   return ssa_map
+//!
+//! additional_opcodes = {}
+//!
+//! for step in top level steps:
+//!   split_to_SSA (step, {}, additional_opcodes)
+//!
+//! for (step, extra_opcodes) in additional_opcodes:
+//!   concat extra_opcodes to step.opcodes
+//! ```
+//!
+//! Alongside this SSA splitting, we also need to construct a graph to reason about what types
+//! might be on the stack at any one point. This is simpler so won't be explained here.
+//!
+//! A note on naming: I call this SSA, but it is not strictly true. In SSA, each variable is assigned to
+//! exactly once, and at a dominance frontier, SSAs from preceding blocks are merged into one using a 'phi node'
+//! or 'phi function', why picks the correct variable to read based on which branch was just taken. Carrying
+//! around additional information about which block was just taken isn't something that I want to do, so our
+//! 'phi function' actually inserts the relevant assignment into the preceding blocks directly. This does mean
+//! that some variables can be written to from different blocks, especially where loops are concerned (as the
+//! output SSA needs to be written to both before the loop and at the end of each iteration). This isn't actually
+//! a problem for us, as we're not using SSA to carry out liveness analysis - we use it to minimise casts and
+//! maximimise the type information known at compile time.
+
 #![expect(
     clippy::mutable_key_type,
     reason = "implementations of Eq and Ord for RcVar and Step are independent of actual contents"
@@ -9,7 +94,7 @@ use crate::instructions::{
     ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{
-    IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, insert_casts, used_vars,
+    IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, insert_casts,
 };
 use crate::prelude::*;
 use crate::sb3::VarVal;
@@ -17,7 +102,9 @@ use crate::sb3::VarVal;
 use alloc::collections::btree_map::Entry;
 use core::convert::identity;
 use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
 use core::mem;
+use petgraph::dot::Dot;
 
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -66,38 +153,44 @@ enum MaybeGraph {
     Finished(VarGraph),
 }
 
+#[derive(Clone)]
 struct VariableMaps<'a> {
     /// global variable -> local variable
-    pub current: BTreeMap<RcVar, RcVar>,
-    /// global variable -> local variable, for the immediate outer scope
-    pub outer: &'a BTreeMap<RcVar, RcVar>,
-    /// global variable -> local variable, for any outer scope
-    pub global: &'a BTreeMap<RcVar, RcVar>,
+    pub ssa: BTreeMap<RcVar, RcVar>,
+    /// global variable -> (arg index, arg variable)
+    pub proc_args: &'a BTreeMap<RcVar, (usize, RcVar)>,
 }
 
 impl<'a> VariableMaps<'a> {
-    const fn new() -> Self {
+    const fn new_with_proc_args(proc_args: &'a BTreeMap<RcVar, (usize, RcVar)>) -> Self {
         Self {
-            current: BTreeMap::new(),
-            outer: const { &BTreeMap::new() },
-            global: const { &BTreeMap::new() },
+            ssa: BTreeMap::new(),
+            proc_args,
         }
     }
 
-    fn elevate(
-        &'a self,
-        empty_btreemap: &'a mut BTreeMap<RcVar, RcVar>,
-        empty_btreemap2: &'a mut BTreeMap<RcVar, RcVar>,
-    ) -> Self {
-        empty_btreemap.append(&mut self.global.clone());
-        empty_btreemap.append(&mut self.outer.clone());
-        empty_btreemap2.append(&mut self.outer.clone());
-        empty_btreemap2.append(&mut self.current.clone());
-        Self {
-            current: BTreeMap::new(),
-            outer: empty_btreemap2,
-            global: empty_btreemap,
-        }
+    fn use_current_ssa_for_global<S, A, G, T>(
+        &self,
+        global_var: &RcVar,
+        if_ssa: S,
+        if_arg: A,
+        if_global: G,
+    ) -> T
+    where
+        S: FnOnce(&RcVar) -> T,
+        A: FnOnce(usize, &RcVar) -> T,
+        G: FnOnce() -> T,
+    {
+        self.ssa.get(global_var).map_or_else(
+            || {
+                if let Some((arg_index, arg_var)) = self.proc_args.get(global_var) {
+                    if_arg(*arg_index, arg_var)
+                } else {
+                    if_global()
+                }
+            },
+            if_ssa,
+        )
     }
 }
 
@@ -159,7 +252,11 @@ impl VarGraph {
         // );
         // crate::log!("hash of step: {:?}", graphs.);
         let maybe_proc_context = step.context().proc_context.as_ref();
+
+        let mut should_propagate_ssa = step.used_non_inline() && maybe_proc_context.is_none();
+
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
+        let mut additional_opcodes: Vec<(usize, Vec<IrOpcode>)> = vec![];
         'opcode_loop: for (i, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
             // crate::log!("opcode: {opcode:?}");
             // let's just assume that input types match up.
@@ -172,14 +269,18 @@ impl VarGraph {
                     }) => {
                         // crate::log!("found a variable write operation, type stack: {type_stack:?}");
                         let already_local = *locality.try_borrow()?;
-                        if !already_local {
-                            let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
-                            variable_maps
-                                .current
-                                .insert(var.try_borrow()?.clone(), new_variable.clone());
-                            *var.try_borrow_mut()? = new_variable;
-                            *locality.try_borrow_mut()? = true;
+                        if already_local {
+                            type_stack.clear();
+                            continue 'opcode_loop;
                         }
+                        let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
+                        {
+                            variable_maps
+                                .ssa
+                                .insert(var.try_borrow()?.clone(), new_variable.clone());
+                        }
+                        *var.try_borrow_mut()? = new_variable;
+                        *locality.try_borrow_mut()? = true;
                         if type_stack.is_empty() {
                             let mut graph = self.graph().borrow_mut();
                             let Some(Some((vars, _))) =
@@ -214,15 +315,21 @@ impl VarGraph {
                         local_read_write: locality,
                     }) => {
                         // crate::log("found a variable tee operation");
-                        if *locality.try_borrow()? {
-                            break 'opcode_block;
+                        let already_local = *locality.try_borrow()?;
+                        if already_local {
+                            *type_stack = vec![StackElement::Var(var.try_borrow()?.clone())];
+                            continue 'opcode_loop;
                         }
                         let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
-                        variable_maps
-                            .current
-                            .insert(var.try_borrow()?.clone(), new_variable.clone());
+                        {
+                            variable_maps
+                                .ssa
+                                .insert(var.try_borrow()?.clone(), new_variable.clone());
+                        }
                         *var.try_borrow_mut()? = new_variable;
                         *locality.try_borrow_mut()? = true;
+                        // TODO: do we need to consider the case where the stack is empty,
+                        // as with setvariableto?
                         let new_node = self.add_node(Some((
                             vec![var.try_borrow()?.clone()],
                             mem::take(type_stack),
@@ -239,53 +346,29 @@ impl VarGraph {
                             // crate::log("variable is already local; skipping");
                             break 'opcode_block;
                         }
-                        let var_to_swap = if let Some(current_var) =
-                            variable_maps.current.get(&var.try_borrow()?.clone())
-                        {
-                            // crate::log("local variable instance found");
-                            Some(current_var.clone())
-                        } else {
-                            variable_maps.outer.get(&var.try_borrow()?.clone()).cloned()
-                        };
-                        if let Some(new_var) = var_to_swap {
-                            *var.try_borrow_mut()? = new_var;
-                            *local_read.try_borrow_mut()? = true;
-                        } else if let Some(proc_context) = maybe_proc_context {
-                            let target = step.context().target();
-                            let project = step
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?;
-                            let global_vars = used_vars(project.global_variables());
-                            let target_vars = used_vars(target.variables());
-                            if let Some((var_index, _)) = global_vars
-                                .iter()
-                                .chain(&target_vars)
-                                .find_position(|v| *v == &*var.borrow())
-                            {
-                                let arg_vars_cell = proc_context.arg_vars();
-                                let arg_vars = arg_vars_cell.try_borrow()?;
-                                let arg_var = arg_vars
-                                    .get(
-                                        var_index + arg_vars.len()
-                                            - global_vars.len()
-                                            - target_vars.len(),
-                                    )
-                                    .ok_or_else(|| make_hq_bug!("var index out of bounds"))?;
-                                // crate::log("inserting var->arg replacement");
-                                opcode_replacements.push((
-                                    i,
-                                    IrOpcode::procedures_argument(ProceduresArgumentFields(
-                                        var_index,
-                                        arg_var.clone(),
-                                    )),
-                                ));
-                                type_stack.push(StackElement::Var(arg_var.clone()));
-                                break 'opcode_block;
-                            }
-                            hq_bug!("couldn't find variable in global & target vars")
-                        }
-                        type_stack.push(StackElement::Var(var.try_borrow()?.clone()));
+                        let gvar = &var.try_borrow()?.clone();
+                        let mut var_mut = var.try_borrow_mut()?;
+                        type_stack.push(StackElement::Var(
+                            variable_maps.use_current_ssa_for_global::<_, _, _, HQResult<_>>(
+                                gvar,
+                                |current_ssa_var| {
+                                    *var_mut = current_ssa_var.clone();
+                                    *local_read.try_borrow_mut()? = true;
+                                    Ok(current_ssa_var.clone())
+                                },
+                                |var_index, arg_var| {
+                                    opcode_replacements.push((
+                                        i,
+                                        IrOpcode::procedures_argument(ProceduresArgumentFields(
+                                            var_index,
+                                            arg_var.clone(),
+                                        )),
+                                    ));
+                                    Ok(arg_var.clone())
+                                },
+                                || Ok(gvar.clone()),
+                            )?,
+                        ));
                         // crate::log!("stack: {type_stack:?}");
                     }
                     IrOpcode::control_if_else(ControlIfElseFields {
@@ -295,28 +378,46 @@ impl VarGraph {
                         // crate::log("found control_if_else");
                         type_stack.clear(); // the top item on the stack should be consumed by control_if_else
                         let last_node = *self.exit_node().borrow();
+
+                        let mut branch_if_variable_maps = variable_maps.clone();
                         graphs.insert(Rc::clone(branch_if), MaybeGraph::Started);
                         self.visit_step(
                             branch_if,
-                            &mut variable_maps.elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                            &mut branch_if_variable_maps,
                             graphs,
                             type_stack,
                             next_steps,
                         )?;
                         graphs.insert(Rc::clone(branch_if), MaybeGraph::Inlined);
-                        let if_branch_exit = *self.exit_node().borrow();
+                        let mut if_branch_exit = *self.exit_node().borrow();
                         *self.exit_node().borrow_mut() = last_node;
+
+                        let mut branch_else_variable_maps = variable_maps.clone();
                         graphs.insert(Rc::clone(branch_else), MaybeGraph::Started);
                         self.visit_step(
                             branch_else,
-                            &mut variable_maps.elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                            &mut branch_else_variable_maps,
                             graphs,
                             type_stack,
                             next_steps,
                         )?;
                         graphs.insert(Rc::clone(branch_else), MaybeGraph::Inlined);
-                        let else_branch_exit = *self.exit_node().borrow();
+                        let mut else_branch_exit = *self.exit_node().borrow();
                         *self.exit_node().borrow_mut() = self.add_node(None);
+
+                        self.ssa_phi(
+                            vec![
+                                (branch_if, branch_if_variable_maps.ssa, &mut if_branch_exit),
+                                (
+                                    branch_else,
+                                    branch_else_variable_maps.ssa,
+                                    &mut else_branch_exit,
+                                ),
+                            ],
+                            variable_maps,
+                            &BTreeMap::new(),
+                        )?;
+
                         let exit_node = *self.exit_node().borrow();
                         self.add_edge(if_branch_exit, exit_node, EdgeType::Forward);
                         self.add_edge(else_branch_exit, exit_node, EdgeType::Forward);
@@ -328,13 +429,76 @@ impl VarGraph {
                         body,
                         ..
                     }) => {
-                        // crate::log("found control_loop");
+                        let new_var_map: BTreeMap<_, _> = step
+                            .globally_scoped_variables()?
+                            .map(|global_var| {
+                                (global_var, RcVar::new(IrType::none(), VarVal::Bool(false)))
+                            })
+                            .collect();
+                        additional_opcodes.push((
+                            i,
+                            new_var_map
+                                .iter()
+                                .flat_map(|(global_var, new_var)| {
+                                    let (var_access, accessed_var) = variable_maps
+                                        .use_current_ssa_for_global(
+                                            global_var,
+                                            |ssa_var| {
+                                                (
+                                                    IrOpcode::data_variable(DataVariableFields {
+                                                        var: RefCell::new(ssa_var.clone()),
+                                                        local_read: RefCell::new(true),
+                                                    }),
+                                                    ssa_var.clone(),
+                                                )
+                                            },
+                                            |arg_index, arg_var| {
+                                                (
+                                                    IrOpcode::procedures_argument(
+                                                        ProceduresArgumentFields(
+                                                            arg_index,
+                                                            arg_var.clone(),
+                                                        ),
+                                                    ),
+                                                    arg_var.clone(),
+                                                )
+                                            },
+                                            || {
+                                                (
+                                                    IrOpcode::data_variable(DataVariableFields {
+                                                        var: RefCell::new(global_var.clone()),
+                                                        local_read: RefCell::new(false),
+                                                    }),
+                                                    global_var.clone(),
+                                                )
+                                            },
+                                        );
+                                    let new_node = self.add_node(Some((
+                                        vec![new_var.clone()],
+                                        vec![StackElement::Var(accessed_var)],
+                                    )));
+                                    let exit_node = *self.exit_node().borrow();
+                                    self.add_edge(exit_node, new_node, EdgeType::Forward);
+                                    *self.exit_node().borrow_mut() = new_node;
+                                    variable_maps
+                                        .ssa
+                                        .insert(global_var.clone(), new_var.clone());
+                                    [
+                                        var_access,
+                                        IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                            var: RefCell::new(new_var.clone()),
+                                            local_write: RefCell::new(true),
+                                        }),
+                                    ]
+                                })
+                                .collect(),
+                        ));
                         if let Some(first_condition_step) = first_condition {
                             graphs.insert(Rc::clone(first_condition_step), MaybeGraph::Started);
                             self.visit_step(
                                 first_condition_step,
-                                &mut variable_maps
-                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                                // we don't need to keep track of this map as no variables should be set in the first condition
+                                &mut variable_maps.clone(),
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -342,14 +506,16 @@ impl VarGraph {
                             graphs.insert(Rc::clone(first_condition_step), MaybeGraph::Inlined);
                             type_stack.clear(); // we consume the top item on the type stack as an i32.eqz
                             let first_cond_exit = *self.exit_node().borrow();
+
                             let header_node = self.add_node(None);
                             self.add_edge(first_cond_exit, header_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = header_node;
+
+                            let mut body_variable_maps = variable_maps.clone();
                             graphs.insert(Rc::clone(body), MaybeGraph::Started);
                             self.visit_step(
                                 body,
-                                &mut variable_maps
-                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                                &mut body_variable_maps,
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -358,15 +524,21 @@ impl VarGraph {
                             graphs.insert(Rc::clone(condition), MaybeGraph::Started);
                             self.visit_step(
                                 condition,
-                                &mut variable_maps
-                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                                &mut body_variable_maps,
                                 graphs,
                                 type_stack,
                                 next_steps,
                             )?;
                             graphs.insert(Rc::clone(condition), MaybeGraph::Inlined);
                             type_stack.clear();
-                            let cond_exit = *self.exit_node().borrow();
+                            let mut cond_exit = *self.exit_node().borrow();
+
+                            self.ssa_phi(
+                                vec![(condition, body_variable_maps.ssa, &mut cond_exit)],
+                                variable_maps,
+                                &new_var_map,
+                            )?;
+
                             self.add_edge(cond_exit, header_node, EdgeType::BackLink);
                             *self.exit_node().borrow_mut() = cond_exit;
                         } else {
@@ -374,11 +546,12 @@ impl VarGraph {
                             let last_node = *self.exit_node().borrow();
                             self.add_edge(last_node, header_node, EdgeType::Forward);
                             *self.exit_node().borrow_mut() = header_node;
+
+                            let mut body_variable_maps = variable_maps.clone();
                             graphs.insert(Rc::clone(condition), MaybeGraph::Started);
                             self.visit_step(
                                 condition,
-                                &mut variable_maps
-                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                                &mut body_variable_maps,
                                 graphs,
                                 type_stack,
                                 next_steps,
@@ -388,14 +561,20 @@ impl VarGraph {
                             graphs.insert(Rc::clone(body), MaybeGraph::Started);
                             self.visit_step(
                                 body,
-                                &mut variable_maps
-                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
+                                &mut body_variable_maps,
                                 graphs,
                                 type_stack,
                                 next_steps,
                             )?;
                             graphs.insert(Rc::clone(body), MaybeGraph::Inlined);
-                            let body_exit = *self.exit_node().borrow();
+                            let mut body_exit = *self.exit_node().borrow();
+
+                            self.ssa_phi(
+                                vec![(body, body_variable_maps.ssa, &mut body_exit)],
+                                variable_maps,
+                                &new_var_map,
+                            )?;
+
                             self.add_edge(body_exit, header_node, EdgeType::BackLink);
                             *self.exit_node().borrow_mut() = body_exit;
                         }
@@ -436,18 +615,12 @@ impl VarGraph {
                         YieldMode::Inline(step) => {
                             // crate::log("found inline step to visit");
                             graphs.insert(Rc::clone(step), MaybeGraph::Started);
-                            self.visit_step(
-                                step,
-                                &mut variable_maps
-                                    .elevate(&mut BTreeMap::new(), &mut BTreeMap::new()),
-                                graphs,
-                                type_stack,
-                                next_steps,
-                            )?;
+                            self.visit_step(step, variable_maps, graphs, type_stack, next_steps)?;
                             graphs.insert(Rc::clone(step), MaybeGraph::Inlined);
                         }
                         YieldMode::None => {
                             // crate::log("found a yield::none, breaking");
+                            should_propagate_ssa = true;
                             break 'opcode_loop;
                         }
                         YieldMode::Schedule(step) => {
@@ -460,6 +633,7 @@ impl VarGraph {
                     what's going on here?",
                                 );
                             }
+                            should_propagate_ssa = true;
                             break 'opcode_loop;
                         }
                     },
@@ -494,6 +668,7 @@ impl VarGraph {
                 }
             }
         }
+
         if !type_stack.is_empty()
             && step.used_non_inline()
             && let Some(proc_context) = maybe_proc_context
@@ -517,48 +692,147 @@ impl VarGraph {
             self.add_edge(last_node, new_node, EdgeType::Forward);
             *self.exit_node().borrow_mut() = new_node;
         }
-        for (index, opcode_replacement) in opcode_replacements {
-            *step
-                .opcodes_mut()?
-                .get_mut(index)
-                .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))? = opcode_replacement;
-        }
-        let (post_yield, no_propagation) = if let Some(last_op) =
-            step.opcodes().try_borrow()?.last()
-            && matches!(last_op, IrOpcode::hq_yield(_))
+
         {
-            (
-                true,
-                matches!(
-                    last_op,
-                    IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(_)
-                    })
-                ),
-            )
-        } else {
-            (false, false)
-        };
-        if !no_propagation {
-            let final_state_changes = generate_changed_state(variable_maps, post_yield);
-            for (old_var, new_var, _local) in final_state_changes.clone() {
-                let this_type_stack = vec![StackElement::Var(old_var)];
-                let new_node = self.add_node(Some((vec![new_var], this_type_stack)));
+            let mut opcodes = step.opcodes_mut()?;
+
+            for (index, opcode_replacement) in opcode_replacements {
+                *opcodes
+                    .get_mut(index)
+                    .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))? =
+                    opcode_replacement;
+            }
+
+            for (index, additional_opcodes) in additional_opcodes {
+                opcodes.splice(index..index, additional_opcodes);
+            }
+        }
+
+        if should_propagate_ssa {
+            let post_yield = if let Some(last_op) = step.opcodes().try_borrow()?.last()
+                && matches!(last_op, IrOpcode::hq_yield(_))
+            {
+                true
+            } else {
+                false
+            };
+            let mut opcodes = step.opcodes_mut()?;
+            let yield_op = if post_yield {
+                #[expect(clippy::unwrap_used, reason = "guaranteed last element")]
+                Some(opcodes.pop().unwrap())
+            } else {
+                None
+            };
+            for (global_var, ssa_var) in &variable_maps.ssa {
+                let this_type_stack = vec![StackElement::Var(ssa_var.clone())];
+                let new_node = self.add_node(Some((vec![global_var.clone()], this_type_stack)));
                 let last_node = *self.exit_node().borrow();
                 self.add_edge(last_node, new_node, EdgeType::Forward);
                 *self.exit_node().borrow_mut() = new_node;
+                // crate::log("adding outer variable writes");
+                opcodes.extend([
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(ssa_var.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                        var: RefCell::new(global_var.clone()),
+                        local_write: RefCell::new(false),
+                    }),
+                ]);
             }
-            let final_variable_writes = generate_state_backup(final_state_changes.into_iter());
-            // crate::log("adding outer variable writes");
             if post_yield {
-                #[expect(clippy::unwrap_used, reason = "guaranteed last element")]
-                let yield_op = step.opcodes_mut()?.pop().unwrap();
-                step.opcodes_mut()?.extend(final_variable_writes);
-                step.opcodes_mut()?.push(yield_op);
-            } else {
-                step.opcodes_mut()?.extend(final_variable_writes);
+                #[expect(clippy::unwrap_used, reason = "guaranteed to be Some")]
+                opcodes.push(yield_op.unwrap());
             }
         }
+        Ok(())
+    }
+
+    /// Insert an SSA "phi function"; that is, propagate any new SSAs to the outer scope,
+    /// at a so-called dominance frontier (where different paths meet)
+    fn ssa_phi(
+        &self,
+        mut ssa_blocks: Vec<(&Rc<Step>, BTreeMap<RcVar, RcVar>, &mut NodeIndex)>,
+        variable_maps: &mut VariableMaps,
+        ssa_write_map: &BTreeMap<RcVar, RcVar>,
+    ) -> HQResult<()> {
+        let mut lower_ssas: BTreeMap<_, BTreeMap<_, _>> = BTreeMap::new();
+
+        for (block, block_ssa, _) in &ssa_blocks {
+            for (global, block_local) in block_ssa {
+                lower_ssas
+                    .entry(global.clone())
+                    .and_modify(|ssa_block_map| {
+                        ssa_block_map.insert(Rc::clone(block), block_local.clone());
+                    })
+                    .or_insert_with(|| BTreeMap::from([(Rc::clone(block), block_local.clone())]));
+            }
+        }
+
+        let mut block_exits: BTreeMap<_, _> = ssa_blocks
+            .iter_mut()
+            .map(|(block, _block_ssas, block_exit)| (Rc::clone(block), block_exit))
+            .collect();
+
+        let mut block_var_writes = BTreeMap::new();
+
+        for (global, block_ssas) in lower_ssas {
+            let new_var = ssa_write_map
+                .get(&global)
+                .cloned()
+                .unwrap_or_else(|| RcVar::new(IrType::none(), VarVal::Bool(false)));
+            for block in block_exits.keys() {
+                if !block_ssas.contains_key(block) {
+                    block_var_writes
+                        .entry(Rc::clone(block))
+                        .or_insert_with(Vec::new)
+                        .push((
+                            variable_maps
+                                .ssa
+                                .get(&global)
+                                .cloned()
+                                .map_or_else(|| (global.clone(), false), |var| (var, true)),
+                            new_var.clone(),
+                        ));
+                }
+            }
+            for (block, block_ssa) in &block_ssas {
+                block_var_writes
+                    .entry(Rc::clone(block))
+                    .or_insert_with(Vec::new)
+                    .push(((block_ssa.clone(), true), new_var.clone()));
+            }
+            variable_maps.ssa.insert(global.clone(), new_var.clone());
+        }
+
+        for (block, var_writes) in &block_var_writes {
+            let Some(block_exit) = block_exits.get_mut(block) else {
+                hq_bug!("couldn't find SSA block exit")
+            };
+            let mut opcodes = block.opcodes_mut()?;
+            opcodes.reserve_exact(var_writes.len() * 2);
+            for ((var_read, read_local), var_write) in var_writes {
+                let new_node = self.add_node(Some((
+                    vec![var_write.clone()],
+                    vec![StackElement::Var(var_read.clone())],
+                )));
+                self.add_edge(***block_exit, new_node, EdgeType::Forward);
+                ***block_exit = new_node;
+
+                opcodes.append(&mut vec![
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(var_read.clone()),
+                        local_read: RefCell::new(*read_local),
+                    }),
+                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                        var: RefCell::new(var_write.clone()),
+                        local_write: RefCell::new(true),
+                    }),
+                ]);
+            }
+        }
+
         Ok(())
     }
 }
@@ -566,6 +840,7 @@ impl VarGraph {
 fn visit_step_recursively(
     step: Rc<Step>,
     graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>,
+    proc_args: &BTreeMap<RcVar, (usize, RcVar)>,
 ) -> HQResult<()> {
     let next_steps = &mut vec![step];
     while let Some(next_step) = next_steps.pop() {
@@ -581,7 +856,7 @@ fn visit_step_recursively(
             vacant_entry.insert(MaybeGraph::Started);
             graph.visit_step(
                 &next_step,
-                &mut VariableMaps::new(),
+                &mut VariableMaps::new_with_proc_args(proc_args),
                 graphs,
                 &mut vec![],
                 next_steps,
@@ -593,13 +868,29 @@ fn visit_step_recursively(
     Ok(())
 }
 
-/// Visits a procedure. Returns the found step, and a boolean indicating if the step was for a warped
-/// procedure or not.
 fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>) -> HQResult<()> {
     // crate::log("visiting procedure");
     if let PartialStep::Finished(step) = proc.first_step()?.clone() {
         // crate::log!("visiting procedure's step: {}", step.id());
-        visit_step_recursively(step, graphs)?;
+        let globally_scoped_variables: Box<[_]> = step.globally_scoped_variables()?.collect();
+        let arg_vars_drop =
+            proc.context().arg_vars().try_borrow()?.len() - globally_scoped_variables.len();
+        visit_step_recursively(
+            Rc::clone(&step),
+            graphs,
+            &globally_scoped_variables
+                .into_iter()
+                .zip(
+                    proc.context()
+                        .arg_vars()
+                        .try_borrow()?
+                        .iter()
+                        .cloned()
+                        .enumerate()
+                        .dropping(arg_vars_drop),
+                )
+                .collect(),
+        )?;
     }
     Ok(())
 }
@@ -624,73 +915,10 @@ fn split_variables_and_make_graphs(
     for thread in project.threads().try_borrow()?.iter() {
         let step = Rc::clone(thread.first_step());
         // crate::log!("visiting (recursively) step from thread: {}", step.id());
-        visit_step_recursively(step, &mut graphs)?;
+        visit_step_recursively(step, &mut graphs, &BTreeMap::new())?;
     }
     // crate::log("finished splitting variables and making graphs");
     Ok(graphs)
-}
-
-/// Generate instructions to write the values of our localised variables to either the local variables
-/// belonging to the outer scope, or to the global instance of that variable.
-#[expect(
-    clippy::mutable_key_type,
-    reason = "implementations of Eq and Ord for RcVar are independent of actual contents"
-)]
-fn generate_changed_state<'a>(
-    variable_maps: &'a VariableMaps<'a>,
-    post_yield: bool,
-) -> Box<[(RcVar, RcVar, bool)]> {
-    if post_yield {
-        // If we are yielding, we can't rely on outer scopes to propagate all of their variable changes
-        // for us. Therefore, we need to consider the `current` variable map, the `outer` variable map
-        // *and* the `global` variable map. The inner-scoped variables take priority, since outer-scoped
-        // variables are local and will be lost after yielding. All state changes here write to global
-        // variables, since we would only write to a local variable if we were propagating up to the
-        // immediate outer scope.
-        let mut new_map = variable_maps.global.clone();
-        new_map.append(&mut variable_maps.outer.clone());
-        new_map.append(&mut variable_maps.current.clone());
-        new_map
-            .iter()
-            .map(|(global, local)| (local.clone(), global.clone(), false))
-            .collect()
-    } else {
-        // If we've written to a variable in the current scope, that variable will be present as a key in
-        // the `current` variable map, and it may also be present in the `outer` variable map. Any variables
-        // that are present in the `outer` variable map but not the `current` variable map will be dealt with
-        // in the outer scope, as we are not yielding away here. So, we only need to iterate through the
-        // current local variables, and then as we're doing it we can check if there's an outer equivalent.
-        variable_maps
-            .current
-            .iter()
-            .map(move |(global, current)| {
-                let (to_write, local) = variable_maps
-                    .outer
-                    .get(global)
-                    .map_or((global, false), |outer_var| (outer_var, true));
-                (current.clone(), to_write.clone(), local)
-            })
-            .collect()
-    }
-}
-
-fn generate_state_backup(
-    changed_state: impl Iterator<Item = (RcVar, RcVar, bool)>,
-) -> Vec<IrOpcode> {
-    changed_state
-        .flat_map(|(current, to_write, local)| {
-            vec![
-                IrOpcode::data_variable(DataVariableFields {
-                    var: RefCell::new(current),
-                    local_read: RefCell::new(true),
-                }),
-                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                    var: RefCell::new(to_write),
-                    local_write: RefCell::new(local),
-                }),
-            ]
-        })
-        .collect()
 }
 
 fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> {
@@ -727,10 +955,11 @@ fn visit_node(
     changed_vars: &mut BTreeSet<RcVar>,
     stop_at: NodeIndex,
 ) -> HQResult<()> {
+    crate::log!("node index: {node:?}");
     if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
-        // crate::log!("vars: {vars:?}");
+        crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
-        // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
+        crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),
@@ -776,16 +1005,16 @@ where
     loop {
         let mut changed_vars: BTreeSet<RcVar> = BTreeSet::new();
         for graph in graphs.clone() {
-            // crate::log!(
-            //     "{:?}exit node: {:?}",
-            //     Dot::with_config(
-            //         &*graph.graph().borrow(),
-            //         &[
-            //         //DotConfig::NodeIndexLabel
-            //         ]
-            //     ),
-            //     *graph.exit_node().borrow()
-            // );
+            crate::log!(
+                "{:?}exit node: {:?}",
+                Dot::with_config(
+                    &*graph.graph().borrow(),
+                    &[
+                    //DotConfig::NodeIndexLabel
+                    ]
+                ),
+                *graph.exit_node().borrow()
+            );
             hq_assert!(
                 {
                     let inner_graph = graph.graph().try_borrow()?;
@@ -803,6 +1032,8 @@ where
                 *graph.exit_node().try_borrow()?,
             )?;
         }
+        // this must eventually converge, because the sequence of types for each variable at each
+        // iteration is increasing, but the set of types is finite
         if changed_vars.is_empty() {
             break;
         }
@@ -810,7 +1041,11 @@ where
     Ok(())
 }
 
-pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
+/// A token type that cannot be instantiated from anywhere else (since the field is private)
+/// - used as proof that we've carried out these optimisations.
+pub struct SSAToken(PhantomData<()>);
+
+pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
     // crate::log("carrying out variable optimisation");
     let maybe_graphs = split_variables_and_make_graphs(project)?;
     let graphs = maybe_graphs
@@ -830,5 +1065,5 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<()> {
         crate::log!("inserting casts for step {}", step.id());
         insert_casts(&mut *step.opcodes_mut()?)?;
     }
-    Ok(())
+    Ok(SSAToken(PhantomData))
 }

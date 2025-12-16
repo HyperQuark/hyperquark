@@ -74,7 +74,7 @@ macro_rules! instructions_test {
                                 panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result);
                             }
                         }
-                        _ => continue,
+                        _ => (),
                     }
                 }
             }

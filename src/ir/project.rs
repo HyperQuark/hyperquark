@@ -134,65 +134,57 @@ impl IrProject {
         let global_vars = used_vars(project.global_variables());
         crate::log!("global_vars: {global_vars:?}");
         for target in project.targets().try_borrow()?.values() {
-            let target_vars = used_vars(target.variables());
-            fixup_proc_types(target, &global_vars, &target_vars)?;
+            fixup_proc_types(target)?;
         }
         for step in project.steps().try_borrow()?.iter() {
-            let target_vars = used_vars(step.context().target().variables());
-            fixup_proc_calls(step, &global_vars, &target_vars)?;
+            fixup_proc_calls(step)?;
         }
         for step in project.inlined_steps().try_borrow()?.iter() {
-            let target_vars = used_vars(step.context().target().variables());
-            fixup_proc_calls(step, &global_vars, &target_vars)?;
+            fixup_proc_calls(step)?;
         }
         Ok(project)
     }
 }
 
 /// Add inputs + outputs to procedures corresponding to global/target variables
-fn fixup_proc_types(
-    target: &Rc<Target>,
-    global_vars: &[RcVar],
-    target_vars: &[RcVar],
-) -> HQResult<()> {
+fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
     for procedure in target.procedures()?.values() {
+        let PartialStep::Finished(step) = &*procedure.first_step()? else {
+            continue; // this should hopefully just mean that this procedure is unused.
+        };
+
+        let globally_scoped_variables = step.globally_scoped_variables()?;
+        let globally_scoped_variables_num = step.globally_scoped_variables_num()?;
+
         procedure.context().arg_vars().try_borrow_mut()?.extend(
-            (0..(global_vars.len() + target_vars.len()))
+            (0..globally_scoped_variables_num)
                 .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false))),
         );
         procedure.context().return_vars().try_borrow_mut()?.extend(
-            (0..(global_vars.len() + target_vars.len()))
+            (0..globally_scoped_variables_num)
                 .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false))),
         );
         if !procedure.context().always_warped() {
             hq_todo!("non-warped procedure for fixup_target_procs")
         }
-        let PartialStep::Finished(step) = &*procedure.first_step()? else {
-            continue; // this should hopefully just mean that this procedure is unused.
-        };
-        {
-            let mut opcodes = step.opcodes_mut()?;
-            opcodes.extend(
-                global_vars
-                    .iter()
-                    .chain(target_vars)
-                    .map(|var| {
-                        // crate::log!("{var}");
-                        Ok(IrOpcode::data_variable(DataVariableFields {
-                            var: RefCell::new(var.clone()),
-                            local_read: RefCell::new(false),
-                        }))
-                    })
-                    .collect::<HQResult<Box<[_]>>>()?,
-            );
-        }
+
+        let mut opcodes = step.opcodes_mut()?;
+
+        opcodes.reserve_exact(globally_scoped_variables_num);
+
+        opcodes.extend(globally_scoped_variables.map(|arg_var| {
+            IrOpcode::data_variable(DataVariableFields {
+                var: RefCell::new(arg_var),
+                local_read: RefCell::new(false),
+            })
+        }));
     }
 
     Ok(())
 }
 
 /// Pass variables into procedure calls, and read them on return
-fn fixup_proc_calls(step: &Rc<Step>, global_vars: &[RcVar], target_vars: &[RcVar]) -> HQResult<()> {
+fn fixup_proc_calls(step: &Rc<Step>) -> HQResult<()> {
     let mut call_indices = vec![];
     for (index, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
         if matches!(opcode, IrOpcode::procedures_call_warp(_)) {
@@ -200,23 +192,23 @@ fn fixup_proc_calls(step: &Rc<Step>, global_vars: &[RcVar], target_vars: &[RcVar
         }
     }
     step.opcodes_mut()?
-        .reserve_exact(call_indices.len() * (global_vars.len() + target_vars.len()) * 2);
+        .reserve_exact(call_indices.len() * step.globally_scoped_variables_num()? * 2);
     for call_index in call_indices.iter().rev() {
         #[expect(clippy::range_plus_one, reason = "x+1..=x doesn't make much sense")]
         step.opcodes_mut()?.splice(
             (call_index + 1)..(call_index + 1),
-            global_vars.iter().chain(target_vars).rev().map(|var| {
+            step.globally_scoped_variables()?.rev().map(|var| {
                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                    var: RefCell::new(var.clone()),
+                    var: RefCell::new(var),
                     local_write: RefCell::new(false),
                 })
             }),
         );
         step.opcodes_mut()?.splice(
             call_index..call_index,
-            global_vars.iter().chain(target_vars).map(|var| {
+            step.globally_scoped_variables()?.map(|var| {
                 IrOpcode::data_variable(DataVariableFields {
-                    var: RefCell::new(var.clone()),
+                    var: RefCell::new(var),
                     local_read: RefCell::new(false),
                 })
             }),
