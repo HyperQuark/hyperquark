@@ -211,6 +211,9 @@ impl VarGraph {
         // );
         // crate::log!("hash of step: {:?}", graphs.);
         let maybe_proc_context = step.context().proc_context.as_ref();
+
+        let mut should_propagate_ssa = step.used_non_inline() && maybe_proc_context.is_none();
+
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
         'opcode_loop: for (i, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
             // crate::log!("opcode: {opcode:?}");
@@ -522,6 +525,7 @@ impl VarGraph {
                         }
                         YieldMode::None => {
                             // crate::log("found a yield::none, breaking");
+                            should_propagate_ssa = true;
                             break 'opcode_loop;
                         }
                         YieldMode::Schedule(step) => {
@@ -534,6 +538,7 @@ impl VarGraph {
                     what's going on here?",
                                 );
                             }
+                            should_propagate_ssa = true;
                             break 'opcode_loop;
                         }
                     },
@@ -600,7 +605,7 @@ impl VarGraph {
                 .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))? = opcode_replacement;
         }
 
-        if step.used_non_inline() && maybe_proc_context.is_none() {
+        if should_propagate_ssa {
             let post_yield = if let Some(last_op) = step.opcodes().try_borrow()?.last()
                 && matches!(last_op, IrOpcode::hq_yield(_))
             {
