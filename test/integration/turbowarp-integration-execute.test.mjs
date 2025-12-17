@@ -83,7 +83,6 @@ function runProject({ wasm_bytes, settings, reportVmResult, timeoutFailure }) {
     flag_clicked();
 
     let start_time = Date.now();
-    console.log("green_flag()");
     let thisTickStartTime;
     $outertickloop: while (true) {
       if (Date.now() - start_time > 5000) {
@@ -103,7 +102,7 @@ function runProject({ wasm_bytes, settings, reportVmResult, timeoutFailure }) {
       requests_refresh.value = 0;
       if (framerate_wait > 0) {
         await sleep(
-          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime))
+          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
         );
       } else {
         await waitAnimationFrame();
@@ -119,91 +118,95 @@ const executeDir = path.resolve(__dirname, "../fixtures/execute");
 const fileFilter = /\.sb[23]?$/i;
 
 describe("Integration tests", () => {
-  const files = fs.readdirSync(executeDir)
+  const files = fs
+    .readdirSync(executeDir)
     .filter((uri) => fileFilter.test(uri))
     // ignore tests that crash the runner, for now
-    .filter((uri) => !["tw-comparison-matrix-inline.sb3", "tw-unsafe-equals.sb3"].includes(uri));
+    .filter(
+      (uri) =>
+        !["tw-comparison-matrix-inline.sb3", "tw-unsafe-equals.sb3"].includes(
+          uri,
+        ),
+    );
   for (const uri of files) {
-      test.sequential(`${uri} (default flags)`, async () => {
-        let plannedCount = 0;
-        let testCount = 0;
-        let didEnd = false;
-        const testResults = { passes: [], failures: [] };
-        const reporters = {
-          comment(message) {
-            console.log(`[${uri}]`, message);
-          },
-          pass(reason) {
-            testCount++;
-            testResults.passes.push(reason);
-            console.log(`[${uri}] pass:`, reason);
-          },
-          fail(reason) {
-            testCount++;
-            testResults.failures.push(reason);
-            console.log(`[${uri}] fail:`, reason);
-          },
-          plan(count) {
-            plannedCount = Number(count);
-            console.log(`[${uri}] planned ${plannedCount} tests`);
-          },
-          end() {
-            didEnd = true;
-            console.log(`[${uri}] test ended`);
-          },
-        };
+    test.sequential(`${uri} (default flags)`, async () => {
+      let plannedCount = 0;
+      let testCount = 0;
+      let didEnd = false;
+      const testResults = { passes: [], failures: [] };
+      const reporters = {
+        comment(message) {
+          console.log(`[${uri}]`, message);
+        },
+        pass(reason) {
+          testCount++;
+          testResults.passes.push(reason);
+          console.log(`[${uri}] pass:`, reason);
+        },
+        fail(reason) {
+          testCount++;
+          testResults.failures.push(reason);
+          console.log(`[${uri}] fail:`, reason);
+        },
+        plan(count) {
+          plannedCount = Number(count);
+          console.log(`[${uri}] planned ${plannedCount} tests`);
+        },
+        end() {
+          didEnd = true;
+          console.log(`[${uri}] test ended`);
+        },
+      };
 
-        const reportVmResult = (text) => {
-          const command = text.split(/\s+/, 1)[0].toLowerCase();
-          if (reporters[command]) {
-            return reporters[command](text.substring(command.length).trim());
-          }
-
-          // Default to a comment with the full text if we didn't match
-          // any command prefix
-          return reporters.comment(text);
-        };
-
-        const projectBuffer = Buffer.from(
-          fs.readFileSync(path.join(executeDir, uri))
-        );
-
-        const [project_json, _] = await unpackProject(projectBuffer);
-        // console.log(JSON.stringify(project_json, null, 2))
-        const project_wasm = sb3_to_wasm(
-          JSON.stringify(project_json, null, 2),
-          WasmFlags.from_js(defaultSettings.to_js())
-        );
-
-        // todo: run wasm-opt if specified in flags?
-
-        // Run the project and once all threads are complete check the results.
-        await runProject({
-          wasm_bytes: project_wasm.wasm_bytes,
-          target_names: project_wasm.target_names,
-          settings: defaultSettings,
-          reportVmResult,
-          timeoutFailure: () => {
-            throw new Error(`Timeout waiting for threads to complete: ${uri}`);
-          },
-        });
-
-        // Verify test end was called
-        if (!didEnd) {
-          throw new Error(`Test did not call "end"`);
+      const reportVmResult = (text) => {
+        const command = text.split(/\s+/, 1)[0].toLowerCase();
+        if (reporters[command]) {
+          return reporters[command](text.substring(command.length).trim());
         }
 
-        // If a plan was specified, verify we ran the planned number of tests
-        if (plannedCount > 0 && testCount !== plannedCount) {
-          throw new Error(
-            `Expected ${plannedCount} tests, but ran ${testCount}`
-          );
-        }
+        // Default to a comment with the full text if we didn't match
+        // any command prefix
+        return reporters.comment(text);
+      };
 
-        // All failures should be reported
-        if (testResults.failures.length > 0) {
-          throw new Error(`Test failures: ${testResults.failures.join(", ")}`);
-        }
+      const projectBuffer = Buffer.from(
+        fs.readFileSync(path.join(executeDir, uri)),
+      );
+
+      const [project_json, _] = await unpackProject(projectBuffer);
+      // console.log(JSON.stringify(project_json, null, 2))
+      const project_wasm = sb3_to_wasm(
+        JSON.stringify(project_json, null, 2),
+        WasmFlags.from_js(defaultSettings.to_js()),
+      );
+
+      // todo: run wasm-opt if specified in flags?
+
+      // Run the project and once all threads are complete check the results.
+      await runProject({
+        wasm_bytes: project_wasm.wasm_bytes,
+        target_names: project_wasm.target_names,
+        settings: defaultSettings,
+        reportVmResult,
+        timeoutFailure: () => {
+          throw new Error(`Timeout waiting for threads to complete: ${uri}`);
+        },
       });
+
+      // Verify test end was called
+      if (!didEnd) {
+        throw new Error(`Test did not call "end"`);
+      }
+
+      // If a plan was specified, verify we ran the planned number of tests
+      if (plannedCount > 0 && testCount !== plannedCount) {
+        throw new Error(`Expected ${plannedCount} tests, but ran ${testCount}`);
+      }
+
+      // All failures should be reported
+      if (testResults.failures.length > 0) {
+        throw new Error(`Test failures: ${testResults.failures.join(", ")}`);
+      }
+    });
   }
 });

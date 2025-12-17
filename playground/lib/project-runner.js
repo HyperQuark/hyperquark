@@ -7,7 +7,8 @@ import {
   renderer as get_renderer,
 } from "../../js/shared.ts";
 // This does not work in vite dev mode! Only works in build mode.
-const scratch_render = await import("../assets/renderer.js");
+const scratch_render =
+  await import("scratch-render/dist/web/scratch-render.js");
 const RenderWebGL = scratch_render.default;
 const debugModeStore = useDebugModeStore();
 
@@ -36,11 +37,11 @@ function setup(canvas, project_json, assets, target_names) {
     createSkin(renderer, type, layer, ...params);
 
   const costumes = project_json.targets.map((target, index) =>
-    target.costumes.map(({ md5ext }) => assets[md5ext])
+    target.costumes.map(({ md5ext }) => assets[md5ext]),
   );
 
   const costumeNameMap = project_json.targets.map((target) =>
-    Object.fromEntries(target.costumes.map(({ name }, index) => [name, index]))
+    Object.fromEntries(target.costumes.map(({ name }, index) => [name, index])),
   );
 
   // @ts-ignore
@@ -60,7 +61,7 @@ function setup(canvas, project_json, assets, target_names) {
       costume.dataFormat,
       "sprite",
       costume.data,
-      [realCostume.rotationCenterX, realCostume.rotationCenterY]
+      [realCostume.rotationCenterX, realCostume.rotationCenterY],
     );
 
     const drawable = renderer.getDrawable(drawableId);
@@ -91,11 +92,11 @@ export default async (
   } = {
     framerate: 30,
     turbo: false,
-  }
+  },
 ) => {
   if (debugModeStore.debug)
     window.open(
-      URL.createObjectURL(new Blob([wasm_bytes], { type: "application/wasm" }))
+      URL.createObjectURL(new Blob([wasm_bytes], { type: "application/wasm" })),
     );
   const framerate_wait = Math.round(1000 / framerate);
   console.log("framerate_wait: %i", framerate_wait);
@@ -203,7 +204,7 @@ export default async (
       } catch (error) {
         console.info(
           "synthetic error to expose wasm module to devtools:",
-          error
+          error,
         );
       }
       flag_clicked();
@@ -211,7 +212,7 @@ export default async (
       console.log("green_flag()");
       let thisTickStartTime;
       $outertickloop: while (true) {
-        console.log('fps: %i', 1000 / (Date.now() - thisTickStartTime));
+        console.log("fps: %i", 1000 / (Date.now() - thisTickStartTime));
         thisTickStartTime = Date.now();
         renderer.draw();
         // @ts-ignore
@@ -233,10 +234,10 @@ export default async (
         if (framerate_wait > 0) {
           console.log(
             "sleeping for %i ms",
-            framerate_wait - (Date.now() - thisTickStartTime)
+            framerate_wait - (Date.now() - thisTickStartTime),
           );
           await sleep(
-            Math.max(0, framerate_wait - (Date.now() - thisTickStartTime))
+            Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
           );
         } else {
           console.log("waiting animation frame");

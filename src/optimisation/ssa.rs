@@ -104,7 +104,7 @@ use core::convert::identity;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::mem;
-use petgraph::dot::Dot;
+// use petgraph::dot::Dot;
 
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -955,11 +955,11 @@ fn visit_node(
     changed_vars: &mut BTreeSet<RcVar>,
     stop_at: NodeIndex,
 ) -> HQResult<()> {
-    crate::log!("node index: {node:?}");
+    // crate::log!("node index: {node:?}");
     if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
-        crate::log!("vars: {vars:?}");
+        // crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
-        crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
+        // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),
@@ -1005,16 +1005,16 @@ where
     loop {
         let mut changed_vars: BTreeSet<RcVar> = BTreeSet::new();
         for graph in graphs.clone() {
-            crate::log!(
-                "{:?}exit node: {:?}",
-                Dot::with_config(
-                    &*graph.graph().borrow(),
-                    &[
-                    //DotConfig::NodeIndexLabel
-                    ]
-                ),
-                *graph.exit_node().borrow()
-            );
+            // crate::log!(
+            //     "{:?}exit node: {:?}",
+            //     Dot::with_config(
+            //         &*graph.graph().borrow(),
+            //         &[
+            //         //DotConfig::NodeIndexLabel
+            //         ]
+            //     ),
+            //     *graph.exit_node().borrow()
+            // );
             hq_assert!(
                 {
                     let inner_graph = graph.graph().try_borrow()?;
@@ -1062,7 +1062,7 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
     // crate::log!("graphs num: {}", graphs.len());
     iterate_graphs(&graphs.values().copied())?;
     for step in maybe_graphs.keys() {
-        crate::log!("inserting casts for step {}", step.id());
+        // crate::log!("inserting casts for step {}", step.id());
         insert_casts(&mut *step.opcodes_mut()?)?;
     }
     Ok(SSAToken(PhantomData))

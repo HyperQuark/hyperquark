@@ -7,9 +7,9 @@ let _target_skins: Array<[number, number]>;
 let _costumes: Array<Array<Costume>>;
 
 type Costume = {
-  data: string,
-  dataFormat: string,
-}
+  data: string;
+  dataFormat: string;
+};
 
 export function setup(
   target_names: Array<string>,
@@ -66,7 +66,7 @@ export function costumes(): Array<Array<Costume>> {
 export function update_bubble(
   target_index: number,
   verb: "say" | "think",
-  text: string
+  text: string,
 ) {
   check_setup();
   if (!_target_bubbles[target_index]) {
@@ -75,14 +75,14 @@ export function update_bubble(
       "sprite",
       verb,
       text,
-      false
+      false,
     );
   } else {
     _renderer.updateTextSkin(
       _target_bubbles[target_index][0],
       verb,
       text,
-      false
+      false,
     );
   }
 }

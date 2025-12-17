@@ -1,4 +1,4 @@
-@import './base.css';
+@import "./base.css";
 
 #app {
   max-width: 1280px;
@@ -7,19 +7,20 @@
   font-weight: normal;
 }
 
-div, p {
+div,
+p {
   margin: 1rem auto;
 }
 
 a,
 .green {
   text-decoration: none;
-  color: hsl(39.3,100%,37%);
+  color: hsl(39.3, 100%, 37%);
   transition: var(--transition-time);
 }
 
 @media (hover: hover) {
   a:hover {
-    background-color: hsla(33.1,100%,41%,0.2);
+    background-color: hsla(33.1, 100%, 41%, 0.2);
   }
 }

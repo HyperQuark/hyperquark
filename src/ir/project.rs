@@ -3,7 +3,7 @@ use super::variable::{TargetVars, variables_from_target};
 use super::{Step, Target, Thread};
 use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
 use crate::ir::target::IrCostume;
-use crate::ir::{PartialStep, RcVar, Type as IrType, used_vars};
+use crate::ir::{PartialStep, RcVar, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 use crate::wasm::WasmFlags;
@@ -120,7 +120,7 @@ impl IrProject {
             .iter()
             .cloned()
             .unzip();
-        crate::log("all threads + targets created");
+        // crate::log("all threads + targets created");
         let threads = threads_vec.into_iter().flatten().collect::<Box<[_]>>();
         *project
             .threads
@@ -131,8 +131,7 @@ impl IrProject {
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? =
             targets.into_iter().collect();
-        let global_vars = used_vars(project.global_variables());
-        crate::log!("global_vars: {global_vars:?}");
+        // crate::log!("global_vars: {global_vars:?}");
         for target in project.targets().try_borrow()?.values() {
             fixup_proc_types(target)?;
         }

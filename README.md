@@ -6,7 +6,7 @@ HyperQuark compiles [Scratch](https://scratch.mit.edu) projects to [WebAssembly]
 
 ## Prerequisites
 
-- [Rust](https://rust-lang.org) v1.65.0 or later
+- [Rust](https://rust-lang.org) with a nightly toolchain - install via [rustup](https://rustup.rs)
 - the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
 - wasm-bindgen-cli (`cargo install -f wasm-bindgen-cli`)
 - wasm-opt (install binaryen using whatever package manager you use)

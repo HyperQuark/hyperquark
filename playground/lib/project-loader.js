@@ -52,10 +52,8 @@ export const unpackProject = (input) => {
         await VM.deserializeProject(json, zip);
         VM.runtime.handleProjectLoaded();
         const sb3Json = JSON.parse(VM.toJSON());
-        return [sb3Json, zip]
+        return [sb3Json, zip];
       }
       throw "Unable to verify Scratch Project version";
     });
 };
-
-

@@ -186,7 +186,7 @@ impl WasmFlags {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(wasm_features: Vec<WasmFeature>) -> Self {
-        crate::log(format!("{wasm_features:?}").as_str());
+        // crate::log(format!("{wasm_features:?}").as_str());
         Self {
             wasm_opt: WasmOpt::On,
             string_type: if wasm_features.contains(&WasmFeature::JSStringBuiltins) {
