@@ -25,5 +25,10 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+  },
+  test: {
+    root: '.',
+    plugins: [wasm()],
+    pool: 'forks'
   }
 })

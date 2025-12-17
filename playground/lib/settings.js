@@ -3,14 +3,15 @@ import { WasmFlags, WasmFeature, all_wasm_features, wasm_feature_detect_name } f
 import * as WasmFeatureDetect from 'wasm-feature-detect';
 export { WasmFlags };
 
-console.log(WasmFeature)
-window.hyperquarkExports = hyperquarkExports;
+
+console.log(WasmFeature);
+if (typeof window !== "undefined") window.hyperquarkExports = hyperquarkExports;
 
 export const supportedWasmFeatures = await getSupportedWasmFeatures();
 export const defaultSettings = new WasmFlags(Array.from(supportedWasmFeatures, (feat) => WasmFeature[feat]));
 const defaultSettingsObj = defaultSettings.to_js();
 
-window.defaultSettings = defaultSettings;
+if (typeof window !== "undefined") window.defaultSettings = defaultSettings;
 
 function settingsInfoFromType(type) {
     if (type === "boolean") {
