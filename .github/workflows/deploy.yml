@@ -29,9 +29,6 @@ jobs:
           command: install
           args: cargo-outdir
 
-      # - name: Install binaryen
-      #   run: sudo apt-get install binaryen
-
       - name: Install node
         uses: actions/setup-node@v6
         with:
@@ -39,10 +36,13 @@ jobs:
           cache: "npm"
 
       - name: Run npm install
-        run: |
-          npm install
-          npm i -g vite
-          npm i -g binaryen@nightly
+        uses: bahmutov/npm-install@v1
+
+      - name: Install binaryen
+        uses: bahmutov/npm-install@v1
+        with:
+          install-command: npm i -g binaryen@nightly
+          cache-key-prefix: binaryen
 
       - name: Build
         env:
