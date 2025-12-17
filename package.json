@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@scratch/scratch-vm": "^12.3.0",
     "binaryen": "github:pufferfish101007/binaryen.js#non-nullable-table",
     "pinia": "2.1.3",
     "scratch-parser": "5.1.1",
