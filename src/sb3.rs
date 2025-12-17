@@ -348,6 +348,7 @@ pub struct Sound {
     pub data_format: Box<str>, // TODO: enumerate
     pub rate: f64,
     pub sample_count: f64,
+    pub format: Option<Box<str>>, // this seems to be present sometimes, as an empty string
 }
 
 /// The (default) value of a variable
@@ -384,7 +385,9 @@ pub struct Target {
     pub current_costume: u32,
     pub costumes: Vec<Costume>,
     pub sounds: Vec<Sound>,
+    #[serde(default)]
     pub layer_order: i32,
+    #[serde(default)]
     pub volume: f64,
     #[serde(default)]
     pub tempo: f64,
@@ -432,8 +435,8 @@ pub enum Monitor {
         opcode: Box<str>,
         params: BTreeMap<Box<str>, Box<str>>,
         sprite_name: Option<Box<str>>,
-        width: f64,
-        height: f64,
+        width: Option<f64>,
+        height: Option<f64>,
         x: f64,
         y: f64,
         visible: bool,
@@ -448,8 +451,8 @@ pub enum Monitor {
         params: BTreeMap<Box<str>, Box<str>>,
         sprite_name: Option<Box<str>>,
         value: VarVal,
-        width: f64,
-        height: f64,
+        width: Option<f64>,
+        height: Option<f64>,
         x: f64,
         y: f64,
         visible: bool,
@@ -490,9 +493,10 @@ impl TryFrom<&str> for Sb3Project {
                     err.column()
                 ),
                 Category::Data => hq_bad_proj!(
-                    "Invalid project.json at project.json:{}:{}",
+                    "Invalid project.json at project.json:{}:{}. Actual errror: {}",
                     err.line(),
-                    err.column()
+                    err.column(),
+                    err
                 ),
                 Category::Eof => hq_bad_proj!(
                     "Unexpected end of file at project.json:{}:{}",
