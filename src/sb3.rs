@@ -348,6 +348,7 @@ pub struct Sound {
     pub data_format: Box<str>, // TODO: enumerate
     pub rate: f64,
     pub sample_count: f64,
+    pub format: Option<Box<str>>, // this seems to be present sometimes, as an empty string
 }
 
 /// The (default) value of a variable
@@ -384,7 +385,9 @@ pub struct Target {
     pub current_costume: u32,
     pub costumes: Vec<Costume>,
     pub sounds: Vec<Sound>,
+    #[serde(default)]
     pub layer_order: i32,
+    #[serde(default)]
     pub volume: f64,
     #[serde(default)]
     pub tempo: f64,
@@ -432,8 +435,8 @@ pub enum Monitor {
         opcode: Box<str>,
         params: BTreeMap<Box<str>, Box<str>>,
         sprite_name: Option<Box<str>>,
-        width: f64,
-        height: f64,
+        width: Option<f64>,
+        height: Option<f64>,
         x: f64,
         y: f64,
         visible: bool,
@@ -448,8 +451,8 @@ pub enum Monitor {
         params: BTreeMap<Box<str>, Box<str>>,
         sprite_name: Option<Box<str>>,
         value: VarVal,
-        width: f64,
-        height: f64,
+        width: Option<f64>,
+        height: Option<f64>,
         x: f64,
         y: f64,
         visible: bool,
@@ -490,9 +493,10 @@ impl TryFrom<&str> for Sb3Project {
                     err.column()
                 ),
                 Category::Data => hq_bad_proj!(
-                    "Invalid project.json at project.json:{}:{}",
+                    "Invalid project.json at project.json:{}:{}. Actual errror: {}",
                     err.line(),
-                    err.column()
+                    err.column(),
+                    err
                 ),
                 Category::Eof => hq_bad_proj!(
                     "Unexpected end of file at project.json:{}:{}",
@@ -504,113 +508,3 @@ impl TryFrom<&str> for Sb3Project {
         }
     }
 }
-/*
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-
-     pub fn test_project_id(id: &str) -> String {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        println!("https://api.scratch.mit.edu/projects/{:}/", id);
-        let token_val = serde_json::from_str::<Value>(
-            &reqwest::blocking::get(format!("https://api.scratch.mit.edu/projects/{:}/", id))
-                .unwrap()
-                .text()
-                .unwrap(),
-        )
-        .unwrap()["project_token"]
-            .clone();
-        let token = token_val.as_str().unwrap();
-        println!("{:}", token);
-        println!(
-            "https://projects.scratch.mit.edu/{:}/?token={:}&nocache={:}",
-            id,
-            token,
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-        );
-
-        //dbg!(&resp);
-        reqwest::blocking::get(format!(
-            "https://projects.scratch.mit.edu/{:}/?token={:}",
-            id, token
-        ))
-        .unwrap()
-        .text()
-        .unwrap()
-        //let j: Sb3Project = serde_json::from_str(&resp[..]).unwrap();
-        //j
-    }
-
-    #[test]
-     fn paper_minecraft() {
-        let resp = self::test_project_id("10128407");
-        let j: Sb3Project = resp.try_into().unwrap();
-        dbg!(j);
-        /*let k: Value = serde_json::from_str(&resp).unwrap();
-        for (it, t) in j.targets.iter().enumerate() {
-            for (i, b) in &t.blocks {
-                if let Some(bi) = &b.block_info() {
-                    if bi.opcode == super::BlockOpcode::other {
-                        if let Value::Object(o) = &k {
-                          if let Value::Array(a) = &o["targets"] {
-                            if let Value::Object(o2) = &a[it] {
-                              if let Value::Object(o3) = &o2["blocks"] {
-                                if let Value::Object(o4) = &o3[i] {
-                                  println!("{}", o4["opcode"]);
-                                }
-                              }
-                            }
-                          }
-                        }
-                    }
-                }
-            }
-        }*/
-    }
-
-    #[test]
-     fn level_eaten() {
-        let resp = self::test_project_id("704676520");
-        let j: Sb3Project = resp.try_into().unwrap();
-        dbg!(j);
-        /*let k: Value = serde_json::from_str(&resp).unwrap();
-        for (it, t) in j.targets.iter().enumerate() {
-            for (i, b) in &t.blocks {
-                if let Some(bi) = &b.block_info() {
-                    if bi.opcode == super::BlockOpcode::other {
-                        if let Value::Object(o) = &k {
-                          if let Value::Array(a) = &o["targets"] {
-                            if let Value::Object(o2) = &a[it] {
-                              if let Value::Object(o3) = &o2["blocks"] {
-                                if let Value::Object(o4) = &o3[i] {
-                                  println!("{}", o4["opcode"]);
-                                }
-                              }
-                            }
-                          }
-                        }
-                    }
-                }
-            }
-        }*/
-    }
-
-    #[test]
-     fn hq_test_project() {
-        let resp = self::test_project_id("771449498");
-        dbg!(&resp);
-        let j: Sb3Project = resp.try_into().unwrap();
-        dbg!(j);
-    }
-
-    #[test]
-     fn default_project() {
-        let resp = self::test_project_id("510186917");
-        let j: Sb3Project = resp.try_into().unwrap();
-        dbg!(j);
-    }
-}
-*/

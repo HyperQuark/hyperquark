@@ -1,5 +1,5 @@
 <script setup>
-import ProjectInput from '../components/ProjectInput.vue'
+import ProjectInput from "../components/ProjectInput.vue";
 </script>
 
 <template>
@@ -7,27 +7,35 @@ import ProjectInput from '../components/ProjectInput.vue'
     <h1>HyperQuark</h1>
   </header>
   <main>
-    <div>HyperQuark compiles Scratch projects to WebAssembly in order to run them <span id="blazing">⚡ blazingly fast
-        ⚡</span> really quickly.</div>
+    <div>
+      HyperQuark compiles Scratch projects to WebAssembly in order to run them
+      <span id="blazing">⚡ blazingly fast ⚡</span> really quickly.
+    </div>
     <div>
       <RouterLink to="/about">Learn more</RouterLink>
     </div>
     <ProjectInput />
-    <br>
-    <br>
-    <br>
+    <br />
+    <br />
+    <br />
     <h2>HyperQuark featured projects</h2>
-    <br>
+    <br />
     <ul id="featured-projects-container">
       <li v-for="project in featuredProjects">
-        <RouterLink :to="'projects/' + project.id">{{ project.name }}</RouterLink> by {{ project.author }}
+        <RouterLink :to="'projects/' + project.id">{{
+          project.name
+        }}</RouterLink>
+        by {{ project.author }}
       </li>
     </ul>
-    <br>
+    <br />
     <h2>Currently implemented blocks:</h2>
-    <br>
+    <br />
     <ul id="implemented-opcodes-container">
-      <li v-for="opcode in implementedOpcodes" :class="'block-category-' + opcode.match(/^[a-z]+(?=_)/)">
+      <li
+        v-for="opcode in implementedOpcodes"
+        :class="'block-category-' + opcode.match(/^[a-z]+(?=_)/)"
+      >
         {{ opcode }}
       </li>
     </ul>
@@ -35,31 +43,31 @@ import ProjectInput from '../components/ProjectInput.vue'
 </template>
 
 <script>
-import { opcodes as implementedOpcodes } from '@/../js/opcodes.js';
+import { opcodes as implementedOpcodes } from "@/../js/opcodes.js";
 // todo: just use ids, dynamically fetch/cache title, author thumbnail etc
 // or use a studio like turbowarp
 // but at the moment this is kind of just a quick-access bar for frequently tested projects
 const featuredProjects = [
   {
     id: 951679565,
-    name: 'Colourful Smiley Face Simulator',
-    author: 'pufferfish_test',
+    name: "Colourful Smiley Face Simulator",
+    author: "pufferfish_test",
   },
   {
     id: 886414106,
-    name: 'benchmark',
-    author: 'pufferfish_test',
+    name: "benchmark",
+    author: "pufferfish_test",
   },
   {
     id: 1050568991,
-    name: 'fibonacci benchmark',
-    author: 'pufferfish_test',
+    name: "fibonacci benchmark",
+    author: "pufferfish_test",
   },
   {
     id: 1116438829,
-    name: 'HQ test project 2.0',
-    author: 'pufferfish_test'
-  }
+    name: "HQ test project 2.0",
+    author: "pufferfish_test",
+  },
 ];
 </script>
 
@@ -87,35 +95,35 @@ ul {
 }
 
 li.block-category-looks {
-  color: #9966FF;
+  color: #9966ff;
 }
 
 li.block-category-operator {
-  color: #59C059;
+  color: #59c059;
 }
 
 li.block-category-motion {
-  color: #4C97FF;
+  color: #4c97ff;
 }
 
 li.block-category-control {
-  color: #FFAB19;
+  color: #ffab19;
 }
 
 li.block-category-pen {
-  color: #0fBD8C;
+  color: #0fbd8c;
 }
 
 li.block-category-data {
-  color: #FF8C1A;
+  color: #ff8c1a;
 }
 
 li.block-category-sensing {
-  color: #5CB1D6;
+  color: #5cb1d6;
 }
 
 li.block-category-procedures,
 li.block-category-argument {
-  color: #FF6680;
+  color: #ff6680;
 }
 </style>

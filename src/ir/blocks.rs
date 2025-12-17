@@ -249,16 +249,22 @@ pub fn inputs(
         .into_iter()
         .map(|name| -> HQResult<Vec<IrOpcode>> {
             let input = match block_info.inputs.get((*name).into()) {
-                Some(input) => input,
-                None => {
-                    if name.starts_with("CONDITION") {
-                        &Input::NoShadow(
-                            0,
-                            Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
-                        )
-                    } else {
-                        hq_bad_proj!("missing input {}", name)
-                    }
+                Some(noshadow @ Input::NoShadow(_, Some(_))) => noshadow,
+                Some(shadow @ Input::Shadow(_, Some(_), _)) => shadow,
+                None | Some(Input::NoShadow(_, None) | Input::Shadow(_, None, _)) => {
+                    // revert to a sensible default
+                    &Input::NoShadow(
+                        0,
+                        Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
+                    )
+                    // if name.starts_with("CONDITION") {
+                    //     &Input::NoShadow(
+                    //         0,
+                    //         Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
+                    //     )
+                    // } else {
+                    //     hq_bad_proj!("missing input {}", name)
+                    // }
                 }
             };
             #[expect(
@@ -297,22 +303,14 @@ pub enum ProcArgType {
     StringNumber,
 }
 
-impl ProcArgType {
-    fn default_block(self) -> Vec<IrOpcode> {
-        vec![match self {
-            Self::Boolean => IrOpcode::hq_integer(HqIntegerFields(0)),
-            Self::StringNumber => IrOpcode::hq_text(HqTextFields("".into())),
-        }]
-    }
-}
-
 fn procedure_argument(
-    arg_type: ProcArgType,
+    _arg_type: ProcArgType,
     block_info: &BlockInfo,
     context: &StepContext,
 ) -> HQResult<Vec<IrOpcode>> {
     let Some(proc_context) = context.proc_context.clone() else {
-        return Ok(arg_type.default_block());
+        // this is always the default, regardless of type
+        return Ok(vec![IrOpcode::hq_integer(HqIntegerFields(0))]);
     };
     let sb3::VarVal::String(arg_name) = block_info
         .fields
@@ -328,7 +326,7 @@ fn procedure_argument(
         .iter()
         .position(|name| name == arg_name)
     else {
-        return Ok(arg_type.default_block());
+        return Ok(vec![IrOpcode::hq_integer(HqIntegerFields(0))]);
     };
     let arg_vars_cell = proc_context.arg_vars();
     let arg_vars = arg_vars_cell.try_borrow()?;
@@ -1397,6 +1395,8 @@ fn from_special_block(
                     IrOpcode::hq_float(HqFloatFields(*value))
                 }
             }
+            // string
+            10 => IrOpcode::hq_text(HqTextFields(value.to_string().into_boxed_str())),
             _ => hq_bad_proj!("bad project json (block array of type ({}, f64))", ty),
         },
         // a string input should really be a colour or a string, but often numbers

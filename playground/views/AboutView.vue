@@ -5,12 +5,14 @@
     </header>
     <main>
       <p>
-        HyperQuark compiles Scratch projects to <a href="https://webassembly.org">WebAssembly</a> in an attempt to make
-        them faster.
-        It was created by <a href="https://github.com/pufferfish101007">pufferfish101007</a> and was written in <a
-          href="https://rust-lang.org">Rust</a> mainly, with the exception of this website which uses <a
-          href="https://vuejs.org">Vue</a>.
-        The source code is available <a href="https://github.com/hyperquark">on Github</a>.
+        HyperQuark compiles Scratch projects to
+        <a href="https://webassembly.org">WebAssembly</a> in an attempt to make
+        them faster. It was created by
+        <a href="https://github.com/pufferfish101007">pufferfish101007</a> and
+        was written in <a href="https://rust-lang.org">Rust</a> mainly, with the
+        exception of this website which uses
+        <a href="https://vuejs.org">Vue</a>. The source code is available
+        <a href="https://github.com/hyperquark">on Github</a>.
       </p>
     </main>
   </div>

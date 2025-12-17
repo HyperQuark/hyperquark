@@ -1,5 +1,5 @@
-import { renderer, pen_skin } from '../shared';
+import { renderer, pen_skin } from "../shared";
 
 export function clear() {
-    renderer().penClear(pen_skin());
+  renderer().penClear(pen_skin());
 }

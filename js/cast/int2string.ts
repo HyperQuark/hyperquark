@@ -1,3 +1,3 @@
 export function int2string(s: number): string {
-    return s.toString();
+  return s.toString();
 }

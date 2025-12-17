@@ -9,7 +9,6 @@
 /js/imports.ts
 /js/opcodes.js
 /node_modules/
-/package-lock.json
 /playground/dist/
 /.vite/
 /.vscode/
