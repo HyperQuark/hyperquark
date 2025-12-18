@@ -6,6 +6,7 @@ import {
   is_setup,
   renderer as get_renderer,
 } from "../../js/shared.ts";
+import { WasmStringType } from '../../js/no-compiler/hyperquark.js';
 // This does not work in vite dev mode! Only works in build mode.
 const scratch_render =
   await import("scratch-render/dist/web/scratch-render.js");
@@ -100,11 +101,6 @@ export default async (
     );
   const framerate_wait = Math.round(1000 / framerate);
   console.log("framerate_wait: %i", framerate_wait);
-  let assert;
-  let exit;
-  let browser = false;
-  let output_div;
-  let text_div;
 
   setup(canvas, project_json, assets, target_names);
 
@@ -119,7 +115,7 @@ export default async (
   let sprite_info_offset = 0;
 
   const settings = getSettings();
-  const builtins = [...(settings["js-string-builtins"] ? ["js-string"] : [])];
+  const builtins = [...(WasmStringType[settings.string_type] === "JsStringBuiltins" ? ["js-string"] : [])];
 
   try {
     if (

@@ -194,7 +194,11 @@ impl WasmFlags {
             } else {
                 WasmStringType::ExternRef
             },
-            scheduler: Scheduler::CallIndirect,
+            scheduler: if wasm_features.contains(&WasmFeature::TypedFunctionReferences) {
+                Scheduler::TypedFuncRef
+            } else {
+                Scheduler::CallIndirect
+            },
             print_ir: PrintIR::Off,
             integers: UseIntegers::Off,
         }
@@ -222,7 +226,7 @@ impl WasmFlags {
                 .with_ty(ty_str!(WasmOpt)),
             "scheduler" => FlagInfo::new()
                 .with_name("Scheduler")
-                .with_description("TypedFuncRef - uses typed function references to eliminate runtime checks.\
+                .with_description("TypedFuncRef (recommended) - uses typed function references to eliminate runtime checks.\
                 <br>\
                 CallIndirect - stores function indices, then uses CallIndirect to call them.")
                 .with_ty(ty_str!(Scheduler))
