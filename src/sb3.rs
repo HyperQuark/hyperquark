@@ -14,6 +14,7 @@ use serde_json::Value;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Sb3Project {
     pub targets: Vec<Target>,
+    #[serde(default)]
     pub monitors: Vec<Monitor>,
     pub extensions: Vec<Box<str>>,
     pub meta: Meta,
@@ -114,6 +115,7 @@ pub enum BlockOpcode {
     motion_movesteps,
     motion_gotoxy,
     motion_goto,
+    motion_goto_menu,
     motion_turnright,
     motion_turnleft,
     motion_pointindirection,

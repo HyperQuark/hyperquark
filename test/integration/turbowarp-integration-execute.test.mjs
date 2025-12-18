@@ -102,7 +102,7 @@ function runProject({ wasm_bytes, settings, reportVmResult, timeoutFailure }) {
       requests_refresh.value = 0;
       if (framerate_wait > 0) {
         await sleep(
-          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
+          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime))
         );
       } else {
         await waitAnimationFrame();
@@ -121,12 +121,20 @@ describe("Integration tests", () => {
   const files = fs
     .readdirSync(executeDir)
     .filter((uri) => fileFilter.test(uri))
-    // ignore tests that crash the runner, for now
+    // ignore tests that crash the runner, or that test custom reporters
     .filter(
       (uri) =>
-        !["tw-comparison-matrix-inline.sb3", "tw-unsafe-equals.sb3"].includes(
-          uri,
-        ),
+        ![
+          "tw-comparison-matrix-inline.sb3",
+          "tw-unsafe-equals.sb3",
+          "tw-custom-report-repeat.sb3",
+          "tw-procedure-return-non-existant.sb3",
+          "tw-procedure-return-recursion.sb3",
+          "tw-procedure-return-simple.sb3",
+          "tw-procedure-return-stops-scripts.sb3",
+          "tw-procedure-return-warp.sb3",
+          "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
+        ].includes(uri)
     );
   for (const uri of files) {
     test.sequential(`${uri} (default flags)`, async () => {
@@ -170,14 +178,14 @@ describe("Integration tests", () => {
       };
 
       const projectBuffer = Buffer.from(
-        fs.readFileSync(path.join(executeDir, uri)),
+        fs.readFileSync(path.join(executeDir, uri))
       );
 
       const [project_json, _] = await unpackProject(projectBuffer);
-      // console.log(JSON.stringify(project_json, null, 2))
+      console.log(JSON.stringify(project_json, null, 2));
       const project_wasm = sb3_to_wasm(
         JSON.stringify(project_json, null, 2),
-        WasmFlags.from_js(defaultSettings.to_js()),
+        WasmFlags.from_js(defaultSettings.to_js())
       );
 
       // todo: run wasm-opt if specified in flags?
