@@ -210,11 +210,11 @@ export default async (
       flag_clicked();
       start_time = Date.now();
       console.log("green_flag()");
+      renderer.draw();
       let thisTickStartTime;
       $outertickloop: while (true) {
         console.log("fps: %i", 1000 / (Date.now() - thisTickStartTime));
         thisTickStartTime = Date.now();
-        renderer.draw();
         // @ts-ignore
         $innertickloop: do {
           //for (const _ of [1]) {
@@ -231,6 +231,7 @@ export default async (
         );
         // @ts-ignore
         requests_refresh.value = 0;
+        renderer.draw();
         if (framerate_wait > 0) {
           console.log(
             "sleeping for %i ms",
@@ -244,6 +245,7 @@ export default async (
           await waitAnimationFrame();
         }
       }
+      renderer.draw()
       console.log("project stopped");
     })
     .catch((e) => {
