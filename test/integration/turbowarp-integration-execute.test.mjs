@@ -13,9 +13,10 @@ import path from "node:path";
 
 import { describe, test } from "vitest";
 
-import { imports } from "../../js/imports.ts";
+import { imports as baseImports, imports } from "../../js/imports.ts";
 import { unpackProject } from "../../playground/lib/project-loader.js";
 import { sb3_to_wasm, WasmFlags } from "../../js/compiler/hyperquark.js";
+import { WasmStringType } from "../../js/no-compiler/hyperquark";
 import { defaultSettings } from "../../playground/lib/settings.js";
 
 /**
@@ -35,10 +36,24 @@ import { defaultSettings } from "../../playground/lib/settings.js";
 
 // this is adapted from playground/lib/project-runner.js to work in node
 // todo: adapt so we can just import it?
-function runProject({ wasm_bytes, settings, reportVmResult, timeoutFailure }) {
+function runProject({
+  wasm_bytes,
+  settings,
+  reportVmResult,
+  timeoutFailure,
+  strings,
+}) {
   const framerate_wait = Math.round(1000 / 30);
 
-  const builtins = [...(settings["js-string-builtins"] ? ["js-string"] : [])];
+  const builtins = [
+    ...(WasmStringType[settings.string_type] === "JsStringBuiltins"
+      ? ["js-string"]
+      : []),
+  ];
+
+  const imports = Object.assign(baseImports, {
+    "": Object.fromEntries(strings.map((string) => [string, string])),
+  });
 
   try {
     if (
@@ -194,6 +209,7 @@ describe("Integration tests", () => {
       await runProject({
         wasm_bytes: project_wasm.wasm_bytes,
         target_names: project_wasm.target_names,
+        strings: project_wasm.strings,
         settings: defaultSettings,
         reportVmResult,
         timeoutFailure: () => {

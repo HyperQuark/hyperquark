@@ -138,7 +138,7 @@ fn generate_branches(
         )?);
     } else {
         let if_block_type = BlockType::FunctionType(
-            func.registries().types().register_default((
+            func.registries().types().function(
                 processed_inputs
                     .iter()
                     .copied()
@@ -153,7 +153,7 @@ fn generate_branches(
                         .collect::<HQResult<_>>()?,
                     ReturnType::None => vec![],
                 },
-            ))?,
+            )?,
         );
         let possible_types_num = curr_input.len();
         let allowed_input_types = opcode.acceptable_inputs()?[processed_inputs.len()];

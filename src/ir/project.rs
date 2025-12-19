@@ -1,5 +1,5 @@
 use super::proc::{ProcMap, procs_from_target};
-use super::variable::{TargetVars, variables_from_target};
+use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from_target};
 use super::{Step, Target, Thread};
 use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
 use crate::ir::target::IrCostume;
@@ -16,6 +16,7 @@ pub struct IrProject {
     steps: RefCell<StepSet>,
     inlined_steps: RefCell<StepSet>,
     global_variables: TargetVars,
+    global_lists: TargetLists,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
 
@@ -40,13 +41,18 @@ impl IrProject {
         &self.global_variables
     }
 
+    pub const fn global_lists(&self) -> &TargetLists {
+        &self.global_lists
+    }
+
     #[must_use]
-    pub fn new(global_variables: TargetVars) -> Self {
+    pub fn new(global_variables: TargetVars, global_lists: TargetLists) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(IndexSet::default()),
             inlined_steps: RefCell::new(IndexSet::default()),
             global_variables,
+            global_lists,
             targets: RefCell::new(IndexMap::default()),
         }
     }
@@ -59,7 +65,14 @@ impl IrProject {
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
         );
 
-        let project = Rc::new(Self::new(global_variables));
+        let global_lists = lists_from_target(
+            sb3.targets
+                .iter()
+                .find(|target| target.is_stage)
+                .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
+        );
+
+        let project = Rc::new(Self::new(global_variables, global_lists));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
@@ -70,6 +83,11 @@ impl IrProject {
                     BTreeMap::new()
                 } else {
                     variables_from_target(target)
+                };
+                let lists = if target.is_stage {
+                    BTreeMap::new()
+                } else {
+                    lists_from_target(target)
                 };
                 let procedures = RefCell::new(ProcMap::new());
                 let costumes = target
@@ -87,6 +105,7 @@ impl IrProject {
                 let ir_target = Rc::new(Target::new(
                     target.is_stage,
                     variables,
+                    lists,
                     Rc::downgrade(&project),
                     procedures,
                     index
@@ -148,7 +167,7 @@ impl IrProject {
 /// Add inputs + outputs to procedures corresponding to global/target variables
 fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
     for procedure in target.procedures()?.values() {
-        let PartialStep::Finished(step) = &*procedure.first_step()? else {
+        let PartialStep::Finished(step) = &*procedure.warped_first_step()? else {
             continue; // this should hopefully just mean that this procedure is unused.
         };
 

@@ -2,13 +2,13 @@ use super::flags::Scheduler;
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
 use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
-use crate::wasm::{StepFunc, StepsTable, ThreadsTable, WasmFlags};
+use crate::wasm::{StepFunc, StepsTable, StringsTable, ThreadsTable, WasmFlags};
 use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, ExportKind,
     ExportSection, Function, FunctionSection, GlobalSection, ImportSection, Instruction, MemArg,
-    MemorySection, MemoryType, Module, TableSection, TypeSection, ValType,
+    MemorySection, MemoryType, Module, StartSection, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
@@ -92,7 +92,7 @@ impl WasmProject {
             page_size_log2: None,
         });
 
-        self.registries().strings().clone().finish(&mut imports);
+        Rc::unwrap_or_clone(self.registries().strings().clone()).finish(&mut imports);
 
         // self.registries().tables().register_override::<usize>(
         //     "strings".into(),
@@ -133,6 +133,20 @@ impl WasmProject {
 
         self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
 
+        let mut start_func = Function::new([]);
+        Rc::unwrap_or_clone(self.registries().tabled_strings().clone()).finish(
+            self.registries().strings(),
+            self.registries().tables().register::<StringsTable, _>()?,
+            &mut start_func,
+        )?;
+        start_func.instruction(&Instruction::End);
+        codes.function(&start_func);
+        functions.function(self.registries().types().function(vec![], vec![])?);
+
+        let start_section = StartSection {
+            function_index: self.imported_func_count()? + functions.len() - 1,
+        };
+
         match self.flags.scheduler {
             Scheduler::CallIndirect => {
                 let step_count = self.steps().try_borrow()?.len() as u64;
@@ -160,7 +174,7 @@ impl WasmProject {
                     .register_override::<ThreadsTable, usize, _>((
                         self.registries()
                             .types()
-                            .register_default((vec![ValType::I32], vec![]))?,
+                            .function(vec![ValType::I32], vec![])?,
                         self.imported_func_count()?,
                         self.static_func_count()?,
                     ))?;
@@ -175,7 +189,7 @@ impl WasmProject {
             }
         }
 
-        self.registries().types().clone().finish(&mut types);
+        Rc::unwrap_or_clone(self.registries().types().clone()).finish(&mut types);
 
         self.registries()
             .tables()
@@ -211,7 +225,7 @@ impl WasmProject {
             .section(&memories)
             .section(&globals)
             .section(&exports)
-            // start
+            .section(&start_section)
             .section(&elements)
             //.section(&data_count)
             .section(&codes);
@@ -221,6 +235,15 @@ impl WasmProject {
 
         Ok(FinishedWasm {
             wasm_bytes: wasm_bytes.into_boxed_slice(),
+            strings: self
+                .registries()
+                .strings()
+                .registry()
+                .borrow()
+                .keys()
+                .cloned()
+                .map(str::into_string)
+                .collect(),
             target_names: self
                 .target_names
                 .into_iter()
@@ -269,11 +292,7 @@ impl WasmProject {
         func.instruction(&Instruction::Unreachable);
         func.instruction(&Instruction::End);
         codes.function(&func);
-        functions.function(
-            self.registries()
-                .types()
-                .register_default((vec![], vec![]))?,
-        );
+        functions.function(self.registries().types().function(vec![], vec![])?);
         exports.export(
             "unreachable_dbg",
             ExportKind::Func,
@@ -393,11 +412,7 @@ impl WasmProject {
         }
         func.instruction(&Instruction::End);
 
-        funcs.function(
-            self.registries()
-                .types()
-                .register_default((vec![], vec![]))?,
-        );
+        funcs.function(self.registries().types().function(vec![], vec![])?);
         codes.function(&func);
         exports.export(
             export_name,
@@ -440,7 +455,7 @@ impl WasmProject {
         let step_func_ty = self
             .registries()
             .types()
-            .register_default((vec![ValType::I32], vec![]))?;
+            .function(vec![ValType::I32], vec![])?;
 
         let threads_count = self.registries().globals().register(
             "threads_count".into(),
@@ -511,11 +526,7 @@ impl WasmProject {
             )?);
         }
         tick_func.instruction(&Instruction::End);
-        funcs.function(
-            self.registries()
-                .types()
-                .register_default((vec![], vec![]))?,
-        );
+        funcs.function(self.registries().types().function(vec![], vec![])?);
         codes.function(&tick_func);
         exports.export(
             "tick",
@@ -540,6 +551,7 @@ impl WasmProject {
                 true,
                 Rc::new(IrTarget::new(
                     false,
+                    BTreeMap::default(),
                     BTreeMap::default(),
                     Weak::new(),
                     RefCell::new(BTreeMap::default()),
@@ -587,6 +599,8 @@ pub struct FinishedWasm {
     pub wasm_bytes: Box<[u8]>,
     #[wasm_bindgen(getter_with_clone)]
     pub target_names: Vec<String>,
+    #[wasm_bindgen(getter_with_clone)]
+    pub strings: Vec<String>,
 }
 
 #[cfg(test)]
@@ -599,7 +613,7 @@ mod tests {
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let project = Rc::new(IrProject::new(BTreeMap::default()));
+        let project = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default()));
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
             Step::new_empty(
@@ -607,6 +621,7 @@ mod tests {
                 true,
                 Rc::new(IrTarget::new(
                     false,
+                    BTreeMap::default(),
                     BTreeMap::default(),
                     Weak::new(),
                     RefCell::new(BTreeMap::default()),

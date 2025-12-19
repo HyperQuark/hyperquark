@@ -25,7 +25,7 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    Ok(wasm![F64Const(fields.0)])
+    Ok(wasm![F64Const(fields.0.into())])
 }
 
 pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {

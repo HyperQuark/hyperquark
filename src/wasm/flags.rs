@@ -14,21 +14,7 @@ pub enum WasmStringType {
 
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
-pub enum WasmOpt {
-    On,
-    Off,
-}
-
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[wasm_bindgen]
-pub enum PrintIR {
-    On,
-    Off,
-}
-
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[wasm_bindgen]
-pub enum UseIntegers {
+pub enum Switch {
     On,
     Off,
 }
@@ -40,6 +26,20 @@ pub enum Scheduler {
     CallIndirect,
 }
 
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[wasm_bindgen]
+pub enum ListType {
+    GCArray,
+    LinearMemory,
+}
+
+// #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+// #[wasm_bindgen]
+// pub enum MemoryLayout {
+//     Contiguous,
+//     MultiMemory,
+// }
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
 pub enum WasmFeature {
@@ -47,6 +47,8 @@ pub enum WasmFeature {
     TypedFunctionReferences,
     JSStringBuiltins,
     BulkMemory,
+    GC,
+    MultiMemory,
 }
 
 #[wasm_bindgen]
@@ -58,6 +60,21 @@ pub fn all_wasm_features() -> Vec<WasmFeature> {
         TypedFunctionReferences,
         JSStringBuiltins,
         BulkMemory,
+        GC,
+        MultiMemory,
+    ]
+}
+
+#[cfg(test)]
+#[must_use]
+pub fn unit_test_wasm_features() -> Vec<WasmFeature> {
+    use WasmFeature::*;
+    vec![
+        ReferenceTypes,
+        JSStringBuiltins,
+        BulkMemory,
+        GC,
+        MultiMemory,
     ]
 }
 
@@ -71,6 +88,8 @@ pub fn wasm_feature_detect_name(feat: WasmFeature) -> String {
         TypedFunctionReferences => "typedFunctionReferences",
         JSStringBuiltins => "jsStringBuiltins",
         BulkMemory => "bulkMemory",
+        GC => "gc",
+        MultiMemory => "multiMemory",
     }
     .into()
 }
@@ -157,10 +176,12 @@ macro_rules! ty_str {
 )]
 pub struct WasmFlags {
     pub string_type: WasmStringType,
-    pub wasm_opt: WasmOpt,
+    pub wasm_opt: Switch,
     pub scheduler: Scheduler,
-    pub print_ir: PrintIR,
-    pub integers: UseIntegers,
+    pub print_ir: Switch,
+    pub integers: Switch,
+    pub list_type: ListType,
+    // pub memory_layout: MemoryLayout
 }
 
 #[wasm_bindgen]
@@ -188,7 +209,7 @@ impl WasmFlags {
     pub fn new(wasm_features: Vec<WasmFeature>) -> Self {
         // crate::log(format!("{wasm_features:?}").as_str());
         Self {
-            wasm_opt: WasmOpt::On,
+            wasm_opt: Switch::On,
             string_type: if wasm_features.contains(&WasmFeature::JSStringBuiltins) {
                 WasmStringType::JsStringBuiltins
             } else {
@@ -199,8 +220,13 @@ impl WasmFlags {
             } else {
                 Scheduler::CallIndirect
             },
-            print_ir: PrintIR::Off,
-            integers: UseIntegers::Off,
+            print_ir: Switch::Off,
+            integers: Switch::Off,
+            list_type: if wasm_features.contains(&WasmFeature::GC) {
+                ListType::GCArray
+            } else {
+                ListType::LinearMemory
+            },
         }
     }
 
@@ -220,10 +246,34 @@ impl WasmFlags {
                     ExternRef : vec![WasmFeature::ReferenceTypes],
                     JsStringBuiltins : vec![WasmFeature::ReferenceTypes, WasmFeature::JSStringBuiltins],
                 }),
+            "list_type" => FlagInfo::new()
+                .with_name("List representation")
+                .with_description(
+                    "GCArray (recommended) - uses GC arrays.\
+                    <br>\
+                    LinearMemory (unimplemented) - stores lists in linear memory."
+                )
+                .with_ty(ty_str!(ListType))
+                .with_wasm_features(stringmap! {
+                    GCArray : vec![WasmFeature::GC],
+                    LinearMemory : vec![]
+                }),
+            // "memory_layout" => FlagInfo::new()
+            //     .with_name("Memory layout")
+            //     .with_description(
+            //         "Contiguous - stores everything in one contiguous block of memory.\
+            //         <br>\
+            //         MultiMemory (recommended) - uses multiple memories to avoid reallocations."
+            //     )
+            //     .with_ty(ty_str!(MemoryLayout))
+            //     .with_wasm_features(stringmap! {
+            //         Contiguous : vec![],
+            //         LinearMemory : vec![WasmFeature::MultiMemory]
+            //     }),
             "wasm_opt" => FlagInfo::new()
                 .with_name("WASM optimisation")
                 .with_description("Should we try to optimise generated WASM modules using wasm-opt?")
-                .with_ty(ty_str!(WasmOpt)),
+                .with_ty(ty_str!(Switch)),
             "scheduler" => FlagInfo::new()
                 .with_name("Scheduler")
                 .with_description("TypedFuncRef (recommended) - uses typed function references to eliminate runtime checks.\
@@ -237,12 +287,12 @@ impl WasmFlags {
             "print_ir" => FlagInfo::new()
                 .with_name("Print IR")
                 .with_description("For debugging purposes only")
-                .with_ty(ty_str!(PrintIR)),
+                .with_ty(ty_str!(Switch)),
             "integers" => FlagInfo::new()
                 .with_name("Integers")
                 .with_description("Emit integer instructions wherever possible. May make things faster at \
                 the cost of possible overflow, or may slow things down if mixed with floats.")
-                .with_ty(ty_str!(UseIntegers)),
+                .with_ty(ty_str!(Switch)),
             _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str())
         }
     }

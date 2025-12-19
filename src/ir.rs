@@ -17,5 +17,5 @@ pub use project::IrProject;
 pub use step::Step;
 pub use target::Target;
 use thread::Thread;
-pub use types::{ReturnType, Type, base_types};
-pub use variable::{RcVar, used_vars};
+pub use types::{ReturnType, Type, base_types, var_val_type};
+pub use variable::{RcList, RcVar, used_vars};

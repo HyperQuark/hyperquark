@@ -130,8 +130,13 @@ impl<R> RegistryDefault for R where R: Registry<Value: Default> {}
 pub trait NamedRegistryItem<V> {
     const VALUE: V;
 }
+
 pub trait NamedRegistryItemOverride<V, A>: NamedRegistryItem<V> {
     fn r#override(arg: A) -> V;
+}
+
+pub trait TryNamedRegistryItemOverride<V, A>: NamedRegistryItem<V> {
+    fn try_override(arg: A) -> HQResult<V>;
 }
 
 pub trait NamedRegistrar<R>: RegistryType
@@ -238,6 +243,16 @@ where
     {
         self.0
             .register_override(R::name::<T>(), T::r#override(override_arg))
+    }
+
+    pub fn try_register_override<T, N, A>(&self, override_arg: A) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+        T: NamedRegistryItem<R::Value> + TryNamedRegistryItemOverride<R::Value, A>,
+    {
+        self.0
+            .register_override(R::name::<T>(), T::try_override(override_arg)?)
     }
 }
 

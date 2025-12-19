@@ -70,7 +70,6 @@ impl NamedRegistryItem<TableOptions> for StringsTable {
     const VALUE: TableOptions = TableOptions {
         element_type: RefType::EXTERNREF,
         min: 0,
-        // TODO: use js string imports for preknown strings
         max: None,
         init: None,
         export_name: None,

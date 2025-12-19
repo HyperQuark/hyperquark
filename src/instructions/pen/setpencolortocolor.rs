@@ -30,16 +30,16 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                     If(BlockType::Result(ValType::F32)),
                     LocalGet(temp_local),
                     F32ConvertI32S,
-                    F32Const(255.0),
+                    F32Const(255.0.into()),
                     F32Div,
                     Else,
                     // scratch doesn't allow totally transparent alpha values for rgb colours - see
                     // https://github.com/scratchfoundation/scratch-vm/blob/b3266a0cfe5122f20b72ccd738a3dd4dff4fc5a5/src/util/color.js#L50
-                    F32Const(1.0),
+                    F32Const(1.0.into()),
                     End,
                 ]
             }
-            IrType::ColorRGB => wasm![F32Const(1.0)],
+            IrType::ColorRGB => wasm![F32Const(1.0.into())],
             _ => hq_bug!("bad input type to pen_setPenColorToColor"),
         })
         .chain(wasm![
@@ -56,7 +56,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             I32Const(0xFF),
             I32And,
             F32ConvertI32S,
-            F32Const(255.0),
+            F32Const(255.0.into()),
             F32Div,
             F32Store(MemArg {
                 offset: (mem_pos + mem_layout::sprite::PEN_COLOR_R).into(),
@@ -70,7 +70,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             I32Const(0xFF),
             I32And,
             F32ConvertI32S,
-            F32Const(255.0),
+            F32Const(255.0.into()),
             F32Div,
             F32Store(MemArg {
                 offset: (mem_pos + mem_layout::sprite::PEN_COLOR_G).into(),
@@ -82,7 +82,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             I32Const(0xFF),
             I32And,
             F32ConvertI32S,
-            F32Const(255.0),
+            F32Const(255.0.into()),
             F32Div,
             F32Store(MemArg {
                 offset: (mem_pos + mem_layout::sprite::PEN_COLOR_B).into(),

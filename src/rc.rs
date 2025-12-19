@@ -30,6 +30,16 @@ impl<T> Rc<T> {
     }
 }
 
+impl<T> Rc<T>
+where
+    T: Clone,
+{
+    #[must_use]
+    pub fn unwrap_or_clone(this: Self) -> T {
+        CoreRc::unwrap_or_clone(this.0)
+    }
+}
+
 impl<T> AsRef<T> for Rc<T> {
     fn as_ref(&self) -> &T {
         self.0.as_ref()

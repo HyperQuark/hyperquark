@@ -16,7 +16,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 let if_block_type = func
                     .registries()
                     .types()
-                    .register_default((vec![ValType::I32, ValType::I32], vec![ValType::F64]))?;
+                    .function(vec![ValType::I32, ValType::I32], vec![ValType::F64])?;
                 wasm![
                     LocalTee(modulus_local),
                     LocalGet(modulus_local),
@@ -24,7 +24,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                     If(WasmBlockType::FunctionType(if_block_type)),
                     Drop,
                     Drop,
-                    F64Const(f64::NAN),
+                    F64Const(f64::NAN.into()),
                     Else,
                     I32RemS,
                     LocalTee(result_local),
@@ -74,9 +74,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 F64Mul,
                 F64Sub,
                 LocalGet(modulus_local),
-                F64Const(0.0),
+                F64Const(0.0.into()),
                 LocalGet(div_local),
-                F64Const(0.0),
+                F64Const(0.0.into()),
                 F64Lt,
                 Select,
                 F64Add,
@@ -103,9 +103,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 F64Mul,
                 F64Sub,
                 LocalGet(modulus_local),
-                F64Const(0.0),
+                F64Const(0.0.into()),
                 LocalGet(div_local),
-                F64Const(0.0),
+                F64Const(0.0.into()),
                 F64Lt,
                 Select,
                 F64Add,
@@ -125,9 +125,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 F64Mul,
                 F64Sub,
                 LocalGet(modulus_local),
-                F64Const(0.0),
+                F64Const(0.0.into()),
                 LocalGet(div_local),
-                F64Const(0.0),
+                F64Const(0.0.into()),
                 F64Lt,
                 Select,
                 F64Add,

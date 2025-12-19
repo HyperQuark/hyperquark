@@ -89,12 +89,13 @@
 )]
 
 use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
+    ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataItemoflistFields,
+    DataReplaceitemoflistFields, DataSetvariabletoFields, DataTeevariableFields,
     DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{
-    IrProject, PartialStep, Proc, RcVar, ReturnType, Step, Type as IrType, insert_casts,
+    IrProject, PartialStep, Proc, RcList, RcVar, ReturnType, Step, Type as IrType, insert_casts,
 };
 use crate::prelude::*;
 use crate::sb3::VarVal;
@@ -113,11 +114,34 @@ use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut, stable_graph::StableDiGr
 #[derive(Clone, Debug)]
 enum StackElement {
     Var(RcVar),
+    List(RcList),
     // for things where we can guarantee the output type. e.g. for constants (int, float, string)
     Type(IrType),
     /// this shouldn't be anything that branches or mutates anything in any way,
     /// i.e. not loop, if/else, yield, set variable, etc
     Opcode(IrOpcode),
+}
+
+#[derive(Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
+enum VarOrList {
+    Var(RcVar),
+    List(RcList),
+}
+
+impl VarOrList {
+    fn possible_types(&self) -> core::cell::Ref<'_, IrType> {
+        match self {
+            Self::Var(var) => var.possible_types(),
+            Self::List(list) => list.possible_types(),
+        }
+    }
+
+    fn add_type(&self, ty: IrType) {
+        match self {
+            Self::Var(var) => var.add_type(ty),
+            Self::List(list) => list.add_type(ty),
+        }
+    }
 }
 
 /// Is this edge a backlink or not?
@@ -130,7 +154,7 @@ enum EdgeType {
     BackLink,
 }
 
-type NodeWeight = Option<(Vec<RcVar>, Vec<StackElement>)>;
+type NodeWeight = Option<(Vec<VarOrList>, Vec<StackElement>)>;
 
 #[derive(Debug)]
 struct BaseVarGraph {
@@ -288,10 +312,10 @@ impl VarGraph {
                             else {
                                 hq_bug!("")
                             };
-                            vars.push(var.try_borrow()?.clone());
+                            vars.push(VarOrList::Var(var.try_borrow()?.clone()));
                         } else if !type_stack.is_empty() {
                             let new_node = self.add_node(Some((
-                                vec![var.try_borrow()?.clone()],
+                                vec![VarOrList::Var(var.try_borrow()?.clone())],
                                 mem::take(type_stack),
                             )));
                             let last_node = *self.exit_node().borrow();
@@ -331,7 +355,7 @@ impl VarGraph {
                         // TODO: do we need to consider the case where the stack is empty,
                         // as with setvariableto?
                         let new_node = self.add_node(Some((
-                            vec![var.try_borrow()?.clone()],
+                            vec![VarOrList::Var(var.try_borrow()?.clone())],
                             mem::take(type_stack),
                         )));
                         let last_node = *self.exit_node().borrow();
@@ -370,6 +394,19 @@ impl VarGraph {
                             )?,
                         ));
                         // crate::log!("stack: {type_stack:?}");
+                    }
+                    IrOpcode::data_itemoflist(DataItemoflistFields { list }) => {
+                        type_stack.push(StackElement::List(list.clone()));
+                    }
+                    IrOpcode::data_addtolist(DataAddtolistFields { list })
+                    | IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields { list }) => {
+                        let new_node = self.add_node(Some((
+                            vec![VarOrList::List(list.clone())],
+                            mem::take(type_stack),
+                        )));
+                        let last_node = *self.exit_node().borrow();
+                        self.add_edge(last_node, new_node, EdgeType::Forward);
+                        *self.exit_node().borrow_mut() = new_node;
                     }
                     IrOpcode::control_if_else(ControlIfElseFields {
                         branch_if,
@@ -474,7 +511,7 @@ impl VarGraph {
                                             },
                                         );
                                     let new_node = self.add_node(Some((
-                                        vec![new_var.clone()],
+                                        vec![VarOrList::Var(new_var.clone())],
                                         vec![StackElement::Var(accessed_var)],
                                     )));
                                     let exit_node = *self.exit_node().borrow();
@@ -596,6 +633,7 @@ impl VarGraph {
                                 .iter()
                                 .rev()
                                 .cloned()
+                                .map(VarOrList::Var)
                                 .collect(),
                             mem::take(type_stack),
                         )));
@@ -685,6 +723,7 @@ impl VarGraph {
                     .iter()
                     .rev()
                     .cloned()
+                    .map(VarOrList::Var)
                     .collect(),
                 mem::take(type_stack),
             )));
@@ -725,7 +764,10 @@ impl VarGraph {
             };
             for (global_var, ssa_var) in &variable_maps.ssa {
                 let this_type_stack = vec![StackElement::Var(ssa_var.clone())];
-                let new_node = self.add_node(Some((vec![global_var.clone()], this_type_stack)));
+                let new_node = self.add_node(Some((
+                    vec![VarOrList::Var(global_var.clone())],
+                    this_type_stack,
+                )));
                 let last_node = *self.exit_node().borrow();
                 self.add_edge(last_node, new_node, EdgeType::Forward);
                 *self.exit_node().borrow_mut() = new_node;
@@ -814,7 +856,7 @@ impl VarGraph {
             opcodes.reserve_exact(var_writes.len() * 2);
             for ((var_read, read_local), var_write) in var_writes {
                 let new_node = self.add_node(Some((
-                    vec![var_write.clone()],
+                    vec![VarOrList::Var(var_write.clone())],
                     vec![StackElement::Var(var_read.clone())],
                 )));
                 self.add_edge(***block_exit, new_node, EdgeType::Forward);
@@ -870,7 +912,7 @@ fn visit_step_recursively(
 
 fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>) -> HQResult<()> {
     // crate::log("visiting procedure");
-    if let PartialStep::Finished(step) = proc.first_step()?.clone() {
+    if let PartialStep::Finished(step) = proc.warped_first_step()?.clone() {
         // crate::log!("visiting procedure's step: {}", step.id());
         let globally_scoped_variables: Box<[_]> = step.globally_scoped_variables()?.collect();
         let arg_vars_drop =
@@ -944,6 +986,7 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
             }
             StackElement::Type(ty) => stack.push(*ty),
             StackElement::Var(var) => stack.push(*var.possible_types()),
+            StackElement::List(list) => stack.push(*list.possible_types()),
         }
     }
     Ok(stack)
@@ -952,7 +995,7 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
 fn visit_node(
     graph: &VarGraph,
     node: NodeIndex,
-    changed_vars: &mut BTreeSet<RcVar>,
+    changed_vars: &mut BTreeSet<VarOrList>,
     stop_at: NodeIndex,
 ) -> HQResult<()> {
     // crate::log!("node index: {node:?}");
@@ -1003,7 +1046,7 @@ where
     I: Iterator<Item = &'a VarGraph> + Clone,
 {
     loop {
-        let mut changed_vars: BTreeSet<RcVar> = BTreeSet::new();
+        let mut changed_vars: BTreeSet<VarOrList> = BTreeSet::new();
         for graph in graphs.clone() {
             // crate::log!(
             //     "{:?}exit node: {:?}",
@@ -1063,7 +1106,7 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
     iterate_graphs(&graphs.values().copied())?;
     for step in maybe_graphs.keys() {
         // crate::log!("inserting casts for step {}", step.id());
-        insert_casts(&mut *step.opcodes_mut()?)?;
+        insert_casts(&mut *step.opcodes_mut()?, false)?;
     }
     Ok(SSAToken(PhantomData))
 }

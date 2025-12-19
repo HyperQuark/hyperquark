@@ -1,5 +1,5 @@
 use super::{IrProject, proc::Proc};
-use crate::ir::variable::TargetVars;
+use crate::ir::variable::{TargetLists, TargetVars};
 use crate::prelude::*;
 use crate::sb3::CostumeDataFormat;
 use core::cell::{Ref, RefMut};
@@ -15,6 +15,7 @@ pub struct IrCostume {
 pub struct Target {
     is_stage: bool,
     variables: TargetVars,
+    lists: TargetLists,
     project: Weak<IrProject>,
     procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
     index: u32,
@@ -28,6 +29,10 @@ impl Target {
 
     pub const fn variables(&self) -> &TargetVars {
         &self.variables
+    }
+
+    pub const fn lists(&self) -> &TargetLists {
+        &self.lists
     }
 
     pub fn project(&self) -> Weak<IrProject> {
@@ -53,6 +58,7 @@ impl Target {
     pub const fn new(
         is_stage: bool,
         variables: TargetVars,
+        lists: TargetLists,
         project: Weak<IrProject>,
         procedures: RefCell<BTreeMap<Box<str>, Rc<Proc>>>,
         index: u32,
@@ -61,6 +67,7 @@ impl Target {
         Self {
             is_stage,
             variables,
+            lists,
             project,
             procedures,
             index,

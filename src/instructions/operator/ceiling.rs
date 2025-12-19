@@ -11,7 +11,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         {
             wasm![]
         } else if IrType::FloatNan.contains(t1) {
-            wasm![Drop, F64Const(0.0)]
+            wasm![Drop, F64Const(0.0.into())]
         } else if IrType::Float.contains(t1) {
             wasm![
                 @nanreduce(t1),

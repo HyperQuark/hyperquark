@@ -83,7 +83,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             wasm![
                 Call(imported_function),
                 LocalGet(high_local),
-                F64Const(1.0),
+                F64Const(1.0.into()),
                 F64Add,
                 LocalGet(low_local),
                 F64Sub,
@@ -110,7 +110,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 If(WasmBlockType::Result(ValType::F64)),
                 Call(imported_function),
                 LocalGet(high_local),
-                F64Const(1.0),
+                F64Const(1.0.into()),
                 F64Add,
                 LocalGet(low_local),
                 F64Sub,
