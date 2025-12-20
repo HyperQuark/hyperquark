@@ -61,7 +61,8 @@ impl TabledStringRegistry {
             start_func
                 .instruction(&Instruction::GlobalGet(string_idx))
                 .instruction(&Instruction::I32Const(1))
-                .instruction(&Instruction::TableGrow(strings_table));
+                .instruction(&Instruction::TableGrow(strings_table))
+                .instruction(&Instruction::Drop);
         }
         Ok(())
     }

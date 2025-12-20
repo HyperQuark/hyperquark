@@ -85,6 +85,11 @@ impl fmt::Display for Target {
             .iter()
             .map(|(id, var)| format!(r#""{id}": {var}"#))
             .join(", ");
+        let lists = self
+            .lists
+            .iter()
+            .map(|(id, list)| format!(r#""{id}": {list}"#))
+            .join(", ");
         let procedures = self
             .procedures
             .borrow()
@@ -97,6 +102,7 @@ impl fmt::Display for Target {
         "is_stage": {is_stage},
         "index": {index},
         "variables": {{ {variables} }},
+        "lists": {{ {lists} }},
         "procedures": {{ {procedures} }},
     }}"#
         )

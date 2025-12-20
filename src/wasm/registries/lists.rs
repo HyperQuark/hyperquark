@@ -67,13 +67,16 @@ impl ListRegistry {
     {
         let array_type_index = self.array_type(list)?;
 
+        let initial_length = list
+            .initial_value()
+            .len()
+            .try_into()
+            .map_err(|_| make_hq_bug!("initial list value length out of bounds"))?;
+
         let array_size = if *list.length_mutable().borrow() {
             2000
         } else {
-            list.initial_value()
-                .len()
-                .try_into()
-                .map_err(|_| make_hq_bug!("initial list value length out of bounds"))?
+            initial_length
         };
 
         let init_instructions = list
@@ -87,13 +90,17 @@ impl ListRegistry {
                         };
                         Instruction::F64Const((*f).into())
                     }
-                    Some(IrType::QuasiInt) => {
-                        let VarVal::Float(f) = val else {
+                    Some(IrType::QuasiInt) => match val {
+                        VarVal::Float(f) => {
+                            hq_assert!(f % 1.0 == 0.0);
+                            Instruction::I32Const(*f as i32)
+                        }
+                        VarVal::Int(i) => Instruction::I32Const(*i),
+                        VarVal::Bool(b) => Instruction::I32Const((*b).into()),
+                        VarVal::String(_) => {
                             hq_bug!("VarVal type should be included in var's possible types")
-                        };
-                        hq_assert!(f % 1.0 == 0.0);
-                        Instruction::I32Const(*f as i32)
-                    }
+                        }
+                    },
                     Some(IrType::String) => {
                         let VarVal::String(s) = val else {
                             hq_bug!("VarVal type should be included in var's possible types")
@@ -102,6 +109,7 @@ impl ListRegistry {
                         Instruction::GlobalGet(string_idx)
                     }
                     _ => match val {
+                        VarVal::Int(i) => Instruction::I64Const((*i).into()),
                         VarVal::Bool(b) => Instruction::I64Const((*b).into()),
                         VarVal::Float(f) => {
                             Instruction::I64Const(i64::from_le_bytes(f.to_le_bytes()))
@@ -152,9 +160,9 @@ impl ListRegistry {
                     (
                         ValType::I32,
                         ConstExpr::i32_const(
-                            array_size
+                            initial_length
                                 .try_into()
-                                .map_err(|_| make_hq_bug!("array_size out of bounds"))?,
+                                .map_err(|_| make_hq_bug!("list initial length out of bounds"))?,
                         ),
                         GlobalMutable(true),
                         GlobalExportable(false),

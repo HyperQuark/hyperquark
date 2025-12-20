@@ -35,9 +35,10 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
                 }) if !*local_write.borrow())
                 || matches!(block,
                     IrOpcode::data_teevariable(DataTeevariableFields { local_read_write, .. }) if !*local_read_write.borrow())
-                || matches!(block, IrOpcode::data_addtolist(_)))
-        // todo: add replaceitemoflist here as well
-        {
+                || matches!(
+                    block,
+                    IrOpcode::data_addtolist(_) | IrOpcode::data_replaceitemoflist(_)
+                )) {
             vec![IrType::Any]
         } else {
             block
@@ -56,26 +57,31 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
         let actual_inputs: Vec<_> = type_stack
             .splice((type_stack.len() - expected_inputs.len()).., [])
             .collect();
+        crate::log!("{}; {:?}; {:?}", block, expected_inputs, actual_inputs);
+        let mut dummy_actual_inputs: Vec<_> = actual_inputs.iter().map(|a| a.0).collect();
         for (j, (expected, actual)) in
             core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
         {
             if !expected.is_none()
                 && !expected
                     .base_types()
-                    .any(|ty1| actual.0.base_types().any(|ty2| ty2 == ty1))
+                    .fold(IrType::none(), IrType::or)
+                    .contains(actual.0)
             {
                 if matches!(
                     block,
-                    IrOpcode::data_setvariableto(_) | IrOpcode::data_teevariable(_)
+                    IrOpcode::data_setvariableto(_)
+                        | IrOpcode::data_teevariable(_)
+                        | IrOpcode::data_addtolist(_)
+                        | IrOpcode::data_replaceitemoflist(_)
                 ) {
                     hq_bug!(
-                        "attempted to insert a cast before a variable {} operation - variables should \
+                        "attempted to insert a cast before a variable/list operation - variables should \
                         encompass all possible types, rather than causing values to be coerced.
                         Tried to cast from {} to {}, at position {}.
                         Occurred on these opcodes: [
                         {}
                         ]",
-                        if matches!(block, IrOpcode::data_setvariableto(_)) { "set"} else {"tee"},
                         actual.0,
                         expected,
                         actual.1,
@@ -83,6 +89,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
                     )
                 }
                 casts.push((actual.1, expected));
+                dummy_actual_inputs[j] = expected;
                 expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
                     .output_type(Rc::from([if actual.0.is_none() {
                         IrType::Any
@@ -106,8 +113,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
         {
             type_stack.push((IrType::Any, i));
         } else {
-            // TODO: make this more specific by using the actual input types post-cast
-            match block.output_type(Rc::from(expected_inputs))? {
+            match block.output_type(Rc::from(dummy_actual_inputs))? {
                 ReturnType::Singleton(output) => type_stack.push((output, i)),
                 ReturnType::MultiValue(outputs) => {
                     type_stack.extend(outputs.iter().copied().zip(core::iter::repeat(i)));
@@ -1276,7 +1282,7 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::control_repeat => {
-                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Float(0.0));
+                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Int(0));
                             let local = context.warp;
                             let condition_instructions = vec![
                                 IrOpcode::data_variable(DataVariableFields {

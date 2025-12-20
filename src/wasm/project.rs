@@ -92,6 +92,14 @@ impl WasmProject {
             page_size_log2: None,
         });
 
+        let mut start_func = Function::new([]);
+        Rc::unwrap_or_clone(self.registries().tabled_strings().clone()).finish(
+            self.registries().strings(),
+            self.registries().tables().register::<StringsTable, _>()?,
+            &mut start_func,
+        )?;
+        start_func.instruction(&Instruction::End);
+
         Rc::unwrap_or_clone(self.registries().strings().clone()).finish(&mut imports);
 
         // self.registries().tables().register_override::<usize>(
@@ -133,13 +141,6 @@ impl WasmProject {
 
         self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
 
-        let mut start_func = Function::new([]);
-        Rc::unwrap_or_clone(self.registries().tabled_strings().clone()).finish(
-            self.registries().strings(),
-            self.registries().tables().register::<StringsTable, _>()?,
-            &mut start_func,
-        )?;
-        start_func.instruction(&Instruction::End);
         codes.function(&start_func);
         functions.function(self.registries().types().function(vec![], vec![])?);
 

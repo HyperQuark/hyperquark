@@ -249,6 +249,11 @@ impl fmt::Display for IrProject {
             .iter()
             .map(|(id, var)| format!(r#""{id}": {var}"#))
             .join(", ");
+        let lists = self
+            .global_lists()
+            .iter()
+            .map(|(id, list)| format!(r#""{id}": {list}"#))
+            .join(", ");
         let threads = self
             .threads()
             .borrow()
@@ -272,6 +277,7 @@ impl fmt::Display for IrProject {
             r#"{{
         "targets": {{{targets}}},
         "global_variables": {{{variables}}},
+        "global_lists": {{{lists}}},
         "threads": [{threads}],
         "steps": [{steps}],
         "inlined_steps": [{inlined_steps}]

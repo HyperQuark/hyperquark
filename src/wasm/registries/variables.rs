@@ -55,13 +55,17 @@ impl VariableRegistry {
                         };
                         ConstExpr::f64_const((*f).into())
                     }
-                    Some(IrType::QuasiInt) => {
-                        let VarVal::Float(f) = var.initial_value() else {
+                    Some(IrType::QuasiInt) => match var.initial_value() {
+                        VarVal::Float(f) => {
+                            hq_assert!(f % 1.0 == 0.0);
+                            ConstExpr::i32_const(*f as i32)
+                        }
+                        VarVal::Int(i) => ConstExpr::i32_const(*i),
+                        VarVal::Bool(b) => ConstExpr::i32_const((*b).into()),
+                        VarVal::String(_) => {
                             hq_bug!("VarVal type should be included in var's possible types")
-                        };
-                        hq_assert!(f % 1.0 == 0.0);
-                        ConstExpr::i32_const(*f as i32)
-                    }
+                        }
+                    },
                     Some(IrType::String) => {
                         let VarVal::String(s) = var.initial_value() else {
                             hq_bug!("VarVal type should be included in var's possible types")
@@ -70,6 +74,7 @@ impl VariableRegistry {
                         ConstExpr::global_get(string_idx)
                     }
                     _ => match var.initial_value() {
+                        VarVal::Int(i) => ConstExpr::i64_const((*i).into()),
                         VarVal::Bool(b) => ConstExpr::i64_const((*b).into()),
                         VarVal::Float(f) => {
                             ConstExpr::i64_const(i64::from_le_bytes(f.to_le_bytes()))
