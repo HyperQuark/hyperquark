@@ -113,6 +113,7 @@ use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut, stable_graph::StableDiGr
 
 #[derive(Clone, Debug)]
 enum StackElement {
+    Drop,
     Var(RcVar),
     List(RcList),
     // for things where we can guarantee the output type. e.g. for constants (int, float, string)
@@ -123,16 +124,19 @@ enum StackElement {
 }
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
-enum VarOrList {
+enum VarTarget {
     Var(RcVar),
     List(RcList),
+    Drop,
 }
 
-impl VarOrList {
+impl VarTarget {
+    /// SAFETY: do not call with `VarTarget::Drop`
     fn possible_types(&self) -> core::cell::Ref<'_, IrType> {
         match self {
             Self::Var(var) => var.possible_types(),
             Self::List(list) => list.possible_types(),
+            Self::Drop => unreachable!(),
         }
     }
 
@@ -140,6 +144,7 @@ impl VarOrList {
         match self {
             Self::Var(var) => var.add_type(ty),
             Self::List(list) => list.add_type(ty),
+            Self::Drop => (),
         }
     }
 }
@@ -154,7 +159,7 @@ enum EdgeType {
     BackLink,
 }
 
-type NodeWeight = Option<(Vec<VarOrList>, Vec<StackElement>)>;
+type NodeWeight = Option<(Vec<VarTarget>, Vec<StackElement>)>;
 
 #[derive(Debug)]
 struct BaseVarGraph {
@@ -311,10 +316,10 @@ impl VarGraph {
                         else {
                             hq_bug!("")
                         };
-                        vars.push(VarOrList::Var(var.try_borrow()?.clone()));
+                        vars.push(VarTarget::Var(var.try_borrow()?.clone()));
                     } else if !type_stack.is_empty() {
                         let new_node = self.add_node(Some((
-                            vec![VarOrList::Var(var.try_borrow()?.clone())],
+                            vec![VarTarget::Var(var.try_borrow()?.clone())],
                             mem::take(type_stack),
                         )));
                         let last_node = *self.exit_node().borrow();
@@ -354,7 +359,7 @@ impl VarGraph {
                     // TODO: do we need to consider the case where the stack is empty,
                     // as with setvariableto?
                     let new_node = self.add_node(Some((
-                        vec![VarOrList::Var(var.try_borrow()?.clone())],
+                        vec![VarTarget::Var(var.try_borrow()?.clone())],
                         mem::take(type_stack),
                     )));
                     let last_node = *self.exit_node().borrow();
@@ -395,12 +400,21 @@ impl VarGraph {
                     // crate::log!("stack: {type_stack:?}");
                 }
                 IrOpcode::data_itemoflist(DataItemoflistFields { list }) => {
+                    type_stack.push(StackElement::Drop);
                     type_stack.push(StackElement::List(list.clone()));
                 }
-                IrOpcode::data_addtolist(DataAddtolistFields { list })
-                | IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields { list }) => {
+                IrOpcode::data_addtolist(DataAddtolistFields { list }) => {
                     let new_node = self.add_node(Some((
-                        vec![VarOrList::List(list.clone())],
+                        vec![VarTarget::List(list.clone())],
+                        mem::take(type_stack),
+                    )));
+                    let last_node = *self.exit_node().borrow();
+                    self.add_edge(last_node, new_node, EdgeType::Forward);
+                    *self.exit_node().borrow_mut() = new_node;
+                }
+                IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields { list }) => {
+                    let new_node = self.add_node(Some((
+                        vec![VarTarget::Drop, VarTarget::List(list.clone())],
                         mem::take(type_stack),
                     )));
                     let last_node = *self.exit_node().borrow();
@@ -510,7 +524,7 @@ impl VarGraph {
                                         },
                                     );
                                 let new_node = self.add_node(Some((
-                                    vec![VarOrList::Var(new_var.clone())],
+                                    vec![VarTarget::Var(new_var.clone())],
                                     vec![StackElement::Var(accessed_var)],
                                 )));
                                 let exit_node = *self.exit_node().borrow();
@@ -632,7 +646,7 @@ impl VarGraph {
                             .iter()
                             .rev()
                             .cloned()
-                            .map(VarOrList::Var)
+                            .map(VarTarget::Var)
                             .collect(),
                         mem::take(type_stack),
                     )));
@@ -720,7 +734,7 @@ impl VarGraph {
                     .iter()
                     .rev()
                     .cloned()
-                    .map(VarOrList::Var)
+                    .map(VarTarget::Var)
                     .collect(),
                 mem::take(type_stack),
             )));
@@ -762,7 +776,7 @@ impl VarGraph {
             for (global_var, ssa_var) in &variable_maps.ssa {
                 let this_type_stack = vec![StackElement::Var(ssa_var.clone())];
                 let new_node = self.add_node(Some((
-                    vec![VarOrList::Var(global_var.clone())],
+                    vec![VarTarget::Var(global_var.clone())],
                     this_type_stack,
                 )));
                 let last_node = *self.exit_node().borrow();
@@ -853,7 +867,7 @@ impl VarGraph {
             opcodes.reserve_exact(var_writes.len() * 2);
             for ((var_read, read_local), var_write) in var_writes {
                 let new_node = self.add_node(Some((
-                    vec![VarOrList::Var(var_write.clone())],
+                    vec![VarTarget::Var(var_write.clone())],
                     vec![StackElement::Var(var_read.clone())],
                 )));
                 self.add_edge(***block_exit, new_node, EdgeType::Forward);
@@ -981,6 +995,9 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
                     ReturnType::None => (),
                 }
             }
+            StackElement::Drop => {
+                stack.pop();
+            }
             StackElement::Type(ty) => stack.push(*ty),
             StackElement::Var(var) => stack.push(*var.possible_types()),
             StackElement::List(list) => stack.push(*list.possible_types()),
@@ -992,20 +1009,23 @@ fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> 
 fn visit_node(
     graph: &VarGraph,
     node: NodeIndex,
-    changed_vars: &mut BTreeSet<VarOrList>,
+    changed_vars: &mut BTreeSet<VarTarget>,
     stop_at: NodeIndex,
 ) -> HQResult<()> {
     // crate::log!("node index: {node:?}");
     if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
-        // crate::log!("vars: {vars:?}");
+        crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
-        // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
+        crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),
             "variables stack should have the same length as the corresponding type stack"
         );
         for (var, new_type) in vars.iter().rev().zip(reduced_stack) {
+            if matches!(var, VarTarget::Drop) {
+                continue;
+            }
             if !var.possible_types().contains(new_type) {
                 changed_vars.insert(var.clone());
             }
@@ -1043,7 +1063,7 @@ where
     I: Iterator<Item = &'a VarGraph> + Clone,
 {
     loop {
-        let mut changed_vars: BTreeSet<VarOrList> = BTreeSet::new();
+        let mut changed_vars: BTreeSet<VarTarget> = BTreeSet::new();
         for graph in graphs.clone() {
             // crate::log!(
             //     "{:?}exit node: {:?}",
