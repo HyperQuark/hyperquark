@@ -32,10 +32,8 @@ export default defineConfig({
     pool: "forks",
     poolOptions: {
       forks: {
-        execArgv: [
-          "--experimental-wasm-imported-strings",
-        ]
-      }
-    }
+        execArgv: ["--experimental-wasm-imported-strings"],
+      },
+    },
   },
 });

@@ -56,6 +56,10 @@ impl VariableRegistry {
                         ConstExpr::f64_const((*f).into())
                     }
                     Some(IrType::QuasiInt) => match var.initial_value() {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "integer-ness already confirmed; `as` is saturating."
+                        )]
                         VarVal::Float(f) => {
                             hq_assert!(f % 1.0 == 0.0);
                             ConstExpr::i32_const(*f as i32)

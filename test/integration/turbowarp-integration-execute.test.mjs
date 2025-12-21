@@ -117,7 +117,7 @@ function runProject({
       requests_refresh.value = 0;
       if (framerate_wait > 0) {
         await sleep(
-          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime))
+          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
         );
       } else {
         await waitAnimationFrame();
@@ -149,7 +149,7 @@ describe("Integration tests", () => {
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
           "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
-        ].includes(uri)
+        ].includes(uri),
     );
   for (const uri of files) {
     test.sequential(`${uri} (default flags)`, async () => {
@@ -193,14 +193,14 @@ describe("Integration tests", () => {
       };
 
       const projectBuffer = Buffer.from(
-        fs.readFileSync(path.join(executeDir, uri))
+        fs.readFileSync(path.join(executeDir, uri)),
       );
 
       const [project_json, _] = await unpackProject(projectBuffer);
       console.log(JSON.stringify(project_json, null, 2));
       const project_wasm = sb3_to_wasm(
         JSON.stringify(project_json, null, 2),
-        WasmFlags.from_js(defaultSettings.to_js())
+        WasmFlags.from_js(defaultSettings.to_js()),
       );
 
       // todo: run wasm-opt if specified in flags?

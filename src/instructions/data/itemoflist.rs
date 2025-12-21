@@ -22,6 +22,7 @@ impl fmt::Display for Fields {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "code generation is just long :(")]
 pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,

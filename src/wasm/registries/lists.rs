@@ -210,6 +210,10 @@ impl ListRegistry {
                         .iter()
                         .map(|val| {
                             Ok(match val {
+                                #[expect(
+                                    clippy::cast_possible_truncation,
+                                    reason = "integer-ness already confirmed; `as` is saturating."
+                                )]
                                 VarVal::Float(f) => {
                                     hq_assert!(f % 1.0 == 0.0);
                                     *f as i32
