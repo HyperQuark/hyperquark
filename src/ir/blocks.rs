@@ -109,7 +109,10 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
                 }) if !*local_read.borrow())
                 || matches!(block,
                     IrOpcode::data_teevariable(DataTeevariableFields { local_read_write, .. }) if !*local_read_write.borrow())
-                || matches!(block, IrOpcode::data_itemoflist(_)))
+                || matches!(
+                    block,
+                    IrOpcode::data_itemoflist(_) | IrOpcode::procedures_argument(_)
+                ))
         {
             type_stack.push((IrType::Any, i));
         } else {
@@ -1039,7 +1042,6 @@ fn from_normal_block(
                             };
                             *list.is_used.try_borrow_mut()? = true;
                             *list.list.length_mutable().try_borrow_mut()? = true;
-                            *list.list.items_mutable().try_borrow_mut()? = true;
                             // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_deletealloflist(DataDeletealloflistFields {
                                 list: list.list.clone(),
@@ -1185,7 +1187,6 @@ fn from_normal_block(
                                 hq_bad_proj!("list not found")
                             };
                             *list.is_used.try_borrow_mut()? = true;
-                            *list.list.items_mutable().try_borrow_mut()? = true;
                             // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_replaceitemoflist(
                                 DataReplaceitemoflistFields {

@@ -6,9 +6,10 @@ use crate::wasm::{StepFunc, StepsTable, StringsTable, ThreadsTable, WasmFlags};
 use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
-    BlockType as WasmBlockType, CodeSection, ConstExpr, ElementSection, Elements, ExportKind,
-    ExportSection, Function, FunctionSection, GlobalSection, ImportSection, Instruction, MemArg,
-    MemorySection, MemoryType, Module, StartSection, TableSection, TypeSection, ValType,
+    BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection, DataSection,
+    ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection, GlobalSection,
+    ImportSection, Instruction, MemArg, MemorySection, MemoryType, Module, StartSection,
+    TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
@@ -81,7 +82,7 @@ impl WasmProject {
         let mut tables = TableSection::new();
         let mut exports = ExportSection::new();
         let mut elements = ElementSection::new();
-        //let mut data = DataSection::new();
+        let mut data = DataSection::new();
         let mut globals = GlobalSection::new();
 
         memories.memory(MemoryType {
@@ -93,14 +94,23 @@ impl WasmProject {
         });
 
         let mut start_func = Function::new([]);
+
         Rc::unwrap_or_clone(self.registries().tabled_strings().clone()).finish(
             self.registries().strings(),
             self.registries().tables().register::<StringsTable, _>()?,
             &mut start_func,
         )?;
-        start_func.instruction(&Instruction::End);
 
         Rc::unwrap_or_clone(self.registries().strings().clone()).finish(&mut imports);
+
+        self.registries().lists().clone().finish(
+            &mut data,
+            &mut elements,
+            &mut start_func,
+            self.imported_global_count()?,
+        )?;
+
+        start_func.instruction(&Instruction::End);
 
         // self.registries().tables().register_override::<usize>(
         //     "strings".into(),
@@ -228,9 +238,9 @@ impl WasmProject {
             .section(&exports)
             .section(&start_section)
             .section(&elements)
-            //.section(&data_count)
-            .section(&codes);
-        //.section(&data);
+            .section(&DataCountSection { count: data.len() })
+            .section(&codes)
+            .section(&data);
 
         let wasm_bytes = module.finish();
 

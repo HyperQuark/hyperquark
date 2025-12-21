@@ -24,7 +24,7 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     Fields { list }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let (_, Some(length_global)) = func.registries().lists().register::<usize, _>(list)? else {
+    let (_, Some(length_global)) = func.registries().lists().register(list)? else {
         hq_bug!("tried to deletealloflist of a list with immutable length")
     };
     Ok(wasm![I32Const(0), #LazyGlobalSet(length_global)])

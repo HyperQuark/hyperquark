@@ -11,6 +11,7 @@ impl StringRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
+        // crate::log!("registering string: {}", string);
         self.0.register_default(string)
     }
 

@@ -215,7 +215,6 @@ impl fmt::Display for RcList {
 struct List {
     possible_types: RefCell<Type>,
     length_mutable: RefCell<bool>,
-    items_mutable: RefCell<bool>,
     initial_value: Vec<VarVal>,
     id: String,
 }
@@ -233,7 +232,6 @@ impl RcList {
                     .fold(Type::none(), |t, v| t.or(var_val_type(v)))),
             ),
             length_mutable: RefCell::new(true),
-            items_mutable: RefCell::new(true),
             initial_value,
             id: Uuid::new_v4().to_string(),
         }))
@@ -262,11 +260,6 @@ impl RcList {
     #[must_use]
     pub fn length_mutable(&self) -> &RefCell<bool> {
         &self.0.length_mutable
-    }
-
-    #[must_use]
-    pub fn items_mutable(&self) -> &RefCell<bool> {
-        &self.0.items_mutable
     }
 }
 

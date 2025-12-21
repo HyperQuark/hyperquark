@@ -4,7 +4,7 @@
 
 use super::blocks::NextBlocks;
 use super::context::StepContext;
-use super::{Step, Target as IrTarget, Type as IrType};
+use super::{Step, Target as IrTarget};
 use crate::ir::RcVar;
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockMap, BlockOpcode, Input, Target as Sb3Target};
@@ -95,7 +95,7 @@ fn arg_vars_from_proccode(proccode: &str) -> Rc<RefCell<Vec<RcVar>>> {
             .find_iter(proccode)
             .map(|s| s.as_str().to_string().trim().to_string())
             .filter(|s| s.as_str().starts_with('%'))
-            .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false)))
+            .map(|_| RcVar::new_empty())
             .collect(),
     ))
 }

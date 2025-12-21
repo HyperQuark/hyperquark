@@ -25,7 +25,7 @@ pub fn wasm(
     Fields { list }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     Ok(
-        if let (_, Some(length_global)) = func.registries().lists().register::<usize, _>(list)? {
+        if let (_, Some(length_global)) = func.registries().lists().register(list)? {
             wasm![#LazyGlobalGet(length_global)]
         } else {
             let array_length = list
