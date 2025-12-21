@@ -3,7 +3,7 @@ use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from
 use super::{Step, Target, Thread};
 use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
 use crate::ir::target::IrCostume;
-use crate::ir::{PartialStep, RcVar, Type as IrType};
+use crate::ir::{PartialStep, RcVar};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 use crate::wasm::WasmFlags;
@@ -174,14 +174,16 @@ fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
         let globally_scoped_variables = step.globally_scoped_variables()?;
         let globally_scoped_variables_num = step.globally_scoped_variables_num()?;
 
-        procedure.context().arg_vars().try_borrow_mut()?.extend(
-            (0..globally_scoped_variables_num)
-                .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false))),
-        );
-        procedure.context().return_vars().try_borrow_mut()?.extend(
-            (0..globally_scoped_variables_num)
-                .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false))),
-        );
+        procedure
+            .context()
+            .arg_vars()
+            .try_borrow_mut()?
+            .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
+        procedure
+            .context()
+            .return_vars()
+            .try_borrow_mut()?
+            .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
         if !procedure.context().always_warped() {
             hq_todo!("non-warped procedure for fixup_target_procs")
         }

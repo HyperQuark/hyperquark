@@ -98,7 +98,6 @@ use crate::ir::{
     IrProject, PartialStep, Proc, RcList, RcVar, ReturnType, Step, Type as IrType, insert_casts,
 };
 use crate::prelude::*;
-use crate::sb3::VarVal;
 
 use alloc::collections::btree_map::Entry;
 use core::convert::identity;
@@ -301,7 +300,7 @@ impl VarGraph {
                         type_stack.clear();
                         continue 'opcode_loop;
                     }
-                    let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
+                    let new_variable = RcVar::new_empty();
                     {
                         variable_maps
                             .ssa
@@ -348,7 +347,7 @@ impl VarGraph {
                         *type_stack = vec![StackElement::Var(var.try_borrow()?.clone())];
                         continue 'opcode_loop;
                     }
-                    let new_variable = RcVar::new(IrType::none(), VarVal::Bool(false));
+                    let new_variable = RcVar::new_empty();
                     {
                         variable_maps
                             .ssa
@@ -481,9 +480,7 @@ impl VarGraph {
                 }) => {
                     let new_var_map: BTreeMap<_, _> = step
                         .globally_scoped_variables()?
-                        .map(|global_var| {
-                            (global_var, RcVar::new(IrType::none(), VarVal::Bool(false)))
-                        })
+                        .map(|global_var| (global_var, RcVar::new_empty()))
                         .collect();
                     additional_opcodes.push((
                         i,
@@ -834,7 +831,7 @@ impl VarGraph {
             let new_var = ssa_write_map
                 .get(&global)
                 .cloned()
-                .unwrap_or_else(|| RcVar::new(IrType::none(), VarVal::Bool(false)));
+                .unwrap_or_else(RcVar::new_empty);
             for block in block_exits.keys() {
                 if !block_ssas.contains_key(block) {
                     block_var_writes

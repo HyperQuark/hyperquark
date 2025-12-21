@@ -29,6 +29,16 @@ impl RcVar {
         }))
     }
 
+    /// Create empty variable for use in SSA
+    #[must_use]
+    pub fn new_empty() -> Self {
+        Self(Rc::new(Variable {
+            possible_types: RefCell::new(Type::none()),
+            initial_value: VarVal::Bool(false), // arbitrary value
+            id: Uuid::new_v4().to_string(),
+        }))
+    }
+
     pub fn add_type(&self, ty: Type) {
         let current = *self.0.possible_types.borrow();
         *self.0.possible_types.borrow_mut() = current.or(ty);
