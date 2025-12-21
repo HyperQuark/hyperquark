@@ -42,9 +42,14 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
     Ok(Rc::from([]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
-    // todo: specialise to non-zero for when length of list is known
-    Ok(Singleton(IrType::IntPos.or(IrType::IntZero)))
+pub fn output_type(_inputs: Rc<[IrType]>, Fields { list }: &Fields) -> HQResult<ReturnType> {
+    Ok(Singleton(
+        if !list.initial_value().is_empty() && !*list.length_mutable().borrow() {
+            IrType::IntPos
+        } else {
+            IrType::IntPos.or(IrType::IntZero)
+        },
+    ))
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;

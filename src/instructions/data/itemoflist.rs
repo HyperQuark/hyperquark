@@ -36,9 +36,7 @@ pub fn wasm(
     let elem_type = *fields.list.possible_types();
     let should_box = !IrType::String.contains(elem_type);
     let output_type = WasmProject::ir_type_to_wasm(elem_type.or(string_type))?;
-    // although we specify QuasiInt or String in acceptable_inputs, we get some floats slipping through.
-    // todo: why???
-    Ok(if IrType::Number.contains(t) {
+    Ok(if IrType::QuasiInt.contains(t) {
         let i32_local = func.local(ValType::I32)?;
         wasm![
             LocalTee(i32_local),

@@ -2,6 +2,8 @@ use super::super::prelude::*;
 use crate::ir::RcList;
 use crate::wasm::WasmProject;
 
+use wasm_encoder::BlockType as WasmBlockType;
+
 /// we need these fields to be mutable for optimisations to be feasible
 #[derive(Debug, Clone)]
 pub struct Fields {
@@ -31,33 +33,29 @@ pub fn wasm(
     };
     let local = func.local(WasmProject::ir_type_to_wasm(*list.possible_types())?)?;
     let array_type = func.registries().lists().array_type(list)?;
-    // todo: check that length of list < 200,000
     Ok(if list.possible_types().is_base_type() {
-        wasm![
-            LocalSet(local),
-            #LazyGlobalGet(list_global),
-            #LazyGlobalGet(length_global),
-            LocalGet(local),
-            ArraySet(array_type),
-            #LazyGlobalGet(length_global),
-            I32Const(1),
-            I32Add,
-            #LazyGlobalSet(length_global),
-        ]
+        wasm![@boxed(t)]
     } else {
-        wasm![
-            @boxed(t),
-            LocalSet(local),
-            #LazyGlobalGet(list_global),
-            #LazyGlobalGet(length_global),
-            LocalGet(local),
-            ArraySet(array_type),
-            #LazyGlobalGet(length_global),
-            I32Const(1),
-            I32Add,
-            #LazyGlobalSet(length_global),
-        ]
-    })
+        vec![]
+    }
+    .into_iter()
+    .chain(wasm![
+        LocalSet(local),
+        #LazyGlobalGet(length_global),
+        I32Const(200_000),
+        I32LtS,
+        If(WasmBlockType::Empty),
+        #LazyGlobalGet(list_global),
+        #LazyGlobalGet(length_global),
+        LocalGet(local),
+        ArraySet(array_type),
+        #LazyGlobalGet(length_global),
+        I32Const(1),
+        I32Add,
+        #LazyGlobalSet(length_global),
+        End,
+    ])
+    .collect())
 }
 
 pub fn acceptable_inputs(Fields { list }: &Fields) -> HQResult<Rc<[IrType]>> {
