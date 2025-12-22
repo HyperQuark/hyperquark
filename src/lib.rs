@@ -25,6 +25,10 @@
     clippy::multiple_crate_versions,
     reason = "difficult to fix w.r.t. dependencies"
 )]
+#![allow(
+    clippy::option_if_let_else,
+    reason = "no clear reason why this is better"
+)]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
     clippy::alloc_instead_of_core,

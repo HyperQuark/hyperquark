@@ -48,6 +48,7 @@ crate::instructions_test!(
             let list = crate::ir::RcList::new(
                 IrType::Any,
                 vec![crate::sb3::VarVal::Float(3.0)],
+                &flags()
             );
             *list.length_mutable().borrow_mut() = true;
             list

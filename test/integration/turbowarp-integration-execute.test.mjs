@@ -198,10 +198,16 @@ describe("Integration tests", () => {
 
       const [project_json, _] = await unpackProject(projectBuffer);
       console.log(JSON.stringify(project_json, null, 2));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       const project_wasm = sb3_to_wasm(
         JSON.stringify(project_json, null, 2),
         WasmFlags.from_js(defaultSettings.to_js()),
       );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+      console.log('compiled project')
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
 
       // todo: run wasm-opt if specified in flags?
 

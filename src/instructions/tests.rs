@@ -30,7 +30,8 @@ macro_rules! instructions_test {
             use $crate::prelude::*;
             use $crate::ir::{Type as IrType, ReturnType, Step, Target as IrTarget, IrProject};
             use wasm_encoder::ValType;
-            use $crate::wasm::{flags::unit_test_wasm_features, StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
+            use $crate::wasm::{StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
+            use $crate::wasm::flags::{Switch, unit_test_wasm_features};
 
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]
             #[allow(unused_macros, reason = "it is not unused")]

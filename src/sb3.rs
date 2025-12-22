@@ -424,6 +424,7 @@ pub struct Target {
 pub enum ListMonitorValue {
     List(Vec<VarVal>),
     String(Box<str>),
+    Number(f64),
 }
 
 /// A monitor

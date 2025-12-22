@@ -5,6 +5,7 @@ use crate::{
     ir::types::var_val_type,
     prelude::*,
     sb3::{Target as Sb3Target, VarVal},
+    wasm::{WasmFlags, flags::Switch},
 };
 use core::cell::Ref;
 use core::hash::{Hash, Hasher};
@@ -151,7 +152,7 @@ pub fn variables_from_target(target: &Sb3Target) -> TargetVars {
         .collect()
 }
 
-pub fn lists_from_target(target: &Sb3Target) -> TargetLists {
+pub fn lists_from_target(target: &Sb3Target, flags: &WasmFlags) -> TargetLists {
     target
         .lists
         .iter()
@@ -159,7 +160,7 @@ pub fn lists_from_target(target: &Sb3Target) -> TargetLists {
             (
                 id.clone(),
                 Rc::new(TargetList {
-                    list: RcList::new(Type::none(), list_info.1.clone()),
+                    list: RcList::new(Type::none(), list_info.1.clone(), flags),
                     is_used: RefCell::new(false),
                 }),
             )
@@ -224,15 +225,27 @@ pub struct RcList(Rc<List>);
 
 impl RcList {
     #[must_use]
-    pub fn new(ty: Type, initial_value: Vec<VarVal>) -> Self {
+    pub fn new(ty: Type, initial_value: Vec<VarVal>, flags: &WasmFlags) -> Self {
+        let init = if flags.integers == Switch::On {
+            initial_value
+        } else {
+            initial_value
+                .into_iter()
+                .map(|val| {
+                    if let VarVal::Int(i) = val {
+                        VarVal::String(i.to_string().into_boxed_str())
+                    } else {
+                        val
+                    }
+                })
+                .collect()
+        };
         Self(Rc::new(List {
             possible_types: RefCell::new(
-                ty.or(initial_value
-                    .iter()
-                    .fold(Type::none(), |t, v| t.or(var_val_type(v)))),
+                ty.or(init.iter().fold(Type::none(), |t, v| t.or(var_val_type(v)))),
             ),
             length_mutable: RefCell::new(true),
-            initial_value,
+            initial_value: init,
             id: Uuid::new_v4().to_string(),
         }))
     }

@@ -204,8 +204,13 @@ pub fn wrap_instruction(
     inputs: Rc<[IrType]>,
     opcode: &IrOpcode,
 ) -> HQResult<Vec<InternalInstruction>> {
-    if matches!(opcode, &IrOpcode::procedures_call_warp(_)) {
-        // we don't want to unbox inputs to procedures, because... reasons
+    if matches!(
+        opcode,
+        &IrOpcode::procedures_call_warp(_) | &IrOpcode::hq_dup | &IrOpcode::hq_swap
+    ) {
+        // we don't want to unbox inputs to procedures, because... reasons,
+        // and we don't want to unbox inputs to `dup` or `swap` either because
+        // these are lower level instructions and don't really care about types
         // TODO: can we carry out monomorphisation on procedures?
         return opcode.wasm(func, inputs);
     }

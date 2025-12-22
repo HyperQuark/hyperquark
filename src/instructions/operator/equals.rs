@@ -2,7 +2,6 @@ use wasm_encoder::BlockType;
 
 use super::super::prelude::*;
 
-#[expect(clippy::too_many_lines, reason = "long monomorphisation routine")]
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];

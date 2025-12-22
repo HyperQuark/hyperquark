@@ -24,88 +24,87 @@ impl fmt::Display for Fields {
 
 pub fn wasm(
     func: &StepFunc,
-    _inputs: Rc<[IrType]>,
+    inputs: Rc<[IrType]>,
     fields: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let (list_global, maybe_length_global) = func.registries().lists().register(&fields.list)?;
+    hq_assert!(inputs.len() == 2);
+    let t1 = inputs[0];
+    let t2 = inputs[1];
+    let (list_global, Some(length_global)) = func.registries().lists().register(&fields.list)?
+    else {
+        hq_bug!("tried to insertatlist of a list with immutable length")
+    };
     let array_type = func.registries().lists().array_type(&fields.list)?;
-    let empty_string = func.registries().strings().register_default("".into())?;
-    let string_type = IrType::String;
-    let elem_type = *fields.list.possible_types();
-    let should_box = !IrType::String.contains(elem_type);
-    let output_type = WasmProject::ir_type_to_wasm(elem_type.or(string_type))?;
-    let i32_local = func.local(ValType::I32)?;
-
+    let index_local = func.local(WasmProject::ir_type_to_wasm(t1)?)?;
+    let val_local = func.local(WasmProject::ir_type_to_wasm(t2)?)?;
     Ok(wasm![
-        LocalTee(i32_local),
+        LocalSet(val_local),
+        LocalSet(index_local),
+        #LazyGlobalGet(length_global),
+        I32Const(200_000),
+        I32LtS,
+        If(WasmBlockType::Empty),
+        LocalGet(index_local),
         I32Const(0),
         I32LeS,
-        If(WasmBlockType::Result(output_type)),
-        GlobalGet(empty_string),
-    ]
-    .into_iter()
-    .chain(if should_box {
-        wasm![
-                @boxed(string_type) ]
-    } else {
-        vec![]
-    })
-    .chain(wasm![Else, LocalGet(i32_local),])
-    .chain(if let Some(length_global) = maybe_length_global {
-        wasm![#LazyGlobalGet(length_global)]
-    } else {
-        let array_length = fields
-            .list
-            .initial_value()
-            .len()
-            .try_into()
-            .map_err(|_| make_hq_bug!("list initial value length out of bounds"))?;
-        wasm![I32Const(array_length)]
-    })
-    .chain(wasm![
+        BrIf(0),
+        LocalGet(index_local),
+        #LazyGlobalGet(length_global),
         I32GtS,
-        If(WasmBlockType::Result(output_type)),
-        GlobalGet(empty_string),
-    ])
-    .chain(if should_box {
-        wasm![
-                @boxed(string_type) ]
-    } else {
-        vec![]
-    })
-    .chain(wasm![
-        Else,
+        BrIf(0),
         #LazyGlobalGet(list_global),
-        LocalGet(i32_local),
+        LocalGet(index_local),
+        #LazyGlobalGet(list_global),
+        LocalGet(index_local),
         I32Const(1),
         I32Sub,
-        ArrayGet(array_type),
-    ])
-    .chain(if should_box {
-        wasm![
-                @boxed(elem_type) ]
-    } else {
+        #LazyGlobalGet(length_global),
+        LocalGet(index_local),
+        I32Sub,
+        I32Const(1),
+        I32Add,
+        ArrayCopy {
+            array_type_index_dst: array_type,
+            array_type_index_src: array_type,
+        },
+        #LazyGlobalGet(list_global),
+        LocalGet(index_local),
+        I32Const(1),
+        I32Sub,
+        LocalGet(val_local),
+    ]
+    .into_iter()
+    .chain(if fields.list.possible_types().is_base_type() {
         vec![]
+    } else {
+        wasm![@boxed(t2)]
     })
-    .chain(wasm![End, End,])
+    .chain(wasm![
+        ArraySet(array_type),
+        #LazyGlobalGet(length_global),
+        I32Const(1),
+        I32Add,
+        #LazyGlobalSet(length_global),
+        End,
+    ])
     .collect())
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::from([IrType::QuasiInt]))
+pub fn acceptable_inputs(Fields { list }: &Fields) -> HQResult<Rc<[IrType]>> {
+    // we take inputs in the opposite order to scratch so that it plays nicely with replaceitemoflist
+    Ok(Rc::from([IrType::QuasiInt, *list.possible_types()]))
 }
 
-pub fn output_type(_inputs: Rc<[IrType]>, Fields { list }: &Fields) -> HQResult<ReturnType> {
-    // output type includes string as we return empty string for out-of-bounds
-    Ok(Singleton(list.possible_types().or(IrType::String)))
+pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
+    Ok(ReturnType::None)
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test!(
     int_mut;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 IrType::QuasiInt,
@@ -120,8 +119,8 @@ crate::instructions_test!(
 );
 crate::instructions_test!(
     float_mut;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 IrType::Float,
@@ -135,8 +134,8 @@ crate::instructions_test!(
 );
 crate::instructions_test!(
     string_mut;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 IrType::String,
@@ -150,8 +149,8 @@ crate::instructions_test!(
 );
 crate::instructions_test!(
     any_mut;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 IrType::Any,
@@ -166,8 +165,8 @@ crate::instructions_test!(
 
 crate::instructions_test!(
     int_static;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: crate::ir::RcList::new(
             IrType::QuasiInt,
             vec![],
@@ -179,8 +178,8 @@ crate::instructions_test!(
 
 crate::instructions_test!(
     float_static;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: crate::ir::RcList::new(
             IrType::Float,
             vec![],
@@ -191,8 +190,8 @@ crate::instructions_test!(
 
 crate::instructions_test!(
     string_static;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: crate::ir::RcList::new(
             IrType::String,
             vec![],
@@ -203,8 +202,8 @@ crate::instructions_test!(
 
 crate::instructions_test!(
     any_static;
-    data_itemoflist;
-    t @ super::Fields {
+    data_insertatlist;
+    t1, t2 @ super::Fields {
         list: crate::ir::RcList::new(
             IrType::Any,
             vec![],

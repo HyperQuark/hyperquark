@@ -89,9 +89,9 @@
 )]
 
 use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataItemoflistFields,
-    DataReplaceitemoflistFields, DataSetvariabletoFields, DataTeevariableFields,
-    DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
+    ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataInsertatlistFields,
+    DataItemoflistFields, DataReplaceitemoflistFields, DataSetvariabletoFields,
+    DataTeevariableFields, DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{
@@ -297,7 +297,17 @@ impl VarGraph {
                     // crate::log!("found a variable write operation, type stack: {type_stack:?}");
                     let already_local = *locality.try_borrow()?;
                     if already_local {
-                        type_stack.clear();
+                        if var.try_borrow()?.possible_types().is_none() {
+                            let new_node = self.add_node(Some((
+                                vec![VarTarget::Var(var.try_borrow()?.clone())],
+                                mem::take(type_stack),
+                            )));
+                            let last_node = *self.exit_node().borrow();
+                            self.add_edge(last_node, new_node, EdgeType::Forward);
+                            *self.exit_node().borrow_mut() = new_node;
+                        } else {
+                            type_stack.push(StackElement::Drop);
+                        }
                         continue 'opcode_loop;
                     }
                     let new_variable = RcVar::new_empty();
@@ -403,6 +413,7 @@ impl VarGraph {
                     type_stack.push(StackElement::List(list.clone()));
                 }
                 IrOpcode::data_addtolist(DataAddtolistFields { list }) => {
+                    // crate::log!("type stack at data_addtolist: {type_stack:?}");
                     let new_node = self.add_node(Some((
                         vec![VarTarget::List(list.clone())],
                         mem::take(type_stack),
@@ -411,9 +422,11 @@ impl VarGraph {
                     self.add_edge(last_node, new_node, EdgeType::Forward);
                     *self.exit_node().borrow_mut() = new_node;
                 }
-                IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields { list }) => {
+                IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields { list })
+                | IrOpcode::data_insertatlist(DataInsertatlistFields { list }) => {
+                    // crate::log!("type stack at replaceitemof/insertatlist: {type_stack:?}");
                     let new_node = self.add_node(Some((
-                        vec![VarTarget::Drop, VarTarget::List(list.clone())],
+                        vec![VarTarget::List(list.clone()), VarTarget::Drop],
                         mem::take(type_stack),
                     )));
                     let last_node = *self.exit_node().borrow();
@@ -1062,6 +1075,7 @@ where
     loop {
         let mut changed_vars: BTreeSet<VarTarget> = BTreeSet::new();
         for graph in graphs.clone() {
+            // use petgraph::dot::Dot;
             // crate::log!(
             //     "{:?}exit node: {:?}",
             //     Dot::with_config(
