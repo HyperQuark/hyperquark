@@ -203,11 +203,10 @@ describe("Integration tests", () => {
         JSON.stringify(project_json, null, 2),
         WasmFlags.from_js(defaultSettings.to_js()),
       );
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-      console.log('compiled project')
       await new Promise((resolve) => setTimeout(resolve, 10));
 
+      console.log("compiled project");
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // todo: run wasm-opt if specified in flags?
 

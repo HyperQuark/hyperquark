@@ -67,7 +67,7 @@ let wasmProject;
 const load_asset = async (md5ext) => {
   try {
     if (props.zip) {
-      console.log(props.zip)
+      console.log(props.zip);
       const file = props.zip.file(md5ext) ?? props.zip.files[md5ext];
       const data = await file.async("text"); //.then(console.log);
       //console.log(file, data);
