@@ -44,7 +44,7 @@ pub fn wasm(
     let block_type = func
         .registries()
         .types()
-        .register_default((vec![ValType::I32], vec![]))?;
+        .function(vec![ValType::I32], vec![])?;
     Ok(wasm![
         Block(BlockType::FunctionType(block_type)),
         Block(BlockType::FunctionType(block_type)),

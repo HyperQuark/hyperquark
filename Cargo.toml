@@ -8,7 +8,7 @@ publish = false
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
 enum-field-getter = { path = "enum-field-getter" }
-wasm-encoder = "0.226.0"
+wasm-encoder = "0.243.0"
 indexmap = { version = "2.11.4", default-features = false }
 hashers = "1.0.1"
 uuid = { version = "1.18.1", default-features = false, features = ["v4", "js"] }
@@ -22,8 +22,8 @@ wasm-gen = { path = "wasm-gen" }
 petgraph = { version = "0.8.1", default-features = false, features = ["stable_graph"] }
 
 [dev-dependencies]
-wasmparser = "0.226.0"
-wasmprinter = "0.226.0"
+wasmparser = "0.243.0"
+wasmprinter = "0.243.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]

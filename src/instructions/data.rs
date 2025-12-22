@@ -1,3 +1,11 @@
+pub mod addtolist;
+pub mod deletealloflist;
+pub mod deleteoflist;
+pub mod insertatlist;
+pub mod itemoflist;
+pub mod lengthoflist;
+pub mod listcontents;
+pub mod replaceitemoflist;
 pub mod setvariableto;
 pub mod teevariable;
 pub mod variable;

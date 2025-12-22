@@ -78,7 +78,7 @@ pub fn wasm(
                 heap_type: HeapType::Concrete(
                     func.registries()
                         .types()
-                        .register_default((vec![ValType::I32], vec![]))?,
+                        .function(vec![ValType::I32], vec![])?,
                 ),
             }),
             ConstExpr::ref_func(0), // this is a placeholder.

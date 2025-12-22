@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::sb3::VarVal;
 use bitmask_enum::bitmask;
 
 /// a bitmask of possible IR types
@@ -198,4 +199,16 @@ pub fn base_types(inputs: &[Type]) -> HQResult<Box<[Box<[Type]>]>> {
             Ok(tys)
         })
         .collect()
+}
+
+#[must_use]
+pub const fn var_val_type(var_val: &VarVal) -> Type {
+    // todo: specialise these for constant values
+    // todo: when can we say that the varval is an int? maybe only at a later point in the compilation process?
+    match var_val {
+        VarVal::Int(_) => Type::Int,
+        VarVal::Bool(_) => Type::Boolean,
+        VarVal::Float(_) => Type::Float,
+        VarVal::String(_) => Type::String,
+    }
 }

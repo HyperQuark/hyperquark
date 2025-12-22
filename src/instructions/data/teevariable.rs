@@ -131,7 +131,7 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::QuasiInt,
-                    crate::sb3::VarVal::Bool(true),
+                    crate::sb3::VarVal::Float(1.0),
 
                 ))
             ,

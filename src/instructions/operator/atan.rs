@@ -10,9 +10,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     Ok(wasm![
         @nanreduce(t1),
         Call(imported_func),
-        F64Const(core::f64::consts::PI),
+        F64Const(core::f64::consts::PI.into()),
         F64Div,
-        F64Const(180.0),
+        F64Const(180.0.into()),
         F64Mul,
     ])
 }

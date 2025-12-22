@@ -198,7 +198,7 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                                     quote! { Immediate(wasm_encoder::Instruction::If(wasm_encoder::BlockType::Result(wasm_encoder::ValType::F64))) },
                                     quote! { Immediate(wasm_encoder::Instruction::LocalGet(#local_ident)) },
                                     quote! { Immediate(wasm_encoder::Instruction::Else) },
-                                    quote! { Immediate(wasm_encoder::Instruction::F64Const(0.0)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::F64Const(0.0.into())) },
                                     quote! { Immediate(wasm_encoder::Instruction::End) }
                                 ]
                                 .into_iter(),

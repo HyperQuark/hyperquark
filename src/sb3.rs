@@ -357,6 +357,7 @@ pub struct Sound {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum VarVal {
+    Int(i32),
     Float(f64),
     Bool(bool),
     String(Box<str>),
@@ -423,6 +424,7 @@ pub struct Target {
 pub enum ListMonitorValue {
     List(Vec<VarVal>),
     String(Box<str>),
+    Number(f64),
 }
 
 /// A monitor

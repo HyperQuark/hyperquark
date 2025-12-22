@@ -13,9 +13,10 @@ import path from "node:path";
 
 import { describe, test } from "vitest";
 
-import { imports } from "../../js/imports.ts";
+import { imports as baseImports, imports } from "../../js/imports.ts";
 import { unpackProject } from "../../playground/lib/project-loader.js";
 import { sb3_to_wasm, WasmFlags } from "../../js/compiler/hyperquark.js";
+import { WasmStringType } from "../../js/no-compiler/hyperquark";
 import { defaultSettings } from "../../playground/lib/settings.js";
 
 /**
@@ -35,10 +36,24 @@ import { defaultSettings } from "../../playground/lib/settings.js";
 
 // this is adapted from playground/lib/project-runner.js to work in node
 // todo: adapt so we can just import it?
-function runProject({ wasm_bytes, settings, reportVmResult, timeoutFailure }) {
+function runProject({
+  wasm_bytes,
+  settings,
+  reportVmResult,
+  timeoutFailure,
+  strings,
+}) {
   const framerate_wait = Math.round(1000 / 30);
 
-  const builtins = [...(settings["js-string-builtins"] ? ["js-string"] : [])];
+  const builtins = [
+    ...(WasmStringType[settings.string_type] === "JsStringBuiltins"
+      ? ["js-string"]
+      : []),
+  ];
+
+  const imports = Object.assign(baseImports, {
+    "": Object.fromEntries(strings.map((string) => [string, string])),
+  });
 
   try {
     if (
@@ -102,7 +117,7 @@ function runProject({ wasm_bytes, settings, reportVmResult, timeoutFailure }) {
       requests_refresh.value = 0;
       if (framerate_wait > 0) {
         await sleep(
-          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime))
+          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
         );
       } else {
         await waitAnimationFrame();
@@ -134,7 +149,7 @@ describe("Integration tests", () => {
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
           "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
-        ].includes(uri)
+        ].includes(uri),
     );
   for (const uri of files) {
     test.sequential(`${uri} (default flags)`, async () => {
@@ -178,15 +193,20 @@ describe("Integration tests", () => {
       };
 
       const projectBuffer = Buffer.from(
-        fs.readFileSync(path.join(executeDir, uri))
+        fs.readFileSync(path.join(executeDir, uri)),
       );
 
       const [project_json, _] = await unpackProject(projectBuffer);
       console.log(JSON.stringify(project_json, null, 2));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       const project_wasm = sb3_to_wasm(
         JSON.stringify(project_json, null, 2),
-        WasmFlags.from_js(defaultSettings.to_js())
+        WasmFlags.from_js(defaultSettings.to_js()),
       );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      console.log("compiled project");
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // todo: run wasm-opt if specified in flags?
 
@@ -194,6 +214,7 @@ describe("Integration tests", () => {
       await runProject({
         wasm_bytes: project_wasm.wasm_bytes,
         target_names: project_wasm.target_names,
+        strings: project_wasm.strings,
         settings: defaultSettings,
         reportVmResult,
         timeoutFailure: () => {

@@ -60,7 +60,7 @@ impl Instruction {
                     proc.context().always_warped(),
                     "tried to use LazyWarpedProcCall on a non-warped step"
                 );
-                let PartialStep::Finished(ref step) = *proc.first_step()? else {
+                let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {
                     hq_bug!("tried to use uncompiled procedure step")
                 };
                 let step_index: u32 = steps
@@ -246,7 +246,7 @@ impl StepFunc {
         let type_index = self
             .registries()
             .types()
-            .register_default((self.params.into(), self.output.into()))?;
+            .function(self.params.into(), self.output.into())?;
         funcs.function(type_index);
         code.function(&func);
         Ok(())

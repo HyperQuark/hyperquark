@@ -4,7 +4,7 @@
 
 use super::blocks::NextBlocks;
 use super::context::StepContext;
-use super::{Step, Target as IrTarget, Type as IrType};
+use super::{Step, Target as IrTarget};
 use crate::ir::RcVar;
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockMap, BlockOpcode, Input, Target as Sb3Target};
@@ -27,7 +27,7 @@ pub struct ProcContext {
     arg_ids: Box<[Box<str>]>,
     arg_names: Box<[Box<str>]>,
     target: Rc<IrTarget>,
-    /// whether a procedure is 'run without screen refresh'
+    /// whether a procedure is 'run without screen refresh'.
     always_warped: bool,
 }
 
@@ -60,7 +60,8 @@ impl ProcContext {
 
 #[derive(Clone, Debug)]
 pub struct Proc {
-    first_step: RefCell<PartialStep>,
+    warped_first_step: RefCell<PartialStep>,
+    nonwarped_first_step: RefCell<PartialStep>,
     first_step_id: Option<Box<str>>,
     proccode: Box<str>,
     context: ProcContext,
@@ -68,8 +69,12 @@ pub struct Proc {
 }
 
 impl Proc {
-    pub fn first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
-        Ok(self.first_step.try_borrow()?)
+    pub fn warped_first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
+        Ok(self.warped_first_step.try_borrow()?)
+    }
+
+    pub fn nonwarped_first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
+        Ok(self.nonwarped_first_step.try_borrow()?)
     }
 
     pub const fn context(&self) -> &ProcContext {
@@ -90,7 +95,7 @@ fn arg_vars_from_proccode(proccode: &str) -> Rc<RefCell<Vec<RcVar>>> {
             .find_iter(proccode)
             .map(|s| s.as_str().to_string().trim().to_string())
             .filter(|s| s.as_str().starts_with('%'))
-            .map(|_| RcVar::new(IrType::none(), crate::sb3::VarVal::Bool(false)))
+            .map(|_| RcVar::new_empty())
             .collect(),
     ))
 }
@@ -241,7 +246,8 @@ impl Proc {
         };
         Ok(Rc::new(Self {
             proccode: proccode.as_str().into(),
-            first_step: RefCell::new(PartialStep::None),
+            warped_first_step: RefCell::new(PartialStep::None),
+            nonwarped_first_step: RefCell::new(PartialStep::None),
             first_step_id,
             context,
             debug,
@@ -253,17 +259,13 @@ impl Proc {
         blocks: &BTreeMap<Box<str>, Block>,
         flags: &WasmFlags,
     ) -> HQResult<()> {
-        hq_assert!(
-            self.context().always_warped(),
-            "tried to call compile_warped on a non-warped proc"
-        );
         {
-            if *self.first_step()? != PartialStep::None {
+            if *self.warped_first_step()? != PartialStep::None {
                 return Ok(());
             }
         }
         {
-            *self.first_step.try_borrow_mut()? = PartialStep::StartedCompilation;
+            *self.warped_first_step.try_borrow_mut()? = PartialStep::StartedCompilation;
         }
         let step_context = StepContext {
             warp: true,
@@ -295,7 +297,7 @@ impl Proc {
                 )?
             }
         };
-        *self.first_step.try_borrow_mut()? = PartialStep::Finished(step);
+        *self.warped_first_step.try_borrow_mut()? = PartialStep::Finished(step);
         Ok(())
     }
 }
@@ -323,8 +325,13 @@ impl fmt::Display for Proc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let proccode = self.proccode();
         let always_warped = self.context().always_warped();
-        let partial_step = self.first_step().map_err(|_| fmt::Error)?.clone();
-        let step = match partial_step.borrow() {
+        let partial_warped_step = self.warped_first_step().map_err(|_| fmt::Error)?.clone();
+        let warped_step = match partial_warped_step.borrow() {
+            PartialStep::Finished(step) => step.id(),
+            PartialStep::StartedCompilation | PartialStep::None => "none",
+        };
+        let partial_nonwarped_step = self.nonwarped_first_step().map_err(|_| fmt::Error)?.clone();
+        let nonwarped_step = match partial_nonwarped_step.borrow() {
             PartialStep::Finished(step) => step.id(),
             PartialStep::StartedCompilation | PartialStep::None => "none",
         };
@@ -349,7 +356,8 @@ impl fmt::Display for Proc {
             r#"{{
             "proccode": "{proccode}",
             "always_warped": {always_warped},
-            "first_step": "{step}",
+            "warped_first_step": "{warped_step}",
+            "nonwarped_first_step": "{nonwarped_step}",
             "arg_vars": {arg_vars},
             "return_vars": {ret_vars}
         }}"#

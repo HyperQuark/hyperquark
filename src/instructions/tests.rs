@@ -17,7 +17,7 @@
 #[macro_export]
 macro_rules! instructions_test {
     {$module:ident; $opcode:ident; $($type_arg:ident $(,)?)* $(@$fields:expr)? $(;)?} => {
-        $crate::instructions_test!{$module; $opcode; $($type_arg,)* $(@$fields)? ; WasmFlags::new(all_wasm_features())}
+        $crate::instructions_test!{$module; $opcode; $($type_arg,)* $(@$fields)? ; WasmFlags::new(unit_test_wasm_features())}
     };
     {$module:ident; $opcode:ident; $($type_arg:ident $(,)?)* $(@ $fields:expr)? ; $flags:expr} => {
         #[cfg(test)]
@@ -30,7 +30,10 @@ macro_rules! instructions_test {
             use $crate::prelude::*;
             use $crate::ir::{Type as IrType, ReturnType, Step, Target as IrTarget, IrProject};
             use wasm_encoder::ValType;
-            use $crate::wasm::{flags::all_wasm_features, StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
+            use $crate::wasm::{StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
+            #[expect(clippy::allow_attributes, reason = "might not always trigger")]
+            #[allow(unused, reason = "it might not be unused")]
+            use $crate::wasm::flags::{Switch, unit_test_wasm_features};
 
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]
             #[allow(unused_macros, reason = "it is not unused")]
@@ -87,7 +90,7 @@ macro_rules! instructions_test {
                         println!("skipping failed output_type");
                         continue;
                     };
-                    let ir = Rc::new(IrProject::new(BTreeMap::default()));
+                    let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default()));
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -115,6 +118,7 @@ macro_rules! instructions_test {
                             Rc::new(IrTarget::new(
                                 false,
                                 BTreeMap::default(),
+                                BTreeMap::default(),
                                 Weak::new(),
                                 RefCell::new(BTreeMap::default()),
                                 0,
@@ -124,6 +128,8 @@ macro_rules! instructions_test {
                         .unwrap(), step_func);
 
                     let wasm_bytes = proj.finish().unwrap().wasm_bytes;
+
+                    println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
 
                     wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($type_arg,)*), err.message()))?;
                 }
@@ -138,7 +144,7 @@ macro_rules! instructions_test {
                         continue;
                     };
                     println!("{output_type:?}");
-                    let ir = Rc::new(IrProject::new(BTreeMap::default()));
+                    let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default()));
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -172,6 +178,7 @@ macro_rules! instructions_test {
                             true,
                             Rc::new(IrTarget::new(
                                 false,
+                                BTreeMap::default(),
                                 BTreeMap::default(),
                                 Weak::new(),
                                 RefCell::new(BTreeMap::default()),

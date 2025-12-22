@@ -14,7 +14,7 @@ pub type ExternalFunctionRegistry =
 impl ExternalFunctionRegistry {
     pub fn finish(self, imports: &mut ImportSection, type_registry: &TypeRegistry) -> HQResult<()> {
         for ((module, name), (params, results)) in self.registry().take() {
-            let type_index = type_registry.register_default((params, results))?;
+            let type_index = type_registry.function(params, results)?;
             imports.import(module, &name, EntityType::Function(type_index));
         }
         Ok(())
@@ -52,7 +52,7 @@ impl StaticFunctionRegistry {
             },
         ) in self.registry().take()
         {
-            let type_index = type_registry.register_default((params.into(), returns.into()))?;
+            let type_index = type_registry.function(params.into(), returns.into())?;
             functions.function(type_index);
             let mut func = Function::new_with_locals_types(locals.iter().copied());
             for instruction in instructions {
@@ -67,7 +67,7 @@ impl StaticFunctionRegistry {
 pub mod static_functions {
     use super::StaticFunction;
     use crate::prelude::*;
-    use crate::wasm::mem_layout;
+    use crate::wasm::{f32_to_ieeef32, mem_layout};
     use mem_layout::{sprite as sprite_layout, stage as stage_layout};
     use wasm_encoder::{BlockType as WasmBlockType, MemArg, ValType};
     use wasm_gen::wasm_const;
@@ -108,7 +108,7 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(2.55),
+                F32Const(f32_to_ieeef32(2.55)),
                 F32Mul,
                 I32TruncF32S,
                 LocalSet(hsv2rgb_locals::HUE),
@@ -118,7 +118,7 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(2.55),
+                F32Const(f32_to_ieeef32(2.55)),
                 F32Mul,
                 I32TruncF32S,
                 LocalSet(hsv2rgb_locals::SAT), // saturation ∈ [0, 256)
@@ -128,12 +128,12 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(2.55),
+                F32Const(f32_to_ieeef32(2.55)),
                 F32Mul,
                 I32TruncF32S,
                 LocalSet(hsv2rgb_locals::VAL), // value ∈ [0, 256)
                 LocalGet(hsv2rgb_locals::MEM_POS),
-                F32Const(100.0),
+                F32Const(f32_to_ieeef32(100.0)),
                 LocalGet(hsv2rgb_locals::MEM_POS),
                 F32Load(MemArg {
                     offset: sprite_layout::PEN_TRANSPARENCY as u64,
@@ -141,7 +141,7 @@ pub mod static_functions {
                     memory_index: 0,
                 }), // transparency ∈ [0, 100]
                 F32Sub,
-                F32Const(100.0),
+                F32Const(f32_to_ieeef32(100.0)),
                 F32Div, // alpha ∈ [0, 1]
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR_A as u64,
@@ -154,11 +154,11 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(0.01),
+                F32Const(f32_to_ieeef32(0.01)),
                 F32Lt,
                 If(WasmBlockType::Empty),
                 LocalGet(hsv2rgb_locals::MEM_POS),
-                F32Const(0.0),
+                F32Const(f32_to_ieeef32(0.0)),
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR_A as u64,
                     align: 2,
@@ -171,7 +171,7 @@ pub mod static_functions {
                 If(WasmBlockType::Empty),
                 LocalGet(hsv2rgb_locals::VAL),
                 F32ConvertI32S,
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Div,
                 LocalSet(hsv2rgb_locals::VAL_F),
                 LocalGet(hsv2rgb_locals::MEM_POS),
@@ -309,7 +309,7 @@ pub mod static_functions {
                 LocalGet(hsv2rgb_locals::MEM_POS),
                 LocalGet(hsv2rgb_locals::R),
                 F32ConvertI32S,
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Div,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR_R as u64,
@@ -319,7 +319,7 @@ pub mod static_functions {
                 LocalGet(hsv2rgb_locals::MEM_POS),
                 LocalGet(hsv2rgb_locals::G),
                 F32ConvertI32S,
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Div,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR_G as u64,
@@ -329,7 +329,7 @@ pub mod static_functions {
                 LocalGet(hsv2rgb_locals::MEM_POS),
                 LocalGet(hsv2rgb_locals::B),
                 F32ConvertI32S,
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Div,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR_B as u64,
@@ -374,7 +374,7 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Mul,
                 I32TruncF32S,
                 LocalSet(rgb2hsv_locals::R),
@@ -384,7 +384,7 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Mul,
                 I32TruncF32S,
                 LocalSet(rgb2hsv_locals::G),
@@ -394,7 +394,7 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }),
-                F32Const(255.0),
+                F32Const(f32_to_ieeef32(255.0)),
                 F32Mul,
                 I32TruncF32S,
                 LocalSet(rgb2hsv_locals::B),
@@ -405,10 +405,10 @@ pub mod static_functions {
                     align: 2,
                     memory_index: 0,
                 }), // transparency ∈ [0, 100]
-                F32Const(100.0),
+                F32Const(f32_to_ieeef32(100.0)),
                 F32Mul, // alpha ∈ [0, 1]
                 LocalTee(rgb2hsv_locals::A),
-                F32Const(100.0),
+                F32Const(f32_to_ieeef32(100.0)),
                 F32Sub,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_TRANSPARENCY as u64,
@@ -446,7 +446,7 @@ pub mod static_functions {
                 LocalGet(rgb2hsv_locals::MEM_POS),
                 LocalGet(rgb2hsv_locals::RGB_MAX),
                 F32ConvertI32S,
-                F32Const(2.55),
+                F32Const(f32_to_ieeef32(2.55)),
                 F32Div,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_BRIGHTNESS as u64,
@@ -457,14 +457,14 @@ pub mod static_functions {
                 I32Eqz,
                 If(WasmBlockType::Empty),
                 LocalGet(rgb2hsv_locals::MEM_POS),
-                F32Const(0.0),
+                F32Const(f32_to_ieeef32(0.0)),
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR as u64,
                     align: 2,
                     memory_index: 0,
                 }),
                 LocalGet(rgb2hsv_locals::MEM_POS),
-                F32Const(0.0),
+                F32Const(f32_to_ieeef32(0.0)),
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_SATURATION as u64,
                     align: 2,
@@ -483,14 +483,14 @@ pub mod static_functions {
                 I32Eqz,
                 If(WasmBlockType::Empty),
                 LocalGet(rgb2hsv_locals::MEM_POS),
-                F32Const(0.0),
+                F32Const(f32_to_ieeef32(0.0)),
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR as u64,
                     align: 2,
                     memory_index: 0,
                 }),
                 LocalGet(rgb2hsv_locals::MEM_POS),
-                F32Const(0.0),
+                F32Const(f32_to_ieeef32(0.0)),
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_SATURATION as u64,
                     align: 2,
@@ -501,7 +501,7 @@ pub mod static_functions {
                 LocalGet(rgb2hsv_locals::MEM_POS),
                 LocalGet(rgb2hsv_locals::SAT),
                 F32ConvertI32S,
-                F32Const(2.55),
+                F32Const(f32_to_ieeef32(2.55)),
                 F32Div,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_SATURATION as u64,
@@ -553,7 +553,7 @@ pub mod static_functions {
                 End,
                 End,
                 F32ConvertI32S,
-                F32Const(2.55),
+                F32Const(f32_to_ieeef32(2.55)),
                 F32Div,
                 F32Store(MemArg {
                     offset: sprite_layout::PEN_COLOR as u64,

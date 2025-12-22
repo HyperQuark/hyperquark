@@ -25,6 +25,10 @@
     clippy::multiple_crate_versions,
     reason = "difficult to fix w.r.t. dependencies"
 )]
+#![allow(
+    clippy::option_if_let_else,
+    reason = "no clear reason why this is better"
+)]
 #![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(
     clippy::alloc_instead_of_core,
@@ -70,7 +74,7 @@ pub mod rc;
 pub mod prelude {
     pub use crate::registry::{
         NamedRegistrar, NamedRegistry, NamedRegistryItem, NamedRegistryItemOverride, Registry,
-        RegistryDefault, RegistryType,
+        RegistryDefault, RegistryType, TryNamedRegistryItemOverride,
     };
     pub use crate::{HQError, HQResult};
     pub use alloc::borrow::Cow;
@@ -130,16 +134,16 @@ macro_rules! warn {
 #[wasm_bindgen]
 pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::FinishedWasm> {
     use ir::IrProject;
-    use wasm::flags::PrintIR;
+    use wasm::flags::Switch;
 
     let sb3_proj = sb3::Sb3Project::try_from(proj)?;
     let ir_proj = IrProject::try_from_sb3(&sb3_proj, &flags)?;
-    if flags.print_ir == PrintIR::On {
+    if flags.print_ir == Switch::On {
         crate::log("ir (before optimisation):");
         crate::log(format!("{ir_proj}").as_str());
     }
     let ssa_token = optimisation::ir_optimise(&ir_proj)?;
-    if flags.print_ir == PrintIR::On {
+    if flags.print_ir == Switch::On {
         crate::log("ir (after optimisation):");
         crate::log(format!("{ir_proj}").as_str());
     }
