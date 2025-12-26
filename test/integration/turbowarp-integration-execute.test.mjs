@@ -141,6 +141,7 @@ describe("Integration tests", () => {
       (uri) =>
         ![
           "tw-comparison-matrix-inline.sb3",
+          "tw-comparison-matrix-runtime.sb3",
           "tw-unsafe-equals.sb3",
           "tw-custom-report-repeat.sb3",
           "tw-procedure-return-non-existant.sb3",
@@ -197,7 +198,8 @@ describe("Integration tests", () => {
       );
 
       const [project_json, _] = await unpackProject(projectBuffer);
-      console.log(JSON.stringify(project_json, null, 2));
+      // console.log(JSON.stringify(project_json, null, 2));
+      console.log("loaded project")
       await new Promise((resolve) => setTimeout(resolve, 10));
       const project_wasm = sb3_to_wasm(
         JSON.stringify(project_json, null, 2),

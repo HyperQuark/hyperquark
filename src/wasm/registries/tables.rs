@@ -101,7 +101,7 @@ impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
 pub struct ThreadsTable;
 impl NamedRegistryItem<TableOptions> for ThreadsTable {
     const VALUE: TableOptions = TableOptions {
-        element_type: RefType::FUNCREF,
+        element_type: RefType::ARRAYREF,
         min: 0,
         max: None,
         // default to noop, just so the module validates.
@@ -109,18 +109,18 @@ impl NamedRegistryItem<TableOptions> for ThreadsTable {
         export_name: Some("threads"),
     };
 }
-impl NamedRegistryItemOverride<TableOptions, (u32, u32, u32)> for ThreadsTable {
-    fn r#override(
-        (step_func_ty, imported_func_count, static_func_count): (u32, u32, u32),
-    ) -> TableOptions {
+impl NamedRegistryItemOverride<TableOptions, u32> for ThreadsTable {
+    fn r#override(stack_struct_ty: u32) -> TableOptions {
+        // todo: if we don't need any stacks (i.e. no non-warped procedure, no broadcast & wait),
+        // revert to old behaviour and just store funcrefs (noop for null).
         TableOptions {
             element_type: RefType {
-                nullable: false,
-                heap_type: HeapType::Concrete(step_func_ty),
+                nullable: true,
+                heap_type: HeapType::Concrete(stack_struct_ty),
             },
             min: 0,
             max: None,
-            init: Some(ConstExpr::ref_func(imported_func_count + static_func_count)),
+            init: None,
             export_name: Some("threads"),
         }
     }

@@ -94,7 +94,7 @@ macro_rules! instructions_test {
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
+                    let params = [Ok(ValType::I32), Ok($crate::wasm::registries::TypeRegistry::STRUCT_REF)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
                         ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
                         ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
@@ -106,7 +106,7 @@ macro_rules! instructions_test {
                         continue;
                     };
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 2).try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 
@@ -148,7 +148,7 @@ macro_rules! instructions_test {
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let params = [Ok(ValType::I32)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
+                    let params = [Ok(ValType::I32), Ok($crate::wasm::registries::TypeRegistry::STRUCT_REF)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
                     let result = match output_type {
                         ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
                         ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
@@ -165,7 +165,7 @@ macro_rules! instructions_test {
                     };
                     println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 1).try_into().unwrap()))])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 2).try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 

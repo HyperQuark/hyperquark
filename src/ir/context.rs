@@ -1,5 +1,12 @@
-use super::{IrProject, ProcContext, Target};
-use crate::prelude::*;
+use super::{IrProject, Target};
+use crate::{ir::RcVar, prelude::*};
+
+#[derive(Debug, Clone)]
+pub struct ProcContext {
+    pub arg_vars: Rc<RefCell<Vec<RcVar>>>,
+    pub ret_vars: Rc<RefCell<Vec<RcVar>>>,
+    pub arg_names: Box<[Box<str>]>,
+}
 
 #[derive(Debug, Clone)]
 pub struct StepContext {

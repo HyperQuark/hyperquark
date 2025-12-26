@@ -22,7 +22,8 @@ wasm-gen = { path = "wasm-gen" }
 petgraph = { version = "0.8.1", default-features = false, features = ["stable_graph"] }
 
 [dev-dependencies]
-wasmparser = "0.243.0"
+# wasmparser = "0.243.0"
+wasmparser = { git = "https://github.com/pufferfish101007/wasm-tools.git", rev = "92357c8" }
 wasmprinter = "0.243.0"
 #reqwest = { version = "0.11", features = ["blocking"] }
 

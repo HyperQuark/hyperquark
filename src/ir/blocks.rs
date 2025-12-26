@@ -4,7 +4,7 @@ use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
     DataAddtolistFields, DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields,
+    DataReplaceitemoflistFields, ProceduresCallNonwarpFields,
 };
 use crate::instructions::{
     IrOpcode, YieldMode,
@@ -278,7 +278,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
                 let Some(proc) = procs.get(proccode.as_str()) else {
                     hq_bad_proj!("procedures_call proccode doesn't exist")
                 };
-                proc.context().arg_ids().iter().map(|b| &**b).collect()
+                proc.arg_ids().iter().map(|b| &**b).collect()
             }
             other => hq_todo!("unimplemented input_names for {:?}", other),
         }
@@ -372,20 +372,70 @@ fn procedure_argument(
         hq_bad_proj!("non-string proc argument name")
     };
     let Some(index) = proc_context
-        .arg_names()
+        .arg_names
         .iter()
         .position(|name| name == arg_name)
     else {
         return Ok(vec![IrOpcode::hq_integer(HqIntegerFields(0))]);
     };
-    let arg_vars_cell = proc_context.arg_vars();
-    let arg_vars = arg_vars_cell.try_borrow()?;
+    let arg_vars = (*proc_context.arg_vars).borrow();
     let arg_var = arg_vars
         .get(index)
         .ok_or_else(|| make_hq_bad_proj!("argument index not in range of argumenttypes"))?;
     Ok(vec![IrOpcode::procedures_argument(
-        ProceduresArgumentFields(index, arg_var.clone()),
+        ProceduresArgumentFields {
+            index,
+            arg_var: arg_var.clone(),
+            in_warped: context.warp,
+            arg_vars: Rc::clone(&proc_context.arg_vars),
+        },
     )])
+}
+
+fn generate_next_step(
+    used_non_inline: bool,
+    block_info: &BlockInfo,
+    blocks: &BTreeMap<Box<str>, Block>,
+    context: &StepContext,
+    final_next_blocks: NextBlocks,
+    flags: &WasmFlags,
+) -> HQResult<Rc<Step>> {
+    let (next_block, outer_next_blocks) = if let Some(ref next_block) = block_info.next {
+        (Some(NextBlock::ID(next_block.clone())), final_next_blocks)
+    } else if let (Some(next_block_info), popped_next_blocks) =
+        final_next_blocks.clone().pop_inner()
+    {
+        (Some(next_block_info.block), popped_next_blocks)
+    } else {
+        (None, final_next_blocks)
+    };
+    let next_step = match next_block {
+        Some(NextBlock::ID(id)) => {
+            let Some(next_block_block) = blocks.get(&id) else {
+                hq_bad_proj!("next block doesn't exist")
+            };
+            Step::from_block(
+                next_block_block,
+                id,
+                blocks,
+                context,
+                &context.target().project(),
+                outer_next_blocks,
+                used_non_inline,
+                flags,
+            )?
+        }
+        Some(NextBlock::Step(ref step)) => (*step
+            .upgrade()
+            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?)
+        .clone(used_non_inline)?,
+        None => Step::new_terminating(
+            context.clone(),
+            &context.target().project(),
+            used_non_inline,
+        )?,
+    };
+    Ok(next_step)
 }
 
 #[expect(clippy::too_many_arguments, reason = "too many arguments!")]
@@ -465,37 +515,8 @@ fn generate_loop(
             .collect())
     } else {
         *should_break = true;
-        let (next_block, outer_next_blocks) = if let Some(ref next_block) = block_info.next {
-            (Some(NextBlock::ID(next_block.clone())), final_next_blocks)
-        } else if let (Some(next_block_info), popped_next_blocks) =
-            final_next_blocks.clone().pop_inner()
-        {
-            (Some(next_block_info.block), popped_next_blocks)
-        } else {
-            (None, final_next_blocks)
-        };
-        let next_step = match next_block {
-            Some(NextBlock::ID(id)) => {
-                let Some(next_block_block) = blocks.get(&id) else {
-                    hq_bad_proj!("next block doesn't exist")
-                };
-                Step::from_block(
-                    next_block_block,
-                    id,
-                    blocks,
-                    context,
-                    &context.target().project(),
-                    outer_next_blocks,
-                    false,
-                    flags,
-                )?
-            }
-            Some(NextBlock::Step(ref step)) => (*step
-                .upgrade()
-                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?)
-            .clone(false)?,
-            None => Step::new_terminating(context.clone(), &context.target().project(), false)?,
-        };
+        let next_step =
+            generate_next_step(false, block_info, blocks, context, final_next_blocks, flags)?;
         let condition_step = Step::new_rc(
             None,
             context.clone(),
@@ -1765,14 +1786,29 @@ fn from_normal_block(
                             let proc = procs.get(proccode.as_str()).ok_or_else(|| {
                                 make_hq_bad_proj!("non-existant proccode on procedures_call")
                             })?;
-                            let warp = context.warp || proc.context().always_warped();
+                            let warp = context.warp || proc.always_warped();
                             if warp {
                                 proc.compile_warped(blocks, flags)?;
                                 vec![IrOpcode::procedures_call_warp(ProceduresCallWarpFields {
                                     proc: Rc::clone(proc),
                                 })]
                             } else {
-                                hq_todo!("non-warped procedures")
+                                should_break = true;
+                                let next_step = generate_next_step(
+                                    true,
+                                    block_info,
+                                    blocks,
+                                    context,
+                                    final_next_blocks.clone(),
+                                    flags,
+                                )?;
+                                proc.compile_nonwarped(blocks, flags)?;
+                                vec![IrOpcode::procedures_call_nonwarp(
+                                    ProceduresCallNonwarpFields {
+                                        proc: Rc::clone(proc),
+                                        next_step,
+                                    },
+                                )]
                             }
                         }
                         BlockOpcode::argument_reporter_boolean => {
