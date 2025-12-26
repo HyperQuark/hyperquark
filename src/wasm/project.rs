@@ -419,7 +419,7 @@ impl WasmProject {
             (
                 1,
                 ValType::Ref(RefType {
-                    nullable: false,
+                    nullable: true,
                     heap_type: HeapType::Concrete(thread_struct_type),
                 }),
             ),
@@ -444,13 +444,29 @@ impl WasmProject {
             LocalGet(0),
             LocalGet(0),
             TableGet(self.threads_table_index()?),
-            BrOnNull(0),
             LocalTee(2),
+            RefIsNull,
+            If(WasmBlockType::Empty),
+            LocalGet(0),
+            I32Const(1),
+            I32Add,
+            LocalTee(0),
+            LocalGet(1),
+            I32LtS,
+            If(WasmBlockType::Empty),
+            Br(2),
+            Else,
+            Return,
+            End,
+            End,
+            LocalGet(2),
+            RefAsNonNull,
             StructGet {
                 struct_type_index: thread_struct_type,
                 field_index: 1
             },
             LocalGet(2),
+            RefAsNonNull,
             StructGet {
                 struct_type_index: thread_struct_type,
                 field_index: 0

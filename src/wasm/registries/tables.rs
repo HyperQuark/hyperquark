@@ -104,7 +104,6 @@ impl NamedRegistryItem<TableOptions> for ThreadsTable {
         element_type: RefType::ARRAYREF,
         min: 0,
         max: None,
-        // default to noop, just so the module validates.
         init: None,
         export_name: Some("threads"),
     };
