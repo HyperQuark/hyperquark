@@ -120,6 +120,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
             match block.output_type(Rc::from(dummy_actual_inputs))? {
                 ReturnType::Singleton(output) => type_stack.push((output, i)),
                 ReturnType::MultiValue(outputs) => {
+                    // crate::log!("{outputs:?}");
                     type_stack.extend(outputs.iter().copied().zip(core::iter::repeat(i)));
                 }
                 ReturnType::None => (),

@@ -363,7 +363,7 @@ impl Proc {
                     blocks,
                     &step_context,
                     &step_context.target().project(),
-                    NextBlocks::new(true),
+                    NextBlocks::new(!warp),
                     true,
                     flags,
                 )?

@@ -158,7 +158,7 @@ impl IrOpcode {{
     ) -> HQResult<crate::ir::ReturnType> {{
         // crate::log!("{{:}}", self);
         if inputs.iter().any(crate::ir::Type::is_none) {{
-            hq_bug!("got none input type :scream:")
+            hq_bug!("got none input type :scream: \n at opcode {{:}}", self)
         }}
         boxed_output_type(|ins| self.base_output_type(ins), inputs)
     }}
