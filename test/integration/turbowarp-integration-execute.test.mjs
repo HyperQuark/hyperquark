@@ -199,7 +199,7 @@ describe("Integration tests", () => {
 
       const [project_json, _] = await unpackProject(projectBuffer);
       // console.log(JSON.stringify(project_json, null, 2));
-      console.log("loaded project")
+      console.log("loaded project");
       await new Promise((resolve) => setTimeout(resolve, 10));
       const project_wasm = sb3_to_wasm(
         JSON.stringify(project_json, null, 2),
