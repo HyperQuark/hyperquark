@@ -1611,17 +1611,17 @@ fn from_normal_block(
                                 )
                             };
                             match operator.to_lowercase().as_str() {
-                                "all" => hq_todo!("control_stop all"), 
-                                "this script" => vec![
-                                    IrOpcode::hq_yield(HqYieldFields {
-                                        mode: if context.warp {
-                                            YieldMode::Return
-                                        } else {
-                                            YieldMode::None
-                                        }
-                                    })
-                                ],
-                                "other scripts in sprite" => hq_todo!("control_stop other scripts in sprite"),
+                                "all" => hq_todo!("control_stop all"),
+                                "this script" => vec![IrOpcode::hq_yield(HqYieldFields {
+                                    mode: if context.warp {
+                                        YieldMode::Return
+                                    } else {
+                                        YieldMode::None
+                                    },
+                                })],
+                                "other scripts in sprite" => {
+                                    hq_todo!("control_stop other scripts in sprite")
+                                }
                                 other => hq_bad_proj!("unknown mathop {}", other),
                             }
                         }
