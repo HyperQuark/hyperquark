@@ -456,18 +456,15 @@ fn generate_loop(
     empty_instructions: Vec<IrOpcode>,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
-    let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
-        Some(input) => input,
-        None => return Ok(empty_instructions),
-    }
-    .get_1()
-    .ok_or_else(|| make_hq_bug!(""))?
-    .clone()
-    .ok_or_else(|| make_hq_bug!(""))?
-    else {
+    let BlockArrayOrId::Id(substack_id) = (match block_info.inputs.get("SUBSTACK") {
+        Some(
+            Input::NoShadow(_, Some(substack_input)) | Input::Shadow(_, Some(substack_input), _),
+        ) => substack_input,
+        _ => return Ok(empty_instructions),
+    }) else {
         hq_bad_proj!("malformed SUBSTACK input")
     };
-    let Some(substack_block) = blocks.get(&substack_id) else {
+    let Some(substack_block) = blocks.get(substack_id) else {
         hq_bad_proj!("SUBSTACK block doesn't seem to exist")
     };
     if warp {
@@ -2110,38 +2107,42 @@ fn from_special_block(
         BlockArray::ColorOrString(ty, value) => match ty {
             // number, positive number or integer
             4 | 5 | 8 => {
-                let float = value
-                    .parse()
-                    .map_err(|_| make_hq_bug!("expected a float-parseable value"))?;
-                // proactively convert to an integer if possible;
-                // if a float is needed, it will be cast at const-fold time (TODO),
-                // and if integers are disabled a float will be emitted anyway
-                if flags.integers == Switch::On && float % 1.0 == 0.0 {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "integer-ness already confirmed; `as` is saturating."
-                    )]
-                    IrOpcode::hq_integer(HqIntegerFields(float as i32))
+                if let Ok(float) = value.parse() {
+                    // proactively convert to an integer if possible;
+                    // if a float is needed, it will be cast at const-fold time (TODO),
+                    // and if integers are disabled a float will be emitted anyway
+                    if flags.integers == Switch::On && float % 1.0 == 0.0 {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "integer-ness already confirmed; `as` is saturating."
+                        )]
+                        IrOpcode::hq_integer(HqIntegerFields(float as i32))
+                    } else {
+                        IrOpcode::hq_float(HqFloatFields(float))
+                    }
                 } else {
-                    IrOpcode::hq_float(HqFloatFields(float))
+                    IrOpcode::hq_text(HqTextFields(value.clone()))
                 }
             }
             // integer, positive integer
             6 | 7 =>
             {
-                #[expect(clippy::redundant_else, reason = "false positive")]
+                #[expect(
+                    clippy::same_functions_in_if_condition,
+                    reason = "false positive; called with different generic args"
+                )]
                 if flags.integers == Switch::On {
-                    IrOpcode::hq_integer(HqIntegerFields(
-                        value
-                            .parse()
-                            .map_err(|_| make_hq_bug!("expected an int-parseable value"))?,
-                    ))
+                    if let Ok(int) = value.parse() {
+                        IrOpcode::hq_integer(HqIntegerFields(int))
+                    } else if let Ok(float) = value.parse() {
+                        IrOpcode::hq_float(HqFloatFields(float))
+                    } else {
+                        IrOpcode::hq_text(HqTextFields(value.clone()))
+                    }
+                } else if let Ok(float) = value.parse() {
+                    IrOpcode::hq_float(HqFloatFields(float))
                 } else {
-                    IrOpcode::hq_float(HqFloatFields(
-                        value
-                            .parse()
-                            .map_err(|_| make_hq_bug!("expected a float-parseable value"))?,
-                    ))
+                    IrOpcode::hq_text(HqTextFields(value.clone()))
                 }
             }
             // colour
