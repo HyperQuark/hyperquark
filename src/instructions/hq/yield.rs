@@ -1,19 +1,21 @@
 use super::super::prelude::*;
 use crate::ir::Step;
-use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable, flags::Scheduler};
-use wasm_encoder::{ConstExpr, HeapType, MemArg};
+use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
+use wasm_encoder::{BlockType, ConstExpr, HeapType};
 
 #[derive(Debug)]
 pub enum YieldMode {
     Inline(Rc<Step>),
     Schedule(Weak<Step>),
     None,
+    Return,
 }
 
 impl Clone for YieldMode {
     fn clone(&self) -> Self {
         match self {
             Self::None => Self::None,
+            Self::Return => Self::Return,
             #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
             Self::Inline(step) => Self::Inline(Step::clone(step, false).unwrap()),
             // don't need to clone scheduled step as it doesn't appear in multiple contexts
@@ -32,6 +34,7 @@ impl fmt::Display for YieldMode {
                 Self::Inline(_) => "inline",
                 Self::Schedule(_) => "schedule",
                 Self::None => "none",
+                Self::Return => "return",
             }
         )?;
         match self {
@@ -48,7 +51,7 @@ impl fmt::Display for YieldMode {
                     }
                 )?;
             }
-            Self::None => (),
+            Self::None | Self::Return => (),
         }
         write!(f, "}}")
     }
@@ -70,23 +73,6 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     Fields { mode: yield_mode }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let noop_global = func.registries().globals().register(
-        "noop_func".into(),
-        (
-            ValType::Ref(RefType {
-                nullable: false,
-                heap_type: HeapType::Concrete(
-                    func.registries()
-                        .types()
-                        .function(vec![ValType::I32], vec![])?,
-                ),
-            }),
-            ConstExpr::ref_func(0), // this is a placeholder.
-            GlobalMutable(false),
-            GlobalExportable(false),
-        ),
-    )?;
-
     let threads_count = func.registries().globals().register(
         "threads_count".into(),
         (
@@ -98,56 +84,75 @@ pub fn wasm(
     )?;
 
     Ok(match yield_mode {
-        YieldMode::None => match func.flags().scheduler {
-            Scheduler::CallIndirect => {
-                // Write a special value (e.g. 0 for noop) to linear memory for this thread
-                wasm![
-                    LocalGet(0), // thread index
-                    I32Const(4),
-                    I32Mul,
-                    I32Const(0), // 0 = noop step index
-                    // store at address (thread_index * 4)
-                    I32Store(MemArg {
-                        offset: 0,
-                        align: 2,
-                        memory_index: 0,
-                    }),
-                    LocalGet(0),
-                    I32Const(4),
-                    I32Mul,
-                    I32Const(1),
-                    I32Add,
-                    LocalGet(0),
-                    I32Const(4),
-                    I32Mul,
-                    #LazyGlobalGet(threads_count),
-                    LocalGet(0),
-                    I32Sub,
-                    MemoryCopy {
-                        src_mem: 0,
-                        dst_mem: 0,
-                    },
-                    #LazyGlobalGet(threads_count),
-                    I32Const(1),
-                    I32Sub,
-                    #LazyGlobalSet(threads_count),
-                    Return
-                ]
-            }
-            Scheduler::TypedFuncRef => {
-                let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
-                wasm![
-                    LocalGet(0),
-                    #LazyGlobalGet(noop_global),
-                    TableSet(threads_table),
-                    #LazyGlobalGet(threads_count),
-                    I32Const(1),
-                    I32Sub,
-                    #LazyGlobalSet(threads_count),
-                    Return
-                ]
-            }
-        },
+        YieldMode::None => {
+            let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+            let thread_struct_ty = func.registries().types().thread_struct_type()?;
+            let stack_array_ty = func.registries().types().stack_array_type()?;
+            let stack_struct_ty = func.registries().types().stack_struct_type()?;
+            let thread_struct_local = func.local(ValType::Ref(RefType {
+                nullable: false,
+                heap_type: HeapType::Concrete(thread_struct_ty),
+            }))?;
+            let stack_struct_local = func.local(ValType::Ref(RefType {
+                nullable: false,
+                heap_type: HeapType::Concrete(stack_struct_ty),
+            }))?;
+            let i32_local = func.local(ValType::I32)?;
+            let step_func_ty = func.registries().types().step_func_type()?;
+
+            wasm![
+                LocalGet(0),
+                TableGet(threads_table),
+                RefAsNonNull,
+                LocalTee(thread_struct_local),
+                StructGet { struct_type_index: thread_struct_ty, field_index: 0 },
+                I32Const(1),
+                I32Sub,
+                LocalTee(i32_local),
+                I32Eqz,
+                If(BlockType::Empty),
+                #LazyGlobalGet(threads_count),
+                I32Const(1),
+                I32Sub,
+                #LazyGlobalSet(threads_count),
+                LocalGet(0),
+                RefNull(HeapType::Concrete(thread_struct_ty)),
+                TableSet(threads_table),
+                Return,
+                Else,
+                LocalGet(thread_struct_local),
+                LocalGet(i32_local),
+                StructSet {
+                    struct_type_index: thread_struct_ty,
+                    field_index: 0,
+                },
+                LocalGet(thread_struct_local),
+                StructGet {
+                    struct_type_index: thread_struct_ty,
+                    field_index: 1,
+                },
+                LocalGet(i32_local),
+                I32Const(1),
+                I32Sub,
+                ArrayGet(stack_array_ty),
+                RefAsNonNull,
+                LocalSet(stack_struct_local),
+                LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
+                LocalGet(stack_struct_local),
+                StructGet {
+                    struct_type_index: stack_struct_ty,
+                    field_index: 1,
+                },
+                LocalGet(stack_struct_local),
+                StructGet {
+                    struct_type_index: stack_struct_ty,
+                    field_index: 0,
+                },
+                ReturnCallRef(step_func_ty),
+                End,
+            ]
+        }
+        YieldMode::Return => wasm![Return],
         YieldMode::Inline(step) => {
             hq_assert!(
                 !step.used_non_inline(),
@@ -162,31 +167,32 @@ pub fn wasm(
                 step.used_non_inline(),
                 "scheduled step should be marked as used non-inline"
             );
-            match func.flags().scheduler {
-                Scheduler::CallIndirect => {
-                    wasm![
-                        LocalGet(0), // thread index
-                        I32Const(4),
-                        I32Mul,
-                        #LazyStepIndex(Weak::clone(weak_step)),
-                        I32Store(MemArg {
-                            offset: 0,
-                            align: 2,
-                            memory_index: 0,
-                        }),
-                        Return
-                    ]
-                }
-                Scheduler::TypedFuncRef => {
-                    let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
-                    wasm![
-                        LocalGet(0),
-                        #LazyStepRef(Weak::clone(weak_step)),
-                        TableSet(threads_table),
-                        Return
-                    ]
-                }
-            }
+
+            let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+            let thread_struct_ty = func.registries().types().thread_struct_type()?;
+            let local = func.local(ValType::Ref(RefType {
+                nullable: false,
+                heap_type: HeapType::Concrete(thread_struct_ty),
+            }))?;
+            let stack_array_ty = func.registries().types().stack_array_type()?;
+            let stack_struct_ty = func.registries().types().stack_struct_type()?;
+
+            wasm![
+                LocalGet(0),
+                TableGet(threads_table),
+                RefAsNonNull,
+                LocalTee(local),
+                StructGet { struct_type_index: thread_struct_ty, field_index: 1 },
+                LocalGet(local),
+                StructGet { struct_type_index: thread_struct_ty, field_index: 0 },
+                I32Const(1),
+                I32Sub,
+                ArrayGet(stack_array_ty),
+                RefAsNonNull,
+                #LazyStepRef(Weak::clone(weak_step)),
+                StructSet { struct_type_index: stack_struct_ty, field_index: 0 },
+                Return
+            ]
         }
     })
 }
@@ -202,3 +208,29 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test! {none; hq_yield; @ super::Fields { mode: super::YieldMode::None }}
+
+crate::instructions_test! {ret; hq_yield; @ super::Fields { mode: super::YieldMode::Return }}
+
+crate::instructions_test! {
+    schedule;
+    hq_yield;
+    @ super::Fields {
+        mode: super::YieldMode::Schedule(
+            crate::rc::Rc::downgrade(&crate::ir::Step::new_empty(
+                &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default()))),
+                true,
+                Rc::new(
+                    crate::ir::Target::new(
+                        false,
+                        BTreeMap::default(),
+                        BTreeMap::default(),
+                        crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default()))),
+                        RefCell::default(),
+                        0,
+                        Box::from([])
+                    )
+                )
+            ).unwrap())
+        )
+    }
+}

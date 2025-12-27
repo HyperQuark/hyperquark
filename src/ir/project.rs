@@ -168,26 +168,25 @@ impl IrProject {
 /// Add inputs + outputs to procedures corresponding to global/target variables
 fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
     for procedure in target.procedures()?.values() {
-        let PartialStep::Finished(step) = &*procedure.warped_first_step()? else {
+        let Some(ref warped_proc) = *procedure.warped_specific_proc() else {
+            continue;
+        };
+
+        let PartialStep::Finished(step) = &*warped_proc.first_step()? else {
             continue; // this should hopefully just mean that this procedure is unused.
         };
 
         let globally_scoped_variables = step.globally_scoped_variables()?;
         let globally_scoped_variables_num = step.globally_scoped_variables_num()?;
 
-        procedure
-            .context()
+        warped_proc
             .arg_vars()
             .try_borrow_mut()?
             .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
-        procedure
-            .context()
+        warped_proc
             .return_vars()
             .try_borrow_mut()?
             .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
-        if !procedure.context().always_warped() {
-            hq_todo!("non-warped procedure for fixup_target_procs")
-        }
 
         let mut opcodes = step.opcodes_mut()?;
 

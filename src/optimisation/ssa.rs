@@ -92,7 +92,7 @@ use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataInsertatlistFields,
     DataItemoflistFields, DataReplaceitemoflistFields, DataSetvariabletoFields,
     DataTeevariableFields, DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
-    ProceduresCallWarpFields, YieldMode,
+    ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{
     IrProject, PartialStep, Proc, RcList, RcVar, ReturnType, Step, Type as IrType, insert_casts,
@@ -396,10 +396,12 @@ impl VarGraph {
                             |var_index, arg_var| {
                                 opcode_replacements.push((
                                     i,
-                                    IrOpcode::procedures_argument(ProceduresArgumentFields(
-                                        var_index,
-                                        arg_var.clone(),
-                                    )),
+                                    IrOpcode::procedures_argument(ProceduresArgumentFields {
+                                        index: var_index,
+                                        arg_var: arg_var.clone(),
+                                        in_warped: true,
+                                        arg_vars: Rc::clone(&maybe_proc_context.ok_or_else(|| make_hq_bug!("tried to access proc argument when proc context was None"))?.arg_vars)
+                                    }),
                                 ));
                                 Ok(arg_var.clone())
                             },
@@ -499,40 +501,42 @@ impl VarGraph {
                         i,
                         new_var_map
                             .iter()
-                            .flat_map(|(global_var, new_var)| {
+                            .map(|(global_var, new_var)| {
                                 let (var_access, accessed_var) = variable_maps
-                                    .use_current_ssa_for_global(
+                                    .use_current_ssa_for_global::<_, _, _, HQResult<_>>(
                                         global_var,
                                         |ssa_var| {
-                                            (
+                                            Ok((
                                                 IrOpcode::data_variable(DataVariableFields {
                                                     var: RefCell::new(ssa_var.clone()),
                                                     local_read: RefCell::new(true),
                                                 }),
                                                 ssa_var.clone(),
-                                            )
+                                            ))
                                         },
                                         |arg_index, arg_var| {
-                                            (
+                                            Ok((
                                                 IrOpcode::procedures_argument(
-                                                    ProceduresArgumentFields(
-                                                        arg_index,
-                                                        arg_var.clone(),
-                                                    ),
+                                                    ProceduresArgumentFields {
+                                                        index: arg_index,
+                                                        arg_var: arg_var.clone(),
+                                                        in_warped: true,
+                                                        arg_vars: Rc::clone(&maybe_proc_context.ok_or_else(|| make_hq_bug!("tried to access proc argument when proc context was None"))?.arg_vars)
+                                                    },
                                                 ),
                                                 arg_var.clone(),
-                                            )
+                                            ))
                                         },
                                         || {
-                                            (
+                                            Ok((
                                                 IrOpcode::data_variable(DataVariableFields {
                                                     var: RefCell::new(global_var.clone()),
                                                     local_read: RefCell::new(false),
                                                 }),
                                                 global_var.clone(),
-                                            )
+                                            ))
                                         },
-                                    );
+                                    )?;
                                 let new_node = self.add_node(Some((
                                     vec![VarTarget::Var(new_var.clone())],
                                     vec![StackElement::Var(accessed_var)],
@@ -543,14 +547,17 @@ impl VarGraph {
                                 variable_maps
                                     .ssa
                                     .insert(global_var.clone(), new_var.clone());
-                                [
+                                Ok([
                                     var_access,
                                     IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                         var: RefCell::new(new_var.clone()),
                                         local_write: RefCell::new(true),
                                     }),
-                                ]
+                                ])
                             })
+                            .collect::<HQResult<Vec<_>>>()?
+                            .into_iter()
+                            .flatten()
                             .collect(),
                     ));
                     if let Some(first_condition_step) = first_condition {
@@ -643,14 +650,17 @@ impl VarGraph {
                     self.add_edge(loop_exit, new_node, EdgeType::Forward);
                     *self.exit_node().borrow_mut() = new_node;
                 }
-                IrOpcode::procedures_argument(ProceduresArgumentFields(_, var)) => {
+                IrOpcode::procedures_argument(ProceduresArgumentFields { arg_var, .. }) => {
                     // crate::log("found proc argument.");
-                    type_stack.push(StackElement::Var(var.clone()));
+                    type_stack.push(StackElement::Var(arg_var.clone()));
                 }
                 IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) => {
                     // crate::log!("found proc call. type stack: {type_stack:?}");
+                    let Some(warped_specific_proc) = &*proc.warped_specific_proc() else {
+                        hq_bug!("tried to call_warp with no warped proc")
+                    };
                     let entry_node = self.add_node(Some((
-                        proc.context()
+                        warped_specific_proc
                             .arg_vars()
                             .try_borrow()?
                             .iter()
@@ -664,12 +674,37 @@ impl VarGraph {
                     self.add_edge(last_node, entry_node, EdgeType::Forward);
                     *self.exit_node().borrow_mut() = entry_node;
                     type_stack.extend(
-                        proc.context()
+                        warped_specific_proc
                             .return_vars()
                             .try_borrow()?
                             .iter()
                             .map(|var| StackElement::Var(var.clone())),
                     );
+                    // crate::log!("type stack after proc call: {type_stack:?}");
+                }
+                IrOpcode::procedures_call_nonwarp(ProceduresCallNonwarpFields {
+                    proc,
+                    next_step,
+                }) => {
+                    // crate::log!("found proc call. type stack: {type_stack:?}");
+                    let Some(nonwarped_specific_proc) = &*proc.nonwarped_specific_proc() else {
+                        hq_bug!("tried to call_nonwarp with no non-warped proc")
+                    };
+                    let entry_node = self.add_node(Some((
+                        nonwarped_specific_proc
+                            .arg_vars()
+                            .try_borrow()?
+                            .iter()
+                            .rev()
+                            .cloned()
+                            .map(VarTarget::Var)
+                            .collect(),
+                        mem::take(type_stack),
+                    )));
+                    let last_node = *self.exit_node().borrow();
+                    self.add_edge(last_node, entry_node, EdgeType::Forward);
+                    *self.exit_node().borrow_mut() = entry_node;
+                    next_steps.push(Rc::clone(next_step));
                     // crate::log!("type stack after proc call: {type_stack:?}");
                 }
                 IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
@@ -679,7 +714,7 @@ impl VarGraph {
                         self.visit_step(step, variable_maps, graphs, type_stack, next_steps)?;
                         graphs.insert(Rc::clone(step), MaybeGraph::Inlined);
                     }
-                    YieldMode::None => {
+                    YieldMode::None | YieldMode::Return => {
                         // crate::log("found a yield::none, breaking");
                         should_propagate_ssa = true;
                         break 'opcode_loop;
@@ -730,17 +765,19 @@ impl VarGraph {
 
         if !type_stack.is_empty()
             && step.used_non_inline()
+            && step.context().warp
             && let Some(proc_context) = maybe_proc_context
         {
-            // crate::log!("found spare items on type stack at end of step visit: {type_stack:?}");
+            crate::log!(
+                "found spare items on type stack at end of step visit, in warped proc: {type_stack:?}"
+            );
             // crate::log!(
             //     "return vars: {}",
             //     proc_context.return_vars().try_borrow()?.len()
             // );
             let new_node = self.add_node(Some((
-                proc_context
-                    .return_vars()
-                    .try_borrow()?
+                (*proc_context.ret_vars)
+                    .borrow()
                     .iter()
                     .rev()
                     .cloned()
@@ -933,18 +970,20 @@ fn visit_step_recursively(
 
 fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>) -> HQResult<()> {
     // crate::log("visiting procedure");
-    if let PartialStep::Finished(step) = proc.warped_first_step()?.clone() {
+    if let Some(warped_specific_proc) = &*proc.warped_specific_proc()
+        && let PartialStep::Finished(step) = warped_specific_proc.first_step()?.clone()
+    {
         // crate::log!("visiting procedure's step: {}", step.id());
         let globally_scoped_variables: Box<[_]> = step.globally_scoped_variables()?.collect();
         let arg_vars_drop =
-            proc.context().arg_vars().try_borrow()?.len() - globally_scoped_variables.len();
+            warped_specific_proc.arg_vars().try_borrow()?.len() - globally_scoped_variables.len();
         visit_step_recursively(
             Rc::clone(&step),
             graphs,
             &globally_scoped_variables
                 .into_iter()
                 .zip(
-                    proc.context()
+                    warped_specific_proc
                         .arg_vars()
                         .try_borrow()?
                         .iter()
@@ -954,6 +993,12 @@ fn visit_procedure(proc: &Rc<Proc>, graphs: &mut BTreeMap<Rc<Step>, MaybeGraph>)
                 )
                 .collect(),
         )?;
+    }
+    if let Some(nonwarped_specific_proc) = &*proc.nonwarped_specific_proc()
+        && let PartialStep::Finished(step) = nonwarped_specific_proc.first_step()?.clone()
+    {
+        // crate::log!("visiting procedure's step: {}", step.id());
+        visit_step_recursively(Rc::clone(&step), graphs, &BTreeMap::new())?;
     }
     Ok(())
 }
@@ -1024,9 +1069,9 @@ fn visit_node(
 ) -> HQResult<()> {
     // crate::log!("node index: {node:?}");
     if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
-        crate::log!("vars: {vars:?}");
+        // crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
-        crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
+        // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),
