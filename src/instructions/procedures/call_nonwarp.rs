@@ -15,8 +15,10 @@ impl fmt::Display for Fields {
             f,
             r#"{{
         "proc": {:?},
+        "next_step": {}
     }}"#,
-            self.proc.proccode()
+            self.proc.proccode(),
+            self.next_step,
         )
     }
 }

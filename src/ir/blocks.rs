@@ -51,7 +51,7 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
         };
         if type_stack.len() < expected_inputs.len() {
             hq_bug!(
-                "didn't have enough inputs on the type stack\nat block {:?}",
+                "didn't have enough inputs on the type stack\nat block {}",
                 block
             );
         }
