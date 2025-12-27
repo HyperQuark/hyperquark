@@ -247,7 +247,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::motion_direction
             | BlockOpcode::data_deletealloflist
             | BlockOpcode::data_lengthoflist
-            | BlockOpcode::data_listcontents => vec![],
+            | BlockOpcode::data_listcontents
+            | BlockOpcode::control_stop => vec![],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
@@ -1591,6 +1592,40 @@ fn from_normal_block(
                                 list: list.list.clone(),
                             })]
                         }
+                        BlockOpcode::control_stop => {
+                            let (sb3::Field::Value((Some(val),))
+                            | sb3::Field::ValueId(Some(val), _)) =
+                                block_info.fields.get("STOP_OPTION").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field STOP_OPTION"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing value for STOP_OPTION field"
+                                )
+                            };
+                            let VarVal::String(operator) = val else {
+                                hq_bad_proj!(
+                                    "invalid project.json - non-string value for STOP_OPTION field"
+                                )
+                            };
+                            match operator.to_lowercase().as_str() {
+                                "all" => hq_todo!("control_stop all"), 
+                                "this script" => vec![
+                                    IrOpcode::hq_yield(HqYieldFields {
+                                        mode: if context.warp {
+                                            YieldMode::Return
+                                        } else {
+                                            YieldMode::None
+                                        }
+                                    })
+                                ],
+                                "other scripts in sprite" => hq_todo!("control_stop other scripts in sprite"),
+                                other => hq_bad_proj!("unknown mathop {}", other),
+                            }
+                        }
+
                         BlockOpcode::control_if => 'block: {
                             let BlockArrayOrId::Id(substack_id) =
                                 match block_info.inputs.get("SUBSTACK") {

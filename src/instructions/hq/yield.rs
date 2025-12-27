@@ -8,12 +8,14 @@ pub enum YieldMode {
     Inline(Rc<Step>),
     Schedule(Weak<Step>),
     None,
+    Return,
 }
 
 impl Clone for YieldMode {
     fn clone(&self) -> Self {
         match self {
             Self::None => Self::None,
+            Self::Return => Self::Return,
             #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
             Self::Inline(step) => Self::Inline(Step::clone(step, false).unwrap()),
             // don't need to clone scheduled step as it doesn't appear in multiple contexts
@@ -32,6 +34,7 @@ impl fmt::Display for YieldMode {
                 Self::Inline(_) => "inline",
                 Self::Schedule(_) => "schedule",
                 Self::None => "none",
+                Self::Return => "return",
             }
         )?;
         match self {
@@ -48,7 +51,7 @@ impl fmt::Display for YieldMode {
                     }
                 )?;
             }
-            Self::None => (),
+            Self::None | Self::Return => (),
         }
         write!(f, "}}")
     }
@@ -149,6 +152,7 @@ pub fn wasm(
                 End,
             ]
         }
+        YieldMode::Return => wasm![Return],
         YieldMode::Inline(step) => {
             hq_assert!(
                 !step.used_non_inline(),
@@ -204,6 +208,9 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
 crate::instructions_test! {none; hq_yield; @ super::Fields { mode: super::YieldMode::None }}
+
+crate::instructions_test! {ret; hq_yield; @ super::Fields { mode: super::YieldMode::Return }}
+
 crate::instructions_test! {
     schedule;
     hq_yield;

@@ -714,7 +714,7 @@ impl VarGraph {
                         self.visit_step(step, variable_maps, graphs, type_stack, next_steps)?;
                         graphs.insert(Rc::clone(step), MaybeGraph::Inlined);
                     }
-                    YieldMode::None => {
+                    YieldMode::None | YieldMode::Return => {
                         // crate::log("found a yield::none, breaking");
                         should_propagate_ssa = true;
                         break 'opcode_loop;
