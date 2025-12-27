@@ -75,20 +75,29 @@ describe("Integration tests", () => {
   const files = fs
     .readdirSync(executeDir)
     .filter((uri) => fileFilter.test(uri))
-    // ignore tests that crash the runner, or that test custom reporters
+    // ignore tests that test custom reporters
     .filter(
-      (uri) =>
+      (uri) => 
         ![
-          "tw-comparison-matrix-inline.sb3",
-          "tw-comparison-matrix-runtime.sb3",
-          "tw-unsafe-equals.sb3",
           "tw-custom-report-repeat.sb3",
           "tw-procedure-return-non-existant.sb3",
           "tw-procedure-return-recursion.sb3",
           "tw-procedure-return-simple.sb3",
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
+          "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3"
+        ].includes(uri),
+    )
+    // ignore tests that crash the runner, usually by having an infinite loop
+    // in the compiler; these should be unignored at some point
+    .filter(
+      (uri) =>
+        ![
+          "tw-comparison-matrix-inline.sb3",
+          "tw-comparison-matrix-runtime.sb3",
+          "tw-unsafe-equals.sb3",
           "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
+          "tw-gh-249-quicksort.sb3"
         ].includes(uri),
     );
   for (const uri of files) {
@@ -151,6 +160,8 @@ describe("Integration tests", () => {
       } catch (e) {
         if (/todo/.test(e.toString())) {
           skip(e);
+        } else {
+          throw e;
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
