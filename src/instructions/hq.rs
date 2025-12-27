@@ -1,4 +1,5 @@
 pub mod boolean;
+pub mod r#box;
 pub mod cast;
 pub mod color_rgb;
 pub mod drop;

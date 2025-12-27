@@ -91,8 +91,8 @@
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataInsertatlistFields,
     DataItemoflistFields, DataReplaceitemoflistFields, DataSetvariabletoFields,
-    DataTeevariableFields, DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
-    ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
+    DataTeevariableFields, DataVariableFields, HqBoxFields, HqYieldFields, IrOpcode,
+    ProceduresArgumentFields, ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{
     IrProject, PartialStep, Proc, RcList, RcVar, ReturnType, Step, Type as IrType, insert_casts,
@@ -282,6 +282,7 @@ impl VarGraph {
         let maybe_proc_context = step.context().proc_context.as_ref();
 
         let mut should_propagate_ssa = step.used_non_inline() && maybe_proc_context.is_none();
+        let mut step_ended_on_stop = false;
 
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
         let mut additional_opcodes: Vec<(usize, Vec<IrOpcode>)> = vec![];
@@ -717,6 +718,7 @@ impl VarGraph {
                     YieldMode::None | YieldMode::Return => {
                         // crate::log("found a yield::none, breaking");
                         should_propagate_ssa = true;
+                        step_ended_on_stop = true;
                         break 'opcode_loop;
                     }
                     YieldMode::Schedule(step) => {
@@ -764,7 +766,7 @@ impl VarGraph {
         }
 
         if !type_stack.is_empty()
-            && step.used_non_inline()
+            && (step.used_non_inline() || step_ended_on_stop)
             && step.context().warp
             && let Some(proc_context) = maybe_proc_context
         {
@@ -911,25 +913,32 @@ impl VarGraph {
                 hq_bug!("couldn't find SSA block exit")
             };
             let mut opcodes = block.opcodes_mut()?;
-            opcodes.reserve_exact(var_writes.len() * 2);
-            for ((var_read, read_local), var_write) in var_writes {
-                let new_node = self.add_node(Some((
-                    vec![VarTarget::Var(var_write.clone())],
-                    vec![StackElement::Var(var_read.clone())],
-                )));
-                self.add_edge(***block_exit, new_node, EdgeType::Forward);
-                ***block_exit = new_node;
+            if !matches!(
+                opcodes.last(),
+                Some(IrOpcode::hq_yield(HqYieldFields {
+                    mode: YieldMode::Return,
+                }))
+            ) {
+                opcodes.reserve_exact(var_writes.len() * 2);
+                for ((var_read, read_local), var_write) in var_writes {
+                    let new_node = self.add_node(Some((
+                        vec![VarTarget::Var(var_write.clone())],
+                        vec![StackElement::Var(var_read.clone())],
+                    )));
+                    self.add_edge(***block_exit, new_node, EdgeType::Forward);
+                    ***block_exit = new_node;
 
-                opcodes.append(&mut vec![
-                    IrOpcode::data_variable(DataVariableFields {
-                        var: RefCell::new(var_read.clone()),
-                        local_read: RefCell::new(*read_local),
-                    }),
-                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                        var: RefCell::new(var_write.clone()),
-                        local_write: RefCell::new(true),
-                    }),
-                ]);
+                    opcodes.append(&mut vec![
+                        IrOpcode::data_variable(DataVariableFields {
+                            var: RefCell::new(var_read.clone()),
+                            local_read: RefCell::new(*read_local),
+                        }),
+                        IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                            var: RefCell::new(var_write.clone()),
+                            local_write: RefCell::new(true),
+                        }),
+                    ]);
+                }
             }
         }
 
@@ -1157,6 +1166,83 @@ where
     Ok(())
 }
 
+fn box_proc_returns<'a>(
+    step: &Rc<Step>,
+    ret_vars: &'a core::cell::Ref<'a, Vec<RcVar>>,
+    visited_steps: &mut BTreeSet<Rc<Step>>,
+) -> HQResult<()> {
+    if visited_steps.contains(step) {
+        return Ok(());
+    }
+
+    visited_steps.insert(Rc::clone(step));
+
+    for opcode in step.opcodes().borrow().iter() {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match opcode {
+            IrOpcode::hq_yield(HqYieldFields {
+                mode: YieldMode::Inline(inline_step),
+            }) => {
+                box_proc_returns(inline_step, ret_vars, visited_steps)?;
+            }
+            IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
+                box_proc_returns(body, ret_vars, visited_steps)?;
+            }
+            IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if,
+                branch_else,
+            }) => {
+                box_proc_returns(branch_if, ret_vars, visited_steps)?;
+                box_proc_returns(branch_else, ret_vars, visited_steps)?;
+            }
+            _ => (),
+        }
+    }
+
+    let mut box_additions = Vec::new();
+
+    for ((i, opcode), ret_var) in step
+        .opcodes()
+        .borrow()
+        .iter()
+        .enumerate()
+        .rev()
+        .filter(|(_, op)| {
+            !matches!(
+                op,
+                IrOpcode::hq_yield(HqYieldFields {
+                    mode: YieldMode::Return,
+                }),
+            )
+        })
+        .zip(ret_vars.iter().rev())
+    {
+        if let IrOpcode::data_variable(DataVariableFields { var, .. }) = opcode {
+            if var.borrow().possible_types().is_base_type()
+                && !ret_var.possible_types().is_base_type()
+            {
+                box_additions.push((i, *ret_var.possible_types()));
+            }
+        } else {
+            break;
+        }
+    }
+
+    let mut opcodes_mut = step.opcodes_mut()?;
+
+    for (box_addition, output_ty) in box_additions {
+        opcodes_mut.splice(
+            box_addition..=box_addition,
+            vec![IrOpcode::hq_box(HqBoxFields { output_ty })],
+        );
+    }
+
+    hq_todo!()
+}
+
 /// A token type that cannot be instantiated from anywhere else (since the field is private)
 /// - used as proof that we've carried out these optimisations.
 pub struct SSAToken(PhantomData<()>);
@@ -1181,5 +1267,22 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
         // crate::log!("inserting casts for step {}", step.id());
         insert_casts(&mut *step.opcodes_mut()?, false)?;
     }
+
+    // we might have made some procedure return types boxed, so we now need to go through and box the
+    // appropriate variable getters, now that we know *which* variables are boxed.
+    for target in project.targets().borrow().values() {
+        for procedure in target.procedures()?.values() {
+            if let Some(warped_specific_proc) = &*procedure.warped_specific_proc()
+                && let PartialStep::Finished(step) = &*warped_specific_proc.first_step()?
+            {
+                box_proc_returns(
+                    step,
+                    &(*warped_specific_proc.return_vars()).borrow(),
+                    &mut BTreeSet::new(),
+                )?;
+            }
+        }
+    }
+
     Ok(SSAToken(PhantomData))
 }

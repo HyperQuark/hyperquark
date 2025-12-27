@@ -41,7 +41,7 @@ fn main() {
                         "{}::{}",
                         category,
                         match opcode {
-                            "yield" | "loop" => format!("r#{opcode}"),
+                            "yield" | "loop" | "box" => format!("r#{opcode}"),
                             _ => opcode.to_string(),
                         }
                     ),
