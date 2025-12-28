@@ -1166,9 +1166,9 @@ where
     Ok(())
 }
 
-fn box_proc_returns<'a>(
+fn box_proc_returns(
     step: &Rc<Step>,
-    ret_vars: &'a core::cell::Ref<'a, Vec<RcVar>>,
+    rev_ret_vars: &[&RcVar],
     visited_steps: &mut BTreeSet<Rc<Step>>,
 ) -> HQResult<()> {
     if visited_steps.contains(step) {
@@ -1186,17 +1186,17 @@ fn box_proc_returns<'a>(
             IrOpcode::hq_yield(HqYieldFields {
                 mode: YieldMode::Inline(inline_step),
             }) => {
-                box_proc_returns(inline_step, ret_vars, visited_steps)?;
+                box_proc_returns(inline_step, rev_ret_vars, visited_steps)?;
             }
             IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
-                box_proc_returns(body, ret_vars, visited_steps)?;
+                box_proc_returns(body, rev_ret_vars, visited_steps)?;
             }
             IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if,
                 branch_else,
             }) => {
-                box_proc_returns(branch_if, ret_vars, visited_steps)?;
-                box_proc_returns(branch_else, ret_vars, visited_steps)?;
+                box_proc_returns(branch_if, rev_ret_vars, visited_steps)?;
+                box_proc_returns(branch_else, rev_ret_vars, visited_steps)?;
             }
             _ => (),
         }
@@ -1204,7 +1204,11 @@ fn box_proc_returns<'a>(
 
     let mut box_additions = Vec::new();
 
-    for ((i, opcode), ret_var) in step
+    let mut rev_vars_iter = rev_ret_vars.iter();
+
+    let mut to_skip = 0;
+
+    for (i, opcode) in step
         .opcodes()
         .borrow()
         .iter()
@@ -1218,16 +1222,46 @@ fn box_proc_returns<'a>(
                 }),
             )
         })
-        .zip(ret_vars.iter().rev())
     {
-        if let IrOpcode::data_variable(DataVariableFields { var, .. }) = opcode {
-            if var.borrow().possible_types().is_base_type()
-                && !ret_var.possible_types().is_base_type()
-            {
-                box_additions.push((i, *ret_var.possible_types()));
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match opcode {
+            IrOpcode::data_variable(DataVariableFields { var, .. }) => {
+                if to_skip > 0 {
+                    to_skip -= 1;
+                    continue;
+                }
+                let Some(ret_var) = rev_vars_iter.next() else {
+                    break;
+                };
+                if var.borrow().possible_types().is_base_type()
+                    && !ret_var.possible_types().is_base_type()
+                {
+                    box_additions.push((i + 1, *ret_var.possible_types()));
+                }
             }
-        } else {
-            break;
+            IrOpcode::procedures_argument(ProceduresArgumentFields { arg_var, .. }) => {
+                if to_skip > 0 {
+                    to_skip -= 1;
+                    continue;
+                }
+                let Some(ret_var) = rev_vars_iter.next() else {
+                    break;
+                };
+                if arg_var.possible_types().is_base_type()
+                    && !ret_var.possible_types().is_base_type()
+                {
+                    box_additions.push((i + 1, *ret_var.possible_types()));
+                }
+            }
+            IrOpcode::data_setvariableto(_) => {
+                to_skip += 1;
+            }
+            _ => {
+                break;
+            }
         }
     }
 
@@ -1235,12 +1269,12 @@ fn box_proc_returns<'a>(
 
     for (box_addition, output_ty) in box_additions {
         opcodes_mut.splice(
-            box_addition..=box_addition,
+            box_addition..box_addition,
             vec![IrOpcode::hq_box(HqBoxFields { output_ty })],
         );
     }
 
-    hq_todo!()
+    Ok(())
 }
 
 /// A token type that cannot be instantiated from anywhere else (since the field is private)
@@ -1277,7 +1311,11 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
             {
                 box_proc_returns(
                     step,
-                    &(*warped_specific_proc.return_vars()).borrow(),
+                    &(*warped_specific_proc.return_vars())
+                        .borrow()
+                        .iter()
+                        .rev()
+                        .collect::<Box<[_]>>(),
                     &mut BTreeSet::new(),
                 )?;
             }

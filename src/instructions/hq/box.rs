@@ -6,11 +6,11 @@ pub struct Fields {
 }
 
 impl fmt::Display for Fields {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             r#"{{
-            "output_ty": {}
+            "output_ty": "{}"
         }}"#,
             self.output_ty
         )
