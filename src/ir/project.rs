@@ -168,7 +168,10 @@ impl IrProject {
     }
 }
 
-#[expect(clippy::mutable_key_type, reason = "Rc<Step> hashing relies only on ID, which is immutable")]
+#[expect(
+    clippy::mutable_key_type,
+    reason = "Rc<Step> hashing relies only on ID, which is immutable"
+)]
 fn add_proc_return_vars_before_return<'a, I>(
     step: &Rc<Step>,
     var_ops: I,

@@ -811,8 +811,10 @@ impl VarGraph {
 
         if should_propagate_ssa {
             let post_yield = if let Some(last_op) = step.opcodes().try_borrow()?.last()
-                && matches!(last_op, IrOpcode::hq_yield(_) | IrOpcode::procedures_call_nonwarp(_))
-            {
+                && matches!(
+                    last_op,
+                    IrOpcode::hq_yield(_) | IrOpcode::procedures_call_nonwarp(_)
+                ) {
                 true
             } else {
                 false

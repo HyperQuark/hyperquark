@@ -77,7 +77,7 @@ describe("Integration tests", () => {
     .filter((uri) => fileFilter.test(uri))
     // ignore tests that test custom reporters
     .filter(
-      (uri) => 
+      (uri) =>
         ![
           "tw-custom-report-repeat.sb3",
           "tw-procedure-return-non-existant.sb3",
@@ -85,7 +85,7 @@ describe("Integration tests", () => {
           "tw-procedure-return-simple.sb3",
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
-          "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3"
+          "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3",
         ].includes(uri),
     )
     // ignore tests that crash the runner, usually by having an infinite loop
@@ -97,7 +97,7 @@ describe("Integration tests", () => {
           "tw-comparison-matrix-runtime.sb3",
           "tw-unsafe-equals.sb3",
           "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
-          "tw-gh-249-quicksort.sb3"
+          "tw-gh-249-quicksort.sb3",
         ].includes(uri),
     );
   for (const uri of files) {
