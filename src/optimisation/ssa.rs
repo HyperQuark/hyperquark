@@ -706,6 +706,8 @@ impl VarGraph {
                     self.add_edge(last_node, entry_node, EdgeType::Forward);
                     *self.exit_node().borrow_mut() = entry_node;
                     next_steps.push(Rc::clone(next_step));
+                    should_propagate_ssa = true;
+                    break 'opcode_loop;
                     // crate::log!("type stack after proc call: {type_stack:?}");
                 }
                 IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
@@ -809,7 +811,7 @@ impl VarGraph {
 
         if should_propagate_ssa {
             let post_yield = if let Some(last_op) = step.opcodes().try_borrow()?.last()
-                && matches!(last_op, IrOpcode::hq_yield(_))
+                && matches!(last_op, IrOpcode::hq_yield(_) | IrOpcode::procedures_call_nonwarp(_))
             {
                 true
             } else {

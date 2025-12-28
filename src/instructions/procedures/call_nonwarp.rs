@@ -150,7 +150,7 @@ pub fn wasm(
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         LocalGet(arg_struct_local),
         #LazyNonWarpedProcRef(Rc::clone(proc)),
-        CallRef(func.registries().types().step_func_type()?)
+        ReturnCallRef(func.registries().types().step_func_type()?)
     ]);
 
     Ok(wasm)
