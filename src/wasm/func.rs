@@ -2,11 +2,14 @@ use super::{Registries, WasmFlags, WasmProject};
 use crate::instructions::IrOpcode;
 use crate::ir::{PartialStep, RcVar, ReturnType, Step};
 use crate::prelude::*;
+use crate::wasm::registries::TypeRegistry;
 use crate::{instructions::wrap_instruction, ir::Proc};
 use alloc::collections::btree_map;
 use wasm_encoder::{
-    self, CodeSection, Function, FunctionSection, Instruction as WInstruction, ValType,
+    self, CodeSection, Function, FunctionSection, HeapType, Instruction as WInstruction, RefType,
+    ValType,
 };
+use wasm_gen::wasm;
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
@@ -14,6 +17,7 @@ pub enum Instruction {
     LazyStepRef(Weak<Step>),
     LazyStepIndex(Weak<Step>),
     LazyWarpedProcCall(Rc<Proc>),
+    LazyNonWarpedProcRef(Rc<Proc>),
     LazyGlobalGet(u32),
     LazyGlobalSet(u32),
     StaticFunctionCall(u32),
@@ -29,6 +33,11 @@ impl Instruction {
     ) -> HQResult<WInstruction<'static>> {
         Ok(match self {
             Self::Immediate(instr) => instr.clone(),
+            #[cfg(test)]
+            Self::LazyStepRef(_step) => {
+                WInstruction::RefFunc(imported_func_count + static_func_count)
+            }
+            #[cfg(not(test))]
             Self::LazyStepRef(step) => {
                 let step_index: u32 = steps
                     .try_borrow()?
@@ -56,11 +65,10 @@ impl Instruction {
                 WInstruction::I32Const(step_index)
             }
             Self::LazyWarpedProcCall(proc) => {
-                hq_assert!(
-                    proc.context().always_warped(),
-                    "tried to use LazyWarpedProcCall on a non-warped step"
-                );
-                let PartialStep::Finished(ref step) = *proc.warped_first_step()? else {
+                let Some(ref warped_specific_proc) = *proc.warped_specific_proc() else {
+                    hq_bug!("tried to use LazyWarpedProcCall on a non-warped step")
+                };
+                let PartialStep::Finished(ref step) = *warped_specific_proc.first_step()? else {
                     hq_bug!("tried to use uncompiled procedure step")
                 };
                 let step_index: u32 = steps
@@ -70,6 +78,21 @@ impl Instruction {
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 WInstruction::Call(imported_func_count + static_func_count + step_index)
+            }
+            Self::LazyNonWarpedProcRef(proc) => {
+                let Some(ref nonwarped_specific_proc) = *proc.nonwarped_specific_proc() else {
+                    hq_bug!("tried to use LazyNonWarpedProcRef on a non-non-warped step")
+                };
+                let PartialStep::Finished(ref step) = *nonwarped_specific_proc.first_step()? else {
+                    hq_bug!("tried to use uncompiled procedure step")
+                };
+                let step_index: u32 = steps
+                    .try_borrow()?
+                    .get_index_of(step)
+                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
+                WInstruction::RefFunc(imported_func_count + static_func_count + step_index)
             }
             Self::LazyGlobalGet(idx) => {
                 // crate::log!("global get {idx}. imported globals: {imported_global_count}");
@@ -146,7 +169,7 @@ impl StepFunc {
         Self {
             locals: RefCell::new(vec![]),
             instructions: RefCell::new(vec![]),
-            params: Box::new([ValType::I32]),
+            params: Box::new([ValType::I32, TypeRegistry::STRUCT_REF]),
             output: Box::new([]),
             registries,
             flags,
@@ -293,23 +316,51 @@ impl StepFunc {
         };
         let target_index = step.context().target().index();
         let step_func = if let Some(ref proc_context) = step.context().proc_context {
-            let arg_types = proc_context
-                .arg_vars()
-                .try_borrow()?
-                .iter()
-                .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                .collect::<HQResult<Box<[_]>>>()?;
-            let params = arg_types.iter().chain(&[ValType::I32]).copied().collect();
-            let outputs = proc_context
-                .return_vars()
-                .try_borrow()?
-                .iter()
-                .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                .collect::<HQResult<Box<[_]>>>()?;
+            let params = if step.context().warp {
+                let arg_types = (*proc_context.arg_vars)
+                    .borrow()
+                    .iter()
+                    .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
+                    .collect::<HQResult<Box<[_]>>>()?;
+                arg_types
+                    .iter()
+                    .chain(&[ValType::I32, TypeRegistry::STRUCT_REF])
+                    .copied()
+                    .collect()
+            } else {
+                Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
+            };
+            let outputs = if step.context().warp {
+                (*proc_context.ret_vars)
+                    .borrow()
+                    .iter()
+                    .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
+                    .collect::<HQResult<Box<[_]>>>()?
+            } else {
+                Box::from([])
+            };
             Self::new_with_types(params, outputs, registries, flags, target, target_index)
         } else {
             Self::new(registries, flags, target, target_index)
         };
+        if let Some(ref proc_context) = step.context().proc_context
+            && !step.context().warp
+        {
+            let arg_struct_type = step_func
+                .registries()
+                .types()
+                .proc_arg_struct_type(&(*proc_context.arg_vars).borrow())?;
+            let struct_local = step_func.local(ValType::Ref(RefType {
+                nullable: false,
+                heap_type: HeapType::Concrete(arg_struct_type),
+            }))?;
+            hq_assert_eq!(struct_local, 2);
+            step_func.add_instructions(wasm![
+                LocalGet(1),
+                RefCastNonNull(HeapType::Concrete(arg_struct_type)),
+                LocalSet(2),
+            ])?;
+        }
         let instrs = Self::compile_instructions(&step_func, &*step.opcodes().try_borrow()?)?;
         step_func.add_instructions(instrs)?;
         steps

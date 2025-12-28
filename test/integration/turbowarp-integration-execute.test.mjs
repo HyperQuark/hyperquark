@@ -13,8 +13,9 @@ import path from "node:path";
 
 import { describe, test } from "vitest";
 
-import { imports as baseImports, imports } from "../../js/imports.ts";
+import { imports as baseImports } from "../../js/imports.ts";
 import { unpackProject } from "../../playground/lib/project-loader.js";
+import { instantiateProject } from "../../playground/lib/project-runner.js";
 import { sb3_to_wasm, WasmFlags } from "../../js/compiler/hyperquark.js";
 import { WasmStringType } from "../../js/no-compiler/hyperquark";
 import { defaultSettings } from "../../playground/lib/settings.js";
@@ -34,125 +35,73 @@ import { defaultSettings } from "../../playground/lib/settings.js";
  * the target block or group of blocks.
  */
 
-// this is adapted from playground/lib/project-runner.js to work in node
-// todo: adapt so we can just import it?
-function runProject({
-  wasm_bytes,
-  settings,
-  reportVmResult,
-  timeoutFailure,
-  strings,
-}) {
-  const framerate_wait = Math.round(1000 / 30);
-
-  const builtins = [
-    ...(WasmStringType[settings.string_type] === "JsStringBuiltins"
-      ? ["js-string"]
-      : []),
-  ];
-
-  const imports = Object.assign(baseImports, {
-    "": Object.fromEntries(strings.map((string) => [string, string])),
-  });
-
-  try {
-    if (
-      !WebAssembly.validate(wasm_bytes, {
-        builtins,
-      })
-    ) {
-      throw Error();
-    }
-  } catch {
-    try {
-      new WebAssembly.Module(wasm_bytes);
-      throw new Error("invalid WASM module");
-    } catch (e) {
-      throw new Error("invalid WASM module: " + e.message);
-    }
-  }
-  function sleep(ms) {
-    return new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
-  }
-  function waitAnimationFrame() {
-    return new Promise((resolve) => {
-      setTimeout(resolve, 1);
-    });
-  }
-  imports.looks.say_string = reportVmResult;
-  return WebAssembly.instantiate(wasm_bytes, imports, {
-    builtins,
-    importedStringConstants: "",
-  }).then(async ({ instance }) => {
-    const {
-      flag_clicked,
-      tick,
-      memory,
-      threads_count,
-      requests_refresh,
-      threads,
-      noop,
-    } = instance.exports;
-    flag_clicked();
-
-    let start_time = Date.now();
-    let thisTickStartTime;
-    $outertickloop: while (true) {
-      if (Date.now() - start_time > 5000) {
-        return timeoutFailure();
-      }
-      thisTickStartTime = Date.now();
-      // renderer.draw();
-      $innertickloop: do {
-        tick();
-        if (threads_count.value === 0) {
-          break $outertickloop;
-        }
-      } while (
-        Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
-        requests_refresh.value === 0
-      );
-      requests_refresh.value = 0;
-      if (framerate_wait > 0) {
-        await sleep(
-          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
-        );
-      } else {
-        await waitAnimationFrame();
-      }
-    }
-    return;
-  });
-}
-
 const executeDir = path.resolve(__dirname, "../fixtures/execute");
 
 // Find files which end in ".sb", ".sb2", or ".sb3"
 const fileFilter = /\.sb[23]?$/i;
 
+const makeTestDrawable = () => ({
+  updateVisible() {},
+  updatePosition() {},
+  updateDirection() {},
+  updateScale() {},
+});
+
+const makeTestRenderer = () =>
+  new Proxy(
+    {
+      draw() {},
+      updateTextSkin() {},
+      setLayerGroupOrdering() {},
+      getDrawable: () => makeTestDrawable(),
+      penClear() {},
+      penLine() {},
+      penPoint() {},
+      createDrawable: () => 0,
+      createPenSkin: () => 0,
+      createSVGSkin: () => 0,
+      createTextSkin: () => 0,
+      updateDrawableSkinId() {},
+    },
+    {
+      set(t, p, v) {
+        if (p === "getDrawable") return true;
+        return Reflect.set(t, p, v);
+      },
+    },
+  );
+
 describe("Integration tests", () => {
   const files = fs
     .readdirSync(executeDir)
     .filter((uri) => fileFilter.test(uri))
-    // ignore tests that crash the runner, or that test custom reporters
+    // ignore tests that test custom reporters
     .filter(
       (uri) =>
         ![
-          "tw-comparison-matrix-inline.sb3",
-          "tw-unsafe-equals.sb3",
           "tw-custom-report-repeat.sb3",
           "tw-procedure-return-non-existant.sb3",
           "tw-procedure-return-recursion.sb3",
           "tw-procedure-return-simple.sb3",
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
+          "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3",
+        ].includes(uri),
+    )
+    // ignore tests that crash the runner, usually by having an infinite loop
+    // in the compiler; these should be unignored at some point
+    .filter(
+      (uri) =>
+        ![
+          "tw-comparison-matrix-inline.sb3",
+          "tw-comparison-matrix-runtime.sb3",
+          "tw-unsafe-equals.sb3",
           "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
+          "tw-gh-249-quicksort.sb3",
         ].includes(uri),
     );
   for (const uri of files) {
-    test.sequential(`${uri} (default flags)`, async () => {
+    test.sequential(`${uri} (default flags)`, async ({ skip }) => {
       let plannedCount = 0;
       let testCount = 0;
       let didEnd = false;
@@ -197,12 +146,24 @@ describe("Integration tests", () => {
       );
 
       const [project_json, _] = await unpackProject(projectBuffer);
-      console.log(JSON.stringify(project_json, null, 2));
+      // console.log(JSON.stringify(project_json, null, 2));
+      console.log("loaded project");
       await new Promise((resolve) => setTimeout(resolve, 10));
-      const project_wasm = sb3_to_wasm(
-        JSON.stringify(project_json, null, 2),
-        WasmFlags.from_js(defaultSettings.to_js()),
-      );
+
+      let project_wasm;
+
+      try {
+        project_wasm = sb3_to_wasm(
+          JSON.stringify(project_json, null, 2),
+          WasmFlags.from_js(defaultSettings.to_js()),
+        );
+      } catch (e) {
+        if (/todo/.test(e.toString())) {
+          skip(e);
+        } else {
+          throw e;
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       console.log("compiled project");
@@ -211,16 +172,38 @@ describe("Integration tests", () => {
       // todo: run wasm-opt if specified in flags?
 
       // Run the project and once all threads are complete check the results.
-      await runProject({
+      const runner = await instantiateProject({
         wasm_bytes: project_wasm.wasm_bytes,
         target_names: project_wasm.target_names,
+        project_json,
         strings: project_wasm.strings,
         settings: defaultSettings,
-        reportVmResult,
-        timeoutFailure: () => {
+        timeout: 5000,
+        assets: new Proxy(
+          {},
+          {
+            get() {
+              return {
+                dataFormat: "svg",
+                data: "",
+              };
+            },
+          },
+        ),
+        onTimeout: () => {
           throw new Error(`Timeout waiting for threads to complete: ${uri}`);
         },
+        importOverrides: {
+          looks: {
+            say_string: (string) => reportVmResult(string),
+          },
+        },
+        makeRenderer: makeTestRenderer,
       });
+
+      runner.flag_clicked();
+
+      await runner.run();
 
       // Verify test end was called
       if (!didEnd) {

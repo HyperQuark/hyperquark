@@ -1,7 +1,7 @@
 let _target_names: Array<string>;
 let _setup = false;
 let _target_bubbles: Array<object | null>;
-let _renderer;
+let _renderer: object;
 let _pen_skin: number;
 let _target_skins: Array<[number, number]>;
 let _costumes: Array<Array<Costume>>;

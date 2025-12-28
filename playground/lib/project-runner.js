@@ -1,17 +1,11 @@
 import { getSettings } from "./settings.js";
-import { imports } from "./imports.js";
-import { useDebugModeStore } from "../stores/debug.js";
+import { imports as baseImports } from "./imports.js";
 import {
   setup as sharedSetup,
   is_setup,
   renderer as get_renderer,
 } from "../../js/shared.ts";
 import { WasmStringType } from "../../js/no-compiler/hyperquark.js";
-// This does not work in vite dev mode! Only works in build mode.
-const scratch_render =
-  await import("scratch-render/dist/web/scratch-render.js");
-const RenderWebGL = scratch_render.default;
-const debugModeStore = useDebugModeStore();
 
 function createSkin(renderer, type, layer, ...params) {
   let drawableId = renderer.createDrawable(layer.toString());
@@ -25,12 +19,10 @@ function createSkin(renderer, type, layer, ...params) {
   return [skin, drawableId];
 }
 
-const spriteInfoLen = 80;
-
-function setup(canvas, project_json, assets, target_names) {
+async function setup(makeRenderer, project_json, assets, target_names) {
   if (is_setup()) return;
 
-  let renderer = new RenderWebGL(canvas);
+  let renderer = await makeRenderer();
 
   renderer.getDrawable = (id) => renderer._allDrawables[id];
   renderer.getSkin = (id) => renderer._allSkins[id];
@@ -41,12 +33,9 @@ function setup(canvas, project_json, assets, target_names) {
     target.costumes.map(({ md5ext }) => assets[md5ext]),
   );
 
-  const costumeNameMap = project_json.targets.map((target) =>
-    Object.fromEntries(target.costumes.map(({ name }, index) => [name, index])),
-  );
-
-  // @ts-ignore
-  window.renderer = renderer;
+  if (typeof window === "object") {
+    window.renderer = renderer;
+  }
   renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
   //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
   const pen_skin = renderer.createSkin("pen", "pen")[0];
@@ -80,39 +69,32 @@ function setup(canvas, project_json, assets, target_names) {
 }
 
 // @ts-ignore
-export default async (
-  {
-    framerate = 30,
-    turbo,
-    canvas,
-    wasm_bytes,
-    target_names,
-    string_consts,
-    project_json,
-    assets,
-  } = {
-    framerate: 30,
-    turbo: false,
-  },
-) => {
-  if (debugModeStore.debug)
+export async function instantiateProject({
+  framerate = 30,
+  turbo,
+  wasm_bytes,
+  target_names,
+  strings,
+  project_json,
+  assets,
+  makeRenderer,
+  isDebug = () => false,
+  timeout,
+  onTimeout = () => null,
+  importOverrides,
+}) {
+  if (isDebug() && typeof window === "object")
     window.open(
       URL.createObjectURL(new Blob([wasm_bytes], { type: "application/wasm" })),
     );
-  const framerate_wait = Math.round(1000 / framerate);
-  console.log("framerate_wait: %i", framerate_wait);
 
-  setup(canvas, project_json, assets, target_names);
+  await setup(makeRenderer, project_json, assets, target_names);
 
   const renderer = get_renderer();
 
-  console.log("green flag setup complete");
+  console.log("project setup complete");
 
-  let strings_tbl;
-
-  let updatePenColor;
-  let start_time = 0;
-  let sprite_info_offset = 0;
+  const framerate_wait = Math.round(1000 / framerate);
 
   const settings = getSettings();
   const builtins = [
@@ -120,6 +102,18 @@ export default async (
       ? ["js-string"]
       : []),
   ];
+
+  const imports = Object.assign(baseImports, {
+    "": Object.fromEntries(strings.map((string) => [string, string])),
+  });
+
+  console.log(importOverrides);
+
+  for (const [module, obj] of Object.entries(importOverrides ?? {})) {
+    for (const [name, val] of Object.entries(importOverrides[module])) {
+      imports[module][name] = val;
+    }
+  }
 
   try {
     if (
@@ -144,112 +138,96 @@ export default async (
   }
   function waitAnimationFrame() {
     return new Promise((resolve) => {
-      requestAnimationFrame(resolve);
+      if (typeof requestAnimationFrame === "function")
+        requestAnimationFrame(resolve);
+      else setTimeout(resolve, 1);
     });
   }
-  WebAssembly.instantiate(wasm_bytes, imports, {
+  let { instance } = await WebAssembly.instantiate(wasm_bytes, imports, {
     builtins,
     importedStringConstants: "",
-  })
-    .then(async ({ instance }) => {
-      const {
-        flag_clicked,
-        tick,
-        memory,
-        step_funcs,
-        vars_num,
-        threads_count,
-        requests_refresh,
-        upc,
-        threads,
-        noop,
-        unreachable_dbg,
-      } = instance.exports;
-      updatePenColor = (i) => null; //upc(i - 1);
-      window.memory = memory;
-      window.flag_clicked = flag_clicked;
-      window.tick = tick;
-      window.stop = () => {
-        if (typeof threads == "undefined") {
-          let memArr = new Uint32Array(memory.buffer);
-          for (let i = 0; i < threads_count.value; i++) {
-            memArr[i] = 0;
-          }
-        } else {
-          for (let i = 0; i < threads.length; i++) {
-            threads.set(i, noop);
-          }
-        }
-        threads_count.value = 0;
-      };
-      // @ts-ignore
-      //sprite_info_offset = vars_num.value * 16 + thn_offset + 4;
-      const dv = new DataView(memory.buffer);
-      /*for (let i = 0; i < target_names.length - 1; i++) {
-        dv.setFloat32(
-          sprite_info_offset + i * spriteInfoLen + 16,
-          66.66,
-          true
-        );
-        dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 20, 100, true);
-        dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 24, 100, true);
-        dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 28, 0, true);
-        dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 40, 1, true);
-        dv.setFloat32(sprite_info_offset + i * spriteInfoLen + 44, 1, true);
-        dv.setFloat64(sprite_info_offset + i * spriteInfoLen + 48, 1, true);
-      }*/
-      try {
-        // expose the module to devtools
-        unreachable_dbg();
-      } catch (error) {
-        console.info(
-          "synthetic error to expose wasm module to devtools:",
-          error,
-        );
+  });
+  const {
+    flag_clicked,
+    tick,
+    memory,
+    threads_count,
+    requests_refresh,
+    threads,
+    unreachable_dbg,
+  } = instance.exports;
+  if (typeof window === "object") {
+    window.memory = memory;
+    window.flag_clicked = flag_clicked;
+    window.tick = tick;
+  }
+
+  try {
+    // expose the module to devtools
+    unreachable_dbg();
+  } catch (error) {
+    console.info("synthetic error to expose wasm module to devtools:", error);
+  }
+
+  let running = false;
+
+  const run = async () => {
+    console.log("running");
+    if (running) return;
+
+    running = true;
+
+    renderer.draw();
+
+    let startTime = Date.now();
+    $outertickloop: while (running) {
+      if (timeout && Date.now() - startTime > timeout) {
+        return onTimeout();
       }
+      let thisTickStartTime = Date.now();
+      do {
+        tick();
+        if (threads_count.value === 0) {
+          break $outertickloop;
+        }
+      } while (
+        Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
+        !turbo &&
+        requests_refresh.value === 0
+      );
+      requests_refresh.value = 0;
+      renderer.draw();
+      if (framerate_wait > 0) {
+        await sleep(
+          Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
+        );
+      } else {
+        await waitAnimationFrame();
+      }
+    }
+    renderer.draw();
+    running = false;
+    console.log("project stopped (or maybe paused)");
+  };
+
+  return {
+    greenFlag: () => {
+      console.log("green flag clicked");
       flag_clicked();
-      start_time = Date.now();
-      console.log("green_flag()");
-      renderer.draw();
-      let thisTickStartTime;
-      $outertickloop: while (true) {
-        console.log("fps: %i", 1000 / (Date.now() - thisTickStartTime));
-        thisTickStartTime = Date.now();
-        // @ts-ignore
-        $innertickloop: do {
-          //for (const _ of [1]) {
-          // @ts-ignore
-          tick();
-          // @ts-ignore
-          if (threads_count.value === 0) {
-            break $outertickloop;
-          }
-        } while (
-          Date.now() - thisTickStartTime < framerate_wait * 0.8 &&
-          !turbo &&
-          requests_refresh.value === 0
-        );
-        // @ts-ignore
-        requests_refresh.value = 0;
-        renderer.draw();
-        if (framerate_wait > 0) {
-          console.log(
-            "sleeping for %i ms",
-            framerate_wait - (Date.now() - thisTickStartTime),
-          );
-          await sleep(
-            Math.max(0, framerate_wait - (Date.now() - thisTickStartTime)),
-          );
-        } else {
-          console.log("waiting animation frame");
-          await waitAnimationFrame();
-        }
+      run();
+    },
+    flag_clicked,
+    stop: () => {
+      console.log("stopping");
+      threads_count.value = 0;
+      running = false;
+      for (let i = 0; i < threads.length; i++) {
+        threads.set(i, null);
       }
-      renderer.draw();
-      console.log("project stopped");
-    })
-    .catch((e) => {
-      throw new Error("error when instantiating module:\n" + e.stack);
-      /*exit(1);*/
-    });
-};
+    },
+    pause: () => {
+      running = false;
+    },
+    run,
+  };
+}

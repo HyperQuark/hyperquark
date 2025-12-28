@@ -1,7 +1,10 @@
 use super::proc::{ProcMap, procs_from_target};
 use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from_target};
 use super::{Step, Target, Thread};
-use crate::instructions::{DataSetvariabletoFields, DataVariableFields, IrOpcode};
+use crate::instructions::{
+    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataVariableFields,
+    HqYieldFields, IrOpcode, YieldMode,
+};
 use crate::ir::target::IrCostume;
 use crate::ir::{PartialStep, RcVar};
 use crate::prelude::*;
@@ -165,40 +168,112 @@ impl IrProject {
     }
 }
 
+#[expect(
+    clippy::mutable_key_type,
+    reason = "Rc<Step> hashing relies only on ID, which is immutable"
+)]
+fn add_proc_return_vars_before_return<'a, I>(
+    step: &Rc<Step>,
+    var_ops: I,
+    checked_steps: &mut BTreeSet<Rc<Step>>,
+) -> HQResult<()>
+where
+    I: IntoIterator<Item = &'a IrOpcode> + Clone,
+{
+    let mut has_return = false;
+    checked_steps.insert(Rc::clone(step));
+    for (i, opcode) in step.opcodes().borrow().iter().enumerate() {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match opcode {
+            IrOpcode::hq_yield(HqYieldFields {
+                mode: YieldMode::Return,
+            }) => {
+                hq_assert!(
+                    i == step.opcodes().borrow().len() - 1,
+                    "found yield return in non-tail position"
+                );
+                has_return = true;
+            }
+            IrOpcode::hq_yield(HqYieldFields {
+                mode: YieldMode::Inline(inline_step),
+            }) => {
+                add_proc_return_vars_before_return(inline_step, var_ops.clone(), checked_steps)?;
+            }
+            IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if,
+                branch_else,
+            }) => {
+                add_proc_return_vars_before_return(branch_if, var_ops.clone(), checked_steps)?;
+                add_proc_return_vars_before_return(branch_else, var_ops.clone(), checked_steps)?;
+            }
+            IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
+                add_proc_return_vars_before_return(body, var_ops.clone(), checked_steps)?;
+            }
+            _ => (),
+        }
+    }
+
+    if has_return {
+        crate::log("borrowing opcodes mutably");
+        let mut opcodes_mut = step.opcodes_mut()?;
+        crate::log("borrowed opcodes mutably");
+
+        opcodes_mut.pop();
+
+        opcodes_mut.extend(var_ops.into_iter().cloned());
+
+        opcodes_mut.push(IrOpcode::hq_yield(HqYieldFields {
+            mode: YieldMode::Return,
+        }));
+    }
+
+    Ok(())
+}
+
 /// Add inputs + outputs to procedures corresponding to global/target variables
 fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
     for procedure in target.procedures()?.values() {
-        let PartialStep::Finished(step) = &*procedure.warped_first_step()? else {
+        let Some(ref warped_proc) = *procedure.warped_specific_proc() else {
+            continue;
+        };
+
+        let PartialStep::Finished(step) = &*warped_proc.first_step()? else {
             continue; // this should hopefully just mean that this procedure is unused.
         };
 
         let globally_scoped_variables = step.globally_scoped_variables()?;
         let globally_scoped_variables_num = step.globally_scoped_variables_num()?;
 
-        procedure
-            .context()
+        warped_proc
             .arg_vars()
             .try_borrow_mut()?
             .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
-        procedure
-            .context()
+        warped_proc
             .return_vars()
             .try_borrow_mut()?
             .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
-        if !procedure.context().always_warped() {
-            hq_todo!("non-warped procedure for fixup_target_procs")
+
+        let ret_var_ops = globally_scoped_variables
+            .map(|arg_var| {
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(arg_var),
+                    local_read: RefCell::new(false),
+                })
+            })
+            .collect::<Box<[_]>>();
+
+        {
+            let mut opcodes = step.opcodes_mut()?;
+
+            opcodes.reserve_exact(globally_scoped_variables_num);
+
+            opcodes.extend(ret_var_ops.iter().cloned());
         }
 
-        let mut opcodes = step.opcodes_mut()?;
-
-        opcodes.reserve_exact(globally_scoped_variables_num);
-
-        opcodes.extend(globally_scoped_variables.map(|arg_var| {
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(arg_var),
-                local_read: RefCell::new(false),
-            })
-        }));
+        add_proc_return_vars_before_return(step, ret_var_ops.iter(), &mut BTreeSet::new())?;
     }
 
     Ok(())

@@ -57,7 +57,10 @@ export const settingsInfo = Object.fromEntries(
  * @returns {WasmFlags}
  */
 export function getSettings() {
-  let store = localStorage["settings"];
+  let store =
+    typeof localStorage === "object"
+      ? localStorage["settings"]
+      : defaultSettings;
   try {
     return WasmFlags.from_js({ ...defaultSettingsObj, ...JSON.parse(store) });
   } catch {

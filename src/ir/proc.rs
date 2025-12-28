@@ -5,11 +5,11 @@
 use super::blocks::NextBlocks;
 use super::context::StepContext;
 use super::{Step, Target as IrTarget};
-use crate::ir::RcVar;
+use crate::ir::{ProcContext, RcVar};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockMap, BlockOpcode, Input, Target as Sb3Target};
 use crate::wasm::WasmFlags;
-use core::cell::Ref;
+use core::cell::{Ref, RefMut};
 use lazy_regex::{Lazy, lazy_regex};
 use regex::Regex;
 
@@ -21,25 +21,15 @@ pub enum PartialStep {
 }
 
 #[derive(Clone, Debug)]
-pub struct ProcContext {
+pub struct SpecificProc {
+    first_step: RefCell<PartialStep>,
     arg_vars: Rc<RefCell<Vec<RcVar>>>,
     return_vars: Rc<RefCell<Vec<RcVar>>>,
-    arg_ids: Box<[Box<str>]>,
-    arg_names: Box<[Box<str>]>,
-    target: Rc<IrTarget>,
-    /// whether a procedure is 'run without screen refresh'.
-    always_warped: bool,
 }
 
-impl ProcContext {
-    #[must_use]
-    pub fn arg_ids(&self) -> &[Box<str>] {
-        &self.arg_ids
-    }
-
-    #[must_use]
-    pub fn arg_names(&self) -> &[Box<str>] {
-        &self.arg_names
+impl SpecificProc {
+    pub fn first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
+        Ok(self.first_step.try_borrow()?)
     }
 
     #[must_use]
@@ -52,37 +42,57 @@ impl ProcContext {
         Rc::clone(&self.return_vars)
     }
 
-    #[must_use]
-    pub const fn always_warped(&self) -> bool {
-        self.always_warped
+    fn proc_context(&self, arg_names: Box<[Box<str>]>) -> ProcContext {
+        ProcContext {
+            arg_vars: Rc::clone(&self.arg_vars),
+            ret_vars: Rc::clone(&self.return_vars),
+            arg_names,
+        }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Proc {
-    warped_first_step: RefCell<PartialStep>,
-    nonwarped_first_step: RefCell<PartialStep>,
+    #[expect(clippy::struct_field_names, reason = "i like it")]
+    warped_specific_proc: RefCell<Option<SpecificProc>>,
+    #[expect(clippy::struct_field_names, reason = "i like it")]
+    nonwarped_specific_proc: RefCell<Option<SpecificProc>>,
     first_step_id: Option<Box<str>>,
     proccode: Box<str>,
-    context: ProcContext,
     debug: bool,
+    arg_ids: Box<[Box<str>]>,
+    arg_names: Box<[Box<str>]>,
+    target: Rc<IrTarget>,
+    /// whether a procedure is 'run without screen refresh'.
+    always_warped: bool,
 }
 
 impl Proc {
-    pub fn warped_first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
-        Ok(self.warped_first_step.try_borrow()?)
+    pub fn warped_specific_proc(&self) -> Ref<'_, Option<SpecificProc>> {
+        self.warped_specific_proc.borrow()
     }
 
-    pub fn nonwarped_first_step(&self) -> HQResult<Ref<'_, PartialStep>> {
-        Ok(self.nonwarped_first_step.try_borrow()?)
-    }
-
-    pub const fn context(&self) -> &ProcContext {
-        &self.context
+    pub fn nonwarped_specific_proc(&self) -> Ref<'_, Option<SpecificProc>> {
+        self.nonwarped_specific_proc.borrow()
     }
 
     pub fn proccode(&self) -> &str {
         &self.proccode
+    }
+
+    #[must_use]
+    pub fn arg_ids(&self) -> &[Box<str>] {
+        &self.arg_ids
+    }
+
+    #[must_use]
+    pub fn arg_names(&self) -> &[Box<str>] {
+        &self.arg_names
+    }
+
+    #[must_use]
+    pub const fn always_warped(&self) -> bool {
+        self.always_warped
     }
 }
 
@@ -164,7 +174,6 @@ impl Proc {
         else {
             hq_bad_proj!("proccode wasn't a string");
         };
-        let arg_vars = arg_vars_from_proccode(proccode.as_str());
         #[expect(
             clippy::unwrap_used,
             reason = "previously asserted that block_info is Some"
@@ -236,22 +245,25 @@ impl Proc {
         };
         let arg_ids = Self::string_vec_mutation(mutations, "argumentids")?;
         let arg_names = Self::string_vec_mutation(mutations, "argumentnames")?;
-        let context = ProcContext {
-            arg_vars,
+        Ok(Rc::new(Self {
+            proccode: proccode.as_str().into(),
+            warped_specific_proc: RefCell::new(None),
+            nonwarped_specific_proc: RefCell::new(None),
+            first_step_id,
+            debug,
             arg_ids,
             arg_names,
             target,
-            return_vars: Rc::new(RefCell::new(vec![])),
             always_warped: warp,
-        };
-        Ok(Rc::new(Self {
-            proccode: proccode.as_str().into(),
-            warped_first_step: RefCell::new(PartialStep::None),
-            nonwarped_first_step: RefCell::new(PartialStep::None),
-            first_step_id,
-            context,
-            debug,
         }))
+    }
+
+    fn new_specific_proc(&self) -> SpecificProc {
+        SpecificProc {
+            first_step: RefCell::new(PartialStep::None),
+            arg_vars: arg_vars_from_proccode(&self.proccode),
+            return_vars: Rc::new(RefCell::new(vec![])),
+        }
     }
 
     pub fn compile_warped(
@@ -259,18 +271,78 @@ impl Proc {
         blocks: &BTreeMap<Box<str>, Block>,
         flags: &WasmFlags,
     ) -> HQResult<()> {
+        self.compile(
+            blocks,
+            flags,
+            || Ok(self.warped_specific_proc.try_borrow()?),
+            || Ok(self.warped_specific_proc.try_borrow_mut()?),
+            true,
+        )
+    }
+
+    pub fn compile_nonwarped(
+        &self,
+        blocks: &BTreeMap<Box<str>, Block>,
+        flags: &WasmFlags,
+    ) -> HQResult<()> {
+        self.compile(
+            blocks,
+            flags,
+            || Ok(self.nonwarped_specific_proc.try_borrow()?),
+            || Ok(self.nonwarped_specific_proc.try_borrow_mut()?),
+            false,
+        )
+    }
+
+    pub fn compile<'a, F, G>(
+        &self,
+        blocks: &BTreeMap<Box<str>, Block>,
+        flags: &WasmFlags,
+        specific_proc: F,
+        specific_proc_mut: G,
+        warp: bool,
+    ) -> HQResult<()>
+    where
+        F: Fn() -> HQResult<Ref<'a, Option<SpecificProc>>>,
+        G: Fn() -> HQResult<RefMut<'a, Option<SpecificProc>>>,
+    {
         {
-            if *self.warped_first_step()? != PartialStep::None {
+            if specific_proc()?
+                .as_ref()
+                .is_some_and(|p| p.first_step().is_ok_and(|s| *s != PartialStep::None))
+            {
                 return Ok(());
             }
         }
+
         {
-            *self.warped_first_step.try_borrow_mut()? = PartialStep::StartedCompilation;
+            let maybe_specific_proc = specific_proc()?.clone();
+
+            if maybe_specific_proc.is_some() {
+                #[expect(clippy::unwrap_used, reason = "already checked that it is_some")]
+                *specific_proc_mut()?
+                    .as_ref()
+                    .unwrap()
+                    .first_step
+                    .try_borrow_mut()? = PartialStep::StartedCompilation;
+            } else {
+                let new_specific_proc = self.new_specific_proc();
+                *new_specific_proc.first_step.try_borrow_mut()? = PartialStep::StartedCompilation;
+                *specific_proc_mut()? = Some(new_specific_proc);
+            }
         }
+
+        let specific_proc_option = specific_proc()?;
+        #[expect(
+            clippy::unwrap_used,
+            reason = "must be Some as we assign to it if None"
+        )]
+        let some_specific_proc = specific_proc_option.as_ref().unwrap();
+
         let step_context = StepContext {
-            warp: true,
-            proc_context: Some(self.context.clone()),
-            target: Rc::clone(&self.context.target),
+            warp,
+            proc_context: Some(some_specific_proc.proc_context(self.arg_names.clone())),
+            target: Rc::clone(&self.target),
             debug: self.debug,
         };
         let step = match self.first_step_id {
@@ -291,13 +363,23 @@ impl Proc {
                     blocks,
                     &step_context,
                     &step_context.target().project(),
-                    NextBlocks::new(false),
+                    NextBlocks::new(!warp),
                     true,
                     flags,
                 )?
             }
         };
-        *self.warped_first_step.try_borrow_mut()? = PartialStep::Finished(step);
+
+        #[expect(
+            clippy::unwrap_used,
+            reason = "must be Some as we assigned to it if None"
+        )]
+        *specific_proc()?
+            .as_ref()
+            .unwrap()
+            .first_step
+            .try_borrow_mut()? = PartialStep::Finished(step);
+
         Ok(())
     }
 }
@@ -321,21 +403,14 @@ pub fn procs_from_target(sb3_target: &Sb3Target, ir_target: &Rc<IrTarget>) -> HQ
     Ok(())
 }
 
-impl fmt::Display for Proc {
+impl fmt::Display for SpecificProc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let proccode = self.proccode();
-        let always_warped = self.context().always_warped();
-        let partial_warped_step = self.warped_first_step().map_err(|_| fmt::Error)?.clone();
-        let warped_step = match partial_warped_step.borrow() {
-            PartialStep::Finished(step) => step.id(),
+        let first_step = self.first_step.borrow();
+        let first_step_str = match *first_step {
+            PartialStep::Finished(ref step) => step.id(),
             PartialStep::StartedCompilation | PartialStep::None => "none",
         };
-        let partial_nonwarped_step = self.nonwarped_first_step().map_err(|_| fmt::Error)?.clone();
-        let nonwarped_step = match partial_nonwarped_step.borrow() {
-            PartialStep::Finished(step) => step.id(),
-            PartialStep::StartedCompilation | PartialStep::None => "none",
-        };
-        let arg_vars_cell = &self.context().arg_vars();
+        let arg_vars_cell = &self.arg_vars();
         let arg_vars = format!(
             "[{}]",
             RefCell::borrow(arg_vars_cell)
@@ -343,7 +418,7 @@ impl fmt::Display for Proc {
                 .map(|var| format!("{var}"))
                 .join(", ")
         );
-        let ret_vars_cell = &self.context().return_vars();
+        let ret_vars_cell = &self.return_vars();
         let ret_vars = format!(
             "[{}]",
             RefCell::borrow(ret_vars_cell)
@@ -354,12 +429,36 @@ impl fmt::Display for Proc {
         write!(
             f,
             r#"{{
-            "proccode": "{proccode}",
-            "always_warped": {always_warped},
-            "warped_first_step": "{warped_step}",
-            "nonwarped_first_step": "{nonwarped_step}",
+            "first_step": "{first_step_str}",
             "arg_vars": {arg_vars},
             "return_vars": {ret_vars}
+        }}"#
+        )
+    }
+}
+
+impl fmt::Display for Proc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let proccode = self.proccode();
+        let always_warped = self.always_warped();
+        let warped_specific_proc = if let Some(ref nwsp) = self.warped_specific_proc().clone() {
+            format!("{nwsp}")
+        } else {
+            "null".to_string()
+        };
+        let nonwarped_specific_proc = if let Some(ref nwsp) = self.nonwarped_specific_proc().clone()
+        {
+            format!("{nwsp}")
+        } else {
+            "null".to_string()
+        };
+        write!(
+            f,
+            r#"{{
+            "proccode": "{proccode}",
+            "always_warped": {always_warped},
+            "warped_specific_proc": {warped_specific_proc},
+            "nonwarped_specific_proc": {nonwarped_specific_proc}
         }}"#
         )
     }

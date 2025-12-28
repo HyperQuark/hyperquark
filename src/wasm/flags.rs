@@ -21,13 +21,6 @@ pub enum Switch {
 
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[wasm_bindgen]
-pub enum Scheduler {
-    TypedFuncRef,
-    CallIndirect,
-}
-
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[wasm_bindgen]
 pub enum ListType {
     GCArray,
     LinearMemory,
@@ -177,7 +170,6 @@ macro_rules! ty_str {
 pub struct WasmFlags {
     pub string_type: WasmStringType,
     pub wasm_opt: Switch,
-    pub scheduler: Scheduler,
     pub print_ir: Switch,
     pub integers: Switch,
     pub list_type: ListType,
@@ -214,11 +206,6 @@ impl WasmFlags {
                 WasmStringType::JsStringBuiltins
             } else {
                 WasmStringType::ExternRef
-            },
-            scheduler: if wasm_features.contains(&WasmFeature::TypedFunctionReferences) {
-                Scheduler::TypedFuncRef
-            } else {
-                Scheduler::CallIndirect
             },
             print_ir: Switch::Off,
             integers: Switch::Off,
@@ -274,16 +261,6 @@ impl WasmFlags {
                 .with_name("WASM optimisation")
                 .with_description("Should we try to optimise generated WASM modules using wasm-opt?")
                 .with_ty(ty_str!(Switch)),
-            "scheduler" => FlagInfo::new()
-                .with_name("Scheduler")
-                .with_description("TypedFuncRef (recommended) - uses typed function references to eliminate runtime checks.\
-                <br>\
-                CallIndirect - stores function indices, then uses CallIndirect to call them.")
-                .with_ty(ty_str!(Scheduler))
-                .with_wasm_features(stringmap! {
-                    TypedFuncRef : vec![WasmFeature::TypedFunctionReferences],
-                    CallIndirect : vec![WasmFeature::BulkMemory],
-                }),
             "print_ir" => FlagInfo::new()
                 .with_name("Print IR")
                 .with_description("For debugging purposes only")

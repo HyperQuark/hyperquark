@@ -25,6 +25,10 @@ pub fn wasm(
     inputs: Rc<[IrType]>,
     Fields { proc }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
+    let Some(ref warped_specific_proc) = *proc.warped_specific_proc() else {
+        hq_bug!("warped_specific_proc didn't exist for call_warp")
+    };
+
     let locals = inputs
         .iter()
         .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)?))
@@ -39,7 +43,7 @@ pub fn wasm(
         .collect::<Vec<_>>();
 
     for ((&input, local), param) in inputs.iter().zip(locals).zip(
-        proc.context()
+        warped_specific_proc
             .arg_vars()
             .try_borrow()?
             .iter()
@@ -56,6 +60,7 @@ pub fn wasm(
     }
 
     wasm.extend(wasm![
+        LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         LocalGet((func.params().len() - 1).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         #LazyWarpedProcCall(Rc::clone(proc))
     ]);
@@ -64,8 +69,10 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs(Fields { proc }: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(proc
-        .context()
+    let Some(ref warped_specific_proc) = *proc.warped_specific_proc() else {
+        hq_bug!("warped_specific_proc didn't exist for call_warp")
+    };
+    Ok(warped_specific_proc
         .arg_vars()
         .try_borrow()?
         .iter()
@@ -74,8 +81,11 @@ pub fn acceptable_inputs(Fields { proc }: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, Fields { proc }: &Fields) -> HQResult<ReturnType> {
+    let Some(ref warped_specific_proc) = *proc.warped_specific_proc() else {
+        hq_bug!("warped_specific_proc didn't exist for call_warp")
+    };
     Ok(MultiValue(
-        proc.context()
+        warped_specific_proc
             .return_vars()
             .try_borrow()?
             .iter()
