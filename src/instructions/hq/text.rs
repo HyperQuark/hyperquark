@@ -55,8 +55,8 @@ pub fn const_fold(
     _state: &mut ConstFoldState,
     Fields(s): &Fields,
 ) -> HQResult<ConstFold> {
-    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::String(
-        s.clone(),
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Basic(
+        VarVal::String(s.clone()),
     )])))
 }
 

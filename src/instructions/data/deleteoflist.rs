@@ -91,7 +91,7 @@ crate::instructions_test!(
                 IrType::Int,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -107,7 +107,7 @@ crate::instructions_test!(
                 IrType::Float,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -122,7 +122,7 @@ crate::instructions_test!(
                 IrType::String,
                 vec![crate::sb3::VarVal::String("hi".into())],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -137,7 +137,7 @@ crate::instructions_test!(
                 IrType::Any,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },

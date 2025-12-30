@@ -47,7 +47,9 @@ pub fn const_fold(
     _state: &mut ConstFoldState,
     Fields(b): &Fields,
 ) -> HQResult<ConstFold> {
-    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Bool(*b)])))
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Basic(
+        VarVal::Bool(*b),
+    )])))
 }
 
 crate::instructions_test! {tests_false; hq_boolean; @ super::Fields(false)}

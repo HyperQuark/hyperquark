@@ -53,7 +53,9 @@ pub fn const_fold(
     _state: &mut ConstFoldState,
     Fields(f): &Fields,
 ) -> HQResult<ConstFold> {
-    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Float(*f)])))
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Basic(
+        VarVal::Float(*f),
+    )])))
 }
 
 crate::instructions_test! {tests; hq_float; @ super::Fields(0.0)}

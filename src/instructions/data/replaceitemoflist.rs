@@ -102,7 +102,7 @@ crate::instructions_test!(
                 IrType::Int,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -118,7 +118,7 @@ crate::instructions_test!(
                 IrType::Float,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -133,7 +133,7 @@ crate::instructions_test!(
                 IrType::String,
                 vec![crate::sb3::VarVal::String("hi".into())],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -148,7 +148,7 @@ crate::instructions_test!(
                 IrType::Any,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -163,7 +163,7 @@ crate::instructions_test!(
             IrType::Int,
             vec![],
             &flags()
-        )
+        ).unwrap()
     };
     { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
 );
@@ -176,7 +176,7 @@ crate::instructions_test!(
             IrType::Float,
             vec![],
             &flags()
-        )
+        ).unwrap()
     }
 );
 
@@ -188,7 +188,7 @@ crate::instructions_test!(
             IrType::String,
             vec![],
             &flags()
-        )
+        ).unwrap()
     }
 );
 
@@ -200,6 +200,6 @@ crate::instructions_test!(
             IrType::Any,
             vec![],
             &flags()
-        )
+        ).unwrap()
     }
 );

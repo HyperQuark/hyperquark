@@ -102,9 +102,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
-
-
-            )),
+            ).unwrap()),
         local_write: RefCell::new(false)
     }
 );
@@ -117,9 +115,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::Float,
                     crate::sb3::VarVal::Float(0.0),
-
-
-            )),
+            ).unwrap()),
         local_write: RefCell::new(false)
     }
 );
@@ -132,9 +128,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::String,
                     crate::sb3::VarVal::String("".into()),
-
-
-            )),
+            ).unwrap()),
         local_write: RefCell::new(false)
     }
 );
@@ -147,7 +141,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::Int,
                     crate::sb3::VarVal::Int(1),
-            )),
+            ).unwrap()),
         local_write: RefCell::new(false)
     }
 );
@@ -160,9 +154,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
-
-
-            )),
+            ).unwrap()),
         local_write: RefCell::new(true)
     }
 );
@@ -175,9 +167,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::Float,
                     crate::sb3::VarVal::Float(0.0),
-
-
-            )),
+            ).unwrap()),
         local_write: RefCell::new(true)
     }
 );
@@ -190,9 +180,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::String,
                     crate::sb3::VarVal::String("".into()),
-
-
-            )),
+            ).unwrap()),
         local_write: RefCell::new(true)
     }
 );
@@ -205,7 +193,7 @@ crate::instructions_test!(
                 crate::ir::RcVar::new(
                     IrType::Int,
                     crate::sb3::VarVal::Int(1),
-            )),
+            ).unwrap()),
         local_write: RefCell::new(true)
     }
 );

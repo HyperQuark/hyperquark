@@ -57,7 +57,7 @@ crate::instructions_test!(
                 IrType::Any,
                 vec![crate::sb3::VarVal::Float(3.0)],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },

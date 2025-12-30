@@ -48,7 +48,9 @@ pub fn const_fold(
     _state: &mut ConstFoldState,
     Fields(i): &Fields,
 ) -> HQResult<ConstFold> {
-    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Int(*i)])))
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Basic(
+        VarVal::Int(*i),
+    )])))
 }
 
 crate::instructions_test! {tests; hq_integer; @ super::Fields(0)}

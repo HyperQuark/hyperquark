@@ -1,17 +1,16 @@
 use super::SSAToken;
 use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, HqBooleanFields, HqFloatFields, HqIntegerFields,
-    HqTextFields, HqYieldFields, IrOpcode, YieldMode,
+    ControlIfElseFields, ControlLoopFields, HqBoxFields, HqYieldFields, IrOpcode, YieldMode,
 };
-use crate::ir::{IrProject, ReturnType, Step, Type as IrType};
+use crate::ir::{IrProject, ReturnType, Step, Type as IrType, var_val_instruction, var_val_type};
 use crate::prelude::*;
+use crate::sb3::VarVal;
 
 #[derive(Debug, Clone)]
 pub enum ConstFoldItem {
-    Float(f64),
-    Int(i32),
-    Bool(bool),
-    String(Box<str>),
+    Basic(VarVal),
+    Boxed(VarVal, IrType),
+    Stack(Rc<[IrOpcode]>),
     Unknown {
         possible_types: IrType,
         opcodes: Rc<[IrOpcode]>,
@@ -22,18 +21,9 @@ impl ConstFoldItem {
     pub fn possible_types(&self) -> HQResult<IrType> {
         Ok(match self {
             Self::Unknown { possible_types, .. } => *possible_types,
-            Self::Float(f) => IrOpcode::hq_float(HqFloatFields(*f))
-                .output_type(Rc::from([]))?
-                .singleton_or_else(|| make_hq_bug!("got non-singleton output type for const"))?,
-            Self::Int(i) => IrOpcode::hq_integer(HqIntegerFields(*i))
-                .output_type(Rc::from([]))?
-                .singleton_or_else(|| make_hq_bug!("got non-singleton output type for const"))?,
-            Self::Bool(b) => IrOpcode::hq_boolean(HqBooleanFields(*b))
-                .output_type(Rc::from([]))?
-                .singleton_or_else(|| make_hq_bug!("got non-singleton output type for const"))?,
-            Self::String(s) => IrOpcode::hq_text(HqTextFields(s.clone()))
-                .output_type(Rc::from([]))?
-                .singleton_or_else(|| make_hq_bug!("got non-singleton output type for const"))?,
+            Self::Stack(_) => hq_bug!("called possible_types on ConstFoldItem::Stack"),
+            Self::Basic(val) => var_val_type(val)?,
+            Self::Boxed(_, ty) => *ty,
         })
     }
 
@@ -41,10 +31,12 @@ impl ConstFoldItem {
     pub fn to_opcodes(&self) -> Rc<[IrOpcode]> {
         match self {
             Self::Unknown { opcodes, .. } => Rc::clone(opcodes),
-            Self::Float(f) => Rc::from([IrOpcode::hq_float(HqFloatFields(*f))]),
-            Self::Int(i) => Rc::from([IrOpcode::hq_integer(HqIntegerFields(*i))]),
-            Self::Bool(b) => Rc::from([IrOpcode::hq_boolean(HqBooleanFields(*b))]),
-            Self::String(s) => Rc::from([IrOpcode::hq_text(HqTextFields(s.clone()))]),
+            Self::Basic(val) => Rc::from([var_val_instruction(val)]),
+            Self::Stack(stack) => Rc::clone(stack),
+            Self::Boxed(val, ty) => Rc::from([
+                var_val_instruction(val),
+                IrOpcode::hq_box(HqBoxFields { output_ty: *ty }),
+            ]),
         }
     }
 }

@@ -66,7 +66,7 @@ impl IrProject {
                 .iter()
                 .find(|target| target.is_stage)
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
-        );
+        )?;
 
         let global_lists = lists_from_target(
             sb3.targets
@@ -74,7 +74,7 @@ impl IrProject {
                 .find(|target| target.is_stage)
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
             flags,
-        );
+        )?;
 
         let project = Rc::new(Self::new(global_variables, global_lists));
 
@@ -86,12 +86,12 @@ impl IrProject {
                 let variables = if target.is_stage {
                     BTreeMap::new()
                 } else {
-                    variables_from_target(target)
+                    variables_from_target(target)?
                 };
                 let lists = if target.is_stage {
                     BTreeMap::new()
                 } else {
-                    lists_from_target(target, flags)
+                    lists_from_target(target, flags)?
                 };
                 let procedures = RefCell::new(ProcMap::new());
                 let costumes = target

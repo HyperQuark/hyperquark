@@ -1,3 +1,6 @@
+use crate::instructions::{
+    HqBooleanFields, HqFloatFields, HqIntegerFields, HqTextFields, IrOpcode,
+};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 use bitmask_enum::bitmask;
@@ -203,13 +206,18 @@ pub fn base_types(inputs: &[Type]) -> HQResult<Box<[Box<[Type]>]>> {
 }
 
 #[must_use]
-pub const fn var_val_type(var_val: &VarVal) -> Type {
-    // todo: specialise these for constant values
-    // todo: when can we say that the varval is an int? maybe only at a later point in the compilation process?
+pub fn var_val_instruction(var_val: &VarVal) -> IrOpcode {
     match var_val {
-        VarVal::Int(_) => Type::Int,
-        VarVal::Bool(_) => Type::Boolean,
-        VarVal::Float(_) => Type::Float,
-        VarVal::String(_) => Type::String,
+        VarVal::Float(f) => IrOpcode::hq_float(HqFloatFields(*f)),
+        VarVal::Int(i) => IrOpcode::hq_integer(HqIntegerFields(*i)),
+        VarVal::Bool(b) => IrOpcode::hq_boolean(HqBooleanFields(*b)),
+        VarVal::String(s) => IrOpcode::hq_text(HqTextFields(s.clone())),
     }
+}
+
+pub fn var_val_type(var_val: &VarVal) -> HQResult<Type> {
+    // todo: when can we say that the varval is an int? maybe only at a later point in the compilation process?
+    var_val_instruction(var_val)
+        .output_type(Rc::from([]))?
+        .singleton_or_else(|| make_hq_bug!("got non-singleton output type for const"))
 }

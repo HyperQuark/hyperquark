@@ -302,23 +302,44 @@ pub fn const_fold(
     &Fields(to): &Fields,
 ) -> HQResult<ConstFold> {
     Ok(match &inputs[0] {
-        ConstFoldItem::Unknown { .. } => NotFoldable,
-        ConstFoldItem::String(string) => match best_cast_candidate(IrType::String, to)? {
-            IrType::Boolean => ConstFold::Folded(Rc::from([ConstFoldItem::Bool(
-                &**string != "0" && !string.is_empty() && string.to_lowercase() != "false",
-            )])),
-            IrType::String => ConstFold::Folded(Rc::from([ConstFoldItem::String(string.clone())])),
-            IrType::Float => ConstFold::Folded(Rc::from([ConstFoldItem::Float(
-                string.parse().unwrap_or(f64::NAN),
-            )])),
-            #[expect(clippy::cast_possible_truncation, reason = "this is deliberate")]
-            IrType::Int => ConstFold::Folded(Rc::from([ConstFoldItem::Int(
-                string.parse::<f64>().unwrap_or(0.0) as i32,
-            )])),
-            _ => hq_bug!("tried to cast from string to {}", to),
-        },
-        // other casts are foldable, but they are a lower priority since binaryen should be able to handle them fine
-        _ => NotFoldable,
+        ConstFoldItem::Unknown { .. } | ConstFoldItem::Boxed(_, _) => NotFoldable,
+        ConstFoldItem::Basic(val) => {
+            ConstFold::Folded(Rc::from([ConstFoldItem::Basic(match val {
+                VarVal::String(string) => match best_cast_candidate(IrType::String, to)? {
+                    IrType::Boolean => VarVal::Bool(
+                        &**string != "0" && !string.is_empty() && string.to_lowercase() != "false",
+                    ),
+                    IrType::String => VarVal::String(string.clone()),
+                    IrType::Float => VarVal::Float(string.parse().unwrap_or(f64::NAN)),
+
+                    #[expect(clippy::cast_possible_truncation, reason = "this is deliberate")]
+                    IrType::Int => VarVal::Int(string.parse::<f64>().unwrap_or(0.0) as i32),
+                    _ => hq_bug!("tried to cast from string to {}", to),
+                },
+                VarVal::Float(float) => match best_cast_candidate(IrType::Float, to)? {
+                    IrType::Boolean => VarVal::Bool(*float != 0.0),
+                    IrType::Float => VarVal::Float(*float),
+                    IrType::Int => VarVal::Int(*float as i32),
+                    IrType::String => VarVal::String(float.to_string().into_boxed_str()),
+                    _ => hq_bug!("tried to cast from float to {}", to),
+                },
+                VarVal::Int(int) => match best_cast_candidate(IrType::Int, to)? {
+                    IrType::Boolean => VarVal::Bool(*int != 0),
+                    IrType::Float => VarVal::Float((*int).into()),
+                    IrType::Int => VarVal::Int(*int),
+                    IrType::String => VarVal::String(int.to_string().into_boxed_str()),
+                    _ => hq_bug!("tried to cast from int to {}", to),
+                },
+                VarVal::Bool(b) => match best_cast_candidate(IrType::Boolean, to)? {
+                    IrType::Boolean => VarVal::Bool(*b),
+                    IrType::Float => VarVal::Float(if *b { 1.0 } else { 0.0 }),
+                    IrType::Int => VarVal::Int((*b).into()),
+                    IrType::String => VarVal::String(b.to_string().into_boxed_str()),
+                    _ => hq_bug!("tried to cast from bool to {}", to),
+                },
+            })]))
+        }
+        ConstFoldItem::Stack(_) => hq_bug!("found ConstFoldItem::Stack on stack"),
     })
 }
 

@@ -117,6 +117,7 @@ mod prelude {
     pub use crate::ir::{ReturnType, Type as IrType};
     pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
     pub use crate::prelude::*;
+    pub use crate::sb3::VarVal;
     pub use crate::wasm::{InternalInstruction, StepFunc};
     pub use ConstFold::NotFoldable;
     pub use ReturnType::{MultiValue, Singleton};

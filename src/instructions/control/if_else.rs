@@ -69,12 +69,29 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
-pub const fn const_fold(
-    _inputs: &[ConstFoldItem],
+pub fn const_fold(
+    inputs: &[ConstFoldItem],
     _state: &mut ConstFoldState,
-    _fields: &Fields,
+    fields: &Fields,
 ) -> HQResult<ConstFold> {
-    Ok(NotFoldable)
+    if let ConstFoldItem::Basic(VarVal::Bool(const_condition)) = inputs[0]
+        && false
+    {
+        Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Stack(
+            if const_condition {
+                &fields.branch_if
+            } else {
+                &fields.branch_else
+            }
+            .opcodes()
+            .borrow()
+            .iter()
+            .cloned()
+            .collect(),
+        )])))
+    } else {
+        Ok(NotFoldable)
+    }
 }
 
 // crate::instructions_test! {none; hq__if; @ super::Fields(None)}
