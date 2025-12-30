@@ -63,7 +63,7 @@ pub struct ConstFoldState {
 fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> {
     let mut new_opcodes = vec![];
 
-    let mut const_stack = vec![];
+    let mut const_stack: Vec<ConstFoldItem> = vec![];
 
     for opcode in step.opcodes().borrow().iter() {
         if let IrOpcode::control_if_else(ControlIfElseFields {
@@ -89,11 +89,16 @@ fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> 
             }
         }
 
-        if let IrOpcode::hq_yield(HqYieldFields {
-            mode: YieldMode::Inline(inline_step),
-        }) = opcode
-        {
-            const_fold_step(inline_step, state)?;
+        if let IrOpcode::hq_yield(HqYieldFields { mode }) = opcode {
+            if let YieldMode::Inline(inline_step) = mode {
+                const_fold_step(inline_step, state)?;
+            } else {
+                for const_item in &const_stack {
+                    new_opcodes.extend(const_item.to_opcodes().iter().cloned());
+                }
+                new_opcodes.push(opcode.clone());
+                break;
+            }
         }
 
         let inputs_len = opcode.acceptable_inputs()?.len();

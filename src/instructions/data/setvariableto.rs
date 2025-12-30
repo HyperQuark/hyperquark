@@ -75,9 +75,21 @@ pub fn const_fold(
     state: &mut ConstFoldState,
     Fields { var, .. }: &Fields,
 ) -> HQResult<ConstFold> {
-    state
-        .vars
-        .insert(var.borrow().id().into(), inputs[0].clone());
+    if state.vars.contains_key(var.borrow().id()) {
+        // if this variable has already been written to, we don't want to overwrite it with some constant
+        // value, so explicitly set it as unknown.
+        state.vars.insert(
+            var.borrow().id().into(),
+            ConstFoldItem::Unknown {
+                possible_types: *var.borrow().possible_types(),
+                opcodes: Rc::from([]),
+            },
+        );
+    } else {
+        state
+            .vars
+            .insert(var.borrow().id().into(), inputs[0].clone());
+    }
 
     Ok(NotFoldable)
 }
