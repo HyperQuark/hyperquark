@@ -54,6 +54,14 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields { list }: &Fields) -> HQResult<
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test!(
     _mut;
     data_lengthoflist;

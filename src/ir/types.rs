@@ -76,9 +76,10 @@ pub enum Type {
 impl Type {
     // float must always be last in this list because it's more difficult to check if a boxed value
     // *doesn't* match any other pattern
-    pub const BASE_TYPES: [Self; 5] = [
+    pub const BASE_TYPES: [Self; 6] = [
         Self::String,
-        Self::QuasiInt,
+        Self::Int,
+        Self::Boolean,
         Self::ColorRGB,
         Self::ColorARGB,
         Self::Float,

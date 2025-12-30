@@ -28,7 +28,7 @@ pub fn wasm(
     let itarget_idx: i32 = target_idx
         .try_into()
         .map_err(|_| make_hq_bug!("target index out of bounds"))?;
-    Ok(if IrType::QuasiInt.contains(inputs[0]) {
+    Ok(if IrType::Int.contains(inputs[0]) {
         let func_index = func.registries().external_functions().register(
             ("looks", format!("{prefix}_int").into_boxed_str()),
             (vec![ValType::I32, ValType::I32], vec![]),
@@ -46,6 +46,29 @@ pub fn wasm(
             (vec![ValType::EXTERNREF, ValType::I32], vec![]),
         )?;
         wasm![I32Const(itarget_idx), Call(func_index)]
+    } else if IrType::Boolean.contains(inputs[0]) {
+        let func_index = func.registries().external_functions().register(
+            ("looks", format!("{prefix}_string").into_boxed_str()),
+            (vec![ValType::EXTERNREF, ValType::I32], vec![]),
+        )?;
+        let true_string = func
+            .registries()
+            .strings()
+            .register_default("true".into())?;
+        let false_string = func
+            .registries()
+            .strings()
+            .register_default("false".into())?;
+        let bool_local = func.local(ValType::I32)?;
+        wasm![
+            LocalSet(bool_local),
+            GlobalGet(true_string),
+            GlobalGet(false_string),
+            LocalGet(bool_local),
+            TypedSelect(ValType::EXTERNREF),
+            I32Const(itarget_idx),
+            Call(func_index)
+        ]
     } else {
         hq_bug!("bad input")
     })
@@ -63,6 +86,14 @@ pub fn output_type(inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTyp
 }
 
 pub const REQUESTS_SCREEN_REFRESH: bool = true;
+
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
 
 crate::instructions_test! {tests_debug; looks_say; t @ super::Fields { debug: true, target_idx: 0 }}
 crate::instructions_test! {tests_non_debug; looks_say; t @ super::Fields { debug: false, target_idx: 0, }}

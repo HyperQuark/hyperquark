@@ -1283,6 +1283,7 @@ fn box_proc_returns(
 
 /// A token type that cannot be instantiated from anywhere else (since the field is private)
 /// - used as proof that we've carried out these optimisations.
+#[derive(Copy, Clone)]
 pub struct SSAToken(PhantomData<()>);
 
 pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {

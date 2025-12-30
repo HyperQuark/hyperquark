@@ -132,29 +132,34 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 } else {
                     not_nan_check
                 }
-            }).chain(boxed_checks.iter().enumerate().map(|(i, ident)| (i * 3 + nan_checks.len(), ident)).map(|(i,ident)| {
+            }).chain(boxed_checks.iter().enumerate().map(|(i, ident)| (i * 3 + nan_checks.len(), ident)).filter_map(|(i,ident)| {
                 let ident = format_ident!("{ident}");
                 let boxed_check = quote! { !#ident.is_base_type() };
                 let string_check = quote! { #ident.base_type() == Some(crate::ir::Type::String) };
                 let float_check = quote! { #ident.base_type() == Some(crate::ir::Type::Float) };
-                let int_check = quote! { #ident.base_type() == Some(crate::ir::Type::QuasiInt) };
+                let int_check = quote! { #ident.base_type() == Some(crate::ir::Type::Int) };
+                let bool_check = quote! { #ident.base_type() == Some(crate::ir::Type::Boolean) };
                 let color_rgb_check = quote! { #ident.base_type() == Some(crate::ir::Type::ColorRGB) };
                 let color_argb_check = quote! { #ident.base_type() == Some(crate::ir::Type::ColorARGB) };
-                if (mask & ((1 << i) + (1 << (i + 1)))) == 0 {
+                Some(if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 0 {
                     boxed_check
-                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 1 {
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 1 << i {
                     string_check
-                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 2 {
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 2 << i {
                     float_check
-                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 3 {
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 3 << i {
                     int_check
-                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 4 {
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 4 << i {
+                    bool_check
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 5 << i {
                     color_rgb_check
-                } else if (mask & ((1 << i) + (1 << (i + 1)))) == 5 {
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 6 << i {
                     color_argb_check
+                } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 7 << i {
+                    quote! { false }
                 } else {
-                    quote! { true }
-                }
+                    return None;
+                })
             }));
             let these_nan: HashSet<_> = nan_checks
                 .iter()
@@ -171,8 +176,9 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, expr)| {
-                    let state = mask & ((1 << i) + (1 << (i + 1)));
-                    if state == 0 {
+                    let j = i * 3 + nan_checks.len();
+                    let state = mask & ((1 << j) + (1 << (j + 1)) + (1 << (j + 2)));
+                    if state == 0 || state > 6 {
                         None
                     } else {
                         Some((expr, state))
@@ -246,10 +252,15 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                                 ].into_iter(), None)),
                                 4 => Some((vec![
                                     quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
-                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_COLOR_RGB_PATTERN)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_BOOL_PATTERN)) },
                                     quote! { Immediate(wasm_encoder::Instruction::I64Or) },
                                 ].into_iter(), None)),
                                 5 => Some((vec![
+                                    quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_COLOR_RGB_PATTERN)) },
+                                    quote! { Immediate(wasm_encoder::Instruction::I64Or) },
+                                ].into_iter(), None)),
+                                6 => Some((vec![
                                     quote! { Immediate(wasm_encoder::Instruction::I64ExtendI32S) },
                                     quote! { Immediate(wasm_encoder::Instruction::I64Const(BOXED_COLOR_ARGB_PATTERN)) },
                                     quote! { Immediate(wasm_encoder::Instruction::I64Or) },

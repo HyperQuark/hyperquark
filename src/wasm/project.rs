@@ -64,7 +64,9 @@ impl WasmProject {
         let base = ir_type.base_type();
         Ok(match base {
             Some(IrType::Float) => ValType::F64,
-            Some(IrType::QuasiInt | IrType::ColorARGB | IrType::ColorRGB) => ValType::I32,
+            Some(IrType::Int | IrType::Boolean | IrType::ColorARGB | IrType::ColorRGB) => {
+                ValType::I32
+            }
             Some(IrType::String) => ValType::EXTERNREF,
             None => ValType::I64, // NaN boxed value... let's worry about colors later
             Some(_) => unreachable!(),

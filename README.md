@@ -40,6 +40,9 @@ To add a new block named `category_opcode`, if it cannot be reduced to simpler b
 - `pub fn output_type(inputs: Rc<[IrType]>, (fields: &Fields)?) -> HQResult<ReturnType>;`
 - - the output type should be as restrictive as possible; loose output types can cause us to lose out on some optimisations
 - - Most output types should be either `ReturnType::None` or `Singleton(IrType)` (included in the module prelude); blocks can return multiple values via `MultiValue(Rc<[IrType]>)` but probably shouldn't.
+- `pub const REQUESTS_SCREEN_REFRESH: bool`
+- `pub fn const_fold(inputs: &[ConstFoldItem], state: &mut ConstFoldState, (fields: &Fields)?) -> HQResult<ConstFold>`
+- - If you don't want to implement this or it doesn't make sense to do so, return `Ok(NotFoldable)`
 - ensure to add relevant `instructions_test!`s - see [instructions/tests.rs](./src/instructions/tests.rs) for usage
 2. add `pub mod opcode;` to `src/instructions/category.rs`, creating the file if needed
 - if you're creating the category file, add `mod category;` to `src/instructions.rs`

@@ -46,4 +46,12 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test! {tests; hq_color_rgb; @ super::Fields { r: 134, g: 56, b: 109 }}

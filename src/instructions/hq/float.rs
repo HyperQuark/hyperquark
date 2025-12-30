@@ -48,4 +48,12 @@ pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<Ret
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    Fields(f): &Fields,
+) -> HQResult<ConstFold> {
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Float(*f)])))
+}
+
 crate::instructions_test! {tests; hq_float; @ super::Fields(0.0)}

@@ -92,7 +92,7 @@ pub fn wasm(
 
 pub fn acceptable_inputs(Fields { list }: &Fields) -> HQResult<Rc<[IrType]>> {
     // we take inputs in the opposite order to scratch so that it plays nicely with replaceitemoflist
-    Ok(Rc::from([IrType::QuasiInt, *list.possible_types()]))
+    Ok(Rc::from([IrType::Int, *list.possible_types()]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
@@ -101,13 +101,21 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test!(
     int_mut;
     data_insertatlist;
     t1, t2 @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::QuasiInt,
+                IrType::Int,
                 vec![],
                 &flags()
             );
@@ -168,7 +176,7 @@ crate::instructions_test!(
     data_insertatlist;
     t1, t2 @ super::Fields {
         list: crate::ir::RcList::new(
-            IrType::QuasiInt,
+            IrType::Int,
             vec![],
             &flags()
         )
