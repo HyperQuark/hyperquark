@@ -21,13 +21,12 @@ struct Variable {
 pub struct RcVar(Rc<Variable>);
 
 impl RcVar {
-    #[must_use]
-    pub fn new(ty: Type, initial_value: VarVal) -> Self {
-        Self(Rc::new(Variable {
-            possible_types: RefCell::new(ty.or(var_val_type(&initial_value))),
+    pub fn new(ty: Type, initial_value: VarVal) -> HQResult<Self> {
+        Ok(Self(Rc::new(Variable {
+            possible_types: RefCell::new(ty.or(var_val_type(&initial_value)?)),
             initial_value,
             id: Uuid::new_v4().to_string(),
-        }))
+        })))
     }
 
     /// Create empty variable for use in SSA
@@ -129,12 +128,12 @@ pub type TargetVars = BTreeMap<Box<str>, Rc<TargetVar>>;
 
 pub type TargetLists = BTreeMap<Box<str>, Rc<TargetList>>;
 
-pub fn variables_from_target(target: &Sb3Target) -> TargetVars {
+pub fn variables_from_target(target: &Sb3Target) -> HQResult<TargetVars> {
     target
         .variables
         .iter()
         .map(|(id, var_info)| {
-            (
+            Ok((
                 id.clone(),
                 Rc::new(TargetVar {
                     var: RcVar::new(
@@ -144,26 +143,26 @@ pub fn variables_from_target(target: &Sb3Target) -> TargetVars {
                             reason = "this field exists on all variants"
                         )]
                         var_info.get_1().unwrap().clone(),
-                    ),
+                    )?,
                     is_used: RefCell::new(false),
                 }),
-            )
+            ))
         })
         .collect()
 }
 
-pub fn lists_from_target(target: &Sb3Target, flags: &WasmFlags) -> TargetLists {
+pub fn lists_from_target(target: &Sb3Target, flags: &WasmFlags) -> HQResult<TargetLists> {
     target
         .lists
         .iter()
         .map(|(id, list_info)| {
-            (
+            Ok((
                 id.clone(),
                 Rc::new(TargetList {
-                    list: RcList::new(Type::none(), list_info.1.clone(), flags),
+                    list: RcList::new(Type::none(), list_info.1.clone(), flags)?,
                     is_used: RefCell::new(false),
                 }),
-            )
+            ))
         })
         .collect()
 }
@@ -224,8 +223,7 @@ struct List {
 pub struct RcList(Rc<List>);
 
 impl RcList {
-    #[must_use]
-    pub fn new(ty: Type, initial_value: Vec<VarVal>, flags: &WasmFlags) -> Self {
+    pub fn new(ty: Type, initial_value: Vec<VarVal>, flags: &WasmFlags) -> HQResult<Self> {
         let init = if flags.integers == Switch::On {
             initial_value
         } else {
@@ -240,14 +238,18 @@ impl RcList {
                 })
                 .collect()
         };
-        Self(Rc::new(List {
+        Ok(Self(Rc::new(List {
             possible_types: RefCell::new(
-                ty.or(init.iter().fold(Type::none(), |t, v| t.or(var_val_type(v)))),
+                ty.or(init
+                    .iter()
+                    .try_fold(Type::none(), |t: Type, v| -> HQResult<_> {
+                        Ok(t.or(var_val_type(v)?))
+                    })?),
             ),
             length_mutable: RefCell::new(true),
             initial_value: init,
             id: Uuid::new_v4().to_string(),
-        }))
+        })))
     }
 
     pub fn add_type(&self, ty: Type) {

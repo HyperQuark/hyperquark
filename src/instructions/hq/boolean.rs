@@ -42,5 +42,15 @@ pub fn output_type(_inputs: Rc<[IrType]>, &Fields(val): &Fields) -> HQResult<Ret
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    Fields(b): &Fields,
+) -> HQResult<ConstFold> {
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Basic(
+        VarVal::Bool(*b),
+    )])))
+}
+
 crate::instructions_test! {tests_false; hq_boolean; @ super::Fields(false)}
 crate::instructions_test! {tests_true; hq_boolean; @ super::Fields(true)}

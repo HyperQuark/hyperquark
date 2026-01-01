@@ -55,7 +55,7 @@ impl VariableRegistry {
                         };
                         ConstExpr::f64_const((*f).into())
                     }
-                    Some(IrType::QuasiInt) => match var.initial_value() {
+                    Some(IrType::Int) => match var.initial_value() {
                         #[expect(
                             clippy::cast_possible_truncation,
                             reason = "integer-ness already confirmed; `as` is saturating."
@@ -65,6 +65,14 @@ impl VariableRegistry {
                             ConstExpr::i32_const(*f as i32)
                         }
                         VarVal::Int(i) => ConstExpr::i32_const(*i),
+                        VarVal::Bool(b) => ConstExpr::i32_const((*b).into()),
+                        VarVal::String(_) => {
+                            hq_bug!("VarVal type should be included in var's possible types")
+                        }
+                    },
+                    Some(IrType::Boolean) => match var.initial_value() {
+                        VarVal::Float(f) => ConstExpr::i32_const((*f == 0.0).into()),
+                        VarVal::Int(i) => ConstExpr::i32_const((*i == 0).into()),
                         VarVal::Bool(b) => ConstExpr::i32_const((*b).into()),
                         VarVal::String(_) => {
                             hq_bug!("VarVal type should be included in var's possible types")

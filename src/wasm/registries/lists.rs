@@ -1,5 +1,6 @@
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry, TypeRegistry};
+use crate::instructions::{BOXED_BOOL_PATTERN, BOXED_INT_PATTERN, BOXED_STRING_PATTERN};
 use crate::ir::{RcList, Type as IrType};
 use crate::prelude::*;
 use crate::registry::MapRegistry;
@@ -87,7 +88,7 @@ impl ListRegistry {
 
         let init_instructions = [
             match list.possible_types().base_type() {
-                Some(IrType::QuasiInt) => Instruction::I32Const(0),
+                Some(IrType::Int | IrType::Boolean) => Instruction::I32Const(0),
                 Some(IrType::Float) => Instruction::F64Const(0.0.into()),
                 Some(IrType::String) => {
                     let string_idx = self.strings().register_default("".into())?;
@@ -204,7 +205,7 @@ impl ListRegistry {
                         array_data_index: data_section.len() - 1,
                     });
                 }
-                Some(IrType::QuasiInt) => {
+                Some(IrType::Int) => {
                     let ints_bytes = list
                         .initial_value()
                         .iter()
@@ -240,6 +241,35 @@ impl ListRegistry {
                         array_data_index: data_section.len() - 1,
                     });
                 }
+                Some(IrType::Boolean) => {
+                    // todo: use packed i8 type?
+
+                    let bools_bytes = list
+                        .initial_value()
+                        .iter()
+                        .map(|val| {
+                            Ok(match val {
+                                VarVal::Bool(b) => i32::from(*b),
+                                VarVal::Int(_) | VarVal::Float(_) | VarVal::String(_) => {
+                                    hq_bug!(
+                                        "VarVal type should be included in var's possible types"
+                                    )
+                                }
+                            }
+                            .to_le_bytes())
+                        })
+                        .collect::<HQResult<Box<[_]>>>()?
+                        .into_iter()
+                        .flatten()
+                        .collect::<Box<[_]>>();
+
+                    data_section.passive(bools_bytes);
+
+                    start_func.instruction(&Instruction::ArrayInitData {
+                        array_type_index,
+                        array_data_index: data_section.len() - 1,
+                    });
+                }
                 Some(IrType::String) => {
                     let strings = list
                         .initial_value()
@@ -269,11 +299,12 @@ impl ListRegistry {
                         .iter()
                         .map(|val| {
                             Ok(match val {
-                                VarVal::Int(i) => (*i).into(),
-                                VarVal::Bool(b) => (*b).into(),
+                                VarVal::Int(i) => i64::from(*i) & BOXED_INT_PATTERN,
+                                VarVal::Bool(b) => i64::from(*b) & BOXED_BOOL_PATTERN,
                                 VarVal::Float(f) => i64::from_le_bytes(f.to_le_bytes()),
                                 VarVal::String(s) => {
-                                    self.tabled_strings().register_default(s.clone())?
+                                    self.tabled_strings().register_default::<i64>(s.clone())?
+                                        & BOXED_STRING_PATTERN
                                 }
                             }
                             .to_le_bytes())

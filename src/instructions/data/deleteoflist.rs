@@ -65,7 +65,7 @@ pub fn wasm(
 }
 
 pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::from([IrType::QuasiInt]))
+    Ok(Rc::from([IrType::Int]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
@@ -74,16 +74,24 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test!(
     int_mut;
     data_deleteoflist;
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::QuasiInt,
+                IrType::Int,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -99,7 +107,7 @@ crate::instructions_test!(
                 IrType::Float,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -114,7 +122,7 @@ crate::instructions_test!(
                 IrType::String,
                 vec![crate::sb3::VarVal::String("hi".into())],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -129,7 +137,7 @@ crate::instructions_test!(
                 IrType::Any,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },

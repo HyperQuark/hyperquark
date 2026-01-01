@@ -40,6 +40,14 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test!(
     test;
     data_deletealloflist;
@@ -49,7 +57,7 @@ crate::instructions_test!(
                 IrType::Any,
                 vec![crate::sb3::VarVal::Float(3.0)],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },

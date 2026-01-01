@@ -162,6 +162,16 @@ impl IrOpcode {{
         }}
         boxed_output_type(|ins| self.base_output_type(ins), inputs)
     }}
+
+    pub fn const_fold(
+        &self,
+        const_inputs: &[ConstFoldItem],
+        const_state: &mut ConstFoldState,
+    ) -> HQResult<ConstFold> {{
+        match self {{
+            {}
+        }}
+    }}
 }}
 pub mod fields {{
     #![allow(clippy::wildcard_imports, reason = "we don't know what we need to import")]
@@ -219,6 +229,13 @@ impl fmt::Display for IrOpcode {{
                     format!("Self::{id}(_) => {path}::REQUESTS_SCREEN_REFRESH,")
                 } else {
                     format!("Self::{id} => {path}::REQUESTS_SCREEN_REFRESH,")
+                }
+            }).collect::<Vec<_>>().join("\n\t\t\t"),
+            paths.iter().map(|(path, id, fields, _)| {
+                if *fields {
+                    format!("Self::{id}(fields) => {path}::const_fold(const_inputs, const_state, fields),")
+                } else {
+                    format!("Self::{id} => {path}::const_fold(const_inputs, const_state),")
                 }
             }).collect::<Vec<_>>().join("\n\t\t\t"),
             paths.iter().filter(|(_, _, fields, _)| *fields)

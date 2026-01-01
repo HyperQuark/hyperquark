@@ -10,6 +10,7 @@
     reason = "there are so many `Rc<T>`s here which I don't want to change"
 )]
 
+pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
 use crate::prelude::*;
 
 mod control;
@@ -102,20 +103,29 @@ pub use input_switcher::wrap_instruction;
 
 pub use hq::r#yield::YieldMode;
 
+/// Canonical NaN + bit 33, + string pointer in bits 1-32
+pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
+/// Canonical NaN + bit 34, + i32 in bits 1-32
+pub const BOXED_INT_PATTERN: i64 = 0x7ff8_0002 << 32;
+/// Canonical NaN + bit 35, + i32 in bits 1-32
+pub const BOXED_BOOL_PATTERN: i64 = 0x7ff8_0004 << 32;
+/// Canonical NaN + bit 36, + i32 in bits 1-32
+pub const BOXED_COLOR_RGB_PATTERN: i64 = 0x7ff8_0008 << 32;
+/// Canonical NaN + bit 37, + i32 in bits 1-32
+pub const BOXED_COLOR_ARGB_PATTERN: i64 = 0x7ff8_000f << 32;
 mod prelude {
     pub use crate::ir::{ReturnType, Type as IrType};
+    pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
     pub use crate::prelude::*;
+    pub use crate::sb3::VarVal;
     pub use crate::wasm::{InternalInstruction, StepFunc};
+    pub use ConstFold::NotFoldable;
     pub use ReturnType::{MultiValue, Singleton};
     pub use wasm_encoder::{RefType, ValType};
     pub use wasm_gen::wasm;
 
-    /// Canonical NaN + bit 33, + string pointer in bits 1-32
-    pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
-    /// Canonical NaN + bit 34, + i32 in bits 1-32
-    pub const BOXED_INT_PATTERN: i64 = 0x7ff8_0002 << 32;
-    /// Canonical NaN + bit 35, + i32 in bits 1-32
-    pub const BOXED_COLOR_RGB_PATTERN: i64 = 0x7ff8_0004 << 32;
-    /// Canonical NaN + bit 36, + i32 in bits 1-32
-    pub const BOXED_COLOR_ARGB_PATTERN: i64 = 0x7ff8_0008 << 32;
+    pub use super::{
+        BOXED_BOOL_PATTERN, BOXED_COLOR_ARGB_PATTERN, BOXED_COLOR_RGB_PATTERN, BOXED_INT_PATTERN,
+        BOXED_STRING_PATTERN,
+    };
 }

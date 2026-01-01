@@ -27,4 +27,11 @@ pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test! {tests; operator_join; t1, t2 ;}

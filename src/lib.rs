@@ -142,7 +142,7 @@ pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::Finishe
         crate::log("ir (before optimisation):");
         crate::log(format!("{ir_proj}").as_str());
     }
-    let ssa_token = optimisation::ir_optimise(&ir_proj)?;
+    let ssa_token = optimisation::ir_optimise(&ir_proj, &flags)?;
     if flags.print_ir == Switch::On {
         crate::log("ir (after optimisation):");
         crate::log(format!("{ir_proj}").as_str());

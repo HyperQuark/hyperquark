@@ -166,4 +166,21 @@ pub fn output_type(_inputs: Rc<[IrType]>) -> HQResult<ReturnType> {
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub fn const_fold(inputs: &[ConstFoldItem], _state: &mut ConstFoldState) -> HQResult<ConstFold> {
+    hq_assert!(inputs.len() == 2);
+    Ok(
+        if let (ConstFoldItem::Basic(val1), ConstFoldItem::Basic(val2)) = (&inputs[0], &inputs[1]) {
+            ConstFold::Folded(Rc::from([match (val1, val2) {
+                (VarVal::Int(i1), VarVal::Int(i2)) => ConstFoldItem::Basic(VarVal::Bool(i1 > i2)),
+                (VarVal::Float(f1), VarVal::Float(f2)) => {
+                    ConstFoldItem::Basic(VarVal::Bool(f1 > f2))
+                }
+                _ => return Ok(NotFoldable),
+            }]))
+        } else {
+            NotFoldable
+        },
+    )
+}
+
 crate::instructions_test! {tests; operator_lt; t1, t2 ;}

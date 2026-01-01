@@ -17,7 +17,8 @@ use wasm_gen::wasm;
 /// Takes a base type and gives the NaN-boxed pattern for that type
 fn boxed_pattern(ty: IrType) -> HQResult<i64> {
     Ok(match ty {
-        IrType::QuasiInt => BOXED_INT_PATTERN,
+        IrType::Int => BOXED_INT_PATTERN,
+        IrType::Boolean => BOXED_BOOL_PATTERN,
         IrType::String => BOXED_STRING_PATTERN,
         IrType::ColorARGB => BOXED_COLOR_ARGB_PATTERN,
         IrType::ColorRGB => BOXED_COLOR_RGB_PATTERN,
@@ -27,7 +28,7 @@ fn boxed_pattern(ty: IrType) -> HQResult<i64> {
 
 fn unbox_instructions(ty: IrType, func: &StepFunc) -> HQResult<Vec<InternalInstruction>> {
     Ok(match ty {
-        IrType::QuasiInt | IrType::ColorARGB | IrType::ColorRGB => wasm![I32WrapI64],
+        IrType::Int | IrType::Boolean | IrType::ColorARGB | IrType::ColorRGB => wasm![I32WrapI64],
         IrType::String => {
             let table_index = func.registries().tables().register::<StringsTable, _>()?;
             wasm![I32WrapI64, TableGet(table_index)]

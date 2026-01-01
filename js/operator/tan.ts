@@ -1,4 +1,4 @@
-export function tan(angle: number) {
+export function tan(angle: number): number {
   angle = angle % 360;
   switch (angle) {
     case -270:

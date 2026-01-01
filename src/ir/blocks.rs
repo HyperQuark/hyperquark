@@ -810,8 +810,8 @@ fn generate_list_index_op<B>(
 where
     B: Fn() -> IrOpcode,
 {
-    let text_var = RcVar::new(IrType::String, VarVal::String("".into()));
-    let int_var = RcVar::new(IrType::Int, VarVal::Int(0));
+    let text_var = RcVar::new(IrType::String, VarVal::String("".into()))?;
+    let int_var = RcVar::new(IrType::Int, VarVal::Int(0))?;
     let extra_var = RcVar::new_empty();
     let result_var = RcVar::new_empty();
 
@@ -1121,11 +1121,7 @@ fn from_normal_block(
                                 "asin" => vec![IrOpcode::operator_asin],
                                 "acos" => vec![IrOpcode::operator_acos],
                                 "atan" => vec![IrOpcode::operator_atan],
-                                "ln" => vec![
-                                    IrOpcode::operator_log,
-                                    IrOpcode::hq_float(HqFloatFields(core::f64::consts::LN_10)),
-                                    IrOpcode::operator_divide,
-                                ],
+                                "ln" => vec![IrOpcode::operator_ln],
                                 "log" => vec![IrOpcode::operator_log],
                                 "e ^" => vec![IrOpcode::operator_exp],
                                 "10 ^" => vec![IrOpcode::operator_pow10],
@@ -1712,7 +1708,7 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::control_repeat => {
-                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Int(0));
+                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Int(0))?;
                             let local = context.warp;
                             let condition_instructions = vec![
                                 IrOpcode::data_variable(DataVariableFields {

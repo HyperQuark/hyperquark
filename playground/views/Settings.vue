@@ -32,6 +32,12 @@
             <input type="radio" v-model="settings[id]" :value="option" />
             {{ option }}<br />
           </span>
+          <input
+            type="number"
+            v-model="settings[id]"
+            v-if="/(u|i)32/.test(settingsInfo[id].type)"
+            :min="settingsInfo[id].type === 'u32' ? 0 : -Infinity"
+          />
         </div>
       </div>
     </div>
@@ -77,6 +83,10 @@ watch(
 );
 
 onMounted(scrollToAnchor);
+
+window.settings = settings;
+
+window.WasmFlags = WasmFlags;
 
 watch(settings, (value, oldValue) => {
   console.log(settings);

@@ -173,6 +173,7 @@ pub struct WasmFlags {
     pub print_ir: Switch,
     pub integers: Switch,
     pub list_type: ListType,
+    pub unroll_loops: u32,
     // pub memory_layout: MemoryLayout
 }
 
@@ -214,6 +215,7 @@ impl WasmFlags {
             } else {
                 ListType::LinearMemory
             },
+            unroll_loops: 2,
         }
     }
 
@@ -270,6 +272,12 @@ impl WasmFlags {
                 .with_description("Emit integer instructions wherever possible. May make things faster at \
                 the cost of possible overflow, or may slow things down if mixed with floats.")
                 .with_ty(ty_str!(Switch)),
+            "unroll_loops" => FlagInfo::new()
+                .with_name("Unroll loops")
+                .with_description("Unroll the first n iterations of loops. Can help with type analysis.\
+                <br>\
+                Recommended: 2; set to 0 to disable loop unrolling.")
+                .with_ty(ty_str!(u32)),
             _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str())
         }
     }

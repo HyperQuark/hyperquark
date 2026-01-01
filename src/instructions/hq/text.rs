@@ -50,4 +50,14 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields(val): &Fields) -> HQResult<Retu
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    Fields(s): &Fields,
+) -> HQResult<ConstFold> {
+    Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Basic(
+        VarVal::String(s.clone()),
+    )])))
+}
+
 crate::instructions_test! {tests; hq_text; @ super::Fields("hello, world!".into())}

@@ -174,12 +174,24 @@ pub fn wasm(
             )?;
             wasm![Call(float_to_string)]
         }
-        Some(IrType::QuasiInt) => {
+        Some(IrType::Int) => {
             let int_to_string = func.registries().external_functions().register(
                 ("cast", "int2string".into()),
                 (vec![ValType::I32], vec![ValType::EXTERNREF]),
             )?;
             wasm![Call(int_to_string)]
+        }
+        Some(IrType::Boolean) => {
+            let true_string = func.registries().strings().register_default("true".into())?;
+            let false_string = func.registries().strings().register_default("false".into())?;
+            let bool_local = func.local(ValType::I32)?;
+            wasm![
+                LocalSet(bool_local),
+                GlobalGet(true_string),
+                GlobalGet(false_string),
+                LocalGet(bool_local),
+                TypedSelect(ValType::EXTERNREF),
+            ]
         }
         None => {
             let float_to_string = func.registries().external_functions().register(
@@ -256,16 +268,40 @@ pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnTy
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
+pub const fn const_fold(
+    _inputs: &[ConstFoldItem],
+    _state: &mut ConstFoldState,
+    _fields: &Fields,
+) -> HQResult<ConstFold> {
+    Ok(NotFoldable)
+}
+
 crate::instructions_test!(
     int_mut;
     data_listcontents;
     @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::QuasiInt,
+                IrType::Int,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
+            *list.length_mutable().borrow_mut() = true;
+            list
+        },
+    };
+    { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
+);
+crate::instructions_test!(
+    bool_mut;
+    data_listcontents;
+    @ super::Fields {
+        list: {
+            let list = crate::ir::RcList::new(
+                IrType::Boolean,
+                vec![],
+                &flags()
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -281,7 +317,7 @@ crate::instructions_test!(
                 IrType::Float,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -296,7 +332,7 @@ crate::instructions_test!(
                 IrType::String,
                 vec![crate::sb3::VarVal::String("hi".into())],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -311,7 +347,7 @@ crate::instructions_test!(
                 IrType::Any,
                 vec![],
                 &flags()
-            );
+            ).unwrap();
             *list.length_mutable().borrow_mut() = true;
             list
         },
@@ -323,10 +359,23 @@ crate::instructions_test!(
     data_listcontents;
     @ super::Fields {
         list: crate::ir::RcList::new(
-            IrType::QuasiInt,
+            IrType::Int,
             vec![],
             &flags()
-        )
+        ).unwrap()
+    };
+    { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
+);
+
+crate::instructions_test!(
+    bool_static;
+    data_listcontents;
+    @ super::Fields {
+        list: crate::ir::RcList::new(
+            IrType::Boolean,
+            vec![],
+            &flags()
+        ).unwrap()
     };
     { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
 );
@@ -339,7 +388,7 @@ crate::instructions_test!(
             IrType::Float,
             vec![],
             &flags()
-        )
+        ).unwrap()
     }
 );
 
@@ -351,7 +400,7 @@ crate::instructions_test!(
             IrType::String,
             vec![],
             &flags()
-        )
+        ).unwrap()
     }
 );
 
@@ -363,6 +412,6 @@ crate::instructions_test!(
             IrType::Any,
             vec![],
             &flags()
-        )
+        ).unwrap()
     }
 );

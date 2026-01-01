@@ -33,7 +33,9 @@ function settingsInfoFromType(type) {
       enum_obj: hyperquarkExports[type],
     };
   } else {
-    return null;
+    return {
+      type,
+    };
   }
 }
 
@@ -99,11 +101,13 @@ export function getUsedWasmFeatures() {
   console.log(settings);
   const featureSet = new Set();
   for (const [id, info] of Object.entries(settingsInfo)) {
-    const theseFeatures = info.flag_info
-      .wasm_features(settings[id])
-      ?.map?.((num) => WasmFeature[num]);
-    for (const feature of theseFeatures || []) {
-      featureSet.add(feature);
+    if (info.type === "radio") {
+      const theseFeatures = info.flag_info
+        .wasm_features(settings[id])
+        ?.map?.((num) => WasmFeature[num]);
+      for (const feature of theseFeatures || []) {
+        featureSet.add(feature);
+      }
     }
   }
   return featureSet;
