@@ -396,6 +396,7 @@ impl WasmProject {
             self.finish_event(
                 match event {
                     Event::FlagCLicked => "flag_clicked",
+                    Event::Broadcast(_) => continue, // broadcasts handled in the sender blocks
                 },
                 indices,
                 funcs,
@@ -549,7 +550,7 @@ impl WasmProject {
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
-            events.entry(thread.event()).or_default().push(
+            events.entry(thread.event().clone()).or_default().push(
                 u32::try_from(
                     steps
                         .try_borrow()?
@@ -593,7 +594,11 @@ mod tests {
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let project = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default()));
+        let project = Rc::new(IrProject::new(
+            BTreeMap::default(),
+            BTreeMap::default(),
+            Box::from([]),
+        ));
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
             Step::new_empty(

@@ -20,6 +20,7 @@ pub struct IrProject {
     inlined_steps: RefCell<StepSet>,
     global_variables: TargetVars,
     global_lists: TargetLists,
+    broadcasts: Box<[Box<str>]>,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
 
@@ -48,14 +49,23 @@ impl IrProject {
         &self.global_lists
     }
 
+    pub const fn broadcasts(&self) -> &[Box<str>] {
+        &self.broadcasts
+    }
+
     #[must_use]
-    pub fn new(global_variables: TargetVars, global_lists: TargetLists) -> Self {
+    pub fn new(
+        global_variables: TargetVars,
+        global_lists: TargetLists,
+        broadcasts: Box<[Box<str>]>,
+    ) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(IndexSet::default()),
             inlined_steps: RefCell::new(IndexSet::default()),
             global_variables,
             global_lists,
+            broadcasts,
             targets: RefCell::new(IndexMap::default()),
         }
     }
@@ -76,7 +86,14 @@ impl IrProject {
             flags,
         )?;
 
-        let project = Rc::new(Self::new(global_variables, global_lists));
+        let broadcasts = sb3
+            .targets
+            .iter()
+            .flat_map(|target| target.broadcasts.values())
+            .cloned()
+            .collect();
+
+        let project = Rc::new(Self::new(global_variables, global_lists, broadcasts));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
@@ -338,6 +355,11 @@ impl fmt::Display for IrProject {
             .iter()
             .map(|thread| format!("{thread}"))
             .join(", ");
+        let broadcasts = self
+            .broadcasts()
+            .iter()
+            .map(|name| format!(r#""{name}""#))
+            .join(", ");
         let steps = self
             .steps()
             .borrow()
@@ -356,6 +378,7 @@ impl fmt::Display for IrProject {
         "targets": {{{targets}}},
         "global_variables": {{{variables}}},
         "global_lists": {{{lists}}},
+        "broadcasts": [{broadcasts}],
         "threads": [{threads}],
         "steps": [{steps}],
         "inlined_steps": [{inlined_steps}]

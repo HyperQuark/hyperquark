@@ -1,8 +1,8 @@
 use super::blocks::NextBlocks;
 use super::{Event, IrProject, Step, StepContext, Target};
-use crate::prelude::*;
-use crate::sb3::{Block, BlockMap, BlockOpcode};
+use crate::sb3::{Block, BlockMap, BlockOpcode, VarVal};
 use crate::wasm::WasmFlags;
+use crate::{prelude::*, sb3};
 
 #[derive(Clone, Debug)]
 pub struct Thread {
@@ -11,8 +11,8 @@ pub struct Thread {
 }
 
 impl Thread {
-    pub const fn event(&self) -> Event {
-        self.event
+    pub const fn event(&self) -> &Event {
+        &self.event
     }
 
     pub const fn first_step(&self) -> &Rc<Step> {
@@ -35,8 +35,27 @@ impl Thread {
         #[expect(clippy::wildcard_enum_match_arm, reason = "too many variants to match")]
         let event = match block_info.opcode {
             BlockOpcode::event_whenflagclicked => Event::FlagCLicked,
+            BlockOpcode::event_whenbroadcastreceived => {
+                let sb3::Field::ValueId(val, _id) =
+                    block_info.fields.get("BROADCAST_OPTION").ok_or_else(|| {
+                        make_hq_bad_proj!("invalid project.json - missing field BROADCAST_OPTION")
+                    })?
+                else {
+                    hq_bad_proj!(
+                        "invalid project.json - missing broadcast name for BROADCAST_OPTION field"
+                    );
+                };
+                let VarVal::String(name) = val.clone().ok_or_else(|| {
+                    make_hq_bad_proj!(
+                        "invalid project.json - null broadcast name for BROADCAST_OPTION field"
+                    )
+                })?
+                else {
+                    hq_bad_proj!("non-string broadcast name")
+                };
+                Event::Broadcast(name)
+            }
             BlockOpcode::event_whenbackdropswitchesto
-            | BlockOpcode::event_whenbroadcastreceived
             | BlockOpcode::event_whengreaterthan
             | BlockOpcode::event_whenkeypressed
             | BlockOpcode::event_whenstageclicked
@@ -78,7 +97,7 @@ impl fmt::Display for Thread {
         write!(
             f,
             r#"{{
-            "event": "{event:?}",
+            "event": '{event:?}',
             "first_step": "{first_step}",
         }}"#
         )

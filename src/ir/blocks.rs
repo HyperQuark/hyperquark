@@ -592,6 +592,7 @@ fn generate_if_else(
     let dummy_project = Rc::new(IrProject::new(
         this_project.global_variables().clone(),
         this_project.global_lists().clone(),
+        Box::from(this_project.broadcasts()),
     ));
     let dummy_target = Rc::new(Target::new(
         false,
