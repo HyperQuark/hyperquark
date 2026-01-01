@@ -2,6 +2,7 @@ use wasm_encoder::BlockType as WasmBlockType;
 
 use super::super::prelude::*;
 
+#[expect(clippy::too_many_lines, reason = "wasm generation is just long")]
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);
     let t1 = inputs[0];

@@ -319,6 +319,7 @@ pub fn const_fold(
                 VarVal::Float(float) => match best_cast_candidate(IrType::Float, to)? {
                     IrType::Boolean => VarVal::Bool(*float != 0.0),
                     IrType::Float => VarVal::Float(*float),
+                    #[expect(clippy::cast_possible_truncation, reason = "deliberate truncation")]
                     IrType::Int => VarVal::Int(*float as i32),
                     IrType::String => VarVal::String(float.to_string().into_boxed_str()),
                     _ => hq_bug!("tried to cast from float to {}", to),

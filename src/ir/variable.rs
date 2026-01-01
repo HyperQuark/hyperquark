@@ -21,7 +21,6 @@ struct Variable {
 pub struct RcVar(Rc<Variable>);
 
 impl RcVar {
-    #[must_use]
     pub fn new(ty: Type, initial_value: VarVal) -> HQResult<Self> {
         Ok(Self(Rc::new(Variable {
             possible_types: RefCell::new(ty.or(var_val_type(&initial_value)?)),
@@ -224,7 +223,6 @@ struct List {
 pub struct RcList(Rc<List>);
 
 impl RcList {
-    #[must_use]
     pub fn new(ty: Type, initial_value: Vec<VarVal>, flags: &WasmFlags) -> HQResult<Self> {
         let init = if flags.integers == Switch::On {
             initial_value
