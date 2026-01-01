@@ -1121,11 +1121,7 @@ fn from_normal_block(
                                 "asin" => vec![IrOpcode::operator_asin],
                                 "acos" => vec![IrOpcode::operator_acos],
                                 "atan" => vec![IrOpcode::operator_atan],
-                                "ln" => vec![
-                                    IrOpcode::operator_log,
-                                    IrOpcode::hq_float(HqFloatFields(core::f64::consts::LN_10)),
-                                    IrOpcode::operator_divide,
-                                ],
+                                "ln" => vec![IrOpcode::operator_ln],
                                 "log" => vec![IrOpcode::operator_log],
                                 "e ^" => vec![IrOpcode::operator_exp],
                                 "10 ^" => vec![IrOpcode::operator_pow10],

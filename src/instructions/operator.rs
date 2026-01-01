@@ -15,6 +15,7 @@ pub mod gt;
 pub mod join;
 pub mod length;
 pub mod letter_of;
+pub mod ln;
 pub mod log;
 pub mod lt;
 pub mod modulo;
