@@ -101,9 +101,8 @@ where
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
 
 pub mod input_switcher;
-pub use input_switcher::wrap_instruction;
-
 pub use hq::r#yield::YieldMode;
+pub use input_switcher::wrap_instruction;
 
 /// Canonical NaN + bit 33, + string pointer in bits 1-32
 pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
@@ -116,11 +115,6 @@ pub const BOXED_COLOR_RGB_PATTERN: i64 = 0x7ff8_0008 << 32;
 /// Canonical NaN + bit 37, + i32 in bits 1-32
 pub const BOXED_COLOR_ARGB_PATTERN: i64 = 0x7ff8_000f << 32;
 mod prelude {
-    pub use crate::ir::{ReturnType, Type as IrType};
-    pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
-    pub use crate::prelude::*;
-    pub use crate::sb3::VarVal;
-    pub use crate::wasm::{InternalInstruction, StepFunc};
     pub use ConstFold::NotFoldable;
     pub use ReturnType::{MultiValue, Singleton};
     pub use wasm_encoder::{RefType, ValType};
@@ -130,4 +124,9 @@ mod prelude {
         BOXED_BOOL_PATTERN, BOXED_COLOR_ARGB_PATTERN, BOXED_COLOR_RGB_PATTERN, BOXED_INT_PATTERN,
         BOXED_STRING_PATTERN,
     };
+    pub use crate::ir::{ReturnType, Type as IrType};
+    pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
+    pub use crate::prelude::*;
+    pub use crate::sb3::VarVal;
+    pub use crate::wasm::{InternalInstruction, StepFunc};
 }

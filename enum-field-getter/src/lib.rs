@@ -1,11 +1,11 @@
 #![doc = include_str!("../README.md")]
 
+use std::collections::{HashMap, HashSet};
+
 use proc_macro::TokenStream;
 use proc_macro_error::{abort_call_site, emit_warning, proc_macro_error};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
-
-use std::collections::{HashMap, HashSet};
 
 /// See top-level crate documentation.
 #[proc_macro_error]
@@ -25,29 +25,45 @@ pub fn enum_field_getter(stream: TokenStream) -> TokenStream {
                     let ident = field.ident.clone().unwrap().to_string();
                     let field_ty = field.ty.clone();
                     let df = (field_ty.clone(), vec![variant.ident.to_string()]);
-                    field_info.entry(ident.clone()).and_modify(|info| {
-                        let (ty, used_variants) = info;
-                        if quote!{#field_ty}.to_string() != quote!{#ty}.to_string() {
-                            emit_warning!(field, "fields must be the same type across all variants - no getter will be emitted for this field");
-                            incompatible.insert(ident.clone());
-                        } else {
-                            used_variants.push(variant.ident.to_string());
-                        }
-                    }).or_insert(df);
+                    field_info
+                        .entry(ident.clone())
+                        .and_modify(|info| {
+                            let (ty, used_variants) = info;
+                            if quote! {#field_ty}.to_string() != quote! {#ty}.to_string() {
+                                emit_warning!(
+                                    field,
+                                    "fields must be the same type across all variants - no getter \
+                                     will be emitted for this field"
+                                );
+                                incompatible.insert(ident.clone());
+                            } else {
+                                used_variants.push(variant.ident.to_string());
+                            }
+                        })
+                        .or_insert(df);
                 }
             } else if let Fields::Unnamed(_) = variant.fields {
                 for (i, field) in variant.fields.iter().enumerate() {
                     let field_ty = field.ty.clone();
                     let df = (field_ty.clone(), vec![variant.ident.to_string()]);
-                    tuple_field_info.entry(i).and_modify(|info| {
-                        let (ty, used_variants) = info;
-                        if quote!{#field_ty}.to_string() != quote!{#ty}.to_string() {
-                            emit_warning!(field, "Fields must be the same type across all variants - no getter will be emitted for this field.\nExpected type {}, got {}.", quote!{#ty}.to_string(), quote!{#field_ty}.to_string());
-                            tuple_incompatible.insert(i);
-                        } else {
-                            used_variants.push(variant.ident.to_string());
-                        }
-                    }).or_insert(df);
+                    tuple_field_info
+                        .entry(i)
+                        .and_modify(|info| {
+                            let (ty, used_variants) = info;
+                            if quote! {#field_ty}.to_string() != quote! {#ty}.to_string() {
+                                emit_warning!(
+                                    field,
+                                    "Fields must be the same type across all variants - no getter \
+                                     will be emitted for this field.\nExpected type {}, got {}.",
+                                    quote! {#ty}.to_string(),
+                                    quote! {#field_ty}.to_string()
+                                );
+                                tuple_incompatible.insert(i);
+                            } else {
+                                used_variants.push(variant.ident.to_string());
+                            }
+                        })
+                        .or_insert(df);
                 }
             }
         }

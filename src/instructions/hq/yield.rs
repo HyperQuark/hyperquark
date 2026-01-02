@@ -1,7 +1,8 @@
+use wasm_encoder::{BlockType, ConstExpr, HeapType};
+
 use super::super::prelude::*;
 use crate::ir::Step;
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
-use wasm_encoder::{BlockType, ConstExpr, HeapType};
 
 #[derive(Debug)]
 pub enum YieldMode {

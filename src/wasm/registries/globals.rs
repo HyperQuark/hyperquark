@@ -1,7 +1,9 @@
+use core::ops::Deref;
+
+use wasm_encoder::{ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ValType};
+
 use crate::prelude::*;
 use crate::registry::MapRegistry;
-use core::ops::Deref;
-use wasm_encoder::{ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ValType};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);

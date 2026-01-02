@@ -1,6 +1,7 @@
+use wasm_encoder::{EntityType, Function, GlobalType, ImportSection, Instruction, ValType};
+
 use crate::prelude::*;
 use crate::registry::SetRegistry;
-use wasm_encoder::{EntityType, Function, GlobalType, ImportSection, Instruction, ValType};
 
 #[derive(Clone, Default)]
 pub struct StringRegistry(SetRegistry<Box<str>>);

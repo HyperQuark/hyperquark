@@ -1,8 +1,9 @@
 // for use in warped contexts only.
 
+use wasm_encoder::BlockType;
+
 use super::super::prelude::*;
 use crate::ir::Step;
-use wasm_encoder::BlockType;
 
 #[derive(Debug)]
 pub struct Fields {

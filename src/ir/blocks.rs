@@ -1,28 +1,27 @@
+use lazy_regex::{Lazy, lazy_regex};
+use regex::Regex;
+use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
+
 use super::context::StepContext;
 use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
+use crate::instructions::fields::{
+    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
+    DataVariableFields, HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields,
+    HqIntegerFields, HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields,
+    ProceduresArgumentFields, ProceduresCallWarpFields,
+};
 use crate::instructions::{
     DataAddtolistFields, DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields, EventBroadcastFields, ProceduresCallNonwarpFields,
-};
-use crate::instructions::{
-    IrOpcode, YieldMode,
-    fields::{
-        ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-        DataVariableFields, HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields,
-        HqIntegerFields, HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields,
-        ProceduresArgumentFields, ProceduresCallWarpFields,
-    },
+    DataReplaceitemoflistFields, EventBroadcastFields, IrOpcode, ProceduresCallNonwarpFields,
+    YieldMode,
 };
 use crate::ir::{RcList, ReturnType};
 use crate::prelude::*;
 use crate::sb3::{self, Field, VarVal};
 use crate::wasm::WasmFlags;
 use crate::wasm::flags::Switch;
-use lazy_regex::{Lazy, lazy_regex};
-use regex::Regex;
-use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
 pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQResult<()> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from

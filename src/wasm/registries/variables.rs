@@ -1,10 +1,11 @@
+use wasm_encoder::ConstExpr;
+
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry};
 use crate::ir::{RcVar, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 use crate::wasm::registries::{StringRegistry, TabledStringRegistry};
-use wasm_encoder::ConstExpr;
 
 pub struct VariableRegistry(
     Rc<GlobalRegistry>,

@@ -1,7 +1,8 @@
-use super::super::prelude::*;
-use crate::wasm::{StepTarget, mem_layout, registries};
 use registries::functions::static_functions::UpdatePenColorFromRGB;
 use wasm_encoder::{BlockType, MemArg};
+
+use super::super::prelude::*;
+use crate::wasm::{StepTarget, mem_layout, registries};
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let t1 = inputs[0];

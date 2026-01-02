@@ -88,6 +88,18 @@
     reason = "implementations of Eq and Ord for RcVar and Step are independent of actual contents"
 )]
 
+use alloc::collections::btree_map::Entry;
+use core::convert::identity;
+use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
+use core::mem;
+
+// use petgraph::dot::Dot;
+use petgraph::graph::{EdgeIndex, NodeIndex};
+use petgraph::stable_graph::StableDiGraph;
+use petgraph::visit::EdgeRef;
+use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut};
+
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataInsertatlistFields,
     DataItemoflistFields, DataReplaceitemoflistFields, DataSetvariabletoFields,
@@ -98,17 +110,6 @@ use crate::ir::{
     IrProject, PartialStep, Proc, RcList, RcVar, ReturnType, Step, Type as IrType, insert_casts,
 };
 use crate::prelude::*;
-
-use alloc::collections::btree_map::Entry;
-use core::convert::identity;
-use core::hash::{Hash, Hasher};
-use core::marker::PhantomData;
-use core::mem;
-// use petgraph::dot::Dot;
-
-use petgraph::graph::{EdgeIndex, NodeIndex};
-use petgraph::visit::EdgeRef;
-use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut, stable_graph::StableDiGraph};
 
 #[derive(Clone, Debug)]
 enum StackElement {

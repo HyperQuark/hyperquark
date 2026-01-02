@@ -5,10 +5,11 @@
 //! `sb3` files must be unzipped first. See <https://en.scratch-wiki.info/wiki/Scratch_File_Format>
 //! for a loose informal specification.
 
-use crate::prelude::*;
 use enum_field_getter::EnumFieldGetter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::prelude::*;
 
 /// A scratch project
 #[derive(Serialize, Deserialize, Debug, Clone)]

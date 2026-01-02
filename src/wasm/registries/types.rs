@@ -1,9 +1,11 @@
-use crate::registry::SetRegistry;
-use crate::wasm::WasmProject;
-use crate::{ir::RcVar, prelude::*};
 use wasm_encoder::{
     AbstractHeapType, FieldType, HeapType, RefType, StorageType, TypeSection, ValType,
 };
+
+use crate::ir::RcVar;
+use crate::prelude::*;
+use crate::registry::SetRegistry;
+use crate::wasm::WasmProject;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WasmType {

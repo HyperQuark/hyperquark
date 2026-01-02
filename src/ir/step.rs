@@ -1,3 +1,7 @@
+use core::cell::RefMut;
+
+use uuid::Uuid;
+
 use super::blocks::{self, NextBlocks};
 use super::{IrProject, StepContext};
 use crate::instructions::{ControlIfElseFields, HqYieldFields, IrOpcode, YieldMode};
@@ -5,8 +9,6 @@ use crate::ir::{RcVar, Target, used_vars};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap};
 use crate::wasm::WasmFlags;
-use core::cell::RefMut;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Step {

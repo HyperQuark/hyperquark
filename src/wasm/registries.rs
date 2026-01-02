@@ -7,7 +7,6 @@ pub mod targets;
 pub mod types;
 pub mod variables;
 
-use crate::prelude::*;
 pub use functions::{ExternalFunctionRegistry, StaticFunctionRegistry};
 pub use globals::{GlobalExportable, GlobalMutable, GlobalRegistry};
 pub use lists::ListRegistry;
@@ -16,6 +15,8 @@ pub use tables::{StepsTable, StringsTable, TableRegistry, ThreadsTable};
 pub use targets::SpriteRegistry;
 pub use types::TypeRegistry;
 pub use variables::VariableRegistry;
+
+use crate::prelude::*;
 
 pub struct Registries {
     strings: Rc<StringRegistry>,

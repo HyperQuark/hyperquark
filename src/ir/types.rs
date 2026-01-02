@@ -1,9 +1,10 @@
+use bitmask_enum::bitmask;
+
 use crate::instructions::{
     HqBooleanFields, HqFloatFields, HqIntegerFields, HqTextFields, IrOpcode,
 };
 use crate::prelude::*;
 use crate::sb3::VarVal;
-use bitmask_enum::bitmask;
 
 /// a bitmask of possible IR types
 #[bitmask(u32)]

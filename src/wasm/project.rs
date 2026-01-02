@@ -1,8 +1,3 @@
-use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
-use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
-use crate::prelude::*;
-use crate::wasm::registries::functions::static_functions::SpawnNewThread;
-use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
@@ -12,6 +7,12 @@ use wasm_encoder::{
     RefType, StartSection, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
+
+use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
+use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
+use crate::prelude::*;
+use crate::wasm::registries::functions::static_functions::SpawnNewThread;
+use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
@@ -617,7 +618,8 @@ mod tests {
     use super::{Registries, WasmProject};
     use crate::ir::{IrProject, Step, Target as IrTarget};
     use crate::prelude::*;
-    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags, flags::all_wasm_features};
+    use crate::wasm::flags::all_wasm_features;
+    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags};
 
     #[test]
     fn empty_project_is_valid_wasm() {

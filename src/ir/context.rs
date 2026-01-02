@@ -1,5 +1,6 @@
 use super::{IrProject, Target};
-use crate::{ir::RcVar, prelude::*};
+use crate::ir::RcVar;
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct ProcContext {

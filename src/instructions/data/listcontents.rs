@@ -1,8 +1,8 @@
+use wasm_encoder::{BlockType as WasmBlockType, HeapType};
+
 use super::super::prelude::*;
 use crate::ir::RcList;
 use crate::wasm::StringsTable;
-
-use wasm_encoder::{BlockType as WasmBlockType, HeapType};
 
 /// we need these fields to be mutable for optimisations to be feasible
 #[derive(Debug, Clone)]

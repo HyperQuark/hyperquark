@@ -1,8 +1,9 @@
 use super::blocks::NextBlocks;
 use super::{Event, IrProject, Step, StepContext, Target};
+use crate::prelude::*;
+use crate::sb3;
 use crate::sb3::{Block, BlockMap, BlockOpcode, VarVal};
 use crate::wasm::WasmFlags;
-use crate::{prelude::*, sb3};
 
 #[derive(Clone, Debug)]
 pub struct Thread {

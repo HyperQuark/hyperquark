@@ -1,6 +1,5 @@
-use crate::wasm::WasmProject;
-
 use super::super::prelude::*;
+use crate::wasm::WasmProject;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert!(inputs.len() == 2);

@@ -1,7 +1,8 @@
+use wasm_encoder::{FieldType, HeapType, Instruction as WInstruction, StorageType};
+
 use super::super::prelude::*;
 use crate::ir::{Proc, Step};
 use crate::wasm::{StepFunc, ThreadsTable, WasmProject};
-use wasm_encoder::{FieldType, HeapType, Instruction as WInstruction, StorageType};
 
 #[derive(Clone, Debug)]
 pub struct Fields {

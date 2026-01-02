@@ -1,7 +1,7 @@
+use wasm_encoder::BlockType as WasmBlockType;
+
 use super::super::prelude::*;
 use crate::ir::RcList;
-
-use wasm_encoder::BlockType as WasmBlockType;
 
 /// we need these fields to be mutable for optimisations to be feasible
 #[derive(Debug, Clone)]

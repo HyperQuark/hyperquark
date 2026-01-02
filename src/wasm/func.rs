@@ -1,15 +1,16 @@
-use super::{Registries, WasmFlags, WasmProject};
-use crate::instructions::IrOpcode;
-use crate::ir::{Event, PartialStep, RcVar, ReturnType, Step};
-use crate::prelude::*;
-use crate::wasm::registries::TypeRegistry;
-use crate::{instructions::wrap_instruction, ir::Proc};
 use alloc::collections::btree_map;
+
 use wasm_encoder::{
     self, AbstractHeapType, CodeSection, Function, FunctionSection, HeapType,
     Instruction as WInstruction, RefType, ValType,
 };
 use wasm_gen::wasm;
+
+use super::{Registries, WasmFlags, WasmProject};
+use crate::instructions::{IrOpcode, wrap_instruction};
+use crate::ir::{Event, PartialStep, Proc, RcVar, ReturnType, Step};
+use crate::prelude::*;
+use crate::wasm::registries::TypeRegistry;
 
 #[derive(Clone, Debug)]
 pub enum Instruction {

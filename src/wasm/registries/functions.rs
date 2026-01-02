@@ -1,12 +1,13 @@
 #![allow(clippy::cast_possible_wrap, reason = "can't use try_into in const")]
 
-use super::TypeRegistry;
-use crate::prelude::*;
-use crate::registry::{MapRegistry, Registry};
 use wasm_encoder::{
     CodeSection, EntityType, Function, FunctionSection, ImportSection, Instruction as WInstruction,
     ValType,
 };
+
+use super::TypeRegistry;
+use crate::prelude::*;
+use crate::registry::{MapRegistry, Registry};
 
 pub type ExternalFunctionRegistry =
     MapRegistry<(&'static str, Box<str>), (Vec<ValType>, Vec<ValType>)>;
@@ -81,14 +82,15 @@ impl StaticFunctionRegistry {
 }
 
 pub mod static_functions {
-    use super::{MaybeStaticFunction, StaticFunction};
-    use crate::prelude::*;
-    use crate::wasm::{f32_to_ieeef32, mem_layout};
     use mem_layout::{sprite as sprite_layout, stage as stage_layout};
     use wasm_encoder::{
         AbstractHeapType, BlockType as WasmBlockType, HeapType, MemArg, RefType, ValType,
     };
     use wasm_gen::wasm_const;
+
+    use super::{MaybeStaticFunction, StaticFunction};
+    use crate::prelude::*;
+    use crate::wasm::{f32_to_ieeef32, mem_layout};
 
     pub struct SpawnNewThread;
     impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {

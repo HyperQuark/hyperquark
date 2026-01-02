@@ -1,8 +1,10 @@
-use super::{IrProject, proc::Proc};
+use core::cell::{Ref, RefMut};
+
+use super::IrProject;
+use super::proc::Proc;
 use crate::ir::variable::{TargetLists, TargetVars};
 use crate::prelude::*;
 use crate::sb3::CostumeDataFormat;
-use core::cell::{Ref, RefMut};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrCostume {

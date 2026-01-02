@@ -1,18 +1,13 @@
 //! Provides the logic for having boxed input types to blocks
 
-use super::HqCastFields;
-use super::IrOpcode;
-use super::prelude::*;
-use crate::ir::{Type as IrType, base_types};
-use crate::wasm::GlobalExportable;
-use crate::wasm::GlobalMutable;
-use crate::wasm::StepFunc;
-use crate::wasm::StringsTable;
-use crate::wasm::WasmProject;
 use itertools::Itertools;
-use wasm_encoder::ConstExpr;
-use wasm_encoder::{BlockType, Instruction as WInstruction};
+use wasm_encoder::{BlockType, ConstExpr, Instruction as WInstruction};
 use wasm_gen::wasm;
+
+use super::prelude::*;
+use super::{HqCastFields, IrOpcode};
+use crate::ir::{Type as IrType, base_types};
+use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, StringsTable, WasmProject};
 
 /// Takes a base type and gives the NaN-boxed pattern for that type
 fn boxed_pattern(ty: IrType) -> HQResult<i64> {
