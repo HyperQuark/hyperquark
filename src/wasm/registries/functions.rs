@@ -92,6 +92,118 @@ pub mod static_functions {
     use crate::prelude::*;
     use crate::wasm::{f32_to_ieeef32, mem_layout};
 
+    /// Spawns a new thread in the same stack (i.e. a thread that yields back to the current
+    /// thread once it completes.)
+    ///
+    /// Takes 4 parameters:
+    /// - i32 - the current thread index
+    /// - step funcref - the step to spawn
+    /// - structref - the structref to pass to the step being spawned
+    /// - step funcref - the step to return to after
+    pub struct SpawnThreadInStack;
+    impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
+        const VALUE: MaybeStaticFunction = MaybeStaticFunction {
+            static_function: None,
+            maybe_populate: || None,
+        };
+    }
+    pub type SpawnThreadInStackOverride = (u32, u32, u32, u32, u32);
+    impl NamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadInStackOverride>
+        for SpawnThreadInStack
+    {
+        fn r#override(
+            (func_ty, stack_struct_type, stack_array_type, thread_struct_type, threads_table): SpawnThreadInStackOverride,
+        ) -> MaybeStaticFunction {
+            MaybeStaticFunction {
+                static_function: Some(StaticFunction {
+                    instructions: Box::from(wasm_const![
+                        LocalGet(1),
+                        LocalGet(2),
+                        StructNew(stack_struct_type),
+                        LocalSet(4),
+                        LocalGet(0),
+                        TableGet(threads_table),
+                        RefAsNonNull,
+                        LocalTee(5),
+                        StructGet {
+                            struct_type_index: thread_struct_type,
+                            field_index: 1,
+                        },
+                        LocalGet(5),
+                        StructGet {
+                            struct_type_index: thread_struct_type,
+                            field_index: 0,
+                        },
+                        LocalGet(4),
+                        // todo: consider the case where we need to resize the array
+                        ArraySet(stack_array_type),
+                        LocalGet(5),
+                        StructGet {
+                            struct_type_index: thread_struct_type,
+                            field_index: 1,
+                        },
+                        LocalGet(5),
+                        StructGet {
+                            struct_type_index: thread_struct_type,
+                            field_index: 0,
+                        },
+                        I32Const(1),
+                        I32Sub,
+                        ArrayGet(stack_array_type),
+                        LocalGet(3),
+                        StructSet {
+                            struct_type_index: stack_struct_type,
+                            field_index: 0,
+                        },
+                        LocalGet(5),
+                        LocalGet(5),
+                        StructGet {
+                            struct_type_index: thread_struct_type,
+                            field_index: 0,
+                        },
+                        I32Const(1),
+                        I32Add,
+                        StructSet {
+                            struct_type_index: thread_struct_type,
+                            field_index: 0,
+                        },
+                        End
+                    ] as &[_]),
+                    params: Box::from([
+                        ValType::I32,
+                        ValType::Ref(RefType {
+                            nullable: false,
+                            heap_type: HeapType::Concrete(func_ty),
+                        }),
+                        ValType::Ref(RefType {
+                            nullable: true,
+                            heap_type: wasm_encoder::HeapType::Abstract {
+                                shared: false,
+                                ty: AbstractHeapType::Struct,
+                            },
+                        }),
+                        ValType::Ref(RefType {
+                            nullable: false,
+                            heap_type: HeapType::Concrete(func_ty),
+                        }),
+                    ]),
+                    returns: Box::from([]),
+                    locals: Box::from([
+                        ValType::Ref(RefType {
+                            nullable: false,
+                            heap_type: HeapType::Concrete(stack_struct_type),
+                        }),
+                        ValType::Ref(RefType {
+                            nullable: false,
+                            heap_type: HeapType::Concrete(thread_struct_type),
+                        }),
+                    ]),
+                }),
+                maybe_populate: || None,
+            }
+        }
+    }
+
     pub struct SpawnNewThread;
     impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
         const VALUE: MaybeStaticFunction = MaybeStaticFunction {

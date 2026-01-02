@@ -11,7 +11,7 @@ use wasm_gen::wasm;
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
 use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
 use crate::prelude::*;
-use crate::wasm::registries::functions::static_functions::SpawnNewThread;
+use crate::wasm::registries::functions::static_functions::{SpawnNewThread, SpawnThreadInStack};
 use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
@@ -135,6 +135,16 @@ impl WasmProject {
         self.registries()
             .static_functions()
             .register_override::<SpawnNewThread, usize, _>((
+                self.registries().types().step_func_type()?,
+                self.registries().types().stack_struct_type()?,
+                self.registries().types().stack_array_type()?,
+                self.registries().types().thread_struct_type()?,
+                self.threads_table_index()?,
+            ))?;
+
+        self.registries()
+            .static_functions()
+            .register_override::<SpawnThreadInStack, usize, _>((
                 self.registries().types().step_func_type()?,
                 self.registries().types().stack_struct_type()?,
                 self.registries().types().stack_array_type()?,
