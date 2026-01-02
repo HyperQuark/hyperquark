@@ -4,7 +4,7 @@ use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
     DataAddtolistFields, DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields, ProceduresCallNonwarpFields,
+    DataReplaceitemoflistFields, EventBroadcastFields, ProceduresCallNonwarpFields,
 };
 use crate::instructions::{
     IrOpcode, YieldMode,
@@ -77,8 +77,9 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
                         | IrOpcode::data_replaceitemoflist(_)
                 ) {
                     hq_bug!(
-                        "attempted to insert a cast before a variable/list operation - variables should \
-                        encompass all possible types, rather than causing values to be coerced.
+                        "attempted to insert a cast before a variable/list operation - variables \
+                         should encompass all possible types, rather than causing values to be \
+                         coerced.
                         Tried to cast from {} to {}, at position {}.
                         Occurred on these opcodes: [
                         {}
@@ -248,7 +249,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_deletealloflist
             | BlockOpcode::data_lengthoflist
             | BlockOpcode::data_listcontents
-            | BlockOpcode::control_stop => vec![],
+            | BlockOpcode::control_stop
+            | BlockOpcode::event_broadcast_menu => vec![],
+            BlockOpcode::event_broadcast => vec!["BROADCAST_INPUT"],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
@@ -1130,6 +1133,91 @@ fn from_normal_block(
                             }
                         }
                         BlockOpcode::operator_random => vec![IrOpcode::operator_random],
+                        BlockOpcode::event_broadcast_menu => {
+                            let sb3::Field::ValueId(val, _id) =
+                                block_info.fields.get("BROADCAST_OPTION").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field BROADCAST_OPTION"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing broadcast name for \
+                                     BROADCAST_OPTION field"
+                                );
+                            };
+                            let VarVal::String(name) = val.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null broadcast name for \
+                                     BROADCAST_OPTION field"
+                                )
+                            })?
+                            else {
+                                hq_bad_proj!("non-string broadcast name")
+                            };
+                            vec![IrOpcode::hq_text(HqTextFields(name))]
+                        }
+                        BlockOpcode::event_broadcast => {
+                            let var = RcVar::new(IrType::String, VarVal::String("".into()))?;
+                            vec![
+                                IrOpcode::hq_cast(HqCastFields(IrType::String)),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(var.clone()),
+                                    local_write: RefCell::new(true),
+                                }),
+                            ]
+                            .into_iter()
+                            .chain(
+                                context
+                                    .project()?
+                                    .broadcasts()
+                                    .iter()
+                                    .try_fold(
+                                        Step::new_empty(
+                                            project,
+                                            false,
+                                            Rc::clone(context.target()),
+                                        )?,
+                                        |branch_else, broadcast_name| {
+                                            let branch_if = Step::new_rc(
+                                                None,
+                                                context.clone(),
+                                                vec![IrOpcode::event_broadcast(
+                                                    EventBroadcastFields(broadcast_name.clone()),
+                                                )],
+                                                project,
+                                                false,
+                                            )?;
+                                            Step::new_rc(
+                                                None,
+                                                context.clone(),
+                                                vec![
+                                                    IrOpcode::data_variable(DataVariableFields {
+                                                        var: RefCell::new(var.clone()),
+                                                        local_read: RefCell::new(true),
+                                                    }),
+                                                    IrOpcode::hq_text(HqTextFields(
+                                                        broadcast_name.clone(),
+                                                    )),
+                                                    IrOpcode::operator_equals, // todo: this should be a case-sensitive comparison
+                                                    IrOpcode::control_if_else(
+                                                        ControlIfElseFields {
+                                                            branch_if,
+                                                            branch_else,
+                                                        },
+                                                    ),
+                                                ],
+                                                project,
+                                                false,
+                                            )
+                                        },
+                                    )?
+                                    .opcodes()
+                                    .borrow()
+                                    .clone(),
+                            )
+                            .collect()
+                        }
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =
                                 block_info.fields.get("VARIABLE").ok_or_else(|| {
@@ -1904,12 +1992,14 @@ fn from_normal_block(
                             let sb3::VarVal::String(number_name) =
                                 val.clone().ok_or_else(|| {
                                     make_hq_bad_proj!(
-                                    "invalid project.json - null costume name for NUMBER_NAME field"
-                                )
+                                        "invalid project.json - null costume name for NUMBER_NAME \
+                                         field"
+                                    )
                                 })?
                             else {
                                 hq_bad_proj!(
-                                    "invalid project.json - NUMBER_NAME field is not of type String"
+                                    "invalid project.json - NUMBER_NAME field is not of type \
+                                     String"
                                 );
                             };
                             match &*number_name {
@@ -2182,9 +2272,9 @@ fn from_special_block(
             }
             _ => hq_bad_proj!("bad project json (block array of type ({}, string))", ty),
         },
-        BlockArray::Broadcast(ty, _name, id) | BlockArray::VariableOrList(ty, _name, id, _, _) => {
+        BlockArray::Broadcast(ty, name, id) | BlockArray::VariableOrList(ty, name, id, _, _) => {
             match ty {
-                11 => hq_todo!("broadcast input"),
+                11 => IrOpcode::hq_text(HqTextFields(name.clone())),
                 12 => {
                     let target = context.target();
                     let variable = if let Some(var) = target.variables().get(id) {

@@ -401,7 +401,16 @@ impl VarGraph {
                                         index: var_index,
                                         arg_var: arg_var.clone(),
                                         in_warped: true,
-                                        arg_vars: Rc::clone(&maybe_proc_context.ok_or_else(|| make_hq_bug!("tried to access proc argument when proc context was None"))?.arg_vars)
+                                        arg_vars: Rc::clone(
+                                            &maybe_proc_context
+                                                .ok_or_else(|| {
+                                                    make_hq_bug!(
+                                                        "tried to access proc argument when proc \
+                                                         context was None"
+                                                    )
+                                                })?
+                                                .arg_vars,
+                                        ),
                                     }),
                                 ));
                                 Ok(arg_var.clone())
@@ -522,7 +531,17 @@ impl VarGraph {
                                                         index: arg_index,
                                                         arg_var: arg_var.clone(),
                                                         in_warped: true,
-                                                        arg_vars: Rc::clone(&maybe_proc_context.ok_or_else(|| make_hq_bug!("tried to access proc argument when proc context was None"))?.arg_vars)
+                                                        arg_vars: Rc::clone(
+                                                            &maybe_proc_context
+                                                                .ok_or_else(|| {
+                                                                    make_hq_bug!(
+                                                                        "tried to access proc \
+                                                                         argument when proc \
+                                                                         context was None"
+                                                                    )
+                                                                })?
+                                                                .arg_vars,
+                                                        ),
                                                     },
                                                 ),
                                                 arg_var.clone(),
@@ -729,8 +748,8 @@ impl VarGraph {
                             next_steps.push(rcstep);
                         } else {
                             crate::warn(
-                                "couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
-                    what's going on here?",
+                                "couldn't upgrade Weak<Step> in Schedule in variables \
+                                 optimisation pass;what's going on here?",
                             );
                         }
                         should_propagate_ssa = true;
@@ -773,7 +792,8 @@ impl VarGraph {
             && let Some(proc_context) = maybe_proc_context
         {
             crate::log!(
-                "found spare items on type stack at end of step visit, in warped proc: {type_stack:?}"
+                "found spare items on type stack at end of step visit, in warped proc: \
+                 {type_stack:?}"
             );
             // crate::log!(
             //     "return vars: {}",

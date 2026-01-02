@@ -13,7 +13,8 @@
 )]
 #![allow(
     clippy::missing_errors_doc,
-    reason = "Too many Results everywhere to document every possible error case. Errors should be self-descriptive and user readable anyway."
+    reason = "Too many Results everywhere to document every possible error case. Errors should be \
+              self-descriptive and user readable anyway."
 )]
 #![allow(clippy::too_many_arguments, reason = "unavoidable at this stage")]
 #![allow(

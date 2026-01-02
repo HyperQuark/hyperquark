@@ -1,13 +1,13 @@
 use super::{Registries, WasmFlags, WasmProject};
 use crate::instructions::IrOpcode;
-use crate::ir::{PartialStep, RcVar, ReturnType, Step};
+use crate::ir::{Event, PartialStep, RcVar, ReturnType, Step};
 use crate::prelude::*;
 use crate::wasm::registries::TypeRegistry;
 use crate::{instructions::wrap_instruction, ir::Proc};
 use alloc::collections::btree_map;
 use wasm_encoder::{
-    self, CodeSection, Function, FunctionSection, HeapType, Instruction as WInstruction, RefType,
-    ValType,
+    self, AbstractHeapType, CodeSection, Function, FunctionSection, HeapType,
+    Instruction as WInstruction, RefType, ValType,
 };
 use wasm_gen::wasm;
 
@@ -20,6 +20,7 @@ pub enum Instruction {
     LazyNonWarpedProcRef(Rc<Proc>),
     LazyGlobalGet(u32),
     LazyGlobalSet(u32),
+    LazyBroadcastSpawn(Box<str>),
     StaticFunctionCall(u32),
 }
 
@@ -27,16 +28,19 @@ impl Instruction {
     pub fn eval(
         &self,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+        events: &BTreeMap<Event, Vec<u32>>,
         imported_func_count: u32,
         static_func_count: u32,
         imported_global_count: u32,
-    ) -> HQResult<WInstruction<'static>> {
+        threads_count_global: u32,
+        spawn_new_thread_func: u32,
+    ) -> HQResult<Box<[WInstruction<'static>]>> {
         Ok(match self {
-            Self::Immediate(instr) => instr.clone(),
+            Self::Immediate(instr) => Box::from([instr.clone()]),
             #[cfg(test)]
-            Self::LazyStepRef(_step) => {
-                WInstruction::RefFunc(imported_func_count + static_func_count)
-            }
+            Self::LazyStepRef(_step) => Box::from([WInstruction::RefFunc(
+                imported_func_count + static_func_count,
+            )]),
             #[cfg(not(test))]
             Self::LazyStepRef(step) => {
                 let step_index: u32 = steps
@@ -49,7 +53,40 @@ impl Instruction {
                     .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                WInstruction::RefFunc(imported_func_count + static_func_count + step_index)
+                Box::from([WInstruction::RefFunc(
+                    imported_func_count + static_func_count + step_index,
+                )])
+            }
+            Self::LazyBroadcastSpawn(broadcast) => {
+                let broadcast_indices = events
+                    .get(&Event::Broadcast(broadcast.clone()))
+                    .cloned()
+                    .unwrap_or_default();
+
+                // todo: these should begin execution in the same step, I think, possibly immediately?
+
+                broadcast_indices
+                    .iter()
+                    .flat_map(|&i| {
+                        [
+                            WInstruction::RefFunc(i + imported_func_count + static_func_count),
+                            WInstruction::RefNull(HeapType::Abstract {
+                                shared: false,
+                                ty: AbstractHeapType::Struct,
+                            }),
+                            WInstruction::Call(spawn_new_thread_func + imported_func_count),
+                        ]
+                    })
+                    .chain([
+                        WInstruction::GlobalGet(threads_count_global + imported_global_count),
+                        WInstruction::I32Const(
+                            i32::try_from(broadcast_indices.len())
+                                .map_err(|_| make_hq_bug!("indices len out of bounds"))?,
+                        ),
+                        WInstruction::I32Add,
+                        WInstruction::GlobalSet(threads_count_global + imported_global_count),
+                    ])
+                    .collect()
             }
             Self::LazyStepIndex(step) => {
                 let step_index: i32 = steps
@@ -62,7 +99,7 @@ impl Instruction {
                     .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                WInstruction::I32Const(step_index)
+                Box::from([WInstruction::I32Const(step_index)])
             }
             Self::LazyWarpedProcCall(proc) => {
                 let Some(ref warped_specific_proc) = *proc.warped_specific_proc() else {
@@ -77,7 +114,9 @@ impl Instruction {
                     .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                WInstruction::Call(imported_func_count + static_func_count + step_index)
+                Box::from([WInstruction::Call(
+                    imported_func_count + static_func_count + step_index,
+                )])
             }
             Self::LazyNonWarpedProcRef(proc) => {
                 let Some(ref nonwarped_specific_proc) = *proc.nonwarped_specific_proc() else {
@@ -92,17 +131,21 @@ impl Instruction {
                     .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
                     .try_into()
                     .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                WInstruction::RefFunc(imported_func_count + static_func_count + step_index)
+                Box::from([WInstruction::RefFunc(
+                    imported_func_count + static_func_count + step_index,
+                )])
             }
             Self::LazyGlobalGet(idx) => {
                 // crate::log!("global get {idx}. imported globals: {imported_global_count}");
-                WInstruction::GlobalGet(idx + imported_global_count)
+                Box::from([WInstruction::GlobalGet(idx + imported_global_count)])
             }
             Self::LazyGlobalSet(idx) => {
                 // crate::log!("global get {idx}. imported globals: {imported_global_count}");
-                WInstruction::GlobalSet(idx + imported_global_count)
+                Box::from([WInstruction::GlobalSet(idx + imported_global_count)])
             }
-            Self::StaticFunctionCall(idx) => WInstruction::Call(imported_func_count + idx),
+            Self::StaticFunctionCall(idx) => {
+                Box::from([WInstruction::Call(imported_func_count + idx)])
+            }
         })
     }
 }
@@ -252,18 +295,26 @@ impl StepFunc {
         funcs: &mut FunctionSection,
         code: &mut CodeSection,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
+        events: &BTreeMap<Event, Vec<u32>>,
         imported_func_count: u32,
         static_func_count: u32,
         imported_global_count: u32,
+        threads_count_global: u32,
+        spawn_new_thread_func: u32,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions().take() {
-            func.instruction(&instruction.eval(
+            for real_instruction in instruction.eval(
                 steps,
+                events,
                 imported_func_count,
                 static_func_count,
                 imported_global_count,
-            )?);
+                threads_count_global,
+                spawn_new_thread_func,
+            )? {
+                func.instruction(&real_instruction);
+            }
         }
         func.instruction(&wasm_encoder::Instruction::End);
         let type_index = self

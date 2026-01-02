@@ -64,7 +64,8 @@ pub fn wasm(
                     }
                 })
             ),
-            "struct parameter did not match the expected type shape; expected (structref), got {:?}",
+            "struct parameter did not match the expected type shape; expected (structref), got \
+             {:?}",
             func.params().get(1)
         );
         let struct_type_index = func

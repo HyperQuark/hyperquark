@@ -66,10 +66,7 @@ pub fn wasm(
         vec![]
     })
     .chain(
-        if elem_type.intersects(
-            IrType::StringNan
-                .or(IrType::StringNumber),
-        ) {
+        if elem_type.intersects(IrType::StringNan.or(IrType::StringNumber)) {
             let string_length = func.registries().external_functions().register(
                 ("wasm:js-string", "length".into()),
                 (vec![ValType::EXTERNREF], vec![ValType::I32]),
@@ -82,40 +79,39 @@ pub fn wasm(
                 #LazyGlobalGet(list_global),
                 LocalGet(i_local),
                 ArrayGet(array_type),
-            ].into_iter()
-            .chain(
-                match list.possible_types().base_type() {
-                    Some(IrType::String) => {
-                        wasm![
-                            Call(string_length),
-                            I32Const(1),
-                            I32Eq,
-                        ]
-                    },
-                    None => {
-                        let i64_local = func.local(ValType::I64)?;
-                        let strings_table = func.registries().tables().register::<StringsTable, _>()?;
-                        wasm![
-                            LocalTee(i64_local),
-                            I64Const(BOXED_STRING_PATTERN),
-                            I64And,
-                            I64Const(BOXED_STRING_PATTERN),
-                            I64Eq,
-                            If(WasmBlockType::Result(ValType::I32)),
-                            LocalGet(i64_local),
-                            I32WrapI64,
-                            TableGet(strings_table),
-                            Call(string_length),
-                            I32Const(1),
-                            I32Eq,
-                            Else,
-                            I32Const(0),
-                            End,
-                        ]
-                    },
-                    _ => hq_bug!("shouldn't be checking for single chars in list contents for list with possible types {}", *list.possible_types())
+            ]
+            .into_iter()
+            .chain(match list.possible_types().base_type() {
+                Some(IrType::String) => {
+                    wasm![Call(string_length), I32Const(1), I32Eq,]
                 }
-            )
+                None => {
+                    let i64_local = func.local(ValType::I64)?;
+                    let strings_table = func.registries().tables().register::<StringsTable, _>()?;
+                    wasm![
+                        LocalTee(i64_local),
+                        I64Const(BOXED_STRING_PATTERN),
+                        I64And,
+                        I64Const(BOXED_STRING_PATTERN),
+                        I64Eq,
+                        If(WasmBlockType::Result(ValType::I32)),
+                        LocalGet(i64_local),
+                        I32WrapI64,
+                        TableGet(strings_table),
+                        Call(string_length),
+                        I32Const(1),
+                        I32Eq,
+                        Else,
+                        I32Const(0),
+                        End,
+                    ]
+                }
+                _ => hq_bug!(
+                    "shouldn't be checking for single chars in list contents for list with \
+                     possible types {}",
+                    *list.possible_types()
+                ),
+            })
             .chain(wasm![
                 LocalTee(is_single_chars_local),
                 I32Eqz,
@@ -132,12 +128,7 @@ pub fn wasm(
                     |_| make_hq_bug!("list initial value length out of bounds")
                 )?)]
             })
-            .chain(wasm![
-                I32LtS,
-                BrIf(1),
-                End,
-                End,
-            ])
+            .chain(wasm![I32LtS, BrIf(1), End, End,])
             .collect()
         } else {
             wasm![I32Const(0), LocalSet(is_single_chars_local)]
@@ -182,8 +173,14 @@ pub fn wasm(
             wasm![Call(int_to_string)]
         }
         Some(IrType::Boolean) => {
-            let true_string = func.registries().strings().register_default("true".into())?;
-            let false_string = func.registries().strings().register_default("false".into())?;
+            let true_string = func
+                .registries()
+                .strings()
+                .register_default("true".into())?;
+            let false_string = func
+                .registries()
+                .strings()
+                .register_default("false".into())?;
             let bool_local = func.local(ValType::I32)?;
             wasm![
                 LocalSet(bool_local),
@@ -232,7 +229,10 @@ pub fn wasm(
                 End,
             ]
         }
-        _ => hq_bug!("unexpected list type for list contents, {}", *list.possible_types())
+        _ => hq_bug!(
+            "unexpected list type for list contents, {}",
+            *list.possible_types()
+        ),
     })
     .chain(wasm![
         Call(string_concat),
@@ -241,18 +241,15 @@ pub fn wasm(
         I32Const(1),
         I32Add,
         LocalTee(i_local),
-    ]).chain(if let Some(length_global) = maybe_length_global {
+    ])
+    .chain(if let Some(length_global) = maybe_length_global {
         wasm![#LazyGlobalGet(length_global)]
     } else {
         wasm![I32Const(list.initial_value().len().try_into().map_err(
             |_| make_hq_bug!("list initial value length out of bounds")
         )?)]
-    }).chain(wasm![
-        I32LtS,
-        BrIf(0),
-        End,
-        LocalGet(output_local),
-    ])
+    })
+    .chain(wasm![I32LtS, BrIf(0), End, LocalGet(output_local),])
     .chain(wasm![End])
     .collect())
 }

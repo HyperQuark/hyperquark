@@ -113,7 +113,8 @@ fn generate_branches(
                     wasm.append(&mut wasm![@boxed(this_base_type)]);
                 } else if let ReturnType::MultiValue(_) = this_output {
                     crate::warn(
-                        "found multi-valued output type for this block in `generate_branches`... suspicious.",
+                        "found multi-valued output type for this block in `generate_branches`... \
+                         suspicious.",
                     );
                 }
             }

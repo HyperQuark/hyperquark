@@ -77,6 +77,7 @@ pub enum BlockOpcode {
     data_hidelist,
     data_showlist,
     event_broadcast,
+    event_broadcast_menu,
     event_broadcastandwait,
     event_whenflagclicked,
     event_whenkeypressed,

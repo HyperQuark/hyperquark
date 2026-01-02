@@ -3,7 +3,8 @@
 
 #![allow(
     clippy::unnecessary_wraps,
-    reason = "many functions here needlessly return `Result`s in order to keep type signatures consistent"
+    reason = "many functions here needlessly return `Result`s in order to keep type signatures \
+              consistent"
 )]
 #![allow(
     clippy::needless_pass_by_value,
@@ -15,6 +16,7 @@ use crate::prelude::*;
 
 mod control;
 mod data;
+mod event;
 mod hq;
 mod looks;
 mod motion;
