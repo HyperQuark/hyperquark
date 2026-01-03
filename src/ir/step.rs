@@ -147,6 +147,25 @@ impl Step {
         )
     }
 
+    pub fn new_poll_waiting_threads(
+        context: StepContext,
+        project: &Weak<IrProject>,
+    ) -> HQResult<Rc<Self>> {
+        Self::new_rc(
+            None,
+            context.clone(),
+            vec![
+                IrOpcode::event_poll_waiting_threads,
+                IrOpcode::control_if_else(ControlIfElseFields {
+                    branch_if: Self::new_rc(None, context.clone(), vec![], project, false)?,
+                    branch_else: Self::new_terminating(context, project, false)?,
+                }),
+            ],
+            project,
+            true,
+        )
+    }
+
     pub fn opcodes_mut(&self) -> HQResult<RefMut<'_, Vec<IrOpcode>>> {
         self.opcodes
             .try_borrow_mut()

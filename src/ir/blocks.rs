@@ -14,8 +14,8 @@ use crate::instructions::fields::{
 use crate::instructions::{
     DataAddtolistFields, DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields, EventBroadcastFields, IrOpcode, ProceduresCallNonwarpFields,
-    YieldMode,
+    DataReplaceitemoflistFields, EventBroadcastAndWaitFields, EventBroadcastFields, IrOpcode,
+    ProceduresCallNonwarpFields, YieldMode,
 };
 use crate::ir::{RcList, ReturnType};
 use crate::prelude::*;
@@ -250,7 +250,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_listcontents
             | BlockOpcode::control_stop
             | BlockOpcode::event_broadcast_menu => vec![],
-            BlockOpcode::event_broadcast => vec!["BROADCAST_INPUT"],
+            BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
+                vec!["BROADCAST_INPUT"]
+            }
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
@@ -1028,6 +1030,66 @@ where
     .collect())
 }
 
+fn generate_exhaustive_string_comparison<I, S, F>(
+    string_source: I,
+    instruction: F,
+    context: &StepContext,
+    project: &Weak<IrProject>,
+) -> HQResult<Vec<IrOpcode>>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<Box<str>> + Clone,
+    F: Fn(Box<str>) -> IrOpcode,
+{
+    let var = RcVar::new(IrType::String, VarVal::String("".into()))?;
+    Ok(vec![
+        IrOpcode::hq_cast(HqCastFields(IrType::String)),
+        IrOpcode::data_setvariableto(DataSetvariabletoFields {
+            var: RefCell::new(var.clone()),
+            local_write: RefCell::new(true),
+        }),
+    ]
+    .into_iter()
+    .chain(
+        string_source
+            .into_iter()
+            .try_fold(
+                Step::new_empty(project, false, Rc::clone(context.target()))?,
+                |branch_else, string| {
+                    let branch_if = Step::new_rc(
+                        None,
+                        context.clone(),
+                        vec![instruction(string.clone().into())],
+                        project,
+                        false,
+                    )?;
+                    Step::new_rc(
+                        None,
+                        context.clone(),
+                        vec![
+                            IrOpcode::data_variable(DataVariableFields {
+                                var: RefCell::new(var.clone()),
+                                local_read: RefCell::new(true),
+                            }),
+                            IrOpcode::hq_text(HqTextFields(string.into())),
+                            IrOpcode::operator_equals, // todo: this should be a case-sensitive comparison
+                            IrOpcode::control_if_else(ControlIfElseFields {
+                                branch_if,
+                                branch_else,
+                            }),
+                        ],
+                        project,
+                        false,
+                    )
+                },
+            )?
+            .opcodes()
+            .borrow()
+            .clone(),
+    )
+    .collect())
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "a big monolithic function is somewhat unavoidable here"
@@ -1156,66 +1218,38 @@ fn from_normal_block(
                             };
                             vec![IrOpcode::hq_text(HqTextFields(name))]
                         }
-                        BlockOpcode::event_broadcast => {
-                            let var = RcVar::new(IrType::String, VarVal::String("".into()))?;
-                            vec![
-                                IrOpcode::hq_cast(HqCastFields(IrType::String)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(var.clone()),
-                                    local_write: RefCell::new(true),
-                                }),
-                            ]
-                            .into_iter()
-                            .chain(
-                                context
-                                    .project()?
-                                    .broadcasts()
-                                    .iter()
-                                    .try_fold(
-                                        Step::new_empty(
-                                            project,
-                                            false,
-                                            Rc::clone(context.target()),
-                                        )?,
-                                        |branch_else, broadcast_name| {
-                                            let branch_if = Step::new_rc(
-                                                None,
-                                                context.clone(),
-                                                vec![IrOpcode::event_broadcast(
-                                                    EventBroadcastFields(broadcast_name.clone()),
-                                                )],
-                                                project,
-                                                false,
-                                            )?;
-                                            Step::new_rc(
-                                                None,
-                                                context.clone(),
-                                                vec![
-                                                    IrOpcode::data_variable(DataVariableFields {
-                                                        var: RefCell::new(var.clone()),
-                                                        local_read: RefCell::new(true),
-                                                    }),
-                                                    IrOpcode::hq_text(HqTextFields(
-                                                        broadcast_name.clone(),
-                                                    )),
-                                                    IrOpcode::operator_equals, // todo: this should be a case-sensitive comparison
-                                                    IrOpcode::control_if_else(
-                                                        ControlIfElseFields {
-                                                            branch_if,
-                                                            branch_else,
-                                                        },
-                                                    ),
-                                                ],
-                                                project,
-                                                false,
-                                            )
+                        BlockOpcode::event_broadcast => generate_exhaustive_string_comparison(
+                            context.project()?.broadcasts().iter().cloned(),
+                            |broadcast| IrOpcode::event_broadcast(EventBroadcastFields(broadcast)),
+                            context,
+                            project,
+                        )?,
+                        BlockOpcode::event_broadcastandwait => {
+                            let poll_step =
+                                Step::new_poll_waiting_threads(context.clone(), project)?;
+                            should_break = true;
+                            let next_step = generate_next_step(
+                                true,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                flags,
+                            )?;
+                            generate_exhaustive_string_comparison(
+                                context.project()?.broadcasts().iter().cloned(),
+                                |broadcast| {
+                                    IrOpcode::event_broadcast_and_wait(
+                                        EventBroadcastAndWaitFields {
+                                            broadcast,
+                                            poll_step: Rc::clone(&poll_step),
+                                            next_step: Rc::clone(&next_step),
                                         },
-                                    )?
-                                    .opcodes()
-                                    .borrow()
-                                    .clone(),
-                            )
-                            .collect()
+                                    )
+                                },
+                                context,
+                                project,
+                            )?
                         }
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =

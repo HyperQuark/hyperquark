@@ -164,11 +164,14 @@ impl WasmProject {
                 &mut codes,
                 self.steps(),
                 &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-                self.threads_count_global()?,
-                self.spawn_new_thread_func()?,
             )?;
         }
 
@@ -328,6 +331,16 @@ impl WasmProject {
             .register::<SpawnNewThread, _>()
     }
 
+    fn spawn_thread_in_stack_func<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.registries()
+            .static_functions()
+            .register::<SpawnThreadInStack, _>()
+    }
+
     fn threads_count_global<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
@@ -377,11 +390,14 @@ impl WasmProject {
             for real_instruction in instruction.eval(
                 self.steps(),
                 &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-                self.threads_count_global()?,
-                self.spawn_new_thread_func()?,
             )? {
                 func.instruction(&real_instruction);
             }
@@ -398,11 +414,14 @@ impl WasmProject {
             for real_instruction in instruction.eval(
                 self.steps(),
                 &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-                self.threads_count_global()?,
-                self.spawn_new_thread_func()?,
             )? {
                 func.instruction(&real_instruction);
             }
@@ -536,11 +555,14 @@ impl WasmProject {
             for real_instruction in instr.eval(
                 self.steps(),
                 &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-                self.threads_count_global()?,
-                self.spawn_new_thread_func()?,
             )? {
                 tick_func.instruction(&real_instruction);
             }

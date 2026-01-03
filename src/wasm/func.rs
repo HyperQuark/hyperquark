@@ -1,8 +1,8 @@
 use alloc::collections::btree_map;
 
 use wasm_encoder::{
-    self, AbstractHeapType, CodeSection, Function, FunctionSection, HeapType,
-    Instruction as WInstruction, RefType, ValType,
+    self, AbstractHeapType, CodeSection, FieldType, Function, FunctionSection, HeapType,
+    Instruction as WInstruction, RefType, StorageType, ValType,
 };
 use wasm_gen::wasm;
 
@@ -22,6 +22,7 @@ pub enum Instruction {
     LazyGlobalGet(u32),
     LazyGlobalSet(u32),
     LazyBroadcastSpawn(Box<str>),
+    LazyBroadcastSpawnAndWait((Box<str>, Rc<Step>, Rc<Step>, u32)),
     StaticFunctionCall(u32),
 }
 
@@ -30,11 +31,14 @@ impl Instruction {
         &self,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         events: &BTreeMap<Event, Vec<u32>>,
+        types: &Rc<TypeRegistry>,
+        threads_count_global: u32,
+        spawn_new_thread_func: u32,
+        spawn_thread_in_stack_func: u32,
+        threads_table: u32,
         imported_func_count: u32,
         static_func_count: u32,
         imported_global_count: u32,
-        threads_count_global: u32,
-        spawn_new_thread_func: u32,
     ) -> HQResult<Box<[WInstruction<'static>]>> {
         Ok(match self {
             Self::Immediate(instr) => Box::from([instr.clone()]),
@@ -88,6 +92,87 @@ impl Instruction {
                         WInstruction::GlobalSet(threads_count_global + imported_global_count),
                     ])
                     .collect()
+            }
+            Self::LazyBroadcastSpawnAndWait((broadcast, poll_step, next_step, arr_local)) => {
+                let broadcast_indices = events
+                    .get(&Event::Broadcast(broadcast.clone()))
+                    .cloned()
+                    .unwrap_or_default();
+
+                let i32_array_type = types.array(StorageType::Val(ValType::I32), true)?;
+                let thread_poll_struct = types.struct_(vec![FieldType {
+                    element_type: StorageType::Val(ValType::Ref(RefType {
+                        nullable: false,
+                        heap_type: HeapType::Concrete(i32_array_type),
+                    })),
+                    mutable: false,
+                }])?;
+
+                let poll_step_index: u32 = steps
+                    .try_borrow()?
+                    .get_index_of(poll_step)
+                    .ok_or_else(|| make_hq_bug!("couldn't find poll_step in step map"))?
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("poll_step index out of bounds"))?;
+
+                let next_step_index: u32 = steps
+                    .try_borrow()?
+                    .get_index_of(next_step)
+                    .ok_or_else(|| make_hq_bug!("couldn't find next_step in step map"))?
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("next_step index out of bounds"))?;
+
+                let broadcast_num = i32::try_from(broadcast_indices.len())
+                    .map_err(|_| make_hq_bug!("indices len out of bounds"))?;
+
+                [
+                    WInstruction::I32Const(broadcast_num),
+                    WInstruction::ArrayNewDefault(i32_array_type),
+                    WInstruction::LocalSet(*arr_local),
+                ]
+                .into_iter()
+                .chain(
+                    broadcast_indices
+                        .iter()
+                        .enumerate()
+                        .map(|(j, &i)| {
+                            // todo: should these should begin execution in the same step?
+                            Ok([
+                                WInstruction::LocalGet(*arr_local),
+                                WInstruction::I32Const(
+                                    j.try_into()
+                                        .map_err(|_| make_hq_bug!("index out of bounds"))?,
+                                ),
+                                WInstruction::TableSize(threads_table),
+                                WInstruction::ArraySet(i32_array_type),
+                                WInstruction::RefFunc(i + imported_func_count + static_func_count),
+                                WInstruction::RefNull(HeapType::Abstract {
+                                    shared: false,
+                                    ty: AbstractHeapType::Struct,
+                                }),
+                                WInstruction::Call(spawn_new_thread_func + imported_func_count),
+                            ])
+                        })
+                        .collect::<HQResult<Box<[_]>>>()?
+                        .into_iter()
+                        .flatten(),
+                )
+                .chain([
+                    WInstruction::GlobalGet(threads_count_global + imported_global_count),
+                    WInstruction::I32Const(broadcast_num),
+                    WInstruction::I32Add,
+                    WInstruction::GlobalSet(threads_count_global + imported_global_count),
+                    WInstruction::RefFunc(
+                        poll_step_index + imported_func_count + static_func_count,
+                    ),
+                    WInstruction::LocalGet(*arr_local),
+                    WInstruction::StructNew(thread_poll_struct),
+                    WInstruction::RefFunc(
+                        next_step_index + imported_func_count + static_func_count,
+                    ),
+                    WInstruction::Call(spawn_thread_in_stack_func + imported_func_count),
+                ])
+                .collect()
             }
             Self::LazyStepIndex(step) => {
                 let step_index: i32 = steps
@@ -297,22 +382,28 @@ impl StepFunc {
         code: &mut CodeSection,
         steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         events: &BTreeMap<Event, Vec<u32>>,
+        types: &Rc<TypeRegistry>,
+        threads_count_global: u32,
+        spawn_new_thread_func: u32,
+        spawn_thread_in_stack_func: u32,
+        threads_table: u32,
         imported_func_count: u32,
         static_func_count: u32,
         imported_global_count: u32,
-        threads_count_global: u32,
-        spawn_new_thread_func: u32,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions().take() {
             for real_instruction in instruction.eval(
                 steps,
                 events,
+                types,
+                threads_count_global,
+                spawn_new_thread_func,
+                spawn_thread_in_stack_func,
+                threads_table,
                 imported_func_count,
                 static_func_count,
                 imported_global_count,
-                threads_count_global,
-                spawn_new_thread_func,
             )? {
                 func.instruction(&real_instruction);
             }
