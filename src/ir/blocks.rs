@@ -1033,6 +1033,7 @@ where
 fn generate_exhaustive_string_comparison<I, S, F>(
     string_source: I,
     instruction: F,
+    fallback: Vec<IrOpcode>,
     context: &StepContext,
     project: &Weak<IrProject>,
 ) -> HQResult<Vec<IrOpcode>>
@@ -1054,7 +1055,7 @@ where
         string_source
             .into_iter()
             .try_fold(
-                Step::new_empty(project, false, Rc::clone(context.target()))?,
+                Step::new_rc(None, context.clone(), fallback, project, false)?,
                 |branch_else, string| {
                     let branch_if = Step::new_rc(
                         None,
@@ -1221,6 +1222,7 @@ fn from_normal_block(
                         BlockOpcode::event_broadcast => generate_exhaustive_string_comparison(
                             context.project()?.broadcasts().iter().cloned(),
                             |broadcast| IrOpcode::event_broadcast(EventBroadcastFields(broadcast)),
+                            vec![],
                             context,
                             project,
                         )?,
@@ -1247,6 +1249,9 @@ fn from_normal_block(
                                         },
                                     )
                                 },
+                                vec![IrOpcode::hq_yield(HqYieldFields {
+                                    mode: YieldMode::Schedule(Rc::downgrade(&next_step)),
+                                })],
                                 context,
                                 project,
                             )?
