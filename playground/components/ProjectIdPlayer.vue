@@ -7,7 +7,7 @@
     :title="title"
     :instructions="instructions"
     :description="description"
-    :zip="null"
+    :zip="zip"
   ></ProjectPlayer>
   <template v-else>
     <h1>Project not found</h1>
@@ -21,12 +21,14 @@
 </template>
 
 <script setup>
+import { unpackProject } from "../lib/project-loader";
 import ProjectPlayer from "./ProjectPlayer.vue";
-import { ref } from "vue";
+import { ref, nextTick } from "vue";
 
 const props = defineProps(["id"]);
 const success = ref(null);
 const json = ref("");
+const zip = ref("");
 const title = ref("");
 const author = ref("");
 const instructions = ref("");
@@ -39,14 +41,16 @@ try {
   author.value = apiRes.author.username;
   instructions.value = apiRes.instructions;
   description.value = apiRes.description;
-  json.value = await fetch(
-    `https://projects.scratch.mit.edu/${props.id}/?token=${apiRes.project_token}`,
-  ).then((res) => {
-    if (!res.ok) {
-      throw new Error("response was not OK");
-    }
-    return res.json();
-  });
+  const res = await fetch(
+    `https://projects.scratch.mit.edu/${props.id}?token=${apiRes.project_token}`,
+  );
+  if (!res.ok) {
+    throw new Error("response was not OK");
+  }
+  const [_json, _zip] = await unpackProject(await res.arrayBuffer());
+  console.log(json);
+  zip.value = _zip;
+  json.value = _json;
   success.value = true;
 } catch (e) {
   success.value = e;

@@ -113,6 +113,8 @@ onMounted(async () => {
   let assets = null;
   let wasmProject;
 
+  console.log(props);
+
   try {
     // we need to convert settings to and from a JsValue because the WasmFlags exported from the
     // no-compiler version is not the same as that exported by the compiler... because reasons
