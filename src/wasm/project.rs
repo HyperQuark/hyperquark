@@ -196,7 +196,10 @@ impl WasmProject {
 
         elements.declared(Elements::Functions(
             (self.imported_func_count()? + self.static_func_count()?
-                ..functions.len() + self.imported_func_count()? + self.static_func_count()? - 2)
+                ..self.imported_func_count()?
+                    + self.static_func_count()?
+                    + u32::try_from(self.steps().try_borrow()?.len())
+                        .map_err(|_| make_hq_bug!("steps len out of bounds"))?)
                 .collect(),
         ));
 
