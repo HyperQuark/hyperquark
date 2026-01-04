@@ -1,4 +1,5 @@
 use core::cell::RefMut;
+use std::convert::identity;
 
 use uuid::Uuid;
 
@@ -212,28 +213,18 @@ impl Step {
         )
     }
 
-    pub fn does_yield(&self) -> HQResult<bool> {
-        for opcode in &*self.opcodes().try_borrow()? {
-            // if opcode.requests_screen_refresh() {
-            //     return Ok(true);
-            // }
-            #[expect(clippy::wildcard_enum_match_arm, reason = "too many variants to match")]
-            match opcode {
-                IrOpcode::hq_yield(HqYieldFields {
-                    mode: YieldMode::Schedule(_),
-                }) => return Ok(true),
-                IrOpcode::control_if_else(ControlIfElseFields {
-                    branch_else,
-                    branch_if,
-                }) => {
-                    if branch_if.does_yield()? || branch_else.does_yield()? {
-                        return Ok(true);
-                    }
-                }
-                _ => (),
+    pub fn does_yield(&self) -> bool {
+        for opcode in &*self.opcodes().borrow() {
+            if opcode.yields_to_next_step().is_some() {
+                return true;
+            }
+            if opcode.inline_steps().map_or(false, |steps| {
+                steps.iter().map(|step| step.does_yield()).any(identity)
+            }) {
+                return true;
             }
         }
-        Ok(false)
+        false
     }
 
     /// An iterator of variables that are global (in the WASM sense, not the scratch sense)

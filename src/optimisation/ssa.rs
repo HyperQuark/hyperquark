@@ -743,19 +743,7 @@ impl VarGraph {
                         step_ended_on_stop = true;
                         break 'opcode_loop;
                     }
-                    YieldMode::Schedule(step) => {
-                        // crate::log("found a scheduled step, scheduling and breaking");
-                        if let Some(rcstep) = step.upgrade() {
-                            next_steps.push(rcstep);
-                        } else {
-                            crate::warn(
-                                "couldn't upgrade Weak<Step> in Schedule in variables \
-                                 optimisation pass;what's going on here?",
-                            );
-                        }
-                        should_propagate_ssa = true;
-                        break 'opcode_loop;
-                    }
+                    YieldMode::Schedule(_) => (), // handled at bottom of loop
                 },
                 _ => {
                     let inputs_len = opcode.acceptable_inputs()?.len();
@@ -784,6 +772,11 @@ impl VarGraph {
                         ReturnType::None => type_stack.clear(),
                     }
                 }
+            }
+            if let Some(next_step) = opcode.yields_to_next_step() {
+                next_steps.push(next_step);
+                should_propagate_ssa = true;
+                break 'opcode_loop;
             }
         }
 
@@ -1203,27 +1196,10 @@ fn box_proc_returns(
     visited_steps.insert(Rc::clone(step));
 
     for opcode in step.opcodes().borrow().iter() {
-        #[expect(
-            clippy::wildcard_enum_match_arm,
-            reason = "too many variants to match explicitly"
-        )]
-        match opcode {
-            IrOpcode::hq_yield(HqYieldFields {
-                mode: YieldMode::Inline(inline_step),
-            }) => {
-                box_proc_returns(inline_step, rev_ret_vars, visited_steps)?;
-            }
-            IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
-                box_proc_returns(body, rev_ret_vars, visited_steps)?;
-            }
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if,
-                branch_else,
-            }) => {
-                box_proc_returns(branch_if, rev_ret_vars, visited_steps)?;
-                box_proc_returns(branch_else, rev_ret_vars, visited_steps)?;
-            }
-            _ => (),
+        if let Some(inline_steps) = opcode.inline_steps() {
+            inline_steps.iter().try_for_each(|inline_step| {
+                box_proc_returns(inline_step, rev_ret_vars, visited_steps)
+            })?;
         }
     }
 

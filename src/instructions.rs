@@ -11,6 +11,7 @@
     reason = "there are so many `Rc<T>`s here which I don't want to change"
 )]
 
+use crate::ir::Step;
 pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
 use crate::prelude::*;
 
@@ -99,6 +100,53 @@ where
 }
 
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
+
+impl IrOpcode {
+    pub fn yields_to_next_step(&self) -> Option<Rc<Step>> {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match self {
+            Self::hq_yield(HqYieldFields {
+                mode: YieldMode::Schedule(next_step),
+            }) => Weak::upgrade(next_step),
+            Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
+            | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. }) => {
+                Some(Rc::clone(next_step))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn inline_steps(&self) -> Option<Box<[Rc<Step>]>> {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match self {
+            Self::hq_yield(HqYieldFields {
+                mode: YieldMode::Inline(inline_step),
+            }) => Some(Box::from([Rc::clone(inline_step)])),
+            Self::control_if_else(ControlIfElseFields {
+                branch_if,
+                branch_else,
+            }) => Some(Box::from([Rc::clone(branch_if), Rc::clone(branch_else)])),
+            Self::control_loop(ControlLoopFields {
+                first_condition,
+                condition,
+                body,
+                ..
+            }) => Some(
+                [first_condition.as_ref(), Some(condition), Some(body)]
+                    .into_iter()
+                    .filter_map(Option::<&_>::cloned)
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
+}
 
 pub mod input_switcher;
 pub use hq::r#yield::YieldMode;

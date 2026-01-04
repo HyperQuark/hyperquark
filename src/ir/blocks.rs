@@ -649,7 +649,7 @@ fn generate_if_else(
     // let if_step_yields = dummy_if_step.does_yield()?;
     // let else_step_yields = dummy_else_step.does_yield()?;
     // crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
-    if !context.warp && (dummy_if_step.does_yield()? || dummy_else_step.does_yield()?) {
+    if !context.warp && (dummy_if_step.does_yield() || dummy_else_step.does_yield()) {
         // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
         // version inline after the branch, and the other tagged on in the substep's NextBlocks
         // as usual, to allow for extra variable type optimisations.

@@ -204,32 +204,20 @@ where
             clippy::wildcard_enum_match_arm,
             reason = "too many variants to match explicitly"
         )]
-        match opcode {
-            IrOpcode::hq_yield(HqYieldFields {
-                mode: YieldMode::Return,
-            }) => {
-                hq_assert!(
-                    i == step.opcodes().borrow().len() - 1,
-                    "found yield return in non-tail position"
-                );
-                has_return = true;
-            }
-            IrOpcode::hq_yield(HqYieldFields {
-                mode: YieldMode::Inline(inline_step),
-            }) => {
-                add_proc_return_vars_before_return(inline_step, var_ops.clone(), checked_steps)?;
-            }
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if,
-                branch_else,
-            }) => {
-                add_proc_return_vars_before_return(branch_if, var_ops.clone(), checked_steps)?;
-                add_proc_return_vars_before_return(branch_else, var_ops.clone(), checked_steps)?;
-            }
-            IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
-                add_proc_return_vars_before_return(body, var_ops.clone(), checked_steps)?;
-            }
-            _ => (),
+        if let IrOpcode::hq_yield(HqYieldFields {
+            mode: YieldMode::Return,
+        }) = opcode
+        {
+            hq_assert!(
+                i == step.opcodes().borrow().len() - 1,
+                "found yield return in non-tail position"
+            );
+            has_return = true;
+        }
+        if let Some(inline_steps) = opcode.inline_steps() {
+            inline_steps.iter().try_for_each(|inline_step| {
+                add_proc_return_vars_before_return(inline_step, var_ops.clone(), checked_steps)
+            })?;
         }
     }
 
