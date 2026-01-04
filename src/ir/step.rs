@@ -1,5 +1,4 @@
 use core::cell::RefMut;
-use std::convert::identity;
 
 use uuid::Uuid;
 
@@ -218,9 +217,10 @@ impl Step {
             if opcode.yields_to_next_step().is_some() {
                 return true;
             }
-            if opcode.inline_steps().map_or(false, |steps| {
-                steps.iter().map(|step| step.does_yield()).any(identity)
-            }) {
+            if opcode
+                .inline_steps()
+                .is_some_and(|steps| steps.iter().any(|step| step.does_yield()))
+            {
                 return true;
             }
         }

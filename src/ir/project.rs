@@ -2,8 +2,7 @@ use super::proc::{ProcMap, procs_from_target};
 use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from_target};
 use super::{Step, Target, Thread};
 use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataVariableFields,
-    HqYieldFields, IrOpcode, YieldMode,
+    DataSetvariabletoFields, DataVariableFields, HqYieldFields, IrOpcode, YieldMode,
 };
 use crate::ir::target::IrCostume;
 use crate::ir::{PartialStep, RcVar};
@@ -200,14 +199,12 @@ where
     let mut has_return = false;
     checked_steps.insert(Rc::clone(step));
     for (i, opcode) in step.opcodes().borrow().iter().enumerate() {
-        #[expect(
-            clippy::wildcard_enum_match_arm,
-            reason = "too many variants to match explicitly"
-        )]
-        if let IrOpcode::hq_yield(HqYieldFields {
-            mode: YieldMode::Return,
-        }) = opcode
-        {
+        if matches!(
+            opcode,
+            IrOpcode::hq_yield(HqYieldFields {
+                mode: YieldMode::Return,
+            })
+        ) {
             hq_assert!(
                 i == step.opcodes().borrow().len() - 1,
                 "found yield return in non-tail position"
