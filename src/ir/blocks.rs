@@ -249,7 +249,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_lengthoflist
             | BlockOpcode::data_listcontents
             | BlockOpcode::control_stop
-            | BlockOpcode::event_broadcast_menu => vec![],
+            | BlockOpcode::event_broadcast_menu
+            | BlockOpcode::sensing_timer
+            | BlockOpcode::sensing_resettimer => vec![],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
             }
@@ -1152,6 +1154,8 @@ fn from_normal_block(
                         BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
                         BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                         BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
+                        BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                        BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_reset_timer],
                         BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
                         BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
                         BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
