@@ -260,7 +260,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
             | BlockOpcode::control_repeat_until
-            | BlockOpcode::control_while => vec!["CONDITION"],
+            | BlockOpcode::control_while
+            | BlockOpcode::control_wait_until => vec!["CONDITION"],
             BlockOpcode::operator_not => vec!["OPERAND"],
             BlockOpcode::control_repeat => vec!["TIMES"],
             BlockOpcode::operator_length => vec!["STRING"],
@@ -458,31 +459,44 @@ fn generate_loop(
     condition_instructions: Vec<IrOpcode>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
-    empty_instructions: Vec<IrOpcode>,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
-    let BlockArrayOrId::Id(substack_id) = (match block_info.inputs.get("SUBSTACK") {
+    let substack_id = match block_info.inputs.get("SUBSTACK") {
         Some(
             Input::NoShadow(_, Some(substack_input)) | Input::Shadow(_, Some(substack_input), _),
-        ) => substack_input,
-        _ => return Ok(empty_instructions),
-    }) else {
-        hq_bad_proj!("malformed SUBSTACK input")
+        ) => {
+            let BlockArrayOrId::Id(id) = substack_input else {
+                hq_bad_proj!("malformed SUBSTACK input")
+            };
+            Some(id)
+        }
+        _ => None,
     };
-    let Some(substack_block) = blocks.get(substack_id) else {
-        hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+
+    let substack_block = if let Some(id) = substack_id {
+        Some(
+            blocks
+                .get(id)
+                .ok_or_else(|| make_hq_bad_proj!("SUBSTACK block doesn't seem to exist"))?,
+        )
+    } else {
+        None
     };
     if warp {
         // TODO: can this be expressed in the same way as non-warping loops,
         // just with yield_first: false?
-        let substack_blocks = from_block(
-            substack_block,
-            blocks,
-            context,
-            &context.target().project(),
-            NextBlocks::new(false),
-            flags,
-        )?;
+        let substack_blocks = if let Some(block) = substack_block {
+            from_block(
+                block,
+                blocks,
+                context,
+                &context.target().project(),
+                NextBlocks::new(false),
+                flags,
+            )?
+        } else {
+            vec![]
+        };
         let substack_step = Step::new_rc(
             None,
             context.clone(),
@@ -541,18 +555,26 @@ fn generate_loop(
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             }));
-        let substack_blocks = from_block(
-            substack_block,
-            blocks,
-            context,
-            &context.target().project(),
-            NextBlocks::new(false).extend_with_inner(NextBlockInfo {
-                yield_first: true,
-                block: NextBlock::Step(Rc::downgrade(&condition_step)),
-            }),
-            flags,
-        )?;
-        substack_step.opcodes_mut()?.extend(substack_blocks);
+        if let Some(block) = substack_block {
+            let substack_blocks = from_block(
+                block,
+                blocks,
+                context,
+                &context.target().project(),
+                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
+                    yield_first: true,
+                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
+                }),
+                flags,
+            )?;
+            substack_step.opcodes_mut()?.extend(substack_blocks);
+        } else {
+            substack_step
+                .opcodes_mut()?
+                .push(IrOpcode::hq_yield(HqYieldFields {
+                    mode: YieldMode::Schedule(Rc::downgrade(&condition_step)),
+                }));
+        }
         Ok(setup_instructions
             .into_iter()
             .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
@@ -1849,7 +1871,6 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 vec![],
-                                vec![],
                                 flags,
                             )?
                         }
@@ -1891,11 +1912,10 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
-                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
-                        BlockOpcode::control_repeat_until => {
+                        BlockOpcode::control_repeat_until | BlockOpcode::control_wait_until => {
                             let condition_instructions = inputs(
                                 block_info,
                                 blocks,
@@ -1916,7 +1936,6 @@ fn from_normal_block(
                                 condition_instructions,
                                 true,
                                 setup_instructions,
-                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
@@ -1941,7 +1960,6 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
-                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
