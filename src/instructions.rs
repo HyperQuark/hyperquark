@@ -3,18 +3,21 @@
 
 #![allow(
     clippy::unnecessary_wraps,
-    reason = "many functions here needlessly return `Result`s in order to keep type signatures consistent"
+    reason = "many functions here needlessly return `Result`s in order to keep type signatures \
+              consistent"
 )]
 #![allow(
     clippy::needless_pass_by_value,
     reason = "there are so many `Rc<T>`s here which I don't want to change"
 )]
 
+use crate::ir::Step;
 pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
 use crate::prelude::*;
 
 mod control;
 mod data;
+mod event;
 mod hq;
 mod looks;
 mod motion;
@@ -98,10 +101,55 @@ where
 
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
 
-pub mod input_switcher;
-pub use input_switcher::wrap_instruction;
+impl IrOpcode {
+    pub fn yields_to_next_step(&self) -> Option<Rc<Step>> {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match self {
+            Self::hq_yield(HqYieldFields {
+                mode: YieldMode::Schedule(next_step),
+            }) => Weak::upgrade(next_step),
+            Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
+            | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. })
+            | Self::control_wait(ControlWaitFields { next_step, .. }) => Some(Rc::clone(next_step)),
+            _ => None,
+        }
+    }
 
+    pub fn inline_steps(&self) -> Option<Box<[Rc<Step>]>> {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match self {
+            Self::hq_yield(HqYieldFields {
+                mode: YieldMode::Inline(inline_step),
+            }) => Some(Box::from([Rc::clone(inline_step)])),
+            Self::control_if_else(ControlIfElseFields {
+                branch_if,
+                branch_else,
+            }) => Some(Box::from([Rc::clone(branch_if), Rc::clone(branch_else)])),
+            Self::control_loop(ControlLoopFields {
+                first_condition,
+                condition,
+                body,
+                ..
+            }) => Some(
+                [first_condition.as_ref(), Some(condition), Some(body)]
+                    .into_iter()
+                    .filter_map(Option::<&_>::cloned)
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
+}
+
+pub mod input_switcher;
 pub use hq::r#yield::YieldMode;
+pub use input_switcher::wrap_instruction;
 
 /// Canonical NaN + bit 33, + string pointer in bits 1-32
 pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
@@ -114,11 +162,6 @@ pub const BOXED_COLOR_RGB_PATTERN: i64 = 0x7ff8_0008 << 32;
 /// Canonical NaN + bit 37, + i32 in bits 1-32
 pub const BOXED_COLOR_ARGB_PATTERN: i64 = 0x7ff8_000f << 32;
 mod prelude {
-    pub use crate::ir::{ReturnType, Type as IrType};
-    pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
-    pub use crate::prelude::*;
-    pub use crate::sb3::VarVal;
-    pub use crate::wasm::{InternalInstruction, StepFunc};
     pub use ConstFold::NotFoldable;
     pub use ReturnType::{MultiValue, Singleton};
     pub use wasm_encoder::{RefType, ValType};
@@ -128,4 +171,9 @@ mod prelude {
         BOXED_BOOL_PATTERN, BOXED_COLOR_ARGB_PATTERN, BOXED_COLOR_RGB_PATTERN, BOXED_INT_PATTERN,
         BOXED_STRING_PATTERN,
     };
+    pub use crate::ir::{ReturnType, Type as IrType};
+    pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
+    pub use crate::prelude::*;
+    pub use crate::sb3::VarVal;
+    pub use crate::wasm::{InternalInstruction, StepFunc};
 }

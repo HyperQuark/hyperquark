@@ -1,7 +1,8 @@
+use std::collections::{HashMap, HashSet};
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, quote_spanned};
-use std::collections::{HashMap, HashSet};
 use syn::parse::{Parse, ParseStream};
 use syn::{parenthesized, Error as SynError, Expr, Ident, Token};
 

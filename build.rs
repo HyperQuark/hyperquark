@@ -1,8 +1,8 @@
-use convert_case::{Case, Casing};
 use std::collections::HashSet;
-use std::env;
-use std::fs;
 use std::path::Path;
+use std::{env, fs};
+
+use convert_case::{Case, Casing};
 
 // I hate to admit this, but a fair bit of this file was written by chatgpt to speed things up
 // and to allow me to continue to procrastinate about learning how to do i/o stuff in rust.

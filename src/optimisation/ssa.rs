@@ -88,6 +88,18 @@
     reason = "implementations of Eq and Ord for RcVar and Step are independent of actual contents"
 )]
 
+use alloc::collections::btree_map::Entry;
+use core::convert::identity;
+use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
+use core::mem;
+
+// use petgraph::dot::Dot;
+use petgraph::graph::{EdgeIndex, NodeIndex};
+use petgraph::stable_graph::StableDiGraph;
+use petgraph::visit::EdgeRef;
+use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut};
+
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataAddtolistFields, DataInsertatlistFields,
     DataItemoflistFields, DataReplaceitemoflistFields, DataSetvariabletoFields,
@@ -98,17 +110,6 @@ use crate::ir::{
     IrProject, PartialStep, Proc, RcList, RcVar, ReturnType, Step, Type as IrType, insert_casts,
 };
 use crate::prelude::*;
-
-use alloc::collections::btree_map::Entry;
-use core::convert::identity;
-use core::hash::{Hash, Hasher};
-use core::marker::PhantomData;
-use core::mem;
-// use petgraph::dot::Dot;
-
-use petgraph::graph::{EdgeIndex, NodeIndex};
-use petgraph::visit::EdgeRef;
-use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut, stable_graph::StableDiGraph};
 
 #[derive(Clone, Debug)]
 enum StackElement {
@@ -401,7 +402,16 @@ impl VarGraph {
                                         index: var_index,
                                         arg_var: arg_var.clone(),
                                         in_warped: true,
-                                        arg_vars: Rc::clone(&maybe_proc_context.ok_or_else(|| make_hq_bug!("tried to access proc argument when proc context was None"))?.arg_vars)
+                                        arg_vars: Rc::clone(
+                                            &maybe_proc_context
+                                                .ok_or_else(|| {
+                                                    make_hq_bug!(
+                                                        "tried to access proc argument when proc \
+                                                         context was None"
+                                                    )
+                                                })?
+                                                .arg_vars,
+                                        ),
                                     }),
                                 ));
                                 Ok(arg_var.clone())
@@ -522,7 +532,17 @@ impl VarGraph {
                                                         index: arg_index,
                                                         arg_var: arg_var.clone(),
                                                         in_warped: true,
-                                                        arg_vars: Rc::clone(&maybe_proc_context.ok_or_else(|| make_hq_bug!("tried to access proc argument when proc context was None"))?.arg_vars)
+                                                        arg_vars: Rc::clone(
+                                                            &maybe_proc_context
+                                                                .ok_or_else(|| {
+                                                                    make_hq_bug!(
+                                                                        "tried to access proc \
+                                                                         argument when proc \
+                                                                         context was None"
+                                                                    )
+                                                                })?
+                                                                .arg_vars,
+                                                        ),
                                                     },
                                                 ),
                                                 arg_var.clone(),
@@ -723,19 +743,7 @@ impl VarGraph {
                         step_ended_on_stop = true;
                         break 'opcode_loop;
                     }
-                    YieldMode::Schedule(step) => {
-                        // crate::log("found a scheduled step, scheduling and breaking");
-                        if let Some(rcstep) = step.upgrade() {
-                            next_steps.push(rcstep);
-                        } else {
-                            crate::warn(
-                                "couldn't upgrade Weak<Step> in Schedule in variables optimisation pass;\
-                    what's going on here?",
-                            );
-                        }
-                        should_propagate_ssa = true;
-                        break 'opcode_loop;
-                    }
+                    YieldMode::Schedule(_) => (), // handled at bottom of loop
                 },
                 _ => {
                     let inputs_len = opcode.acceptable_inputs()?.len();
@@ -765,6 +773,11 @@ impl VarGraph {
                     }
                 }
             }
+            if let Some(next_step) = opcode.yields_to_next_step() {
+                next_steps.push(next_step);
+                should_propagate_ssa = true;
+                break 'opcode_loop;
+            }
         }
 
         if !type_stack.is_empty()
@@ -773,7 +786,8 @@ impl VarGraph {
             && let Some(proc_context) = maybe_proc_context
         {
             crate::log!(
-                "found spare items on type stack at end of step visit, in warped proc: {type_stack:?}"
+                "found spare items on type stack at end of step visit, in warped proc: \
+                 {type_stack:?}"
             );
             // crate::log!(
             //     "return vars: {}",
@@ -1182,27 +1196,10 @@ fn box_proc_returns(
     visited_steps.insert(Rc::clone(step));
 
     for opcode in step.opcodes().borrow().iter() {
-        #[expect(
-            clippy::wildcard_enum_match_arm,
-            reason = "too many variants to match explicitly"
-        )]
-        match opcode {
-            IrOpcode::hq_yield(HqYieldFields {
-                mode: YieldMode::Inline(inline_step),
-            }) => {
-                box_proc_returns(inline_step, rev_ret_vars, visited_steps)?;
-            }
-            IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
-                box_proc_returns(body, rev_ret_vars, visited_steps)?;
-            }
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if,
-                branch_else,
-            }) => {
-                box_proc_returns(branch_if, rev_ret_vars, visited_steps)?;
-                box_proc_returns(branch_else, rev_ret_vars, visited_steps)?;
-            }
-            _ => (),
+        if let Some(inline_steps) = opcode.inline_steps() {
+            inline_steps.iter().try_for_each(|inline_step| {
+                box_proc_returns(inline_step, rev_ret_vars, visited_steps)
+            })?;
         }
     }
 

@@ -1,7 +1,8 @@
-use crate::prelude::*;
 use wasm_encoder::{
     ConstExpr, ExportKind, ExportSection, HeapType, RefType, TableSection, TableType,
 };
+
+use crate::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct TableOptions {

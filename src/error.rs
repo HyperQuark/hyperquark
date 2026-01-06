@@ -1,6 +1,6 @@
+use alloc::boxed::Box;
 use core::cell::{BorrowError, BorrowMutError};
 
-use alloc::boxed::Box;
 use wasm_bindgen::JsValue;
 
 pub type HQResult<T> = Result<T, HQError>;

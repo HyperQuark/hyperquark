@@ -1,7 +1,8 @@
+use wasm_encoder::Instruction as WInstruction;
+
 use super::super::prelude::*;
 use crate::ir::Proc;
 use crate::wasm::{StepFunc, WasmProject};
-use wasm_encoder::Instruction as WInstruction;
 
 #[derive(Clone, Debug)]
 pub struct Fields {

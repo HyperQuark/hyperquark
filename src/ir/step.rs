@@ -1,3 +1,7 @@
+use core::cell::RefMut;
+
+use uuid::Uuid;
+
 use super::blocks::{self, NextBlocks};
 use super::{IrProject, StepContext};
 use crate::instructions::{ControlIfElseFields, HqYieldFields, IrOpcode, YieldMode};
@@ -5,8 +9,6 @@ use crate::ir::{RcVar, Target, used_vars};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockMap};
 use crate::wasm::WasmFlags;
-use core::cell::RefMut;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Step {
@@ -145,6 +147,43 @@ impl Step {
         )
     }
 
+    pub fn new_poll_waiting_threads(
+        context: StepContext,
+        project: &Weak<IrProject>,
+    ) -> HQResult<Rc<Self>> {
+        Self::new_rc(
+            None,
+            context.clone(),
+            vec![
+                IrOpcode::event_poll_waiting_threads,
+                IrOpcode::control_if_else(ControlIfElseFields {
+                    branch_if: Self::new_rc(None, context.clone(), vec![], project, false)?,
+                    branch_else: Self::new_terminating(context, project, false)?,
+                }),
+            ],
+            project,
+            true,
+        )
+    }
+
+    pub fn new_poll_timer(context: StepContext, project: &Weak<IrProject>) -> HQResult<Rc<Self>> {
+        Self::new_rc(
+            None,
+            context.clone(),
+            vec![
+                IrOpcode::control_get_thread_timeout,
+                IrOpcode::sensing_timer,
+                IrOpcode::operator_gt,
+                IrOpcode::control_if_else(ControlIfElseFields {
+                    branch_if: Self::new_rc(None, context.clone(), vec![], project, false)?,
+                    branch_else: Self::new_terminating(context, project, false)?,
+                }),
+            ],
+            project,
+            true,
+        )
+    }
+
     pub fn opcodes_mut(&self) -> HQResult<RefMut<'_, Vec<IrOpcode>>> {
         self.opcodes
             .try_borrow_mut()
@@ -191,28 +230,19 @@ impl Step {
         )
     }
 
-    pub fn does_yield(&self) -> HQResult<bool> {
-        for opcode in &*self.opcodes().try_borrow()? {
-            // if opcode.requests_screen_refresh() {
-            //     return Ok(true);
-            // }
-            #[expect(clippy::wildcard_enum_match_arm, reason = "too many variants to match")]
-            match opcode {
-                IrOpcode::hq_yield(HqYieldFields {
-                    mode: YieldMode::Schedule(_),
-                }) => return Ok(true),
-                IrOpcode::control_if_else(ControlIfElseFields {
-                    branch_else,
-                    branch_if,
-                }) => {
-                    if branch_if.does_yield()? || branch_else.does_yield()? {
-                        return Ok(true);
-                    }
-                }
-                _ => (),
+    pub fn does_yield(&self) -> bool {
+        for opcode in &*self.opcodes().borrow() {
+            if opcode.yields_to_next_step().is_some() {
+                return true;
+            }
+            if opcode
+                .inline_steps()
+                .is_some_and(|steps| steps.iter().any(|step| step.does_yield()))
+            {
+                return true;
             }
         }
-        Ok(false)
+        false
     }
 
     /// An iterator of variables that are global (in the WASM sense, not the scratch sense)

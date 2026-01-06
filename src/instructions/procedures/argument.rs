@@ -1,10 +1,9 @@
 use wasm_encoder::{AbstractHeapType, HeapType};
 
 use super::super::prelude::*;
-use crate::{
-    ir::RcVar,
-    wasm::{StepFunc, WasmProject, registries::types::WasmType},
-};
+use crate::ir::RcVar;
+use crate::wasm::registries::types::WasmType;
+use crate::wasm::{StepFunc, WasmProject};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
@@ -64,7 +63,8 @@ pub fn wasm(
                     }
                 })
             ),
-            "struct parameter did not match the expected type shape; expected (structref), got {:?}",
+            "struct parameter did not match the expected type shape; expected (structref), got \
+             {:?}",
             func.params().get(1)
         );
         let struct_type_index = func

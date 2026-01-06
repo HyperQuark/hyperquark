@@ -1,7 +1,8 @@
+use wasm_encoder::{BlockType, ConstExpr, HeapType};
+
 use super::super::prelude::*;
 use crate::ir::Step;
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
-use wasm_encoder::{BlockType, ConstExpr, HeapType};
 
 #[derive(Debug)]
 pub enum YieldMode {
@@ -225,14 +226,14 @@ crate::instructions_test! {
     @ super::Fields {
         mode: super::YieldMode::Schedule(
             crate::rc::Rc::downgrade(&crate::ir::Step::new_empty(
-                &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default()))),
+                &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
                 true,
                 Rc::new(
                     crate::ir::Target::new(
                         false,
                         BTreeMap::default(),
                         BTreeMap::default(),
-                        crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default()))),
+                        crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
                         RefCell::default(),
                         0,
                         Box::from([])

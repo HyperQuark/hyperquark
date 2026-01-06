@@ -110,6 +110,10 @@ li.block-category-control {
   color: #ffab19;
 }
 
+li.block-category-event {
+  color: #ffbf00;
+}
+
 li.block-category-pen {
   color: #0fbd8c;
 }

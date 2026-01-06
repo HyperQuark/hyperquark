@@ -1,7 +1,9 @@
+use wasm_encoder::{FieldType, HeapType, Instruction as WInstruction, StorageType};
+
 use super::super::prelude::*;
 use crate::ir::{Proc, Step};
-use crate::wasm::{StepFunc, ThreadsTable, WasmProject};
-use wasm_encoder::{FieldType, HeapType, Instruction as WInstruction, StorageType};
+use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
+use crate::wasm::{StepFunc, WasmProject};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
@@ -50,18 +52,11 @@ pub fn wasm(
         nullable: false,
         heap_type: HeapType::Concrete(arg_struct_type),
     }))?;
-    let stack_struct_type = func.registries().types().stack_struct_type()?;
-    let stack_struct_local = func.local(ValType::Ref(RefType {
-        nullable: false,
-        heap_type: HeapType::Concrete(stack_struct_type),
-    }))?;
-    let stack_array_type = func.registries().types().stack_array_type()?;
-    let thread_struct_type = func.registries().types().thread_struct_type()?;
-    let thread_struct_local = func.local(ValType::Ref(RefType {
-        nullable: false,
-        heap_type: HeapType::Concrete(thread_struct_type),
-    }))?;
-    let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+
+    let spawn_thread_in_stack = func
+        .registries()
+        .static_functions()
+        .register::<SpawnThreadInStack, _>()?;
 
     let locals = inputs
         .iter()
@@ -96,57 +91,11 @@ pub fn wasm(
     wasm.extend(wasm![
         StructNew(arg_struct_type),
         LocalSet(arg_struct_local),
+        LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         #LazyNonWarpedProcRef(Rc::clone(proc)),
         LocalGet(arg_struct_local),
-        StructNew(stack_struct_type),
-        LocalSet(stack_struct_local),
-        LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
-        TableGet(threads_table),
-        RefAsNonNull,
-        LocalTee(thread_struct_local),
-        StructGet {
-            struct_type_index: thread_struct_type,
-            field_index: 1,
-        },
-        LocalGet(thread_struct_local),
-        StructGet {
-            struct_type_index: thread_struct_type,
-            field_index: 0,
-        },
-        LocalGet(stack_struct_local),
-        // todo: consider the case where we need to resize the array
-        ArraySet(stack_array_type),
-        LocalGet(thread_struct_local),
-        StructGet {
-            struct_type_index: thread_struct_type,
-            field_index: 1,
-        },
-        LocalGet(thread_struct_local),
-        StructGet {
-            struct_type_index: thread_struct_type,
-            field_index: 0,
-        },
-        I32Const(1),
-        I32Sub,
-        ArrayGet(stack_array_type),
         #LazyStepRef(Rc::downgrade(next_step)),
-        StructSet {
-            struct_type_index: stack_struct_type,
-            field_index: 0,
-        },
-
-        LocalGet(thread_struct_local),
-        LocalGet(thread_struct_local),
-        StructGet {
-            struct_type_index: thread_struct_type,
-            field_index: 0,
-        },
-        I32Const(1),
-        I32Add,
-        StructSet {
-            struct_type_index: thread_struct_type,
-            field_index: 0,
-        },
+        #StaticFunctionCall(spawn_thread_in_stack),
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         LocalGet(arg_struct_local),
         #LazyNonWarpedProcRef(Rc::clone(proc)),

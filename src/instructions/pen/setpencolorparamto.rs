@@ -1,8 +1,9 @@
+use registries::functions::static_functions::UpdatePenColorFromHSV;
+use wasm_encoder::{BlockType as WasmBlockType, MemArg};
+
 use super::super::prelude::*;
 use crate::instructions::{HqTextFields, IrOpcode};
 use crate::wasm::{StepTarget, mem_layout, registries};
-use registries::functions::static_functions::UpdatePenColorFromHSV;
-use wasm_encoder::{BlockType as WasmBlockType, MemArg};
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let StepTarget::Sprite(wasm_target_index) = func.target() else {

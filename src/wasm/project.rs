@@ -1,7 +1,3 @@
-use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
-use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
-use crate::prelude::*;
-use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
@@ -11,6 +7,12 @@ use wasm_encoder::{
     RefType, StartSection, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
+
+use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
+use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
+use crate::prelude::*;
+use crate::wasm::registries::functions::static_functions::{SpawnNewThread, SpawnThreadInStack};
+use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
@@ -130,6 +132,26 @@ impl WasmProject {
             .clone()
             .finish(&mut imports, self.registries().types())?;
 
+        self.registries()
+            .static_functions()
+            .register_override::<SpawnNewThread, usize, _>((
+                self.registries().types().step_func_type()?,
+                self.registries().types().stack_struct_type()?,
+                self.registries().types().stack_array_type()?,
+                self.registries().types().thread_struct_type()?,
+                self.threads_table_index()?,
+            ))?;
+
+        self.registries()
+            .static_functions()
+            .register_override::<SpawnThreadInStack, usize, _>((
+                self.registries().types().step_func_type()?,
+                self.registries().types().stack_struct_type()?,
+                self.registries().types().stack_array_type()?,
+                self.registries().types().thread_struct_type()?,
+                self.threads_table_index()?,
+            ))?;
+
         self.registries().static_functions().clone().finish(
             &mut functions,
             &mut codes,
@@ -141,6 +163,12 @@ impl WasmProject {
                 &mut functions,
                 &mut codes,
                 self.steps(),
+                &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
@@ -168,7 +196,10 @@ impl WasmProject {
 
         elements.declared(Elements::Functions(
             (self.imported_func_count()? + self.static_func_count()?
-                ..functions.len() + self.imported_func_count()? + self.static_func_count()? - 2)
+                ..self.imported_func_count()?
+                    + self.static_func_count()?
+                    + u32::try_from(self.steps().try_borrow()?.len())
+                        .map_err(|_| make_hq_bug!("steps len out of bounds"))?)
                 .collect(),
         ));
 
@@ -293,6 +324,42 @@ impl WasmProject {
         self.registries().tables().register::<ThreadsTable, _>()
     }
 
+    fn spawn_new_thread_func<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.registries()
+            .static_functions()
+            .register::<SpawnNewThread, _>()
+    }
+
+    fn spawn_thread_in_stack_func<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.registries()
+            .static_functions()
+            .register::<SpawnThreadInStack, _>()
+    }
+
+    fn threads_count_global<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.registries().globals().register(
+            "threads_count".into(),
+            (
+                ValType::I32,
+                ConstExpr::i32_const(0),
+                GlobalMutable(true),
+                GlobalExportable(true),
+            ),
+        )
+    }
+
     fn finish_event(
         &self,
         export_name: &str,
@@ -303,59 +370,40 @@ impl WasmProject {
     ) -> HQResult<()> {
         let mut func = Function::new(vec![]);
 
-        let threads_count = self.registries().globals().register(
-            "threads_count".into(),
-            (
-                ValType::I32,
-                ConstExpr::i32_const(0),
-                GlobalMutable(true),
-                GlobalExportable(true),
-            ),
-        )?;
+        let threads_count = self.threads_count_global()?;
 
-        let stack_struct_ty = self.registries().types().stack_struct_type()?;
-        let stack_array_ty = self.registries().types().stack_array_type()?;
-        let thread_struct_ty = self.registries().types().thread_struct_type()?;
+        let spawn_new_thread = self.spawn_new_thread_func()?;
 
         let instrs = indices
             .iter()
             .map(|&i| {
                 Ok(wasm![
-                    I32Const(1),
                     RefFunc(i + self.imported_func_count()? + self.static_func_count()?),
                     RefNull(HeapType::Abstract {
                         shared: false,
                         ty: AbstractHeapType::Struct
                     }),
-                    StructNew(stack_struct_ty),
-                    // todo: play around with initial size of stack array
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    ArrayNewFixed {
-                        array_size: 8,
-                        array_type_index: stack_array_ty,
-                    },
-                    StructNew(thread_struct_ty),
-                    I32Const(1),
-                    TableGrow(self.threads_table_index()?),
-                    Drop,
+                    #StaticFunctionCall(spawn_new_thread),
                 ])
             })
             .flatten_ok()
             .collect::<HQResult<Vec<_>>>()?;
 
         for instruction in instrs {
-            func.instruction(&instruction.eval(
+            for real_instruction in instruction.eval(
                 self.steps(),
+                &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-            )?);
+            )? {
+                func.instruction(&real_instruction);
+            }
         }
         for instruction in wasm![
             #LazyGlobalGet(threads_count),
@@ -366,12 +414,20 @@ impl WasmProject {
             I32Add,
             #LazyGlobalSet(threads_count)
         ] {
-            func.instruction(&instruction.eval(
+            for real_instruction in instruction.eval(
                 self.steps(),
+                &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-            )?);
+            )? {
+                func.instruction(&real_instruction);
+            }
         }
         func.instruction(&Instruction::End);
 
@@ -396,6 +452,7 @@ impl WasmProject {
             self.finish_event(
                 match event {
                     Event::FlagCLicked => "flag_clicked",
+                    Event::Broadcast(_) => continue, // broadcasts handled in the sender blocks
                 },
                 indices,
                 funcs,
@@ -498,12 +555,20 @@ impl WasmProject {
             End,
         ];
         for instr in instructions {
-            tick_func.instruction(&instr.eval(
+            for real_instruction in instr.eval(
                 self.steps(),
+                &self.events,
+                self.registries().types(),
+                self.threads_count_global()?,
+                self.spawn_new_thread_func()?,
+                self.spawn_thread_in_stack_func()?,
+                self.threads_table_index()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
-            )?);
+            )? {
+                tick_func.instruction(&real_instruction);
+            }
         }
         tick_func.instruction(&Instruction::End);
         funcs.function(self.registries().types().function(vec![], vec![])?);
@@ -549,7 +614,7 @@ impl WasmProject {
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
-            events.entry(thread.event()).or_default().push(
+            events.entry(thread.event().clone()).or_default().push(
                 u32::try_from(
                     steps
                         .try_borrow()?
@@ -588,12 +653,17 @@ mod tests {
     use super::{Registries, WasmProject};
     use crate::ir::{IrProject, Step, Target as IrTarget};
     use crate::prelude::*;
-    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags, flags::all_wasm_features};
+    use crate::wasm::flags::all_wasm_features;
+    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags};
 
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let project = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default()));
+        let project = Rc::new(IrProject::new(
+            BTreeMap::default(),
+            BTreeMap::default(),
+            Box::from([]),
+        ));
         let steps = Rc::new(RefCell::new(IndexMap::default()));
         StepFunc::compile_step(
             Step::new_empty(

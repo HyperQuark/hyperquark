@@ -155,6 +155,7 @@ export async function instantiateProject({
     requests_refresh,
     threads,
     unreachable_dbg,
+    sensing_timer,
   } = instance.exports;
   if (typeof window === "object") {
     window.memory = memory;
@@ -180,11 +181,17 @@ export async function instantiateProject({
     renderer.draw();
 
     let startTime = Date.now();
+    let previousTickStartTime = startTime;
     $outertickloop: while (running) {
       if (timeout && Date.now() - startTime > timeout) {
         return onTimeout();
       }
       let thisTickStartTime = Date.now();
+      if (typeof sensing_timer !== "undefined") {
+        sensing_timer.value +=
+          (thisTickStartTime - previousTickStartTime) / 1000;
+      }
+      previousTickStartTime = thisTickStartTime;
       do {
         tick();
         if (threads_count.value === 0) {
@@ -213,6 +220,9 @@ export async function instantiateProject({
   return {
     greenFlag: () => {
       console.log("green flag clicked");
+      if (typeof sensing_timer !== "undefined") {
+        sensing_timer.value = 0.0;
+      }
       flag_clicked();
       run();
     },

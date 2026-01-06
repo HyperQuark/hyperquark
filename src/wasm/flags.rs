@@ -1,8 +1,9 @@
 #![allow(clippy::enum_glob_use, reason = "easier and little risk of pollution")]
 
-use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+
+use crate::prelude::*;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 #[wasm_bindgen]

@@ -1,6 +1,7 @@
+use crate::ir::IrProject;
 use crate::prelude::*;
+use crate::wasm::WasmFlags;
 use crate::wasm::flags::Switch;
-use crate::{ir::IrProject, wasm::WasmFlags};
 
 mod const_folding;
 mod loop_unrolling;

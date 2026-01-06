@@ -1,5 +1,6 @@
-use super::super::prelude::*;
 use wasm_encoder::BlockType as WasmBlockType;
+
+use super::super::prelude::*;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert_eq!(inputs.len(), 2);

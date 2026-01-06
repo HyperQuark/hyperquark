@@ -1,14 +1,14 @@
+use core::cell::Ref;
+use core::hash::{Hash, Hasher};
+
 use uuid::Uuid;
 
 use super::Type;
-use crate::{
-    ir::types::var_val_type,
-    prelude::*,
-    sb3::{Target as Sb3Target, VarVal},
-    wasm::{WasmFlags, flags::Switch},
-};
-use core::cell::Ref;
-use core::hash::{Hash, Hasher};
+use crate::ir::types::var_val_type;
+use crate::prelude::*;
+use crate::sb3::{Target as Sb3Target, VarVal};
+use crate::wasm::WasmFlags;
+use crate::wasm::flags::Switch;
 
 #[derive(Debug)]
 struct Variable {

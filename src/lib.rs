@@ -13,7 +13,8 @@
 )]
 #![allow(
     clippy::missing_errors_doc,
-    reason = "Too many Results everywhere to document every possible error case. Errors should be self-descriptive and user readable anyway."
+    reason = "Too many Results everywhere to document every possible error case. Errors should be \
+              self-descriptive and user readable anyway."
 )]
 #![allow(clippy::too_many_arguments, reason = "unavoidable at this stage")]
 #![allow(
@@ -72,11 +73,6 @@ pub mod rc;
 
 /// commonly used _things_ which would be nice not to have to type out every time
 pub mod prelude {
-    pub use crate::registry::{
-        NamedRegistrar, NamedRegistry, NamedRegistryItem, NamedRegistryItemOverride, Registry,
-        RegistryDefault, RegistryType, TryNamedRegistryItemOverride,
-    };
-    pub use crate::{HQError, HQResult};
     pub use alloc::borrow::Cow;
     pub use alloc::boxed::Box;
     pub use alloc::collections::{BTreeMap, BTreeSet};
@@ -85,14 +81,19 @@ pub mod prelude {
     pub use core::borrow::Borrow;
     pub use core::cell::RefCell;
     pub use core::fmt;
+    use core::hash::BuildHasherDefault;
     pub use core::marker::PhantomPinned;
     pub use core::pin::Pin;
 
-    pub use crate::rc::{Rc, Weak};
-
-    use core::hash::BuildHasherDefault;
     use hashers::fnv::FNV1aHasher64;
     use indexmap;
+
+    pub use crate::rc::{Rc, Weak};
+    pub use crate::registry::{
+        NamedRegistrar, NamedRegistry, NamedRegistryItem, NamedRegistryItemOverride, Registry,
+        RegistryDefault, RegistryType, TryNamedRegistryItemOverride,
+    };
+    pub use crate::{HQError, HQResult};
     pub type IndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasherDefault<FNV1aHasher64>>;
     pub type IndexSet<T> = indexmap::IndexSet<T, BuildHasherDefault<FNV1aHasher64>>;
 

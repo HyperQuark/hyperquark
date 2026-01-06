@@ -1,3 +1,8 @@
+use wasm_encoder::{
+    ConstExpr, DataSection, ElementSection, Elements, Function, HeapType, Instruction, RefType,
+    StorageType, ValType,
+};
+
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry, TypeRegistry};
 use crate::instructions::{BOXED_BOOL_PATTERN, BOXED_INT_PATTERN, BOXED_STRING_PATTERN};
@@ -6,11 +11,6 @@ use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::sb3::VarVal;
 use crate::wasm::registries::{StringRegistry, TabledStringRegistry};
-
-use wasm_encoder::{
-    ConstExpr, DataSection, ElementSection, Elements, Function, HeapType, Instruction, RefType,
-    StorageType, ValType,
-};
 
 #[derive(Clone)]
 pub struct ListRegistry(

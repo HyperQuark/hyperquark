@@ -1,5 +1,6 @@
-use crate::prelude::*;
 use core::hash::Hash;
+
+use crate::prelude::*;
 
 #[derive(Clone)]
 pub struct MapRegistry<K, V>(RefCell<IndexMap<K, V>>)

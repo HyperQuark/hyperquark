@@ -1,28 +1,25 @@
+use lazy_regex::{Lazy, lazy_regex};
+use regex::Regex;
+use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
+
 use super::context::StepContext;
 use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
-    DataAddtolistFields, DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
+    ControlIfElseFields, ControlLoopFields, ControlWaitFields, DataAddtolistFields,
+    DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields, ProceduresCallNonwarpFields,
-};
-use crate::instructions::{
-    IrOpcode, YieldMode,
-    fields::{
-        ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-        DataVariableFields, HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields,
-        HqIntegerFields, HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields,
-        ProceduresArgumentFields, ProceduresCallWarpFields,
-    },
+    DataReplaceitemoflistFields, DataSetvariabletoFields, DataTeevariableFields,
+    DataVariableFields, EventBroadcastAndWaitFields, EventBroadcastFields, HqBooleanFields,
+    HqCastFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields, HqYieldFields,
+    IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
+    ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{RcList, ReturnType};
 use crate::prelude::*;
 use crate::sb3::{self, Field, VarVal};
 use crate::wasm::WasmFlags;
 use crate::wasm::flags::Switch;
-use lazy_regex::{Lazy, lazy_regex};
-use regex::Regex;
-use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
 
 pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQResult<()> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
@@ -77,8 +74,9 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
                         | IrOpcode::data_replaceitemoflist(_)
                 ) {
                     hq_bug!(
-                        "attempted to insert a cast before a variable/list operation - variables should \
-                        encompass all possible types, rather than causing values to be coerced.
+                        "attempted to insert a cast before a variable/list operation - variables \
+                         should encompass all possible types, rather than causing values to be \
+                         coerced.
                         Tried to cast from {} to {}, at position {}.
                         Occurred on these opcodes: [
                         {}
@@ -248,14 +246,22 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_deletealloflist
             | BlockOpcode::data_lengthoflist
             | BlockOpcode::data_listcontents
-            | BlockOpcode::control_stop => vec![],
+            | BlockOpcode::control_stop
+            | BlockOpcode::event_broadcast_menu
+            | BlockOpcode::sensing_timer
+            | BlockOpcode::sensing_resettimer => vec![],
+            BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
+                vec!["BROADCAST_INPUT"]
+            }
+            BlockOpcode::control_wait => vec!["DURATION"],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
             | BlockOpcode::control_repeat_until
-            | BlockOpcode::control_while => vec!["CONDITION"],
+            | BlockOpcode::control_while
+            | BlockOpcode::control_wait_until => vec!["CONDITION"],
             BlockOpcode::operator_not => vec!["OPERAND"],
             BlockOpcode::control_repeat => vec!["TIMES"],
             BlockOpcode::operator_length => vec!["STRING"],
@@ -453,31 +459,44 @@ fn generate_loop(
     condition_instructions: Vec<IrOpcode>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
-    empty_instructions: Vec<IrOpcode>,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
-    let BlockArrayOrId::Id(substack_id) = (match block_info.inputs.get("SUBSTACK") {
+    let substack_id = match block_info.inputs.get("SUBSTACK") {
         Some(
             Input::NoShadow(_, Some(substack_input)) | Input::Shadow(_, Some(substack_input), _),
-        ) => substack_input,
-        _ => return Ok(empty_instructions),
-    }) else {
-        hq_bad_proj!("malformed SUBSTACK input")
+        ) => {
+            let BlockArrayOrId::Id(id) = substack_input else {
+                hq_bad_proj!("malformed SUBSTACK input")
+            };
+            Some(id)
+        }
+        _ => None,
     };
-    let Some(substack_block) = blocks.get(substack_id) else {
-        hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+
+    let substack_block = if let Some(id) = substack_id {
+        Some(
+            blocks
+                .get(id)
+                .ok_or_else(|| make_hq_bad_proj!("SUBSTACK block doesn't seem to exist"))?,
+        )
+    } else {
+        None
     };
     if warp {
         // TODO: can this be expressed in the same way as non-warping loops,
         // just with yield_first: false?
-        let substack_blocks = from_block(
-            substack_block,
-            blocks,
-            context,
-            &context.target().project(),
-            NextBlocks::new(false),
-            flags,
-        )?;
+        let substack_blocks = if let Some(block) = substack_block {
+            from_block(
+                block,
+                blocks,
+                context,
+                &context.target().project(),
+                NextBlocks::new(false),
+                flags,
+            )?
+        } else {
+            vec![]
+        };
         let substack_step = Step::new_rc(
             None,
             context.clone(),
@@ -536,18 +555,26 @@ fn generate_loop(
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             }));
-        let substack_blocks = from_block(
-            substack_block,
-            blocks,
-            context,
-            &context.target().project(),
-            NextBlocks::new(false).extend_with_inner(NextBlockInfo {
-                yield_first: true,
-                block: NextBlock::Step(Rc::downgrade(&condition_step)),
-            }),
-            flags,
-        )?;
-        substack_step.opcodes_mut()?.extend(substack_blocks);
+        if let Some(block) = substack_block {
+            let substack_blocks = from_block(
+                block,
+                blocks,
+                context,
+                &context.target().project(),
+                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
+                    yield_first: true,
+                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
+                }),
+                flags,
+            )?;
+            substack_step.opcodes_mut()?.extend(substack_blocks);
+        } else {
+            substack_step
+                .opcodes_mut()?
+                .push(IrOpcode::hq_yield(HqYieldFields {
+                    mode: YieldMode::Schedule(Rc::downgrade(&condition_step)),
+                }));
+        }
         Ok(setup_instructions
             .into_iter()
             .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
@@ -592,6 +619,7 @@ fn generate_if_else(
     let dummy_project = Rc::new(IrProject::new(
         this_project.global_variables().clone(),
         this_project.global_lists().clone(),
+        Box::from(this_project.broadcasts()),
     ));
     let dummy_target = Rc::new(Target::new(
         false,
@@ -642,7 +670,7 @@ fn generate_if_else(
     // let if_step_yields = dummy_if_step.does_yield()?;
     // let else_step_yields = dummy_else_step.does_yield()?;
     // crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
-    if !context.warp && (dummy_if_step.does_yield()? || dummy_else_step.does_yield()?) {
+    if !context.warp && (dummy_if_step.does_yield() || dummy_else_step.does_yield()) {
         // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
         // version inline after the branch, and the other tagged on in the substep's NextBlocks
         // as usual, to allow for extra variable type optimisations.
@@ -1025,6 +1053,67 @@ where
     .collect())
 }
 
+fn generate_exhaustive_string_comparison<I, S, F>(
+    string_source: I,
+    instruction: F,
+    fallback: Vec<IrOpcode>,
+    context: &StepContext,
+    project: &Weak<IrProject>,
+) -> HQResult<Vec<IrOpcode>>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<Box<str>> + Clone,
+    F: Fn(Box<str>) -> IrOpcode,
+{
+    let var = RcVar::new(IrType::String, VarVal::String("".into()))?;
+    Ok(vec![
+        IrOpcode::hq_cast(HqCastFields(IrType::String)),
+        IrOpcode::data_setvariableto(DataSetvariabletoFields {
+            var: RefCell::new(var.clone()),
+            local_write: RefCell::new(true),
+        }),
+    ]
+    .into_iter()
+    .chain(
+        string_source
+            .into_iter()
+            .try_fold(
+                Step::new_rc(None, context.clone(), fallback, project, false)?,
+                |branch_else, string| {
+                    let branch_if = Step::new_rc(
+                        None,
+                        context.clone(),
+                        vec![instruction(string.clone().into())],
+                        project,
+                        false,
+                    )?;
+                    Step::new_rc(
+                        None,
+                        context.clone(),
+                        vec![
+                            IrOpcode::data_variable(DataVariableFields {
+                                var: RefCell::new(var.clone()),
+                                local_read: RefCell::new(true),
+                            }),
+                            IrOpcode::hq_text(HqTextFields(string.into())),
+                            IrOpcode::operator_equals, // todo: this should be a case-sensitive comparison
+                            IrOpcode::control_if_else(ControlIfElseFields {
+                                branch_if,
+                                branch_else,
+                            }),
+                        ],
+                        project,
+                        false,
+                    )
+                },
+            )?
+            .opcodes()
+            .borrow()
+            .clone(),
+    )
+    .collect())
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "a big monolithic function is somewhat unavoidable here"
@@ -1086,6 +1175,8 @@ fn from_normal_block(
                         BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
                         BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                         BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
+                        BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                        BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_reset_timer],
                         BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
                         BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
                         BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
@@ -1129,6 +1220,83 @@ fn from_normal_block(
                             }
                         }
                         BlockOpcode::operator_random => vec![IrOpcode::operator_random],
+                        BlockOpcode::event_broadcast_menu => {
+                            let sb3::Field::ValueId(val, _id) =
+                                block_info.fields.get("BROADCAST_OPTION").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field BROADCAST_OPTION"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing broadcast name for \
+                                     BROADCAST_OPTION field"
+                                );
+                            };
+                            let VarVal::String(name) = val.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null broadcast name for \
+                                     BROADCAST_OPTION field"
+                                )
+                            })?
+                            else {
+                                hq_bad_proj!("non-string broadcast name")
+                            };
+                            vec![IrOpcode::hq_text(HqTextFields(name))]
+                        }
+                        BlockOpcode::event_broadcast => generate_exhaustive_string_comparison(
+                            context.project()?.broadcasts().iter().cloned(),
+                            |broadcast| IrOpcode::event_broadcast(EventBroadcastFields(broadcast)),
+                            vec![],
+                            context,
+                            project,
+                        )?,
+                        BlockOpcode::event_broadcastandwait => {
+                            let poll_step =
+                                Step::new_poll_waiting_threads(context.clone(), project)?;
+                            should_break = true;
+                            let next_step = generate_next_step(
+                                true,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                flags,
+                            )?;
+                            generate_exhaustive_string_comparison(
+                                context.project()?.broadcasts().iter().cloned(),
+                                |broadcast| {
+                                    IrOpcode::event_broadcast_and_wait(
+                                        EventBroadcastAndWaitFields {
+                                            broadcast,
+                                            poll_step: Rc::clone(&poll_step),
+                                            next_step: Rc::clone(&next_step),
+                                        },
+                                    )
+                                },
+                                vec![IrOpcode::hq_yield(HqYieldFields {
+                                    mode: YieldMode::Schedule(Rc::downgrade(&next_step)),
+                                })],
+                                context,
+                                project,
+                            )?
+                        }
+                        BlockOpcode::control_wait => {
+                            let poll_step = Step::new_poll_timer(context.clone(), project)?;
+                            should_break = true;
+                            let next_step = generate_next_step(
+                                true,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                flags,
+                            )?;
+                            vec![IrOpcode::control_wait(ControlWaitFields {
+                                poll_step,
+                                next_step,
+                            })]
+                        }
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =
                                 block_info.fields.get("VARIABLE").ok_or_else(|| {
@@ -1703,7 +1871,6 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 vec![],
-                                vec![],
                                 flags,
                             )?
                         }
@@ -1745,11 +1912,10 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
-                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
-                        BlockOpcode::control_repeat_until => {
+                        BlockOpcode::control_repeat_until | BlockOpcode::control_wait_until => {
                             let condition_instructions = inputs(
                                 block_info,
                                 blocks,
@@ -1770,7 +1936,6 @@ fn from_normal_block(
                                 condition_instructions,
                                 true,
                                 setup_instructions,
-                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
@@ -1795,7 +1960,6 @@ fn from_normal_block(
                                 condition_instructions,
                                 false,
                                 setup_instructions,
-                                vec![IrOpcode::hq_drop],
                                 flags,
                             )?
                         }
@@ -1903,12 +2067,14 @@ fn from_normal_block(
                             let sb3::VarVal::String(number_name) =
                                 val.clone().ok_or_else(|| {
                                     make_hq_bad_proj!(
-                                    "invalid project.json - null costume name for NUMBER_NAME field"
-                                )
+                                        "invalid project.json - null costume name for NUMBER_NAME \
+                                         field"
+                                    )
                                 })?
                             else {
                                 hq_bad_proj!(
-                                    "invalid project.json - NUMBER_NAME field is not of type String"
+                                    "invalid project.json - NUMBER_NAME field is not of type \
+                                     String"
                                 );
                             };
                             match &*number_name {
@@ -2181,9 +2347,9 @@ fn from_special_block(
             }
             _ => hq_bad_proj!("bad project json (block array of type ({}, string))", ty),
         },
-        BlockArray::Broadcast(ty, _name, id) | BlockArray::VariableOrList(ty, _name, id, _, _) => {
+        BlockArray::Broadcast(ty, name, id) | BlockArray::VariableOrList(ty, name, id, _, _) => {
             match ty {
-                11 => hq_todo!("broadcast input"),
+                11 => IrOpcode::hq_text(HqTextFields(name.clone())),
                 12 => {
                     let target = context.target();
                     let variable = if let Some(var) = target.variables().get(id) {

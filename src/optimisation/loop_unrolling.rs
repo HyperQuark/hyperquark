@@ -9,25 +9,12 @@ fn unroll_loops_in_step(step: &Rc<Step>) -> HQResult<()> {
     let mut loops = vec![];
 
     for (i, opcode) in step.opcodes().borrow().iter().enumerate().rev() {
+        if let Some(inline_steps) = opcode.inline_steps() {
+            inline_steps.iter().try_for_each(unroll_loops_in_step)?;
+        }
+
         if let IrOpcode::control_loop(loop_fields) = opcode {
-            unroll_loops_in_step(&loop_fields.body)?;
             loops.push((i, loop_fields.clone()));
-        }
-
-        if let IrOpcode::control_if_else(ControlIfElseFields {
-            branch_if,
-            branch_else,
-        }) = opcode
-        {
-            unroll_loops_in_step(branch_if)?;
-            unroll_loops_in_step(branch_else)?;
-        }
-
-        if let IrOpcode::hq_yield(HqYieldFields {
-            mode: YieldMode::Inline(inline_step),
-        }) = opcode
-        {
-            unroll_loops_in_step(inline_step)?;
         }
     }
 

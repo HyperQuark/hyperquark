@@ -2,6 +2,11 @@
 //! we can (we do this to improve variable type analysis). Procedures can return as many values
 //! as we want, because we can use the WASM multi-value proposal.
 
+use core::cell::{Ref, RefMut};
+
+use lazy_regex::{Lazy, lazy_regex};
+use regex::Regex;
+
 use super::blocks::NextBlocks;
 use super::context::StepContext;
 use super::{Step, Target as IrTarget};
@@ -9,9 +14,6 @@ use crate::ir::{ProcContext, RcVar};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockMap, BlockOpcode, Input, Target as Sb3Target};
 use crate::wasm::WasmFlags;
-use core::cell::{Ref, RefMut};
-use lazy_regex::{Lazy, lazy_regex};
-use regex::Regex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PartialStep {

@@ -2,8 +2,7 @@ use super::proc::{ProcMap, procs_from_target};
 use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from_target};
 use super::{Step, Target, Thread};
 use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataVariableFields,
-    HqYieldFields, IrOpcode, YieldMode,
+    DataSetvariabletoFields, DataVariableFields, HqYieldFields, IrOpcode, YieldMode,
 };
 use crate::ir::target::IrCostume;
 use crate::ir::{PartialStep, RcVar};
@@ -20,6 +19,7 @@ pub struct IrProject {
     inlined_steps: RefCell<StepSet>,
     global_variables: TargetVars,
     global_lists: TargetLists,
+    broadcasts: Box<[Box<str>]>,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
 }
 
@@ -48,14 +48,23 @@ impl IrProject {
         &self.global_lists
     }
 
+    pub const fn broadcasts(&self) -> &[Box<str>] {
+        &self.broadcasts
+    }
+
     #[must_use]
-    pub fn new(global_variables: TargetVars, global_lists: TargetLists) -> Self {
+    pub fn new(
+        global_variables: TargetVars,
+        global_lists: TargetLists,
+        broadcasts: Box<[Box<str>]>,
+    ) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
             steps: RefCell::new(IndexSet::default()),
             inlined_steps: RefCell::new(IndexSet::default()),
             global_variables,
             global_lists,
+            broadcasts,
             targets: RefCell::new(IndexMap::default()),
         }
     }
@@ -76,7 +85,14 @@ impl IrProject {
             flags,
         )?;
 
-        let project = Rc::new(Self::new(global_variables, global_lists));
+        let broadcasts = sb3
+            .targets
+            .iter()
+            .flat_map(|target| target.broadcasts.values())
+            .cloned()
+            .collect();
+
+        let project = Rc::new(Self::new(global_variables, global_lists, broadcasts));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
@@ -183,36 +199,22 @@ where
     let mut has_return = false;
     checked_steps.insert(Rc::clone(step));
     for (i, opcode) in step.opcodes().borrow().iter().enumerate() {
-        #[expect(
-            clippy::wildcard_enum_match_arm,
-            reason = "too many variants to match explicitly"
-        )]
-        match opcode {
+        if matches!(
+            opcode,
             IrOpcode::hq_yield(HqYieldFields {
                 mode: YieldMode::Return,
-            }) => {
-                hq_assert!(
-                    i == step.opcodes().borrow().len() - 1,
-                    "found yield return in non-tail position"
-                );
-                has_return = true;
-            }
-            IrOpcode::hq_yield(HqYieldFields {
-                mode: YieldMode::Inline(inline_step),
-            }) => {
-                add_proc_return_vars_before_return(inline_step, var_ops.clone(), checked_steps)?;
-            }
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if,
-                branch_else,
-            }) => {
-                add_proc_return_vars_before_return(branch_if, var_ops.clone(), checked_steps)?;
-                add_proc_return_vars_before_return(branch_else, var_ops.clone(), checked_steps)?;
-            }
-            IrOpcode::control_loop(ControlLoopFields { body, .. }) => {
-                add_proc_return_vars_before_return(body, var_ops.clone(), checked_steps)?;
-            }
-            _ => (),
+            })
+        ) {
+            hq_assert!(
+                i == step.opcodes().borrow().len() - 1,
+                "found yield return in non-tail position"
+            );
+            has_return = true;
+        }
+        if let Some(inline_steps) = opcode.inline_steps() {
+            inline_steps.iter().try_for_each(|inline_step| {
+                add_proc_return_vars_before_return(inline_step, var_ops.clone(), checked_steps)
+            })?;
         }
     }
 
@@ -338,6 +340,11 @@ impl fmt::Display for IrProject {
             .iter()
             .map(|thread| format!("{thread}"))
             .join(", ");
+        let broadcasts = self
+            .broadcasts()
+            .iter()
+            .map(|name| format!(r#""{name}""#))
+            .join(", ");
         let steps = self
             .steps()
             .borrow()
@@ -356,6 +363,7 @@ impl fmt::Display for IrProject {
         "targets": {{{targets}}},
         "global_variables": {{{variables}}},
         "global_lists": {{{lists}}},
+        "broadcasts": [{broadcasts}],
         "threads": [{threads}],
         "steps": [{steps}],
         "inlined_steps": [{inlined_steps}]

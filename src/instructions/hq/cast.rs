@@ -51,7 +51,8 @@ fn best_cast_candidate(from: IrType, to: IrType) -> HQResult<IrType> {
                 IrType::Boolean,
             ] as &[IrType],
             IrType::ColorRGB | IrType::ColorARGB => hq_bad_proj!(
-                "should not be casting from colour. this is probably a project using 'hacked' blocks, or a bug"
+                "should not be casting from colour. this is probably a project using 'hacked' \
+                 blocks, or a bug"
             ),
             _ => unreachable!(),
         } {
