@@ -5,17 +5,15 @@ use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, I
 use super::context::StepContext;
 use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
-use crate::instructions::fields::{
-    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
-    DataVariableFields, HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields,
-    HqIntegerFields, HqTextFields, HqYieldFields, LooksSayFields, LooksThinkFields,
-    ProceduresArgumentFields, ProceduresCallWarpFields,
-};
 use crate::instructions::{
-    DataAddtolistFields, DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
+    ControlIfElseFields, ControlLoopFields, ControlWaitFields, DataAddtolistFields,
+    DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields, EventBroadcastAndWaitFields, EventBroadcastFields, IrOpcode,
-    ProceduresCallNonwarpFields, YieldMode,
+    DataReplaceitemoflistFields, DataSetvariabletoFields, DataTeevariableFields,
+    DataVariableFields, EventBroadcastAndWaitFields, EventBroadcastFields, HqBooleanFields,
+    HqCastFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields, HqYieldFields,
+    IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
+    ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
 use crate::ir::{RcList, ReturnType};
 use crate::prelude::*;
@@ -255,6 +253,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
             }
+            BlockOpcode::control_wait => vec!["DURATION"],
             BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
@@ -1259,6 +1258,22 @@ fn from_normal_block(
                                 context,
                                 project,
                             )?
+                        }
+                        BlockOpcode::control_wait => {
+                            let poll_step = Step::new_poll_timer(context.clone(), project)?;
+                            should_break = true;
+                            let next_step = generate_next_step(
+                                true,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                flags,
+                            )?;
+                            vec![IrOpcode::control_wait(ControlWaitFields {
+                                poll_step,
+                                next_step,
+                            })]
                         }
                         BlockOpcode::data_setvariableto => {
                             let sb3::Field::ValueId(_val, maybe_id) =

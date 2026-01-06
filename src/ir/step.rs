@@ -166,6 +166,24 @@ impl Step {
         )
     }
 
+    pub fn new_poll_timer(context: StepContext, project: &Weak<IrProject>) -> HQResult<Rc<Self>> {
+        Self::new_rc(
+            None,
+            context.clone(),
+            vec![
+                IrOpcode::control_get_thread_timeout,
+                IrOpcode::sensing_timer,
+                IrOpcode::operator_gt,
+                IrOpcode::control_if_else(ControlIfElseFields {
+                    branch_if: Self::new_rc(None, context.clone(), vec![], project, false)?,
+                    branch_else: Self::new_terminating(context, project, false)?,
+                }),
+            ],
+            project,
+            true,
+        )
+    }
+
     pub fn opcodes_mut(&self) -> HQResult<RefMut<'_, Vec<IrOpcode>>> {
         self.opcodes
             .try_borrow_mut()

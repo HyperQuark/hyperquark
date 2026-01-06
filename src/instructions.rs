@@ -112,9 +112,8 @@ impl IrOpcode {
                 mode: YieldMode::Schedule(next_step),
             }) => Weak::upgrade(next_step),
             Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
-            | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. }) => {
-                Some(Rc::clone(next_step))
-            }
+            | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. })
+            | Self::control_wait(ControlWaitFields { next_step, .. }) => Some(Rc::clone(next_step)),
             _ => None,
         }
     }
