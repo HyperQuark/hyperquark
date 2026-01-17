@@ -15,7 +15,7 @@ use crate::instructions::{
     IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
     ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
-use crate::ir::{RcList, ReturnType};
+use crate::ir::{InlinedStep, MaybeInlinedStep, RcList, ReturnType, StepIndex};
 use crate::prelude::*;
 use crate::sb3::{self, Field, VarVal};
 use crate::wasm::WasmFlags;
@@ -134,7 +134,8 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
 #[derive(Clone, Debug)]
 pub enum NextBlock {
     ID(Box<str>),
-    Step(Weak<Step>),
+    Step(Step),
+    StepIndex(StepIndex),
 }
 
 #[derive(Clone, Debug)]
@@ -401,13 +402,12 @@ fn procedure_argument(
 }
 
 fn generate_next_step(
-    used_non_inline: bool,
     block_info: &BlockInfo,
     blocks: &BTreeMap<Box<str>, Block>,
     context: &StepContext,
     final_next_blocks: NextBlocks,
     flags: &WasmFlags,
-) -> HQResult<Rc<Step>> {
+) -> HQResult<MaybeInlinedStep> {
     let (next_block, outer_next_blocks) = if let Some(ref next_block) = block_info.next {
         (Some(NextBlock::ID(next_block.clone())), final_next_blocks)
     } else if let (Some(next_block_info), popped_next_blocks) =
@@ -422,28 +422,74 @@ fn generate_next_step(
             let Some(next_block_block) = blocks.get(&id) else {
                 hq_bad_proj!("next block doesn't exist")
             };
-            Step::from_block(
+            MaybeInlinedStep::Undetermined(Step::from_block(
                 next_block_block,
                 id,
                 blocks,
                 context,
                 &context.target().project(),
                 outer_next_blocks,
-                used_non_inline,
+                false,
                 flags,
-            )?
+            )?)
         }
-        Some(NextBlock::Step(ref step)) => (*step
-            .upgrade()
-            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?)
-        .clone(used_non_inline)?,
-        None => Step::new_terminating(
+        Some(NextBlock::Step(step)) => MaybeInlinedStep::Undetermined(step),
+        Some(NextBlock::StepIndex(step_index)) => MaybeInlinedStep::NonInlined(step_index),
+        None => MaybeInlinedStep::Undetermined(Step::new_terminating(
             context.clone(),
-            &context.target().project(),
-            used_non_inline,
-        )?,
+            context.target().project(),
+            false,
+        )),
     };
     Ok(next_step)
+}
+
+fn generate_next_step_inlined(
+    block_info: &BlockInfo,
+    blocks: &BTreeMap<Box<str>, Block>,
+    context: &StepContext,
+    final_next_blocks: NextBlocks,
+    flags: &WasmFlags,
+) -> HQResult<InlinedStep> {
+    Ok(
+        match generate_next_step(block_info, blocks, context, final_next_blocks, flags)? {
+            MaybeInlinedStep::Inlined(step) => step,
+            MaybeInlinedStep::NonInlined(step_index) => {
+                let mut step = context
+                    .project()?
+                    .steps()
+                    .try_borrow()?
+                    .get(step_index.0)
+                    .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                    .try_borrow()?
+                    .clone();
+                step.make_inlined();
+                Rc::new(RefCell::new(step))
+            }
+            MaybeInlinedStep::Undetermined(mut step) => {
+                step.make_inlined();
+                Rc::new(RefCell::new(step))
+            }
+        },
+    )
+}
+
+fn generate_next_step_non_inlined(
+    block_info: &BlockInfo,
+    blocks: &BTreeMap<Box<str>, Block>,
+    context: &StepContext,
+    final_next_blocks: NextBlocks,
+    flags: &WasmFlags,
+) -> HQResult<StepIndex> {
+    match generate_next_step(block_info, blocks, context, final_next_blocks, flags)? {
+        MaybeInlinedStep::Inlined(step) => step
+            .try_borrow()?
+            .clone_to_non_inlined(Weak::clone(&context.target().project())),
+        MaybeInlinedStep::NonInlined(step_index) => Ok(step_index),
+        MaybeInlinedStep::Undetermined(step) => {
+            step.clone_to_non_inlined(Weak::clone(&context.target().project()))
+        }
+    }
 }
 
 #[expect(clippy::too_many_arguments, reason = "too many arguments!")]
@@ -497,28 +543,28 @@ fn generate_loop(
         } else {
             vec![]
         };
-        let substack_step = Step::new_rc(
+        let substack_step = Rc::new(RefCell::new(Step::new(
             None,
             context.clone(),
             substack_blocks,
-            &context.target().project(),
+            context.target().project(),
             false,
-        )?;
-        let condition_step = Step::new_rc(
+        )));
+        let condition_step = Rc::new(RefCell::new(Step::new(
             None,
             context.clone(),
             condition_instructions,
-            &context.target().project(),
+            context.target().project(),
             false,
-        )?;
+        )));
         let first_condition_step = if let Some(instrs) = first_condition_instructions {
-            Some(Step::new_rc(
+            Some(Rc::new(RefCell::new(Step::new(
                 None,
                 context.clone(),
                 instrs,
-                &context.target().project(),
+                context.target().project(),
                 false,
-            )?)
+            ))))
         } else {
             None
         };
@@ -534,27 +580,29 @@ fn generate_loop(
     } else {
         *should_break = true;
         let next_step =
-            generate_next_step(false, block_info, blocks, context, final_next_blocks, flags)?;
-        let condition_step = Step::new_rc(
+            generate_next_step_inlined(block_info, blocks, context, final_next_blocks, flags)?;
+        let project = context.project()?;
+        let mut condition_step = Step::new(
             None,
             context.clone(),
             condition_instructions.clone(),
-            &context.target().project(),
+            context.target().project(),
             true,
-        )?;
-        let substack_step = Step::new_rc(
+        );
+        let substack_step = Rc::new(RefCell::new(Step::new(
             None,
             context.clone(),
             vec![],
-            &context.target().project(),
+            context.target().project(),
             false,
-        )?;
+        )));
         condition_step
-            .opcodes_mut()?
+            .opcodes_mut()
             .push(IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             }));
+        let condition_step_index = project.new_owned_step(condition_step)?;
         if let Some(block) = substack_block {
             let substack_blocks = from_block(
                 block,
@@ -563,32 +611,28 @@ fn generate_loop(
                 &context.target().project(),
                 NextBlocks::new(false).extend_with_inner(NextBlockInfo {
                     yield_first: true,
-                    block: NextBlock::Step(Rc::downgrade(&condition_step)),
+                    block: NextBlock::StepIndex(condition_step_index),
                 }),
                 flags,
             )?;
-            substack_step.opcodes_mut()?.extend(substack_blocks);
+            substack_step
+                .try_borrow_mut()?
+                .opcodes_mut()
+                .extend(substack_blocks);
         } else {
             substack_step
-                .opcodes_mut()?
+                .try_borrow_mut()?
+                .opcodes_mut()
                 .push(IrOpcode::hq_yield(HqYieldFields {
-                    mode: YieldMode::Schedule(Rc::downgrade(&condition_step)),
+                    mode: YieldMode::Schedule(condition_step_index),
                 }));
         }
         Ok(setup_instructions
             .into_iter()
             .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
             .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: if flip_if {
-                    Step::clone(&next_step, false)?
-                } else {
-                    Step::clone(&substack_step, false)?
-                },
-                branch_else: if flip_if {
-                    Step::clone(&substack_step, false)?
-                } else {
-                    Step::clone(&next_step, false)?
-                },
+                branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
+                branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
                 // branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 // branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             })])
@@ -662,10 +706,10 @@ fn generate_if_else(
         )?
     } else {
         Step::new_empty(
-            &Rc::downgrade(&dummy_project),
+            Rc::downgrade(&dummy_project),
             false,
             Rc::clone(&dummy_target),
-        )?
+        )
     };
     // let if_step_yields = dummy_if_step.does_yield()?;
     // let else_step_yields = dummy_else_step.does_yield()?;
@@ -732,35 +776,39 @@ fn generate_if_else(
                     //     format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
                     // );
                     vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(
-                            (*Step::from_block(
-                                next_block,
-                                id.clone(),
-                                blocks,
-                                context,
-                                &context.target().project(),
-                                next_blocks,
-                                true,
-                                flags,
-                            )?)
-                            .clone(false)?,
-                        ),
+                        mode: YieldMode::Inline(Rc::new(RefCell::new(Step::from_block(
+                            next_block,
+                            id.clone(),
+                            blocks,
+                            context,
+                            &context.target().project(),
+                            next_blocks,
+                            false,
+                            flags,
+                        )?))),
                     })]
                 }
-                Some(NextBlock::Step(step)) => {
-                    let rcstep = step
-                        .upgrade()
-                        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
+                Some(NextBlock::Step(mut step)) => {
+                    step.make_inlined();
                     // crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
-                    if rcstep.used_non_inline() {
-                        vec![IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline((*rcstep).clone(false)?),
-                        })]
-                    } else {
-                        vec![IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(rcstep),
-                        })]
-                    }
+
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
+                    })]
+                }
+                Some(NextBlock::StepIndex(step_index)) => {
+                    let mut step = context
+                        .project()?
+                        .steps()
+                        .try_borrow()?
+                        .get(step_index.0)
+                        .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                        .try_borrow()?
+                        .clone();
+                    step.make_inlined();
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
+                    })]
                 }
                 None => {
                     // crate::log("no next block after if!");
@@ -775,18 +823,18 @@ fn generate_if_else(
                     }
                 }
             };
-            Step::new_rc(
+            Step::new(
                 None,
                 context.clone(),
                 opcode,
-                &context.target().project(),
+                context.target().project(),
                 false,
-            )?
+            )
         };
         *should_break = true;
         Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
-            branch_if: final_if_step,
-            branch_else: final_else_step,
+            branch_if: Rc::new(RefCell::new(final_if_step)),
+            branch_else: Rc::new(RefCell::new(final_else_step)),
         })])
     } else {
         let final_if_step = Step::from_block(
@@ -811,17 +859,17 @@ fn generate_if_else(
                 flags,
             )?
         } else {
-            Step::new_rc(
+            Step::new(
                 None,
                 context.clone(),
                 vec![],
-                &context.target().project(),
+                context.target().project(),
                 false,
-            )?
+            )
         };
         Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
-            branch_if: final_if_step,
-            branch_else: final_else_step,
+            branch_if: Rc::new(RefCell::new(final_if_step)),
+            branch_else: Rc::new(RefCell::new(final_else_step)),
         })])
     }
 }
@@ -852,7 +900,13 @@ where
                 local_write: RefCell::new(true),
             }));
         }
-        Step::new_rc(None, context.clone(), opcodes, project, false)
+        Rc::new(RefCell::new(Step::new(
+            None,
+            context.clone(),
+            opcodes,
+            Weak::clone(project),
+            false,
+        )))
     };
 
     let int_step = result_step(if other_argument {
@@ -877,7 +931,7 @@ where
             IrOpcode::hq_cast(HqCastFields(IrType::Int)),
             block(),
         ]
-    })?;
+    });
 
     let last_step = result_step(if other_argument {
         vec![
@@ -893,7 +947,7 @@ where
             IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
             block(),
         ]
-    })?;
+    });
 
     let random_step = result_step(if other_argument {
         vec![
@@ -913,18 +967,30 @@ where
             IrOpcode::operator_random,
             block(),
         ]
-    })?;
+    });
 
     let default_step = if let Some(default_block) = default_output {
-        result_step(vec![default_block.clone()])?
+        result_step(vec![default_block.clone()])
     } else {
-        Step::new_rc(None, context.clone(), vec![], project, false)?
+        Rc::new(RefCell::new(Step::new(
+            None,
+            context.clone(),
+            vec![],
+            Weak::clone(project),
+            false,
+        )))
     };
 
-    let not_any_step: Option<HQResult<_>> = maybe_all_block.map(|all_block| {
-        let all_step = Step::new_rc(None, context.clone(), vec![all_block], project, false)?;
+    let not_any_step = maybe_all_block.map(|all_block| {
+        let all_step = Rc::new(RefCell::new(Step::new(
+            None,
+            context.clone(),
+            vec![all_block],
+            Weak::clone(project),
+            false,
+        )));
 
-        Step::new_rc(
+        Rc::new(RefCell::new(Step::new(
             None,
             context.clone(),
             vec![
@@ -936,15 +1002,15 @@ where
                 IrOpcode::operator_equals,
                 IrOpcode::control_if_else(ControlIfElseFields {
                     branch_if: all_step,
-                    branch_else: Step::clone(&default_step, false)?,
+                    branch_else: Rc::clone(&default_step),
                 }),
             ],
-            project,
+            Weak::clone(project),
             false,
-        )
+        )))
     });
 
-    let not_random_step = Step::new_rc(
+    let not_random_step = Rc::new(RefCell::new(Step::new(
         None,
         context.clone(),
         vec![
@@ -955,15 +1021,15 @@ where
             IrOpcode::hq_text(HqTextFields("any".into())),
             IrOpcode::operator_equals,
             IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Step::clone(&random_step, false)?,
-                branch_else: not_any_step.unwrap_or(Ok(default_step))?,
+                branch_if: Rc::clone(&random_step),
+                branch_else: not_any_step.unwrap_or(default_step),
             }),
         ],
-        project,
+        Weak::clone(project),
         false,
-    )?;
+    )));
 
-    let not_last_step = Step::new_rc(
+    let not_last_step = Rc::new(RefCell::new(Step::new(
         None,
         context.clone(),
         vec![
@@ -978,11 +1044,11 @@ where
                 branch_else: not_random_step,
             }),
         ],
-        project,
+        Weak::clone(project),
         false,
-    )?;
+    )));
 
-    let not_int_step = Step::new_rc(
+    let not_int_step = Rc::new(RefCell::new(Step::new(
         None,
         context.clone(),
         vec![
@@ -997,9 +1063,9 @@ where
                 branch_else: not_last_step,
             }),
         ],
-        project,
+        Weak::clone(project),
         false,
-    )?;
+    )));
 
     // we do some silly shennanigans with swapping to make sure that the SSA optimiser stays happy
     Ok(if other_argument {
@@ -1077,17 +1143,23 @@ where
     .chain(
         string_source
             .into_iter()
-            .try_fold(
-                Step::new_rc(None, context.clone(), fallback, project, false)?,
+            .fold(
+                Rc::new(RefCell::new(Step::new(
+                    None,
+                    context.clone(),
+                    fallback,
+                    Weak::clone(project),
+                    false,
+                ))),
                 |branch_else, string| {
-                    let branch_if = Step::new_rc(
+                    let branch_if = Rc::new(RefCell::new(Step::new(
                         None,
                         context.clone(),
                         vec![instruction(string.clone().into())],
-                        project,
+                        Weak::clone(project),
                         false,
-                    )?;
-                    Step::new_rc(
+                    )));
+                    Rc::new(RefCell::new(Step::new(
                         None,
                         context.clone(),
                         vec![
@@ -1102,13 +1174,13 @@ where
                                 branch_else,
                             }),
                         ],
-                        project,
+                        Weak::clone(project),
                         false,
-                    )
+                    )))
                 },
-            )?
+            )
+            .try_borrow()?
             .opcodes()
-            .borrow()
             .clone(),
     )
     .collect())
@@ -1252,11 +1324,14 @@ fn from_normal_block(
                             project,
                         )?,
                         BlockOpcode::event_broadcastandwait => {
-                            let poll_step =
-                                Step::new_poll_waiting_threads(context.clone(), project)?;
+                            let poll_step = context.project()?.new_owned_step(
+                                Step::new_poll_waiting_threads(
+                                    context.clone(),
+                                    Weak::clone(project),
+                                ),
+                            )?;
                             should_break = true;
-                            let next_step = generate_next_step(
-                                true,
+                            let next_step = generate_next_step_non_inlined(
                                 block_info,
                                 blocks,
                                 context,
@@ -1269,23 +1344,24 @@ fn from_normal_block(
                                     IrOpcode::event_broadcast_and_wait(
                                         EventBroadcastAndWaitFields {
                                             broadcast,
-                                            poll_step: Rc::clone(&poll_step),
-                                            next_step: Rc::clone(&next_step),
+                                            poll_step,
+                                            next_step,
                                         },
                                     )
                                 },
                                 vec![IrOpcode::hq_yield(HqYieldFields {
-                                    mode: YieldMode::Schedule(Rc::downgrade(&next_step)),
+                                    mode: YieldMode::Schedule(next_step),
                                 })],
                                 context,
                                 project,
                             )?
                         }
                         BlockOpcode::control_wait => {
-                            let poll_step = Step::new_poll_timer(context.clone(), project)?;
+                            let poll_step = context.project()?.new_owned_step(
+                                Step::new_poll_timer(context.clone(), Weak::clone(project)),
+                            )?;
                             should_break = true;
-                            let next_step = generate_next_step(
-                                true,
+                            let next_step = generate_next_step_non_inlined(
                                 block_info,
                                 blocks,
                                 context,
@@ -1987,8 +2063,7 @@ fn from_normal_block(
                                 })]
                             } else {
                                 should_break = true;
-                                let next_step = generate_next_step(
-                                    true,
+                                let next_step = generate_next_step_non_inlined(
                                     block_info,
                                     blocks,
                                     context,
@@ -2168,16 +2243,15 @@ fn from_normal_block(
                     ) && !context.warp
                     {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Schedule(Rc::downgrade(&Step::from_block(
+                            mode: YieldMode::Schedule(Step::from_block_non_inlined(
                                 next_block,
                                 id.clone(),
                                 blocks,
                                 context,
                                 project,
                                 new_next_blocks_stack,
-                                true,
                                 flags,
-                            )?)),
+                            )?),
                         }));
                         None
                     } else {
@@ -2185,7 +2259,7 @@ fn from_normal_block(
                         next_block.block_info()
                     }
                 }
-                NextBlock::Step(ref step) => {
+                NextBlock::Step(mut step) => {
                     if (
                         popped_next.yield_first
                         // || opcodes.last().is_some_and(
@@ -2194,14 +2268,32 @@ fn from_normal_block(
                     ) && !context.warp
                     {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Schedule(Weak::clone(step)),
+                            mode: YieldMode::Schedule(context.project()?.new_owned_step(step)?),
                         }));
                     } else {
+                        step.make_inlined();
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(
-                                step.upgrade()
-                                    .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-                            ),
+                            mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
+                        }));
+                    }
+                    None
+                }
+                NextBlock::StepIndex(step_index) => {
+                    if (
+                        popped_next.yield_first
+                        // || opcodes.last().is_some_and(
+                        //     super::super::instructions::IrOpcode::requests_screen_refresh,
+                        // )
+                    ) && !context.warp
+                    {
+                        opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Schedule(step_index)
+                        }));
+                    } else {
+                        let mut step = context.project()?.steps().try_borrow()?.get(step_index.0).ok_or_else(|| make_hq_bug!("step index out of bounds"))?.try_borrow()?.clone();
+                        step.make_inlined();
+                        opcodes.push(IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
                         }));
                     }
                     None

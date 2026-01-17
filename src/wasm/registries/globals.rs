@@ -34,8 +34,8 @@ impl GlobalRegistry {
         globals: &mut GlobalSection,
         exports: &mut ExportSection,
         imported_global_count: u32,
-        imported_function_count: u32,
-        static_function_count: u32,
+        _imported_function_count: u32,
+        _static_function_count: u32,
     ) {
         for (key, (ty, suggested_initial, mutable, export)) in self.registry().take() {
             if *export {
@@ -45,17 +45,17 @@ impl GlobalRegistry {
                     imported_global_count + globals.len(),
                 );
             }
-            let actual_initial = match &*key {
-                "noop_func" => ConstExpr::ref_func(imported_function_count + static_function_count),
-                _ => suggested_initial,
-            };
+            // let actual_initial = match &*key {
+            //     "noop_func" => ConstExpr::ref_func(imported_function_count + static_function_count),
+            //     _ => suggested_initial,
+            // };
             globals.global(
                 GlobalType {
                     val_type: ty,
                     mutable: *mutable,
                     shared: false,
                 },
-                &actual_initial,
+                &suggested_initial,
             );
         }
     }

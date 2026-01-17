@@ -1,5 +1,6 @@
 use super::blocks::NextBlocks;
 use super::{Event, IrProject, Step, StepContext, Target};
+use crate::ir::StepIndex;
 use crate::prelude::*;
 use crate::sb3;
 use crate::sb3::{Block, BlockMap, BlockOpcode, VarVal};
@@ -8,7 +9,7 @@ use crate::wasm::WasmFlags;
 #[derive(Clone, Debug)]
 pub struct Thread {
     event: Event,
-    first_step: Rc<Step>,
+    first_step: StepIndex,
 }
 
 impl Thread {
@@ -16,8 +17,8 @@ impl Thread {
         &self.event
     }
 
-    pub const fn first_step(&self) -> &Rc<Step> {
-        &self.first_step
+    pub const fn first_step(&self) -> StepIndex {
+        self.first_step
     }
 
     /// tries to construct a thread from a top-level block.
@@ -72,7 +73,7 @@ impl Thread {
         let next = blocks
             .get(next_id)
             .ok_or_else(|| make_hq_bug!("block not found in BlockMap"))?;
-        let first_step = Step::from_block(
+        let first_step = Step::from_block_non_inlined(
             next,
             next_id.clone(),
             blocks,
@@ -84,7 +85,6 @@ impl Thread {
             },
             project,
             NextBlocks::new(true),
-            true,
             flags,
         )?;
         Ok(Some(Self { event, first_step }))
@@ -94,13 +94,14 @@ impl Thread {
 impl fmt::Display for Thread {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let event = self.event();
-        let first_step = self.first_step().id();
+        let first_step = self.first_step();
         write!(
             f,
             r#"{{
             "event": '{event:?}',
-            "first_step": "{first_step}",
-        }}"#
+            "first_step_index": "{}",
+        }}"#,
+            first_step.0
         )
     }
 }

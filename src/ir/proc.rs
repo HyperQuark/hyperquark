@@ -10,7 +10,7 @@ use regex::Regex;
 use super::blocks::NextBlocks;
 use super::context::StepContext;
 use super::{Step, Target as IrTarget};
-use crate::ir::{ProcContext, RcVar};
+use crate::ir::{ProcContext, RcVar, StepIndex};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockMap, BlockOpcode, Input, Target as Sb3Target};
 use crate::wasm::WasmFlags;
@@ -19,7 +19,7 @@ use crate::wasm::WasmFlags;
 pub enum PartialStep {
     None,
     StartedCompilation,
-    Finished(Rc<Step>),
+    Finished(StepIndex),
 }
 
 #[derive(Clone, Debug)]
@@ -348,29 +348,33 @@ impl Proc {
             debug: self.debug,
         };
         let step = match self.first_step_id {
-            None => Step::new_rc(
-                None,
-                step_context.clone(),
-                vec![],
-                &step_context.target().project(),
-                true,
-            )?,
+            None => step_context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?
+                .new_owned_step(Step::new(
+                    None,
+                    step_context.clone(),
+                    vec![],
+                    step_context.target().project(),
+                    true,
+                )),
             Some(ref id) => {
                 let block = blocks.get(id).ok_or_else(|| {
                     make_hq_bad_proj!("procedure's first step block doesn't exist")
                 })?;
-                Step::from_block(
+                Step::from_block_non_inlined(
                     block,
                     id.clone(),
                     blocks,
                     &step_context,
                     &step_context.target().project(),
                     NextBlocks::new(!warp),
-                    true,
                     flags,
-                )?
+                )
             }
-        };
+        }?;
 
         #[expect(
             clippy::unwrap_used,
@@ -409,8 +413,8 @@ impl fmt::Display for SpecificProc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let first_step = self.first_step.borrow();
         let first_step_str = match *first_step {
-            PartialStep::Finished(ref step) => step.id(),
-            PartialStep::StartedCompilation | PartialStep::None => "none",
+            PartialStep::Finished(step) => format!("{}", step.0),
+            PartialStep::StartedCompilation | PartialStep::None => "none".to_owned(),
         };
         let arg_vars_cell = &self.arg_vars();
         let arg_vars = format!(

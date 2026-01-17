@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use super::SSAToken;
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, HqBoxFields, HqYieldFields, IrOpcode, YieldMode,
@@ -52,19 +54,22 @@ pub struct ConstFoldState {
     pub vars: BTreeMap<Box<str>, ConstFoldItem>,
 }
 
-fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> {
+fn const_fold_step<S>(step: S, state: &mut ConstFoldState) -> HQResult<()>
+where
+    S: Deref<Target = RefCell<Step>>,
+{
     let mut new_opcodes = vec![];
 
     let mut const_stack: Vec<ConstFoldItem> = vec![];
 
-    for opcode in step.opcodes().borrow().iter() {
+    for opcode in step.try_borrow()?.opcodes().iter() {
         if let IrOpcode::control_if_else(ControlIfElseFields {
             branch_if,
             branch_else,
         }) = opcode
         {
-            const_fold_step(branch_if, state)?;
-            const_fold_step(branch_else, state)?;
+            const_fold_step(Rc::clone(branch_if), state)?;
+            const_fold_step(Rc::clone(branch_else), state)?;
         }
 
         if let IrOpcode::control_loop(ControlLoopFields {
@@ -74,16 +79,16 @@ fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> 
             ..
         }) = opcode
         {
-            const_fold_step(body, &mut ConstFoldState::default())?;
-            const_fold_step(condition, &mut ConstFoldState::default())?;
+            const_fold_step(Rc::clone(body), &mut ConstFoldState::default())?;
+            const_fold_step(Rc::clone(condition), &mut ConstFoldState::default())?;
             if let Some(first_cond_step) = first_condition.as_ref() {
-                const_fold_step(first_cond_step, &mut ConstFoldState::default())?;
+                const_fold_step(Rc::clone(first_cond_step), &mut ConstFoldState::default())?;
             }
         }
 
         if let IrOpcode::hq_yield(HqYieldFields { mode }) = opcode {
             if let YieldMode::Inline(inline_step) = mode {
-                const_fold_step(inline_step, state)?;
+                const_fold_step(Rc::clone(inline_step), state)?;
             } else {
                 for const_item in &const_stack {
                     new_opcodes.extend(const_item.to_opcodes().iter().cloned());
@@ -147,7 +152,7 @@ fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> 
         new_opcodes.extend(remaining_const_item.to_opcodes().iter().cloned());
     }
 
-    *step.opcodes_mut()? = new_opcodes;
+    *step.try_borrow_mut()?.opcodes_mut() = new_opcodes;
 
     Ok(())
 }

@@ -1,14 +1,14 @@
 use wasm_encoder::{HeapType, StorageType};
 
 use super::super::prelude::*;
-use crate::ir::Step;
+use crate::ir::{StepIndex};
 use crate::wasm::StepFunc;
 
 #[derive(Clone, Debug)]
 pub struct Fields {
     pub broadcast: Box<str>,
-    pub poll_step: Rc<Step>,
-    pub next_step: Rc<Step>,
+    pub poll_step: StepIndex,
+    pub next_step: StepIndex,
 }
 
 impl fmt::Display for Fields {
@@ -20,7 +20,7 @@ impl fmt::Display for Fields {
         "poll_step": {},
         "next_step": {}
     }}"#,
-            self.broadcast, self.poll_step, self.next_step,
+            self.broadcast, self.poll_step.0, self.next_step.0,
         )
     }
 }
@@ -45,7 +45,7 @@ pub fn wasm(
 
     Ok(wasm![
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
-        #LazyBroadcastSpawnAndWait((broadcast.clone(), Rc::clone(poll_step), Rc::clone(next_step), arr_local))
+        #LazyBroadcastSpawnAndWait((broadcast.clone(), *poll_step, *next_step, arr_local))
     ])
 }
 
