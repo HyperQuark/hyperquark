@@ -1,14 +1,14 @@
 use wasm_encoder::{FieldType, HeapType, Instruction as WInstruction, StorageType};
 
 use super::super::prelude::*;
-use crate::ir::{Proc, Step};
+use crate::ir::{Proc, StepIndex};
 use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
 use crate::wasm::{StepFunc, WasmProject};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
     pub proc: Rc<Proc>,
-    pub next_step: Rc<Step>,
+    pub next_step: StepIndex,
 }
 
 impl fmt::Display for Fields {
@@ -20,7 +20,7 @@ impl fmt::Display for Fields {
         "next_step": {}
     }}"#,
             self.proc.proccode(),
-            self.next_step,
+            self.next_step.0,
         )
     }
 }
@@ -94,7 +94,7 @@ pub fn wasm(
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         #LazyNonWarpedProcRef(Rc::clone(proc)),
         LocalGet(arg_struct_local),
-        #LazyStepRef(Rc::downgrade(next_step)),
+        #LazyStepRef(*next_step),
         #StaticFunctionCall(spawn_thread_in_stack),
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         LocalGet(arg_struct_local),

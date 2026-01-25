@@ -28,7 +28,7 @@ macro_rules! instructions_test {
 
             use super::{wasm, output_type, acceptable_inputs};
             use $crate::prelude::*;
-            use $crate::ir::{Type as IrType, ReturnType, Step, Target as IrTarget, IrProject};
+            use $crate::ir::{Type as IrType, ReturnType};
             use wasm_encoder::ValType;
             use $crate::wasm::{StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]
@@ -90,7 +90,7 @@ macro_rules! instructions_test {
                         println!("skipping failed output_type");
                         continue;
                     };
-                    let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])));
+                    // let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])));
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -112,20 +112,7 @@ macro_rules! instructions_test {
 
                     proj.steps()
                         .borrow_mut()
-                        .insert(Step::new_empty(
-                            &Rc::downgrade(&ir),
-                            true,
-                            Rc::new(IrTarget::new(
-                                false,
-                                BTreeMap::default(),
-                                BTreeMap::default(),
-                                Weak::new(),
-                                RefCell::new(BTreeMap::default()),
-                                0,
-                                Box::new([]),
-                            )),
-                        )
-                        .unwrap(), step_func);
+                        .push(step_func);
 
                     let wasm_bytes = proj.finish().unwrap().wasm_bytes;
 
@@ -144,7 +131,7 @@ macro_rules! instructions_test {
                         continue;
                     };
                     println!("{output_type:?}");
-                    let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])));
+                    // let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])));
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -173,20 +160,7 @@ macro_rules! instructions_test {
 
                     proj.steps()
                         .borrow_mut()
-                        .insert(Step::new_empty(
-                            &Rc::downgrade(&ir),
-                            true,
-                            Rc::new(IrTarget::new(
-                                false,
-                                BTreeMap::default(),
-                                BTreeMap::default(),
-                                Weak::new(),
-                                RefCell::new(BTreeMap::default()),
-                                0,
-                                Box::new([]),
-                            )),
-                        )
-                        .unwrap(), step_func);
+                        .push(step_func);
 
                     let wasm_bytes = proj.finish().unwrap().wasm_bytes;
 

@@ -1,3 +1,5 @@
+use core::ops::Deref;
+
 use super::SSAToken;
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, HqBoxFields, HqYieldFields, IrOpcode, YieldMode,
@@ -52,38 +54,67 @@ pub struct ConstFoldState {
     pub vars: BTreeMap<Box<str>, ConstFoldItem>,
 }
 
-fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> {
+fn const_fold_step<S>(step: S, state: &mut ConstFoldState) -> HQResult<()>
+where
+    S: Deref<Target = RefCell<Step>>,
+{
     let mut new_opcodes = vec![];
 
     let mut const_stack: Vec<ConstFoldItem> = vec![];
 
-    for opcode in step.opcodes().borrow().iter() {
+    for oopcode in step.try_borrow()?.opcodes() {
+        let mut opcode = oopcode.clone();
         if let IrOpcode::control_if_else(ControlIfElseFields {
             branch_if,
             branch_else,
         }) = opcode
         {
-            const_fold_step(branch_if, state)?;
-            const_fold_step(branch_else, state)?;
+            let branch_if_mut = Rc::new(Rc::unwrap_or_clone(branch_if));
+            let branch_else_mut = Rc::new(Rc::unwrap_or_clone(branch_else));
+            const_fold_step(Rc::clone(&branch_if_mut), state)?;
+            const_fold_step(Rc::clone(&branch_else_mut), state)?;
+
+            opcode = IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if: branch_if_mut,
+                branch_else: branch_else_mut,
+            });
         }
 
         if let IrOpcode::control_loop(ControlLoopFields {
             condition,
             first_condition,
             body,
-            ..
+            flip_if,
         }) = opcode
         {
-            const_fold_step(body, &mut ConstFoldState::default())?;
-            const_fold_step(condition, &mut ConstFoldState::default())?;
-            if let Some(first_cond_step) = first_condition.as_ref() {
-                const_fold_step(first_cond_step, &mut ConstFoldState::default())?;
-            }
+            let body_mut = Rc::new(Rc::unwrap_or_clone(body));
+            let condition_mut = Rc::new(Rc::unwrap_or_clone(condition));
+            const_fold_step(Rc::clone(&body_mut), &mut ConstFoldState::default())?;
+            const_fold_step(Rc::clone(&condition_mut), &mut ConstFoldState::default())?;
+            let first_condition_mut = first_condition
+                .map(|first_cond_step| -> HQResult<_> {
+                    let first_cond_mut = Rc::new(Rc::unwrap_or_clone(first_cond_step));
+                    const_fold_step(Rc::clone(&first_cond_mut), &mut ConstFoldState::default())?;
+
+                    Ok(first_cond_mut)
+                })
+                .transpose()?;
+
+            opcode = IrOpcode::control_loop(ControlLoopFields {
+                body: body_mut,
+                condition: condition_mut,
+                first_condition: first_condition_mut,
+                flip_if,
+            });
         }
 
-        if let IrOpcode::hq_yield(HqYieldFields { mode }) = opcode {
+        if let IrOpcode::hq_yield(HqYieldFields { ref mode }) = opcode {
             if let YieldMode::Inline(inline_step) = mode {
-                const_fold_step(inline_step, state)?;
+                let inline_step_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(inline_step)));
+                const_fold_step(Rc::clone(&inline_step_mut), state)?;
+                opcode = IrOpcode::hq_yield(HqYieldFields {
+                    mode: YieldMode::Inline(inline_step_mut),
+                });
             } else {
                 for const_item in &const_stack {
                     new_opcodes.extend(const_item.to_opcodes().iter().cloned());
@@ -147,7 +178,7 @@ fn const_fold_step(step: &Rc<Step>, state: &mut ConstFoldState) -> HQResult<()> 
         new_opcodes.extend(remaining_const_item.to_opcodes().iter().cloned());
     }
 
-    *step.opcodes_mut()? = new_opcodes;
+    *step.try_borrow_mut()?.opcodes_mut() = new_opcodes;
 
     Ok(())
 }

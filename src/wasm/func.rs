@@ -1,4 +1,5 @@
 use alloc::collections::btree_map;
+use core::ops::Deref;
 
 use wasm_encoder::{
     self, AbstractHeapType, CodeSection, FieldType, Function, FunctionSection, HeapType,
@@ -8,28 +9,26 @@ use wasm_gen::wasm;
 
 use super::{Registries, WasmFlags, WasmProject};
 use crate::instructions::{IrOpcode, wrap_instruction};
-use crate::ir::{Event, PartialStep, Proc, RcVar, ReturnType, Step};
+use crate::ir::{Event, PartialStep, Proc, RcVar, ReturnType, Step, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::TypeRegistry;
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
     Immediate(wasm_encoder::Instruction<'static>),
-    LazyStepRef(Weak<Step>),
-    LazyStepIndex(Weak<Step>),
+    LazyStepRef(StepIndex),
     LazyWarpedProcCall(Rc<Proc>),
     LazyNonWarpedProcRef(Rc<Proc>),
     LazyGlobalGet(u32),
     LazyGlobalSet(u32),
     LazyBroadcastSpawn(Box<str>),
-    LazyBroadcastSpawnAndWait((Box<str>, Rc<Step>, Rc<Step>, u32)),
+    LazyBroadcastSpawnAndWait((Box<str>, StepIndex, StepIndex, u32)),
     StaticFunctionCall(u32),
 }
 
 impl Instruction {
     pub fn eval(
         &self,
-        steps: &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
         events: &BTreeMap<Event, Vec<u32>>,
         types: &Rc<TypeRegistry>,
         threads_count_global: u32,
@@ -47,21 +46,12 @@ impl Instruction {
                 imported_func_count + static_func_count,
             )]),
             #[cfg(not(test))]
-            Self::LazyStepRef(step) => {
-                let step_index: u32 = steps
-                    .try_borrow()?
-                    .get_index_of(
-                        &step
-                            .upgrade()
-                            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-                    )
-                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                Box::from([WInstruction::RefFunc(
-                    imported_func_count + static_func_count + step_index,
-                )])
-            }
+            Self::LazyStepRef(step_index) => Box::from([WInstruction::RefFunc(
+                imported_func_count
+                    + static_func_count
+                    + u32::try_from(step_index.0)
+                        .map_err(|_| make_hq_bug!("step index out of bounds"))?,
+            )]),
             Self::LazyBroadcastSpawn(broadcast) => {
                 let broadcast_indices = events
                     .get(&Event::Broadcast(broadcast.clone()))
@@ -108,17 +98,13 @@ impl Instruction {
                     mutable: false,
                 }])?;
 
-                let poll_step_index: u32 = steps
-                    .try_borrow()?
-                    .get_index_of(poll_step)
-                    .ok_or_else(|| make_hq_bug!("couldn't find poll_step in step map"))?
+                let poll_step_index: u32 = poll_step
+                    .0
                     .try_into()
                     .map_err(|_| make_hq_bug!("poll_step index out of bounds"))?;
 
-                let next_step_index: u32 = steps
-                    .try_borrow()?
-                    .get_index_of(next_step)
-                    .ok_or_else(|| make_hq_bug!("couldn't find next_step in step map"))?
+                let next_step_index: u32 = next_step
+                    .0
                     .try_into()
                     .map_err(|_| make_hq_bug!("next_step index out of bounds"))?;
 
@@ -174,51 +160,33 @@ impl Instruction {
                 ])
                 .collect()
             }
-            Self::LazyStepIndex(step) => {
-                let step_index: i32 = steps
-                    .try_borrow()?
-                    .get_index_of(
-                        &step
-                            .upgrade()
-                            .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?,
-                    )
-                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
-                Box::from([WInstruction::I32Const(step_index)])
-            }
             Self::LazyWarpedProcCall(proc) => {
                 let Some(ref warped_specific_proc) = *proc.warped_specific_proc() else {
                     hq_bug!("tried to use LazyWarpedProcCall on a non-warped step")
                 };
-                let PartialStep::Finished(ref step) = *warped_specific_proc.first_step()? else {
+                let PartialStep::Finished(step_index) = *warped_specific_proc.first_step()? else {
                     hq_bug!("tried to use uncompiled procedure step")
                 };
-                let step_index: u32 = steps
-                    .try_borrow()?
-                    .get_index_of(step)
-                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 Box::from([WInstruction::Call(
-                    imported_func_count + static_func_count + step_index,
+                    imported_func_count
+                        + static_func_count
+                        + u32::try_from(step_index.0)
+                            .map_err(|_| make_hq_bug!("step index out of bounds"))?,
                 )])
             }
             Self::LazyNonWarpedProcRef(proc) => {
                 let Some(ref nonwarped_specific_proc) = *proc.nonwarped_specific_proc() else {
                     hq_bug!("tried to use LazyNonWarpedProcRef on a non-non-warped step")
                 };
-                let PartialStep::Finished(ref step) = *nonwarped_specific_proc.first_step()? else {
+                let PartialStep::Finished(step_index) = *nonwarped_specific_proc.first_step()?
+                else {
                     hq_bug!("tried to use uncompiled procedure step")
                 };
-                let step_index: u32 = steps
-                    .try_borrow()?
-                    .get_index_of(step)
-                    .ok_or_else(|| make_hq_bug!("couldn't find step in step map"))?
-                    .try_into()
-                    .map_err(|_| make_hq_bug!("step index out of bounds"))?;
                 Box::from([WInstruction::RefFunc(
-                    imported_func_count + static_func_count + step_index,
+                    imported_func_count
+                        + static_func_count
+                        + u32::try_from(step_index.0)
+                            .map_err(|_| make_hq_bug!("step index out of bounds"))?,
                 )])
             }
             Self::LazyGlobalGet(idx) => {
@@ -380,7 +348,6 @@ impl StepFunc {
         self,
         funcs: &mut FunctionSection,
         code: &mut CodeSection,
-        steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
         events: &BTreeMap<Event, Vec<u32>>,
         types: &Rc<TypeRegistry>,
         threads_count_global: u32,
@@ -394,7 +361,6 @@ impl StepFunc {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions().take() {
             for real_instruction in instruction.eval(
-                steps,
                 events,
                 types,
                 threads_count_global,
@@ -436,30 +402,36 @@ impl StepFunc {
     }
 
     pub fn compile_step(
-        step: Rc<Step>,
-        steps: &Rc<RefCell<IndexMap<Rc<Step>, Self>>>,
+        step: &RefCell<Step>,
+        step_index: StepIndex,
+        steps: &Rc<RefCell<Vec<Self>>>,
         registries: Rc<Registries>,
         flags: WasmFlags,
     ) -> HQResult<Self> {
         hq_assert!(
-            step.used_non_inline(),
+            step.try_borrow()?.used_non_inline(),
             "step should be marked as used non-inline to compile normally"
         );
-        if let Some(step_func) = steps.try_borrow()?.get(&step) {
+        hq_assert_eq!(
+            step_index.0,
+            steps.try_borrow()?.len(),
+            "tried to compile step that wasn't the next one scheduled"
+        );
+        if let Some(step_func) = steps.try_borrow()?.get(step_index.0) {
             return Ok(step_func.clone());
         }
-        let target = if step.context().target().is_stage() {
+        let target = if step.try_borrow()?.context().target().is_stage() {
             StepTarget::Stage
         } else {
             StepTarget::Sprite(
                 registries
                     .sprites()
-                    .register_default(Rc::clone(step.context().target()))?,
+                    .register_default(Rc::clone(step.try_borrow()?.context().target()))?,
             )
         };
-        let target_index = step.context().target().index();
-        let step_func = if let Some(ref proc_context) = step.context().proc_context {
-            let params = if step.context().warp {
+        let target_index = step.try_borrow()?.context().target().index();
+        let step_func = if let Some(ref proc_context) = step.try_borrow()?.context().proc_context {
+            let params = if step.try_borrow()?.context().warp {
                 let arg_types = (*proc_context.arg_vars)
                     .borrow()
                     .iter()
@@ -473,7 +445,7 @@ impl StepFunc {
             } else {
                 Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
             };
-            let outputs = if step.context().warp {
+            let outputs = if step.try_borrow()?.context().warp {
                 (*proc_context.ret_vars)
                     .borrow()
                     .iter()
@@ -486,8 +458,8 @@ impl StepFunc {
         } else {
             Self::new(registries, flags, target, target_index)
         };
-        if let Some(ref proc_context) = step.context().proc_context
-            && !step.context().warp
+        if let Some(ref proc_context) = step.try_borrow()?.context().proc_context
+            && !step.try_borrow()?.context().warp
         {
             let arg_struct_type = step_func
                 .registries()
@@ -504,20 +476,23 @@ impl StepFunc {
                 LocalSet(2),
             ])?;
         }
-        let instrs = Self::compile_instructions(&step_func, &*step.opcodes().try_borrow()?)?;
+        let instrs = Self::compile_instructions(&step_func, step.try_borrow()?.opcodes())?;
         step_func.add_instructions(instrs)?;
         steps
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
-            .insert(step, step_func.clone());
+            .push(step_func.clone());
         Ok(step_func)
     }
 
-    pub fn compile_inner_step(&self, step: &Rc<Step>) -> HQResult<Vec<Instruction>> {
+    pub fn compile_inner_step<S>(&self, step: S) -> HQResult<Vec<Instruction>>
+    where
+        S: Deref<Target = RefCell<Step>>,
+    {
         hq_assert!(
-            !step.used_non_inline(),
+            !step.try_borrow()?.used_non_inline(),
             "inner step should NOT be marked as used non-inline"
         );
-        Self::compile_instructions(self, &*step.opcodes().try_borrow()?)
+        Self::compile_instructions(self, step.try_borrow()?.opcodes())
     }
 }

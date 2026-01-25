@@ -1,22 +1,22 @@
+use core::ops::Deref;
+
 use super::proc::{ProcMap, procs_from_target};
 use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from_target};
 use super::{Step, Target, Thread};
 use crate::instructions::{
     DataSetvariabletoFields, DataVariableFields, HqYieldFields, IrOpcode, YieldMode,
 };
+use crate::ir::step::StepIndex;
 use crate::ir::target::IrCostume;
 use crate::ir::{PartialStep, RcVar};
 use crate::prelude::*;
 use crate::sb3::Sb3Project;
 use crate::wasm::WasmFlags;
 
-pub type StepSet = IndexSet<Rc<Step>>;
-
 #[derive(Clone, Debug)]
 pub struct IrProject {
     threads: RefCell<Box<[Thread]>>,
-    steps: RefCell<StepSet>,
-    inlined_steps: RefCell<StepSet>,
+    steps: RefCell<Vec<RefCell<Step>>>,
     global_variables: TargetVars,
     global_lists: TargetLists,
     broadcasts: Box<[Box<str>]>,
@@ -28,12 +28,8 @@ impl IrProject {
         &self.threads
     }
 
-    pub const fn steps(&self) -> &RefCell<StepSet> {
+    pub const fn steps(&self) -> &RefCell<Vec<RefCell<Step>>> {
         &self.steps
-    }
-
-    pub const fn inlined_steps(&self) -> &RefCell<StepSet> {
-        &self.inlined_steps
     }
 
     pub const fn targets(&self) -> &RefCell<IndexMap<Box<str>, Rc<Target>>> {
@@ -60,13 +56,20 @@ impl IrProject {
     ) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
-            steps: RefCell::new(IndexSet::default()),
-            inlined_steps: RefCell::new(IndexSet::default()),
+            steps: RefCell::new(Vec::new()),
             global_variables,
             global_lists,
             broadcasts,
             targets: RefCell::new(IndexMap::default()),
         }
+    }
+
+    pub fn new_owned_step(&self, step: Step) -> HQResult<StepIndex> {
+        self.steps()
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .push(RefCell::new(step));
+        Ok(StepIndex(self.steps().try_borrow()?.len() - 1))
     }
 
     pub fn try_from_sb3(sb3: &Sb3Project, flags: &WasmFlags) -> HQResult<Rc<Self>> {
@@ -177,28 +180,22 @@ impl IrProject {
         for step in project.steps().try_borrow()?.iter() {
             fixup_proc_calls(step)?;
         }
-        for step in project.inlined_steps().try_borrow()?.iter() {
-            fixup_proc_calls(step)?;
-        }
         Ok(project)
     }
 }
 
-#[expect(
-    clippy::mutable_key_type,
-    reason = "Rc<Step> hashing relies only on ID, which is immutable"
-)]
-fn add_proc_return_vars_before_return<'a, I>(
-    step: &Rc<Step>,
+fn add_proc_return_vars_before_return<'a, S, I>(
+    step: S,
     var_ops: I,
-    checked_steps: &mut BTreeSet<Rc<Step>>,
+    checked_steps: &mut BTreeSet<Box<str>>,
 ) -> HQResult<()>
 where
+    S: Deref<Target = RefCell<Step>>,
     I: IntoIterator<Item = &'a IrOpcode> + Clone,
 {
     let mut has_return = false;
-    checked_steps.insert(Rc::clone(step));
-    for (i, opcode) in step.opcodes().borrow().iter().enumerate() {
+    checked_steps.insert(step.try_borrow()?.id().into());
+    for (i, opcode) in step.try_borrow()?.opcodes().iter().enumerate() {
         if matches!(
             opcode,
             IrOpcode::hq_yield(HqYieldFields {
@@ -206,21 +203,26 @@ where
             })
         ) {
             hq_assert!(
-                i == step.opcodes().borrow().len() - 1,
+                i == step.try_borrow()?.opcodes().len() - 1,
                 "found yield return in non-tail position"
             );
             has_return = true;
         }
         if let Some(inline_steps) = opcode.inline_steps() {
             inline_steps.iter().try_for_each(|inline_step| {
-                add_proc_return_vars_before_return(inline_step, var_ops.clone(), checked_steps)
+                add_proc_return_vars_before_return(
+                    Rc::clone(inline_step),
+                    var_ops.clone(),
+                    checked_steps,
+                )
             })?;
         }
     }
 
     if has_return {
+        let mut step_mut = step.try_borrow_mut()?;
         crate::log("borrowing opcodes mutably");
-        let mut opcodes_mut = step.opcodes_mut()?;
+        let opcodes_mut = step_mut.opcodes_mut();
         crate::log("borrowed opcodes mutably");
 
         opcodes_mut.pop();
@@ -237,17 +239,27 @@ where
 
 /// Add inputs + outputs to procedures corresponding to global/target variables
 fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
+    let project = target
+        .project()
+        .upgrade()
+        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<IrProject>"))?;
+    let steps = project.steps().try_borrow()?;
     for procedure in target.procedures()?.values() {
         let Some(ref warped_proc) = *procedure.warped_specific_proc() else {
             continue;
         };
 
-        let PartialStep::Finished(step) = &*warped_proc.first_step()? else {
+        let PartialStep::Finished(step_index) = &*warped_proc.first_step()? else {
             continue; // this should hopefully just mean that this procedure is unused.
         };
 
-        let globally_scoped_variables = step.globally_scoped_variables()?;
-        let globally_scoped_variables_num = step.globally_scoped_variables_num()?;
+        let step = steps
+            .get(step_index.0)
+            .ok_or_else(|| make_hq_bug!("step index out of bounds"))?;
+
+        let globally_scoped_variables: Box<[_]> =
+            step.try_borrow()?.globally_scoped_variables()?.collect();
+        let globally_scoped_variables_num = step.try_borrow()?.globally_scoped_variables_num()?;
 
         warped_proc
             .arg_vars()
@@ -259,6 +271,8 @@ fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
             .extend((0..globally_scoped_variables_num).map(|_| RcVar::new_empty()));
 
         let ret_var_ops = globally_scoped_variables
+            .iter()
+            .cloned()
             .map(|arg_var| {
                 IrOpcode::data_variable(DataVariableFields {
                     var: RefCell::new(arg_var),
@@ -268,7 +282,8 @@ fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
             .collect::<Box<[_]>>();
 
         {
-            let mut opcodes = step.opcodes_mut()?;
+            let mut step_mut = step.try_borrow_mut()?;
+            let opcodes = step_mut.opcodes_mut();
 
             opcodes.reserve_exact(globally_scoped_variables_num);
 
@@ -282,29 +297,40 @@ fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
 }
 
 /// Pass variables into procedure calls, and read them on return
-fn fixup_proc_calls(step: &Rc<Step>) -> HQResult<()> {
+fn fixup_proc_calls<S>(step: S) -> HQResult<()>
+where
+    S: Deref<Target = RefCell<Step>>,
+{
     let mut call_indices = vec![];
-    for (index, opcode) in step.opcodes().try_borrow()?.iter().enumerate() {
+    for (index, opcode) in step.try_borrow()?.opcodes().iter().enumerate() {
         if matches!(opcode, IrOpcode::procedures_call_warp(_)) {
             call_indices.push(index);
         }
     }
-    step.opcodes_mut()?
-        .reserve_exact(call_indices.len() * step.globally_scoped_variables_num()? * 2);
+
+    let globally_scoped_variables_num = step.try_borrow()?.globally_scoped_variables_num()?;
+    let globally_scoped_variables: Box<[_]> =
+        step.try_borrow()?.globally_scoped_variables()?.collect();
+
+    let mut step_mut = step.try_borrow_mut()?;
+
+    step_mut
+        .opcodes_mut()
+        .reserve_exact(call_indices.len() * globally_scoped_variables_num * 2);
     for call_index in call_indices.iter().rev() {
         #[expect(clippy::range_plus_one, reason = "x+1..=x doesn't make much sense")]
-        step.opcodes_mut()?.splice(
+        step_mut.opcodes_mut().splice(
             (call_index + 1)..(call_index + 1),
-            step.globally_scoped_variables()?.rev().map(|var| {
+            globally_scoped_variables.iter().cloned().rev().map(|var| {
                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                     var: RefCell::new(var),
                     local_write: RefCell::new(false),
                 })
             }),
         );
-        step.opcodes_mut()?.splice(
+        step_mut.opcodes_mut().splice(
             call_index..call_index,
-            step.globally_scoped_variables()?.map(|var| {
+            globally_scoped_variables.iter().cloned().map(|var| {
                 IrOpcode::data_variable(DataVariableFields {
                     var: RefCell::new(var),
                     local_read: RefCell::new(false),
@@ -349,13 +375,7 @@ impl fmt::Display for IrProject {
             .steps()
             .borrow()
             .iter()
-            .map(|step| format!("{step}"))
-            .join(", ");
-        let inlined_steps = self
-            .inlined_steps()
-            .borrow()
-            .iter()
-            .map(|step| format!("{step}"))
+            .map(|step| format!("{}", RefCell::borrow(step)))
             .join(", ");
         write!(
             f,
@@ -366,7 +386,6 @@ impl fmt::Display for IrProject {
         "broadcasts": [{broadcasts}],
         "threads": [{threads}],
         "steps": [{steps}],
-        "inlined_steps": [{inlined_steps}]
     }}"#
         )
     }

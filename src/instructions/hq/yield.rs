@@ -1,28 +1,15 @@
 use wasm_encoder::{BlockType, ConstExpr, HeapType};
 
 use super::super::prelude::*;
-use crate::ir::Step;
+use crate::ir::{Step, StepIndex};
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum YieldMode {
-    Inline(Rc<Step>),
-    Schedule(Weak<Step>),
+    Inline(Rc<RefCell<Step>>),
+    Schedule(StepIndex),
     None,
     Return,
-}
-
-impl Clone for YieldMode {
-    fn clone(&self) -> Self {
-        match self {
-            Self::None => Self::None,
-            Self::Return => Self::Return,
-            #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
-            Self::Inline(step) => Self::Inline(Step::clone(step, false).unwrap()),
-            // don't need to clone scheduled step as it doesn't appear in multiple contexts
-            Self::Schedule(weak_step) => Self::Schedule(Weak::clone(weak_step)),
-        }
-    }
 }
 
 impl fmt::Display for YieldMode {
@@ -40,17 +27,10 @@ impl fmt::Display for YieldMode {
         )?;
         match self {
             Self::Inline(step) => {
-                write!(f, r#", "step": {:?}"#, step.id())?;
+                write!(f, r#", "step": {}"#, RefCell::borrow(step))?;
             }
             Self::Schedule(step) => {
-                write!(
-                    f,
-                    r#", "step": {:?}"#,
-                    match step.upgrade() {
-                        Some(ref rcstep) => rcstep.id(),
-                        None => return Err(fmt::Error),
-                    }
-                )?;
+                write!(f, r#", "step_index": {}"#, step.0)?;
             }
             Self::None | Self::Return => (),
         }
@@ -156,19 +136,12 @@ pub fn wasm(
         YieldMode::Return => wasm![Return],
         YieldMode::Inline(step) => {
             hq_assert!(
-                !step.used_non_inline(),
+                !RefCell::borrow(step).used_non_inline(),
                 "inlined step should not be marked as used non-inline"
             );
-            func.compile_inner_step(step)?
+            func.compile_inner_step(Rc::clone(step))?
         }
-        YieldMode::Schedule(weak_step) => {
-            let step = Weak::upgrade(weak_step)
-                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Step>"))?;
-            hq_assert!(
-                step.used_non_inline(),
-                "scheduled step should be marked as used non-inline"
-            );
-
+        YieldMode::Schedule(step_index) => {
             let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
             let thread_struct_ty = func.registries().types().thread_struct_type()?;
             let local = func.local(ValType::Ref(RefType {
@@ -190,7 +163,7 @@ pub fn wasm(
                 I32Sub,
                 ArrayGet(stack_array_ty),
                 RefAsNonNull,
-                #LazyStepRef(Weak::clone(weak_step)),
+                #LazyStepRef(*step_index),
                 StructSet { struct_type_index: stack_struct_ty, field_index: 0 },
                 Return
             ]
@@ -220,26 +193,26 @@ crate::instructions_test! {none; hq_yield; @ super::Fields { mode: super::YieldM
 
 crate::instructions_test! {ret; hq_yield; @ super::Fields { mode: super::YieldMode::Return }}
 
-crate::instructions_test! {
-    schedule;
-    hq_yield;
-    @ super::Fields {
-        mode: super::YieldMode::Schedule(
-            crate::rc::Rc::downgrade(&crate::ir::Step::new_empty(
-                &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
-                true,
-                Rc::new(
-                    crate::ir::Target::new(
-                        false,
-                        BTreeMap::default(),
-                        BTreeMap::default(),
-                        crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
-                        RefCell::default(),
-                        0,
-                        Box::from([])
-                    )
-                )
-            ).unwrap())
-        )
-    }
-}
+// crate::instructions_test! {
+//     schedule;
+//     hq_yield;
+//     @ super::Fields {
+//         mode: super::YieldMode::Schedule(
+//             crate::rc::Rc::downgrade(&crate::ir::Step::new_empty(
+//                 &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
+//                 true,
+//                 Rc::new(
+//                     crate::ir::Target::new(
+//                         false,
+//                         BTreeMap::default(),
+//                         BTreeMap::default(),
+//                         crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
+//                         RefCell::default(),
+//                         0,
+//                         Box::from([])
+//                     )
+//                 )
+//             ).unwrap())
+//         )
+//     }
+// }

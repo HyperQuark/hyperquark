@@ -3,20 +3,10 @@ use wasm_encoder::BlockType;
 use super::super::prelude::*;
 use crate::ir::Step;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fields {
-    pub branch_if: Rc<Step>,
-    pub branch_else: Rc<Step>,
-}
-
-impl Clone for Fields {
-    fn clone(&self) -> Self {
-        #[expect(clippy::unwrap_used, reason = "clone does not return Result")]
-        Self {
-            branch_if: Step::clone(&self.branch_if, false).unwrap(),
-            branch_else: Step::clone(&self.branch_else, false).unwrap(),
-        }
-    }
+    pub branch_if: Rc<RefCell<Step>>,
+    pub branch_else: Rc<RefCell<Step>>,
 }
 
 impl fmt::Display for Fields {
@@ -27,7 +17,8 @@ impl fmt::Display for Fields {
         "branch_if": {},
         "branch_else": {},
     }}"#,
-            self.branch_if, self.branch_else
+            RefCell::borrow(&self.branch_if),
+            RefCell::borrow(&self.branch_else)
         )
     }
 }
@@ -40,8 +31,8 @@ pub fn wasm(
         branch_else,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let if_instructions = func.compile_inner_step(branch_if)?;
-    let else_instructions = func.compile_inner_step(branch_else)?;
+    let if_instructions = func.compile_inner_step(Rc::clone(branch_if))?;
+    let else_instructions = func.compile_inner_step(Rc::clone(branch_else))?;
     let block_type = func
         .registries()
         .types()
@@ -79,13 +70,12 @@ pub fn const_fold(
         && false
     {
         Ok(ConstFold::Folded(Rc::from([ConstFoldItem::Stack(
-            if const_condition {
+            RefCell::borrow(if const_condition {
                 &fields.branch_if
             } else {
                 &fields.branch_else
-            }
+            })
             .opcodes()
-            .borrow()
             .iter()
             .cloned()
             .collect(),

@@ -1,3 +1,5 @@
+use core::ops::Deref;
+
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, HqYieldFields, IrOpcode, YieldMode,
 };
@@ -5,20 +7,24 @@ use crate::ir::{IrProject, Step};
 use crate::prelude::*;
 use crate::wasm::WasmFlags;
 
-fn unroll_loops_in_step(step: &Rc<Step>) -> HQResult<()> {
+fn unroll_loops_in_step<S>(step: S) -> HQResult<()>
+where
+    S: Deref<Target = RefCell<Step>>,
+{
     let mut loops = vec![];
 
-    for (i, opcode) in step.opcodes().borrow().iter().enumerate().rev() {
+    for (i, opcode) in step.try_borrow()?.opcodes().iter().enumerate().rev() {
         if let Some(inline_steps) = opcode.inline_steps() {
-            inline_steps.iter().try_for_each(unroll_loops_in_step)?;
+            inline_steps
+                .iter()
+                .cloned()
+                .try_for_each(unroll_loops_in_step)?;
         }
 
         if let IrOpcode::control_loop(loop_fields) = opcode {
             loops.push((i, loop_fields.clone()));
         }
     }
-
-    let mut opcodes = step.opcodes_mut()?;
 
     for (
         i,
@@ -30,14 +36,12 @@ fn unroll_loops_in_step(step: &Rc<Step>) -> HQResult<()> {
         },
     ) in loops
     {
-        #[expect(clippy::range_plus_one, reason = "i don't like inclusive range")]
-        opcodes.splice(
-            i..(i + 1),
-            if let Some(ref first_condition_step) = first_condition {
-                first_condition_step.opcodes().borrow()
-            } else {
-                condition.opcodes().borrow()
-            }
+        let initial_condition_opcodes = if let Some(ref first_condition_step) = first_condition {
+            first_condition_step.try_borrow()?.opcodes().clone()
+        } else {
+            condition.try_borrow()?.opcodes().clone()
+        };
+        let replacement = initial_condition_opcodes
             .iter()
             .cloned()
             .chain(if flip_if {
@@ -46,12 +50,12 @@ fn unroll_loops_in_step(step: &Rc<Step>) -> HQResult<()> {
                 vec![]
             })
             .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Step::new_rc(
+                branch_if: Rc::new(RefCell::new(Step::new(
                     None,
-                    step.context().clone(),
+                    step.try_borrow()?.context().clone(),
                     vec![
                         IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(Step::clone(&body, false)?),
+                            mode: YieldMode::Inline(Rc::clone(&body)),
                         }),
                         IrOpcode::control_loop(ControlLoopFields {
                             first_condition: None,
@@ -60,16 +64,19 @@ fn unroll_loops_in_step(step: &Rc<Step>) -> HQResult<()> {
                             flip_if,
                         }),
                     ],
-                    &step.project(),
+                    step.try_borrow()?.project(),
                     false,
-                )?,
-                branch_else: Step::new_empty(
-                    &step.project(),
+                ))),
+                branch_else: Rc::new(RefCell::new(Step::new_empty(
+                    step.try_borrow()?.project(),
                     false,
-                    Rc::clone(step.context().target()),
-                )?,
-            })]),
-        );
+                    Rc::clone(step.try_borrow()?.context().target()),
+                ))),
+            })]);
+        #[expect(clippy::range_plus_one, reason = "i don't like inclusive range")]
+        step.try_borrow_mut()?
+            .opcodes_mut()
+            .splice(i..(i + 1), replacement);
     }
 
     Ok(())

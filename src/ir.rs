@@ -14,7 +14,7 @@ pub use context::{ProcContext, StepContext};
 pub use event::Event;
 pub use proc::{PartialStep, Proc};
 pub use project::IrProject;
-pub use step::Step;
+pub use step::{InlinedStep, MaybeInlinedStep, Step, StepIndex};
 pub use target::Target;
 use thread::Thread;
 pub use types::{ReturnType, Type, base_types, var_val_instruction, var_val_type};

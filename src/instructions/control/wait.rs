@@ -1,14 +1,14 @@
 use wasm_encoder::{AbstractHeapType, ConstExpr, FieldType, HeapType, StorageType};
 
 use super::super::prelude::*;
-use crate::ir::Step;
+use crate::ir::StepIndex;
 use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
-    pub poll_step: Rc<Step>,
-    pub next_step: Rc<Step>,
+    pub poll_step: StepIndex,
+    pub next_step: StepIndex,
 }
 
 impl fmt::Display for Fields {
@@ -19,7 +19,7 @@ impl fmt::Display for Fields {
         "poll_step": {},
         "next_step": {}
     }}"#,
-            self.poll_step, self.next_step,
+            self.poll_step.0, self.next_step.0,
         )
     }
 }
@@ -75,10 +75,10 @@ pub fn wasm(
                 StructNew(struct_type),
                 LocalSet(struct_local),
                 LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
-                #LazyStepRef(Rc::downgrade(poll_step)),
+                #LazyStepRef(*poll_step),
                 LocalGet(struct_local),
                 RefCastNullable(HeapType::Abstract { shared: false, ty: AbstractHeapType::Struct }),
-                #LazyStepRef(Rc::downgrade(next_step)),
+                #LazyStepRef(*next_step),
                 #StaticFunctionCall(spawn_thread_in_stack_func),
             ]
         ).collect()

@@ -9,7 +9,7 @@ use wasm_encoder::{
 use wasm_gen::wasm;
 
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
-use crate::ir::{Event, IrProject, Step, Target as IrTarget, Type as IrType};
+use crate::ir::{Event, IrProject, StepIndex, Type as IrType};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{SpawnNewThread, SpawnThreadInStack};
 use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
@@ -19,7 +19,8 @@ use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 pub struct WasmProject {
     #[expect(dead_code, reason = "doesn't need to be used... yet")]
     flags: WasmFlags,
-    steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>>,
+    /// step funcs corresponding to the non-inlined steps, in the same order (hopefully)
+    steps: Rc<RefCell<Vec<StepFunc>>>,
     /// maps an event to a list of *`step_func`* indices (NOT function indices) which are
     /// triggered by that event.
     events: BTreeMap<Event, Vec<u32>>,
@@ -38,7 +39,7 @@ impl WasmProject {
     pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
         Self {
             flags,
-            steps: Rc::new(RefCell::new(IndexMap::default())),
+            steps: Rc::new(RefCell::new(Vec::new())),
             events: BTreeMap::default(),
             environment,
             registries: Rc::new(Registries::default()),
@@ -57,7 +58,7 @@ impl WasmProject {
     }
 
     #[must_use]
-    pub const fn steps(&self) -> &Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> {
+    pub const fn steps(&self) -> &Rc<RefCell<Vec<StepFunc>>> {
         &self.steps
     }
 
@@ -158,11 +159,10 @@ impl WasmProject {
             self.registries.types(),
         )?;
 
-        for step_func in self.steps().try_borrow()?.values().cloned() {
+        for step_func in self.steps().try_borrow()?.iter().cloned() {
             step_func.finish(
                 &mut functions,
                 &mut codes,
-                self.steps(),
                 &self.events,
                 self.registries().types(),
                 self.threads_count_global()?,
@@ -217,11 +217,11 @@ impl WasmProject {
         // );
 
         exports.export("memory", ExportKind::Memory, 0);
-        exports.export(
-            "noop",
-            ExportKind::Func,
-            self.imported_func_count()? + self.static_func_count()?,
-        );
+        // exports.export(
+        //     "noop",
+        //     ExportKind::Func,
+        //     self.imported_func_count()? + self.static_func_count()?,
+        // );
 
         self.registries().globals().clone().finish(
             &mut globals,
@@ -391,7 +391,6 @@ impl WasmProject {
 
         for instruction in instrs {
             for real_instruction in instruction.eval(
-                self.steps(),
                 &self.events,
                 self.registries().types(),
                 self.threads_count_global()?,
@@ -415,7 +414,6 @@ impl WasmProject {
             #LazyGlobalSet(threads_count)
         ] {
             for real_instruction in instruction.eval(
-                self.steps(),
                 &self.events,
                 self.registries().types(),
                 self.threads_count_global()?,
@@ -556,7 +554,6 @@ impl WasmProject {
         ];
         for instr in instructions {
             for real_instruction in instr.eval(
-                self.steps(),
                 &self.events,
                 self.registries().types(),
                 self.threads_count_global()?,
@@ -586,44 +583,36 @@ impl WasmProject {
         _ssa_token: crate::optimisation::SSAToken,
         flags: WasmFlags,
     ) -> HQResult<Self> {
-        let steps: Rc<RefCell<IndexMap<Rc<Step>, StepFunc>>> =
-            Rc::new(RefCell::new(IndexMap::default()));
+        let steps = Rc::new(RefCell::new(Vec::new()));
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
-        StepFunc::compile_step(
-            Step::new_empty(
-                &Rc::downgrade(ir_project),
-                true,
-                Rc::new(IrTarget::new(
-                    false,
-                    BTreeMap::default(),
-                    BTreeMap::default(),
-                    Weak::new(),
-                    RefCell::new(BTreeMap::default()),
-                    0,
-                    Box::new([]),
-                )),
-            )?,
-            &steps,
-            Rc::clone(&registries),
-            flags,
-        )?;
+        // StepFunc::compile_step(
+        //     Rc::new(Step::new_empty(
+        //         Rc::downgrade(ir_project),
+        //         true,
+        //         Rc::new(IrTarget::new(
+        //             false,
+        //             BTreeMap::default(),
+        //             BTreeMap::default(),
+        //             Weak::new(),
+        //             RefCell::new(BTreeMap::default()),
+        //             0,
+        //             Box::new([]),
+        //         )),
+        //     )),
+        //     &steps,
+        //     Rc::clone(&registries),
+        //     flags,
+        // )?;
         // compile every step
-        for step in ir_project.steps().try_borrow()?.iter() {
-            StepFunc::compile_step(Rc::clone(step), &steps, Rc::clone(&registries), flags)?;
+        for (i, step) in ir_project.steps().try_borrow()?.iter().enumerate() {
+            StepFunc::compile_step(step, StepIndex(i), &steps, Rc::clone(&registries), flags)?;
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
             events.entry(thread.event().clone()).or_default().push(
-                u32::try_from(
-                    steps
-                        .try_borrow()?
-                        .get_index_of(thread.first_step())
-                        .ok_or_else(|| {
-                            make_hq_bug!("Thread's first_step wasn't found in Thread::steps()")
-                        })?,
-                )
-                .map_err(|_| make_hq_bug!("step func index out of bounds"))?,
+                u32::try_from(thread.first_step().0)
+                    .map_err(|_| make_hq_bug!("step func index out of bounds"))?,
             );
         }
         Ok(Self {
@@ -651,40 +640,19 @@ pub struct FinishedWasm {
 #[cfg(test)]
 mod tests {
     use super::{Registries, WasmProject};
-    use crate::ir::{IrProject, Step, Target as IrTarget};
     use crate::prelude::*;
     use crate::wasm::flags::all_wasm_features;
-    use crate::wasm::{ExternalEnvironment, StepFunc, WasmFlags};
+    use crate::wasm::{ExternalEnvironment, WasmFlags};
 
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        let project = Rc::new(IrProject::new(
-            BTreeMap::default(),
-            BTreeMap::default(),
-            Box::from([]),
-        ));
-        let steps = Rc::new(RefCell::new(IndexMap::default()));
-        StepFunc::compile_step(
-            Step::new_empty(
-                &Rc::downgrade(&project),
-                true,
-                Rc::new(IrTarget::new(
-                    false,
-                    BTreeMap::default(),
-                    BTreeMap::default(),
-                    Weak::new(),
-                    RefCell::new(BTreeMap::default()),
-                    0,
-                    Box::new([]),
-                )),
-            )
-            .unwrap(),
-            &steps,
-            Rc::clone(&registries),
-            WasmFlags::new(all_wasm_features()),
-        )
-        .unwrap();
+        // let project = Rc::new(IrProject::new(
+        //     BTreeMap::default(),
+        //     BTreeMap::default(),
+        //     Box::from([]),
+        // ));
+        let steps = Rc::new(RefCell::new(Vec::new()));
         let project = WasmProject {
             flags: WasmFlags::new(all_wasm_features()),
             steps,
