@@ -60,7 +60,17 @@ pub fn const_fold(
     if let Some(const_val) = state.vars.get(var.borrow().id())
         && !matches!(const_val, ConstFoldItem::Unknown { .. })
     {
-        Ok(ConstFold::Folded(Rc::from([const_val.clone()])))
+        let var_ref = var.try_borrow()?;
+        let possible_types = var_ref.possible_types();
+        Ok(ConstFold::Folded(
+            if possible_types.is_base_type() || matches!(const_val, ConstFoldItem::Boxed { .. }) {
+                Rc::from([const_val.clone()])
+            } else if let ConstFoldItem::Basic(var_val) = const_val {
+                Rc::from([ConstFoldItem::Boxed(var_val.clone(), *possible_types)])
+            } else {
+                return Ok(NotFoldable);
+            },
+        ))
     } else {
         Ok(NotFoldable)
     }

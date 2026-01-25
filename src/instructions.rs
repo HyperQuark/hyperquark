@@ -145,6 +145,34 @@ impl IrOpcode {
             _ => None,
         }
     }
+
+    pub fn inline_steps_mut(&mut self) -> Option<Box<[&mut Rc<RefCell<Step>>]>> {
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "too many variants to match explicitly"
+        )]
+        match self {
+            Self::hq_yield(HqYieldFields {
+                mode: YieldMode::Inline(inline_step),
+            }) => Some(Box::from([inline_step])),
+            Self::control_if_else(ControlIfElseFields {
+                branch_if,
+                branch_else,
+            }) => Some(Box::from([branch_if, branch_else])),
+            Self::control_loop(ControlLoopFields {
+                first_condition,
+                condition,
+                body,
+                ..
+            }) => Some(
+                [first_condition.as_mut(), Some(condition), Some(body)]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
 }
 
 pub mod input_switcher;
