@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use core::ops::Deref;
 
 use super::SSAToken;
 use crate::instructions::{
@@ -62,7 +62,7 @@ where
 
     let mut const_stack: Vec<ConstFoldItem> = vec![];
 
-    for opcode in step.try_borrow()?.opcodes().iter() {
+    for opcode in step.try_borrow()?.opcodes() {
         if let IrOpcode::control_if_else(ControlIfElseFields {
             branch_if,
             branch_else,

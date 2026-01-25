@@ -30,22 +30,27 @@ impl PartialEq for Step {
 impl Eq for Step {}
 
 impl Step {
+    #[must_use]
     pub const fn context(&self) -> &StepContext {
         &self.context
     }
 
+    #[must_use]
     pub const fn opcodes(&self) -> &Vec<IrOpcode> {
         &self.opcodes
     }
 
+    #[must_use]
     pub const fn used_non_inline(&self) -> bool {
         self.used_non_inline
     }
 
+    #[must_use]
     pub const fn id(&self) -> &str {
         &self.id
     }
 
+    #[must_use]
     pub fn project(&self) -> Weak<IrProject> {
         Weak::clone(&self.project)
     }
@@ -68,6 +73,7 @@ impl Step {
     }
 
     /// Creates a totally empty noop step. This should not be used outside of wasm module generation.
+    #[must_use]
     pub fn new_empty(project: Weak<IrProject>, used_non_inline: bool, target: Rc<Target>) -> Self {
         Self::new(
             None,
@@ -83,6 +89,7 @@ impl Step {
         )
     }
 
+    #[must_use]
     pub fn new_terminating(
         context: StepContext,
         project: Weak<IrProject>,
@@ -99,6 +106,7 @@ impl Step {
         )
     }
 
+    #[must_use]
     pub fn new_poll_waiting_threads(context: StepContext, project: Weak<IrProject>) -> Self {
         Self::new(
             None,
@@ -125,6 +133,7 @@ impl Step {
         )
     }
 
+    #[must_use]
     pub fn new_poll_timer(context: StepContext, project: Weak<IrProject>) -> Self {
         Self::new(
             None,
@@ -153,7 +162,8 @@ impl Step {
         )
     }
 
-    pub fn opcodes_mut(&mut self) -> &mut Vec<IrOpcode> {
+    #[must_use]
+    pub const fn opcodes_mut(&mut self) -> &mut Vec<IrOpcode> {
         &mut self.opcodes
     }
 
@@ -210,10 +220,10 @@ impl Step {
             true,
             flags,
         )?;
-        let project = project
+        let rc_project = project
             .upgrade()
             .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
-        project.new_owned_step(step)
+        rc_project.new_owned_step(step)
     }
 
     pub fn make_inlined(&mut self) {
@@ -224,15 +234,16 @@ impl Step {
         self.id = Uuid::new_v4().to_string().into();
     }
 
-    pub fn clone_to_non_inlined(&self, project: Weak<IrProject>) -> HQResult<StepIndex> {
+    pub fn clone_to_non_inlined(&self, project: &Weak<IrProject>) -> HQResult<StepIndex> {
         let mut step = self.clone();
         step.used_non_inline = true;
-        let project = project
+        let rc_project = project
             .upgrade()
             .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak"))?;
-        project.new_owned_step(step)
+        rc_project.new_owned_step(step)
     }
 
+    #[must_use]
     pub fn does_yield(&self) -> bool {
         for opcode in self.opcodes() {
             if opcode.yields_to_next_step().is_some() {
@@ -326,10 +337,4 @@ pub enum MaybeInlinedStep {
     Inlined(InlinedStep),
     NonInlined(StepIndex),
     Undetermined(Step),
-}
-
-#[derive(Debug, Clone)]
-pub enum MaybeInlinedNonOwnedStep {
-    Inlined(InlinedStep),
-    NonInlined(StepIndex),
 }

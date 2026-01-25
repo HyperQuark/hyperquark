@@ -1,5 +1,5 @@
 use alloc::collections::btree_map;
-use std::ops::Deref;
+use core::ops::Deref;
 
 use wasm_encoder::{
     self, AbstractHeapType, CodeSection, FieldType, Function, FunctionSection, HeapType,
@@ -493,6 +493,6 @@ impl StepFunc {
             !step.try_borrow()?.used_non_inline(),
             "inner step should NOT be marked as used non-inline"
         );
-        Self::compile_instructions(self, &*step.try_borrow()?.opcodes())
+        Self::compile_instructions(self, step.try_borrow()?.opcodes())
     }
 }

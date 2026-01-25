@@ -102,7 +102,7 @@ where
 include!(concat!(env!("OUT_DIR"), "/ir-opcodes.rs"));
 
 impl IrOpcode {
-    pub fn yields_to_next_step(&self) -> Option<StepIndex> {
+    pub const fn yields_to_next_step(&self) -> Option<StepIndex> {
         #[expect(
             clippy::wildcard_enum_match_arm,
             reason = "too many variants to match explicitly"
@@ -110,8 +110,8 @@ impl IrOpcode {
         match self {
             Self::hq_yield(HqYieldFields {
                 mode: YieldMode::Schedule(next_step),
-            }) => Some(*next_step),
-            Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
+            })
+            | Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
             | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. })
             | Self::control_wait(ControlWaitFields { next_step, .. }) => Some(*next_step),
             _ => None,

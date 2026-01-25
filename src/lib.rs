@@ -17,6 +17,7 @@
               self-descriptive and user readable anyway."
 )]
 #![allow(clippy::too_many_arguments, reason = "unavoidable at this stage")]
+#![allow(clippy::too_many_lines, reason = "unavoidable at this stage")]
 #![allow(
     clippy::trivially_copy_pass_by_ref,
     reason = "too many false positives on WasmFlags, which will grow in future"

@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use core::ops::Deref;
 
 use super::proc::{ProcMap, procs_from_target};
 use super::variable::{TargetLists, TargetVars, lists_from_target, variables_from_target};
@@ -184,10 +184,6 @@ impl IrProject {
     }
 }
 
-#[expect(
-    clippy::mutable_key_type,
-    reason = "Rc<Step> hashing relies only on ID, which is immutable"
-)]
 fn add_proc_return_vars_before_return<'a, S, I>(
     step: S,
     var_ops: I,

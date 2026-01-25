@@ -26,7 +26,9 @@ impl fmt::Display for Fields {
         "body": {},
         "flip_if": {}
     }}"#,
-            RefCell::borrow(&self.condition), RefCell::borrow(&self.body), self.flip_if
+            RefCell::borrow(&self.condition),
+            RefCell::borrow(&self.body),
+            self.flip_if
         )
     }
 }

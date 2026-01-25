@@ -21,7 +21,11 @@ use crate::sb3::{self, Field, VarVal};
 use crate::wasm::WasmFlags;
 use crate::wasm::flags::Switch;
 
-pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQResult<()> {
+pub fn insert_casts(
+    blocks: &mut Vec<IrOpcode>,
+    ignore_variables: bool,
+    recurse: bool,
+) -> HQResult<()> {
     let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
     let mut casts: Vec<(usize, IrType)> = vec![]; // a vector of cast targets, and where they're needed
     for (i, block) in blocks.iter().enumerate() {
@@ -124,6 +128,16 @@ pub fn insert_casts(blocks: &mut Vec<IrOpcode>, ignore_variables: bool) -> HQRes
                 ReturnType::None => (),
             }
         }
+
+        if recurse && let Some(inline_steps) = block.inline_steps() {
+            for inline_step in inline_steps {
+                insert_casts(
+                    inline_step.try_borrow_mut()?.opcodes_mut(),
+                    ignore_variables,
+                    true,
+                )?;
+            }
+        }
     }
     for (pos, ty) in casts.into_iter().rev() {
         blocks.insert(pos + 1, IrOpcode::hq_cast(HqCastFields(ty)));
@@ -193,7 +207,7 @@ pub fn from_block(
         .to_vec(),
         Block::Special(block_array) => vec![from_special_block(block_array, context, flags)?],
     };
-    insert_casts(&mut opcodes, true)?;
+    insert_casts(&mut opcodes, true, false)?;
     Ok(opcodes)
 }
 
@@ -484,10 +498,10 @@ fn generate_next_step_non_inlined(
     match generate_next_step(block_info, blocks, context, final_next_blocks, flags)? {
         MaybeInlinedStep::Inlined(step) => step
             .try_borrow()?
-            .clone_to_non_inlined(Weak::clone(&context.target().project())),
+            .clone_to_non_inlined(&context.target().project()),
         MaybeInlinedStep::NonInlined(step_index) => Ok(step_index),
         MaybeInlinedStep::Undetermined(step) => {
-            step.clone_to_non_inlined(Weak::clone(&context.target().project()))
+            step.clone_to_non_inlined(&context.target().project())
         }
     }
 }
@@ -557,17 +571,15 @@ fn generate_loop(
             context.target().project(),
             false,
         )));
-        let first_condition_step = if let Some(instrs) = first_condition_instructions {
-            Some(Rc::new(RefCell::new(Step::new(
+        let first_condition_step = first_condition_instructions.map(|instrs| {
+            Rc::new(RefCell::new(Step::new(
                 None,
                 context.clone(),
                 instrs,
                 context.target().project(),
                 false,
-            ))))
-        } else {
-            None
-        };
+            )))
+        });
         Ok(setup_instructions
             .into_iter()
             .chain(vec![IrOpcode::control_loop(ControlLoopFields {
@@ -1186,10 +1198,6 @@ where
     .collect())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a big monolithic function is somewhat unavoidable here"
-)]
 fn from_normal_block(
     block_info: &BlockInfo,
     blocks: &BlockMap,
@@ -2287,10 +2295,17 @@ fn from_normal_block(
                     ) && !context.warp
                     {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Schedule(step_index)
+                            mode: YieldMode::Schedule(step_index),
                         }));
                     } else {
-                        let mut step = context.project()?.steps().try_borrow()?.get(step_index.0).ok_or_else(|| make_hq_bug!("step index out of bounds"))?.try_borrow()?.clone();
+                        let mut step = context
+                            .project()?
+                            .steps()
+                            .try_borrow()?
+                            .get(step_index.0)
+                            .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                            .try_borrow()?
+                            .clone();
                         step.make_inlined();
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Inline(Rc::new(RefCell::new(step))),

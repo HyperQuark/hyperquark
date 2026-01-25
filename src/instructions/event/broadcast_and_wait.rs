@@ -1,7 +1,7 @@
 use wasm_encoder::{HeapType, StorageType};
 
 use super::super::prelude::*;
-use crate::ir::{StepIndex};
+use crate::ir::StepIndex;
 use crate::wasm::StepFunc;
 
 #[derive(Clone, Debug)]
