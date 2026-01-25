@@ -1,8 +1,6 @@
 use core::ops::Deref;
 
-use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, HqYieldFields, IrOpcode, YieldMode,
-};
+use crate::instructions::{ControlIfElseFields, ControlLoopFields, IrOpcode};
 use crate::ir::{IrProject, Step};
 use crate::prelude::*;
 use crate::wasm::WasmFlags;
@@ -31,7 +29,7 @@ where
         ControlLoopFields {
             first_condition,
             condition,
-            body,
+            ref body,
             flip_if,
         },
     ) in loops
@@ -53,17 +51,17 @@ where
                 branch_if: Rc::new(RefCell::new(Step::new(
                     None,
                     step.try_borrow()?.context().clone(),
-                    vec![
-                        IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(Rc::clone(&body)),
-                        }),
-                        IrOpcode::control_loop(ControlLoopFields {
+                    body.try_borrow()?
+                        .opcodes()
+                        .clone()
+                        .into_iter()
+                        .chain([IrOpcode::control_loop(ControlLoopFields {
                             first_condition: None,
                             condition: condition.clone(),
-                            body,
+                            body: Rc::clone(body),
                             flip_if,
-                        }),
-                    ],
+                        })])
+                        .collect(),
                     step.try_borrow()?.project(),
                     false,
                 ))),

@@ -1244,17 +1244,17 @@ where
     loop {
         let mut changed_vars: BTreeSet<VarTarget> = BTreeSet::new();
         for graph in graphs.clone() {
-            // use petgraph::dot::Dot;
-            // crate::log!(
-            //     "{:?}exit node: {:?}",
-            //     Dot::with_config(
-            //         &*graph.graph().borrow(),
-            //         &[
-            //         //DotConfig::NodeIndexLabel
-            //         ]
-            //     ),
-            //     *graph.exit_node().borrow()
-            // );
+            use petgraph::dot::Dot;
+            crate::log!(
+                "{:?}exit node: {:?}",
+                Dot::with_config(
+                    &*graph.graph().borrow(),
+                    &[
+                    //DotConfig::NodeIndexLabel
+                    ]
+                ),
+                *graph.exit_node().borrow()
+            );
             hq_assert!(
                 {
                     let inner_graph = graph.graph().try_borrow()?;
@@ -1295,11 +1295,38 @@ where
 
     visited_steps.insert(step.try_borrow()?.id().into());
 
-    for opcode in step.try_borrow()?.opcodes() {
-        if let Some(inline_steps) = opcode.inline_steps() {
-            inline_steps.iter().try_for_each(|inline_step| {
-                box_proc_returns(Rc::clone(inline_step), rev_ret_vars, visited_steps)
-            })?;
+    let opcodes_len = step.try_borrow()?.opcodes().len();
+
+    for i in 0..opcodes_len {
+        let inlined_steps = step
+            .try_borrow()?
+            .opcodes()
+            .get(i)
+            .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))?
+            .inline_steps();
+        if let Some(inline_steps) = inlined_steps {
+            let new_inline_steps = inline_steps
+                .iter()
+                .map(|inline_step| {
+                    let inline_step_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(inline_step)));
+                    box_proc_returns(Rc::clone(&inline_step_mut), rev_ret_vars, visited_steps)?;
+                    Ok(inline_step_mut)
+                })
+                .collect::<HQResult<Box<[_]>>>()?;
+            for (step_ref_mut, new_inline_step) in step
+                .try_borrow_mut()?
+                .opcodes_mut()
+                .get_mut(i)
+                .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))?
+                .inline_steps_mut()
+                .ok_or_else(|| {
+                    make_hq_bug!("inline_steps_mut was None when inline_steps was Some")
+                })?
+                .iter_mut()
+                .zip(new_inline_steps)
+            {
+                **step_ref_mut = new_inline_step;
+            }
         }
     }
 
