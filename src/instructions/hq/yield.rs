@@ -27,7 +27,7 @@ impl fmt::Display for YieldMode {
         )?;
         match self {
             Self::Inline(step) => {
-                write!(f, r#", "step": {:?}"#, RefCell::borrow(step))?;
+                write!(f, r#", "step": {}"#, RefCell::borrow(step))?;
             }
             Self::Schedule(step) => {
                 write!(f, r#", "step_index": {}"#, step.0)?;
