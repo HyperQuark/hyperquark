@@ -19,7 +19,13 @@ function createSkin(renderer, type, layer, ...params) {
   return [skin, drawableId];
 }
 
-async function setup(makeRenderer, project_json, assets, target_names) {
+async function setup(
+  makeRenderer,
+  project_json,
+  assets,
+  target_names,
+  queue_question,
+) {
   if (is_setup()) return;
 
   let renderer = await makeRenderer();
@@ -65,7 +71,14 @@ async function setup(makeRenderer, project_json, assets, target_names) {
   });
   console.log(target_skins);
 
-  sharedSetup(target_names, renderer, pen_skin, target_skins, costumes);
+  sharedSetup(
+    target_names,
+    renderer,
+    pen_skin,
+    target_skins,
+    costumes,
+    queue_question,
+  );
 }
 
 // @ts-ignore
@@ -82,13 +95,16 @@ export async function instantiateProject({
   timeout,
   onTimeout = () => null,
   importOverrides,
+  queue_question,
+  set_mark_question_resolved,
+  setSetAnswer,
 }) {
   if (isDebug() && typeof window === "object")
     window.open(
       URL.createObjectURL(new Blob([wasm_bytes], { type: "application/wasm" })),
     );
 
-  await setup(makeRenderer, project_json, assets, target_names);
+  await setup(makeRenderer, project_json, assets, target_names, queue_question);
 
   const renderer = get_renderer();
 
@@ -156,12 +172,20 @@ export async function instantiateProject({
     threads,
     unreachable_dbg,
     sensing_timer,
+    mark_waiting_flag,
+    sensing_answer,
   } = instance.exports;
   if (typeof window === "object") {
     window.memory = memory;
     window.flag_clicked = flag_clicked;
     window.tick = tick;
   }
+
+  set_mark_question_resolved(mark_waiting_flag);
+
+  setSetAnswer((answerText) => {
+    sensing_answer.value = answerText;
+  });
 
   try {
     // expose the module to devtools

@@ -113,7 +113,10 @@ impl IrOpcode {
             })
             | Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
             | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. })
-            | Self::control_wait(ControlWaitFields { next_step, .. }) => Some(*next_step),
+            | Self::control_wait(ControlWaitFields { next_step, .. })
+            | Self::sensing_askandwait(SensingAskandwaitFields { next_step, .. }) => {
+                Some(*next_step)
+            }
             _ => None,
         }
     }

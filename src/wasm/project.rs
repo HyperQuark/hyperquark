@@ -2,16 +2,18 @@ use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection,
-    DataSection, ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection,
-    GlobalSection, HeapType, ImportSection, Instruction, MemorySection, MemoryType, Module,
-    RefType, StartSection, TableSection, TypeSection, ValType,
+    DataSection, ElementSection, Elements, ExportKind, ExportSection, FieldType, Function,
+    FunctionSection, GlobalSection, HeapType, ImportSection, Instruction, MemorySection,
+    MemoryType, Module, RefType, StartSection, StorageType, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
 use crate::ir::{Event, IrProject, StepIndex, Type as IrType};
 use crate::prelude::*;
-use crate::wasm::registries::functions::static_functions::{SpawnNewThread, SpawnThreadInStack};
+use crate::wasm::registries::functions::static_functions::{
+    MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
+};
 use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
@@ -153,10 +155,21 @@ impl WasmProject {
                 self.threads_table_index()?,
             ))?;
 
+        self.registries()
+            .static_functions()
+            .register_override::<MarkWaitingFlag, usize, _>(self.registries().types().struct_(
+                vec![FieldType {
+                    element_type: StorageType::I8,
+                    mutable: true,
+                }],
+            )?)?;
+
         self.registries().static_functions().clone().finish(
             &mut functions,
+            &mut exports,
             &mut codes,
             self.registries.types(),
+            self.imported_func_count()?,
         )?;
 
         for step_func in self.steps().try_borrow()?.iter().cloned() {

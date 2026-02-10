@@ -6,6 +6,7 @@ pub mod drop;
 pub mod dup;
 pub mod float;
 pub mod integer;
+pub mod poll_waiting_event;
 pub mod swap;
 pub mod text;
 pub mod r#yield;

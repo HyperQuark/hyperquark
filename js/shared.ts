@@ -5,6 +5,7 @@ let _renderer: object;
 let _pen_skin: number;
 let _target_skins: Array<[number, number]>;
 let _costumes: Array<Array<Costume>>;
+let _queue_question: (question: string, struct: object) => void = () => {};
 
 type Costume = {
   data: string;
@@ -17,6 +18,7 @@ export function setup(
   pen_skin: number,
   target_skins: Array<[number, number]>,
   costumes: Array<Array<Costume>>,
+  queue_question: (question: string, struct: object) => void,
 ) {
   _target_names = target_names;
   _target_bubbles = _target_names.map((_) => null);
@@ -25,6 +27,7 @@ export function setup(
   _pen_skin = pen_skin;
   _target_skins = target_skins;
   _costumes = costumes;
+  _queue_question = queue_question;
   _setup = true;
 }
 
@@ -85,4 +88,9 @@ export function update_bubble(
       false,
     );
   }
+}
+
+export function queue_question(question: string, struct: object) {
+  check_setup();
+  _queue_question(question, struct);
 }

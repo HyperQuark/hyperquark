@@ -1,8 +1,8 @@
 #![allow(clippy::cast_possible_wrap, reason = "can't use try_into in const")]
 
 use wasm_encoder::{
-    CodeSection, EntityType, Function, FunctionSection, ImportSection, Instruction as WInstruction,
-    ValType,
+    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection,
+    Instruction as WInstruction, ValType,
 };
 
 use super::TypeRegistry;
@@ -28,6 +28,7 @@ pub struct StaticFunction {
     pub params: Box<[ValType]>,
     pub returns: Box<[ValType]>,
     pub locals: Box<[ValType]>,
+    pub export: Option<Box<str>>,
 }
 
 #[derive(Clone)]
@@ -46,8 +47,10 @@ impl StaticFunctionRegistry {
     pub fn finish(
         self,
         functions: &mut FunctionSection,
+        exports: &mut ExportSection,
         codes: &mut CodeSection,
         type_registry: &TypeRegistry,
+        imported_func_count: u32,
     ) -> HQResult<()> {
         for (
             _name,
@@ -62,6 +65,7 @@ impl StaticFunctionRegistry {
                 params,
                 returns,
                 locals,
+                export,
             }) = static_function.map_or_else(maybe_populate, Some)
             else {
                 hq_bug!(
@@ -76,6 +80,13 @@ impl StaticFunctionRegistry {
                 func.instruction(&instruction);
             }
             codes.function(&func);
+            if let Some(export_name) = export {
+                exports.export(
+                    &export_name,
+                    ExportKind::Func,
+                    imported_func_count + functions.len() - 1,
+                );
+            }
         }
         Ok(())
     }
@@ -91,6 +102,46 @@ pub mod static_functions {
     use super::{MaybeStaticFunction, StaticFunction};
     use crate::prelude::*;
     use crate::wasm::{f32_to_ieeef32, mem_layout};
+
+    /// Mark a waiting flag as done.
+    ///
+    /// This is designed to be exported (as `"mark_waiting_flag"`) and called by JS.
+    ///
+    /// Takes 1 parameter:
+    /// - A nonnull struct with a single i8 field.
+    pub struct MarkWaitingFlag;
+    impl NamedRegistryItem<MaybeStaticFunction> for MarkWaitingFlag {
+        const VALUE: MaybeStaticFunction = MaybeStaticFunction {
+            static_function: None,
+            maybe_populate: || None,
+        };
+    }
+    pub type MarkWaitingFlagOverride = u32;
+    impl NamedRegistryItemOverride<MaybeStaticFunction, MarkWaitingFlagOverride> for MarkWaitingFlag {
+        fn r#override(i8_struct_ty: u32) -> MaybeStaticFunction {
+            MaybeStaticFunction {
+                static_function: Some(StaticFunction {
+                    export: Some("mark_waiting_flag".into()),
+                    instructions: Box::from(wasm_const![
+                        LocalGet(0),
+                        I32Const(1),
+                        StructSet {
+                            struct_type_index: i8_struct_ty,
+                            field_index: 0
+                        },
+                        End,
+                    ] as &[_]),
+                    params: Box::new([ValType::Ref(RefType {
+                        nullable: false,
+                        heap_type: HeapType::Concrete(i8_struct_ty),
+                    })]),
+                    returns: Box::new([]),
+                    locals: Box::new([]),
+                }),
+                maybe_populate: || None,
+            }
+        }
+    }
 
     /// Spawns a new thread in the same stack (i.e. a thread that yields back to the current
     /// thread once it completes.)
@@ -116,6 +167,7 @@ pub mod static_functions {
         ) -> MaybeStaticFunction {
             MaybeStaticFunction {
                 static_function: Some(StaticFunction {
+                    export: None,
                     instructions: Box::from(wasm_const![
                         LocalGet(1),
                         LocalGet(2),
@@ -218,6 +270,7 @@ pub mod static_functions {
         ) -> MaybeStaticFunction {
             MaybeStaticFunction {
                 static_function: Some(StaticFunction {
+                    export: None,
                     params: Box::from([
                         ValType::Ref(RefType {
                             nullable: false,
@@ -281,6 +334,7 @@ pub mod static_functions {
             static_function: None,
             maybe_populate: || {
                 Some(StaticFunction {
+                    export: None,
                     params: Box::from([ValType::I32]),
                     returns: Box::from([]),
                     locals: Box::from({
@@ -554,6 +608,7 @@ pub mod static_functions {
             static_function: None,
             maybe_populate: || {
                 Some(StaticFunction {
+                    export: None,
                     params: Box::from([ValType::I32]),
                     returns: Box::from([]),
                     locals: Box::from({

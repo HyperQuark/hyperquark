@@ -31,6 +31,14 @@
         {{ props.description }}
       </div>
     </div>
+    <div v-show="queued_questions.length > 0">
+      <span>{{ queued_questions[0]?.[0] }}</span>
+      <br />
+      <form @submit.prevent="submitQuestion">
+        <input type="text" name="answer" v-model="question_response" />
+        <button type="submit">✓</button>
+      </form>
+    </div>
   </div>
   <Loading v-if="!loaded">{{ loadingMsg }}</Loading>
 </template>
@@ -43,7 +51,7 @@ import {
   WasmFlags,
 } from "../../js/compiler/hyperquark.js";
 import { instantiateProject } from "../lib/project-runner.js";
-import { ref, onMounted, registerRuntimeCompiler } from "vue";
+import { ref, onMounted, reactive } from "vue";
 import { getSettings } from "../lib/settings.js";
 import { useDebugModeStore } from "../stores/debug.js";
 
@@ -88,6 +96,31 @@ const declareError = (e, terminate, mode, stage, extra) => {
     loaded.value = true;
   }
 };
+
+const queued_questions = reactive([]);
+let question_response = ref("");
+let mark_question_resolved = () => {};
+
+function set_mark_question_resolved(func) {
+  mark_question_resolved = func;
+}
+
+let setAnswer = () => {};
+
+const setSetAnswer = (_setAnswer) => {
+  setAnswer = _setAnswer;
+};
+
+function submitQuestion() {
+  setAnswer(question_response.value);
+  question_response.value = "";
+  const [_, struct] = queued_questions.shift();
+  mark_question_resolved(struct);
+}
+
+function queue_question(question, struct) {
+  queued_questions.push([question, struct]);
+}
 
 onMounted(async () => {
   const load_asset = async (md5ext) => {
@@ -203,6 +236,9 @@ onMounted(async () => {
         return new RenderWebGL(canvas.value);
       },
       isDebug: () => debugModeStore.debug,
+      queue_question,
+      set_mark_question_resolved,
+      setSetAnswer,
     });
 
     loaded.value = true;

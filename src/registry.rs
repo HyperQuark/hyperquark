@@ -114,6 +114,10 @@ pub trait Registry: Sized + RegistryType {
         )
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
+
+    // TODO: register_override_ifexists or similar - for things like mark_waiting_flag,
+    // which need to be overriden if they are registered, but don't actually need to be
+    // registered always.
 }
 
 pub trait RegistryDefault: Registry<Value: Default> {

@@ -13,7 +13,7 @@ use crate::instructions::{
     DataVariableFields, EventBroadcastAndWaitFields, EventBroadcastFields, HqBooleanFields,
     HqCastFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields, HqYieldFields,
     IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
-    ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
+    ProceduresCallNonwarpFields, ProceduresCallWarpFields, SensingAskandwaitFields, YieldMode,
 };
 use crate::ir::{InlinedStep, MaybeInlinedStep, RcList, ReturnType, StepIndex};
 use crate::prelude::*;
@@ -264,7 +264,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::control_stop
             | BlockOpcode::event_broadcast_menu
             | BlockOpcode::sensing_timer
-            | BlockOpcode::sensing_resettimer => vec![],
+            | BlockOpcode::sensing_resettimer
+            | BlockOpcode::sensing_answer => vec![],
+            BlockOpcode::sensing_askandwait => vec!["QUESTION"],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
             }
@@ -1256,6 +1258,7 @@ fn from_normal_block(
                         BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                         BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                         BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                        BlockOpcode::sensing_answer => vec![IrOpcode::sensing_answer],
                         BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_reset_timer],
                         BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
                         BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
@@ -1363,6 +1366,27 @@ fn from_normal_block(
                                 context,
                                 project,
                             )?
+                        }
+                        BlockOpcode::sensing_askandwait => {
+                            let poll_step =
+                                context
+                                    .project()?
+                                    .new_owned_step(Step::new_poll_waiting_event(
+                                        context.clone(),
+                                        Weak::clone(project),
+                                    ))?;
+                            should_break = true;
+                            let next_step = generate_next_step_non_inlined(
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                flags,
+                            )?;
+                            vec![IrOpcode::sensing_askandwait(SensingAskandwaitFields {
+                                poll_step,
+                                next_step,
+                            })]
                         }
                         BlockOpcode::control_wait => {
                             let poll_step = context.project()?.new_owned_step(
