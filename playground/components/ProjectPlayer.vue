@@ -259,6 +259,8 @@ canvas {
   float: left;
   margin-right: 1em;
   margin-bottom: 1.5em;
+  width: 480px;
+  height: 360px;
 }
 
 div.instructions {
