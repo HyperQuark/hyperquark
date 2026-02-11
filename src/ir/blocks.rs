@@ -1376,17 +1376,55 @@ fn from_normal_block(
                                         Weak::clone(project),
                                     ))?;
                             should_break = true;
-                            let next_step = generate_next_step_non_inlined(
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                flags,
-                            )?;
-                            vec![IrOpcode::sensing_askandwait(SensingAskandwaitFields {
-                                poll_step,
-                                next_step,
-                            })]
+                            if context.target().is_stage() {
+                                let next_step = generate_next_step_non_inlined(
+                                    block_info,
+                                    blocks,
+                                    context,
+                                    final_next_blocks.clone(),
+                                    flags,
+                                )?;
+                                vec![IrOpcode::sensing_askandwait(SensingAskandwaitFields {
+                                    poll_step,
+                                    next_step,
+                                })]
+                            } else {
+                                let next_step = generate_next_step_inlined(
+                                    block_info,
+                                    blocks,
+                                    context,
+                                    final_next_blocks.clone(),
+                                    flags,
+                                )?;
+                                let real_next_step = Step::new(
+                                    None,
+                                    context.clone(),
+                                    vec![
+                                        IrOpcode::hq_text(HqTextFields("".into())),
+                                        IrOpcode::looks_say(LooksSayFields {
+                                            debug: false,
+                                            target_idx: context.target().index(),
+                                        }),
+                                        IrOpcode::hq_yield(HqYieldFields {
+                                            mode: YieldMode::Inline(next_step),
+                                        }),
+                                    ],
+                                    Weak::clone(project),
+                                    true,
+                                )
+                                .clone_to_non_inlined(project)?;
+                                vec![
+                                    IrOpcode::looks_say(LooksSayFields {
+                                        debug: false,
+                                        target_idx: context.target().index(),
+                                    }),
+                                    IrOpcode::hq_text(HqTextFields("".into())),
+                                    IrOpcode::sensing_askandwait(SensingAskandwaitFields {
+                                        poll_step,
+                                        next_step: real_next_step,
+                                    }),
+                                ]
+                            }
                         }
                         BlockOpcode::control_wait => {
                             let poll_step = context.project()?.new_owned_step(

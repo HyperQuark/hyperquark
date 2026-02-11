@@ -20,7 +20,23 @@
       <input type="checkbox" id="turbo" :value="turbo" />
       <label for="turbo">turbo mode</label>
     </div>
-    <canvas width="480" height="360" ref="canvas"></canvas>
+    <div id="stage-container">
+      <canvas width="480" height="360" ref="canvas"></canvas>
+      <div v-show="queued_questions.length > 0" id="question-div">
+        <div v-if="!!queued_questions[0]?.[0]?.length">
+          {{ queued_questions[0]?.[0] }}
+        </div>
+        <form @submit.prevent="submitQuestion">
+          <input
+            type="text"
+            name="answer"
+            v-model="question_response"
+            ref="questionInput"
+          />
+          <button type="submit">✓</button>
+        </form>
+      </div>
+    </div>
     <div class="instructions">
       <div v-if="props.instructions">
         <h2>Instructions</h2>
@@ -30,14 +46,6 @@
         <h2>Notes and credits</h2>
         {{ props.description }}
       </div>
-    </div>
-    <div v-show="queued_questions.length > 0">
-      <span>{{ queued_questions[0]?.[0] }}</span>
-      <br />
-      <form @submit.prevent="submitQuestion">
-        <input type="text" name="answer" v-model="question_response" />
-        <button type="submit">✓</button>
-      </form>
     </div>
   </div>
   <Loading v-if="!loaded">{{ loadingMsg }}</Loading>
@@ -51,7 +59,7 @@ import {
   WasmFlags,
 } from "../../js/compiler/hyperquark.js";
 import { instantiateProject } from "../lib/project-runner.js";
-import { ref, onMounted, reactive } from "vue";
+import { ref, onMounted, reactive, watch } from "vue";
 import { getSettings } from "../lib/settings.js";
 import { useDebugModeStore } from "../stores/debug.js";
 
@@ -75,6 +83,7 @@ let turbo = ref(false);
 let canvas = ref(null);
 let loadingMsg = ref("compiling project");
 let loaded = ref(false);
+let questionInput = ref(null);
 
 let greenFlag = () => null;
 let stop = () => null;
@@ -101,15 +110,7 @@ const queued_questions = reactive([]);
 let question_response = ref("");
 let mark_question_resolved = () => {};
 
-function set_mark_question_resolved(func) {
-  mark_question_resolved = func;
-}
-
 let setAnswer = () => {};
-
-const setSetAnswer = (_setAnswer) => {
-  setAnswer = _setAnswer;
-};
 
 function submitQuestion() {
   setAnswer(question_response.value);
@@ -117,6 +118,12 @@ function submitQuestion() {
   const [_, struct] = queued_questions.shift();
   mark_question_resolved(struct);
 }
+
+watch(queued_questions, () => {
+  if (queued_questions.length > 0) {
+    questionInput.value.focus();
+  }
+});
 
 function queue_question(question, struct) {
   queued_questions.push([question, struct]);
@@ -237,14 +244,17 @@ onMounted(async () => {
       },
       isDebug: () => debugModeStore.debug,
       queue_question,
-      set_mark_question_resolved,
-      setSetAnswer,
+      onStop: () => {
+        queued_questions.splice(0);
+      },
     });
 
     loaded.value = true;
 
     greenFlag = runner.greenFlag;
     stop = runner.stop;
+    setAnswer = runner.setAnswer;
+    mark_question_resolved = runner.mark_question_resolved;
   } catch (e) {
     declareError(e, true, "An error", "instantiating");
   }
@@ -255,12 +265,44 @@ onMounted(async () => {
 canvas {
   border: 1px solid black;
   background: white;
-  max-width: calc((100vw - 1rem) * 0.95);
+  width: 100%;
+  height: 100%;
+}
+
+div#stage-container {
   float: left;
   margin-right: 1em;
   margin-bottom: 1.5em;
   width: 480px;
   height: 360px;
+  position: relative;
+
+  & > div#question-div {
+    width: calc(100% - 1em);
+    position: absolute;
+    bottom: 0;
+    margin: 0.5em;
+    padding: 0.5em;
+    background: var(--color-background-soft);
+    border-radius: 5px;
+    box-sizing: border-box;
+
+    & > div {
+      padding: 0;
+      margin-top: 0;
+      line-height: 1em;
+      margin-bottom: 0.4em;
+    }
+
+    & > form {
+      display: flex;
+
+      & > input {
+        flex-grow: 100;
+        border-radius: 5px;
+      }
+    }
+  }
 }
 
 div.instructions {

@@ -96,8 +96,7 @@ export async function instantiateProject({
   onTimeout = () => null,
   importOverrides,
   queue_question,
-  set_mark_question_resolved,
-  setSetAnswer,
+  onStop = () => null,
 }) {
   if (isDebug() && typeof window === "object")
     window.open(
@@ -181,12 +180,6 @@ export async function instantiateProject({
     window.tick = tick;
   }
 
-  set_mark_question_resolved(mark_waiting_flag);
-
-  setSetAnswer((answerText) => {
-    sensing_answer.value = answerText;
-  });
-
   try {
     // expose the module to devtools
     unreachable_dbg();
@@ -258,10 +251,15 @@ export async function instantiateProject({
       for (let i = 0; i < threads.length; i++) {
         threads.set(i, null);
       }
+      onStop();
     },
     pause: () => {
       running = false;
     },
     run,
+    mark_question_resolved: mark_waiting_flag,
+    setAnswer(answerText) {
+      sensing_answer.value = answerText;
+    },
   };
 }

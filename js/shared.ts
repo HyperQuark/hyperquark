@@ -72,7 +72,7 @@ export function update_bubble(
   text: string,
 ) {
   check_setup();
-  if (!_target_bubbles[target_index]) {
+  if (!_target_bubbles[target_index] && text !== "") {
     _target_bubbles[target_index] = _renderer.createSkin(
       "text",
       "sprite",
@@ -80,6 +80,10 @@ export function update_bubble(
       text,
       false,
     );
+  } else if (text == "") {
+    _renderer.destroyDrawable(_target_bubbles[target_index][1], "sprite");
+    _renderer.destroySkin(_target_bubbles[target_index][0]);
+    _target_bubbles[target_index] = null;
   } else {
     _renderer.updateTextSkin(
       _target_bubbles[target_index][0],
