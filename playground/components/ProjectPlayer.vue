@@ -32,6 +32,7 @@
             name="answer"
             v-model="question_response"
             ref="questionInput"
+            autocomplete="off"
           />
           <button type="submit">✓</button>
         </form>
