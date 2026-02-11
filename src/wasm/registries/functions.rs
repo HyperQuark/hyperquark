@@ -31,6 +31,15 @@ pub struct StaticFunction {
     pub export: Option<Box<str>>,
 }
 
+/// A `const`-able representation of a static function.
+///
+/// `maybe_populate` should return a `Some(StaticFunction)` if the function instructions
+/// are known at compile-time;
+/// `static_function` should be overriden to a `Some(StaticFunction)` if the function
+/// is overriden.
+///
+/// It is not possible to populate `static_function` in a `const` context, hence the existence
+/// of the `maybe_populate` field.
 #[derive(Clone)]
 pub struct MaybeStaticFunction {
     pub static_function: Option<StaticFunction>,
@@ -109,6 +118,8 @@ pub mod static_functions {
     ///
     /// Takes 1 parameter:
     /// - A nonnull struct with a single i8 field.
+    ///
+    /// Override with one u32, the single-field i8 struct type index
     pub struct MarkWaitingFlag;
     impl NamedRegistryItem<MaybeStaticFunction> for MarkWaitingFlag {
         const VALUE: MaybeStaticFunction = MaybeStaticFunction {
@@ -151,6 +162,13 @@ pub mod static_functions {
     /// - step funcref - the step to spawn
     /// - structref - the structref to pass to the step being spawned
     /// - step funcref - the step to return to after
+    ///
+    /// Override with:
+    /// - u32 - the index of the step func type
+    /// - u32 - the index of the stack struct type
+    /// - u32 - the index of the stack array type
+    /// - u32 - the index of the thread struct type
+    /// - u32 - the index of the threads table
     pub struct SpawnThreadInStack;
     impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
         const VALUE: MaybeStaticFunction = MaybeStaticFunction {
@@ -256,6 +274,19 @@ pub mod static_functions {
         }
     }
 
+    /// Spawn a new thread with the provided step function. This does not call it
+    /// immediately, instead leaving that for the scheduler or calling function to do so.
+    ///
+    /// Takes 2 parameters:
+    /// - step funcref - the step to spawn
+    /// - ref null struct - the stack struct to spawn it with
+    ///
+    /// Override with:
+    /// - u32 - the index of the step func type
+    /// - u32 - the index of the stack struct type
+    /// - u32 - the index of the stack array type
+    /// - u32 - the index of the thread struct type
+    /// - u32 - the index of the threads table
     pub struct SpawnNewThread;
     impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
         const VALUE: MaybeStaticFunction = MaybeStaticFunction {
@@ -328,6 +359,11 @@ pub mod static_functions {
         VAL_F
     }
 
+    /// Updates the stored RGBA pen colour from the HSV colour.
+    ///
+    /// Takes 1 paramter, an i32 corresponding to the target index
+    ///
+    /// Not overridable.
     pub struct UpdatePenColorFromHSV;
     impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
         const VALUE: MaybeStaticFunction = MaybeStaticFunction {
@@ -602,6 +638,11 @@ pub mod static_functions {
         HUE SAT
     }
 
+    /// Updates the stored HSV pen colour from the RGBA colour.
+    ///
+    /// Takes one parameter, an i32 corresponding to the target index.
+    ///
+    /// Not overridable.
     pub struct UpdatePenColorFromRGB;
     impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
         const VALUE: MaybeStaticFunction = MaybeStaticFunction {
