@@ -59,7 +59,7 @@ import {
   FinishedWasm,
   WasmFlags,
 } from "../../js/compiler/hyperquark.js";
-import { instantiateProject } from "../lib/project-runner.js";
+import { ProjectRunner } from "../lib/project-runner.js";
 import { ref, onMounted, reactive, watch } from "vue";
 import { getSettings } from "../lib/settings.js";
 import { useDebugModeStore } from "../stores/debug.js";
@@ -229,7 +229,7 @@ onMounted(async () => {
 
   try {
     loadingMsg.value = "instantiating project";
-    const runner = await instantiateProject({
+    const runner = await ProjectRunner.init({
       framerate: 30,
       turbo: turbo.value,
       wasm_bytes: wasmBytes,
@@ -244,18 +244,20 @@ onMounted(async () => {
         return new RenderWebGL(canvas.value);
       },
       isDebug: () => debugModeStore.debug,
-      queue_question,
-      onStop: () => {
-        queued_questions.splice(0);
-      },
     });
 
     loaded.value = true;
 
-    greenFlag = runner.greenFlag;
-    stop = runner.stop;
-    setAnswer = runner.setAnswer;
-    mark_question_resolved = runner.mark_question_resolved;
+    runner.addEventListener("stopped", () => queued_questions.splice(0));
+    runner.addEventListener(
+      "queueQuestion",
+      ({ detail: { question, struct } }) => queue_question(question, struct),
+    );
+
+    greenFlag = runner.greenFlag.bind(runner);
+    stop = runner.stop.bind(runner);
+    setAnswer = runner.setAnswer.bind(runner);
+    mark_question_resolved = runner.mark_question_resolved.bind(runner);
   } catch (e) {
     declareError(e, true, "An error", "instantiating");
   }

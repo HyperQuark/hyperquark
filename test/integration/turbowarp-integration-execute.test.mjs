@@ -15,7 +15,7 @@ import { describe, test } from "vitest";
 
 import { imports as baseImports } from "../../js/imports.ts";
 import { unpackProject } from "../../playground/lib/project-loader.js";
-import { instantiateProject } from "../../playground/lib/project-runner.js";
+import { ProjectRunner } from "../../playground/lib/project-runner.js";
 import { sb3_to_wasm, WasmFlags } from "../../js/compiler/hyperquark.js";
 import { WasmStringType } from "../../js/no-compiler/hyperquark";
 import { defaultSettings } from "../../playground/lib/settings.js";
@@ -172,7 +172,7 @@ describe("Integration tests", () => {
       // todo: run wasm-opt if specified in flags?
 
       // Run the project and once all threads are complete check the results.
-      const runner = await instantiateProject({
+      const runner = await ProjectRunner.init({
         wasm_bytes: project_wasm.wasm_bytes,
         target_names: project_wasm.target_names,
         project_json,
@@ -190,15 +190,16 @@ describe("Integration tests", () => {
             },
           },
         ),
-        onTimeout: () => {
-          throw new Error(`Timeout waiting for threads to complete: ${uri}`);
-        },
         importOverrides: {
           looks: {
             say_string: (string) => reportVmResult(string),
           },
         },
         makeRenderer: makeTestRenderer,
+      });
+
+      runner.addEventListener("timeout", () => {
+        throw new Error(`Timeout waiting for threads to complete: ${uri}`);
       });
 
       runner.flag_clicked();
