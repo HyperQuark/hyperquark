@@ -2231,6 +2231,14 @@ fn from_normal_block(
                         BlockOpcode::looks_nextcostume => vec![
                             IrOpcode::looks_costumenumber,
                             IrOpcode::hq_integer(HqIntegerFields(1)),
+                            IrOpcode::operator_add,
+                            IrOpcode::hq_integer(HqIntegerFields(
+                                context.target().costumes().len()
+                                    .try_into().map_err(|_| {
+                                        make_hq_bug!("costumes length out of bounds")
+                                    })?,
+                            )),
+                            IrOpcode::operator_modulo,
                             IrOpcode::looks_switchcostumeto,
                         ],
                         BlockOpcode::looks_costume => {
