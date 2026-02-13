@@ -64,6 +64,8 @@ export async function setup(
   });
   console.log(target_skins);
 
+  const stageIndex = project_json.targets.findIndex((target) => target.isStage);
+
   sharedSetup(
     target_names,
     renderer,
@@ -71,5 +73,6 @@ export async function setup(
     target_skins,
     costumes,
     queue_question,
+    stageIndex,
   );
 }

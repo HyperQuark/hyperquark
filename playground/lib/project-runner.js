@@ -1,6 +1,10 @@
 import { getSettings } from "./settings.js";
 import { imports as baseImports } from "./imports.js";
-import { renderer as get_renderer } from "../../js/shared.ts";
+import {
+  renderer as get_renderer,
+  stageIndex,
+  target_skins,
+} from "../../js/shared.ts";
 import { WasmStringType } from "../../js/no-compiler/hyperquark.js";
 import { setup } from "./setup.js";
 
@@ -32,35 +36,30 @@ export class ProjectRunner extends EventTarget {
   #threads_count;
   flag_clicked;
   #threads;
+  #mouseX;
+  #mouseY;
+  #mouseDown;
+  #triggerSpriteClicked;
 
-  constructor({
-    sensing_answer,
-    mark_question_resolved,
-    renderer,
-    tick,
-    timeout,
-    framerate_wait,
-    requests_refresh,
-    turbo,
-    threads_count,
-    flag_clicked,
-    threads,
-    sensing_timer,
-  }) {
+  constructor({ renderer, timeout, framerate_wait, turbo, exports }) {
     super();
 
-    this.#sensing_answer = sensing_answer;
-    this.#mark_question_resolved_func = mark_question_resolved;
+    this.#sensing_answer = exports.sensing_answer;
+    this.#mark_question_resolved_func = exports.mark_waiting_flag;
     this.#renderer = renderer;
-    this.#tick = tick;
+    this.#tick = exports.tick;
     this.#timeout = timeout;
     this.#framerate_wait = framerate_wait;
-    this.#requests_refresh = requests_refresh;
+    this.#requests_refresh = exports.requests_refresh;
     this.turbo = turbo;
-    this.#sensing_timer = sensing_timer;
-    this.#threads_count = threads_count;
-    this.flag_clicked = flag_clicked;
-    this.#threads = threads;
+    this.#sensing_timer = exports.sensing_timer;
+    this.#threads_count = exports.threads_count;
+    this.flag_clicked = exports.flag_clicked;
+    this.#threads = exports.threads;
+    this.#mouseX = exports.mouseX ?? { value: 0 };
+    this.#mouseY = exports.mouseY ?? { value: 0 };
+    this.#mouseDown = exports.mouseDown ?? { value: false };
+    this.#triggerSpriteClicked = exports.trigger_sprite_clicked;
   }
 
   static async init({
@@ -150,6 +149,9 @@ export class ProjectRunner extends EventTarget {
       sensing_timer,
       mark_waiting_flag,
       sensing_answer,
+      mouseX,
+      mouseY,
+      mouseDown,
     } = instance.exports;
 
     if (typeof window === "object") {
@@ -166,18 +168,11 @@ export class ProjectRunner extends EventTarget {
     }
 
     const runner = new ProjectRunner({
-      sensing_answer,
-      mark_question_resolved: mark_waiting_flag,
       renderer,
-      tick,
+      exports: instance.exports,
       timeout,
       framerate_wait,
-      requests_refresh,
       turbo,
-      sensing_timer,
-      threads_count,
-      flag_clicked,
-      threads,
     });
 
     return runner;
@@ -258,4 +253,51 @@ export class ProjectRunner extends EventTarget {
   setAnswer(answerText) {
     this.#sensing_answer.value = answerText;
   }
+
+  onMouseMove({ clientX, clientY, rect, isDown }) {
+    const x = clamp((clientX - rect.left) / rect.width, 0, 1) * 480 - 240;
+    const y = clamp((clientY - rect.top) / rect.height, 0, 1) * 360 - 180;
+    this.#mouseX.value = x;
+    this.#mouseY.value = y;
+
+    if (typeof isDown !== "undefined") {
+      const prevIsDown = this.#mouseDown.value;
+      if (prevIsDown && !isDown) {
+        // TODO: update 'this sprite clicked?' values to be not clicked
+      }
+      if (!prevIsDown && isDown) {
+        const clickedTarget = this.#pickMouseOverTarget(
+          clientX - rect.left,
+          clientY - rect.top,
+        );
+        this.#triggerSpriteClicked?.(clickedTarget);
+        if (!this.#running) this.run();
+      }
+
+      this.#mouseDown.value = isDown;
+    }
+
+    if (this.#mouseDown.value) {
+      // TODO: update 'this sprite clicked?' values to be maybe clicked depending on mouse position
+    }
+  }
+
+  #pickMouseOverTarget(x, y) {
+    // adapted from https://github.com/scratchfoundation/scratch-vm/blob/8dbcc1f/src/io/mouse.js#L40
+    // (licensed under BSD-3.0 - see https://raw.githubusercontent.com/scratchfoundation/scratch-vm/8dbcc1f/LICENSE)
+    const drawableID = this.#renderer.pick(x, y);
+    const targetSkins = target_skins();
+    for (let i = 0; i < targetSkins.length; i++) {
+      const thisDrawableID = targetSkins[i][1];
+      if (thisDrawableID === drawableID) {
+        return i;
+      }
+    }
+    // Return the stage if no target was found
+    return stageIndex();
+  }
+}
+
+function clamp(val, min, max) {
+  return Math.max(Math.min(val, max), min);
 }

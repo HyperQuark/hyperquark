@@ -373,14 +373,15 @@ impl WasmProject {
         )
     }
 
+    #[expect(clippy::needless_pass_by_value, reason = "annoying to borrow a box")]
     fn finish_event(
         &self,
-        export_name: &str,
+        export_name: Box<str>,
         indices: &[u32],
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
-    ) -> HQResult<()> {
+    ) -> HQResult<u32> {
         let mut func = Function::new(vec![]);
 
         let threads_count = self.threads_count_global()?;
@@ -445,12 +446,12 @@ impl WasmProject {
         funcs.function(self.registries().types().function(vec![], vec![])?);
         codes.function(&func);
         exports.export(
-            export_name,
+            &export_name,
             ExportKind::Func,
             self.imported_func_count()? + funcs.len() - 1,
         );
 
-        Ok(())
+        Ok(self.imported_func_count()? + funcs.len() - 1)
     }
 
     fn finish_events(
@@ -459,17 +460,98 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
     ) -> HQResult<()> {
-        for (event, indices) in &self.events {
-            self.finish_event(
-                match event {
-                    Event::FlagCLicked => "flag_clicked",
-                    Event::Broadcast(_) => continue, // broadcasts handled in the sender blocks
-                },
-                indices,
-                funcs,
-                codes,
-                exports,
-            )?;
+        let event_funcs = self
+            .events
+            .iter()
+            .map(|(event, indices)| {
+                Ok(Some((
+                    event,
+                    self.finish_event(
+                        match event {
+                            Event::FlagClicked => "flag_clicked".into(),
+                            Event::Broadcast(_) => return Ok(None), // broadcasts handled in the sender blocks
+                            Event::SpriteClicked(index) => {
+                                format!("spriteClicked{index}").into_boxed_str()
+                            }
+                        },
+                        indices,
+                        funcs,
+                        codes,
+                        exports,
+                    )?,
+                )))
+            })
+            .collect::<HQResult<Box<[_]>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<BTreeMap<_, _>>();
+        let sprite_clicked_indices: Box<[i32]> = self
+            .events
+            .keys()
+            .filter_map(|e| {
+                #[expect(clippy::redundant_else, reason = "false positive")]
+                if let Event::SpriteClicked(index) = e {
+                    Some(
+                        i32::try_from(*index)
+                            .map_err(|_| make_hq_bug!("target index out of bounds")),
+                    )
+                } else {
+                    None
+                }
+            })
+            .collect::<HQResult<_>>()?;
+        if !sprite_clicked_indices.is_empty() {
+            let mut sprite_clicked_func = Function::new([]);
+            let sprite_clicked_instrs: Vec<_> = sprite_clicked_indices
+                .iter()
+                .flat_map(|index| {
+                    wasm![
+                        LocalGet(0),
+                        I32Const(*index),
+                        I32Eq,
+                        If(WasmBlockType::Empty),
+                        Call(
+                            event_funcs[&Event::SpriteClicked(
+                                #[expect(
+                                    clippy::unwrap_used,
+                                    reason = "guaranteed to succeed because i32 was originally a \
+                                              u32"
+                                )]
+                                (*index).try_into().unwrap()
+                            )]
+                        ),
+                        Return,
+                        End,
+                    ]
+                })
+                .chain(wasm![End])
+                .collect();
+            for instruction in sprite_clicked_instrs {
+                for real_instruction in instruction.eval(
+                    &self.events,
+                    self.registries().types(),
+                    self.threads_count_global()?,
+                    self.spawn_new_thread_func()?,
+                    self.spawn_thread_in_stack_func()?,
+                    self.threads_table_index()?,
+                    self.imported_func_count()?,
+                    self.static_func_count()?,
+                    self.imported_global_count()?,
+                )? {
+                    sprite_clicked_func.instruction(&real_instruction);
+                }
+            }
+            funcs.function(
+                self.registries()
+                    .types()
+                    .function(vec![ValType::I32], vec![])?,
+            );
+            codes.function(&sprite_clicked_func);
+            exports.export(
+                "trigger_sprite_clicked",
+                ExportKind::Func,
+                self.imported_func_count()? + funcs.len() - 1,
+            );
         }
 
         Ok(())

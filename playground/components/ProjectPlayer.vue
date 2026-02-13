@@ -254,6 +254,28 @@ onMounted(async () => {
       ({ detail: { question, struct } }) => queue_question(question, struct),
     );
 
+    const onMouseMove = (e, isDown) => {
+      const rect = canvas.value.getBoundingClientRect();
+      runner.onMouseMove({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        rect,
+        isDown,
+      });
+    };
+
+    document.addEventListener("mousemove", (e) => {
+      onMouseMove(e);
+    });
+    canvas.value.addEventListener("mousedown", (e) => {
+      onMouseMove(e, true);
+      e.preventDefault();
+    });
+    canvas.value.addEventListener("mouseup", (e) => {
+      onMouseMove(e, false);
+      e.preventDefault();
+    });
+
     greenFlag = runner.greenFlag.bind(runner);
     stop = runner.stop.bind(runner);
     setAnswer = runner.setAnswer.bind(runner);

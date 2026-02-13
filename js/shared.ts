@@ -6,6 +6,7 @@ let _pen_skin: number;
 let _target_skins: Array<[number, number]>;
 let _costumes: Array<Array<Costume>>;
 let _queue_question: (question: string, struct: object) => void = () => {};
+let _stageIndex: number;
 
 type Costume = {
   data: string;
@@ -19,6 +20,7 @@ export function setup(
   target_skins: Array<[number, number]>,
   costumes: Array<Array<Costume>>,
   queue_question: (question: string, struct: object) => void,
+  stageIndex: number,
 ) {
   _target_names = target_names;
   _target_bubbles = _target_names.map((_) => null);
@@ -28,6 +30,7 @@ export function setup(
   _target_skins = target_skins;
   _costumes = costumes;
   _queue_question = queue_question;
+  _stageIndex = stageIndex;
   _setup = true;
 }
 
@@ -66,6 +69,11 @@ export function costumes(): Array<Array<Costume>> {
   return _costumes;
 }
 
+export function stageIndex(): number {
+  check_setup();
+  return _stageIndex;
+}
+
 export function update_bubble(
   target_index: number,
   verb: "say" | "think",
@@ -81,6 +89,7 @@ export function update_bubble(
       false,
     );
   } else if (text == "") {
+    if (!_target_bubbles[target_index]) return;
     _renderer.destroyDrawable(_target_bubbles[target_index][1], "sprite");
     _renderer.destroySkin(_target_bubbles[target_index][0]);
     _target_bubbles[target_index] = null;
