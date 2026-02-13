@@ -48,17 +48,22 @@ export async function setup(
 
     const [skin, drawableId] = renderer.createSkin(
       costume.dataFormat,
-      "sprite",
+      target.isStage ? "background" : "sprite",
       costume.data,
       [realCostume.rotationCenterX, realCostume.rotationCenterY],
     );
 
     const drawable = renderer.getDrawable(drawableId);
-    if (!target.is_stage) {
+    if (!target.isStage) {
       drawable.updateVisible(!!target.visible);
       drawable.updatePosition([target.x, target.y]);
       drawable.updateDirection(target.direction);
       drawable.updateScale([target.size, target.size]);
+    } else {
+      drawable.updateVisible(true);
+      drawable.updatePosition([0, 0]);
+      drawable.updateDirection(90);
+      drawable.updateScale([100, 100]);
     }
     return [skin, drawableId];
   });

@@ -21,6 +21,8 @@ pub struct IrProject {
     global_lists: TargetLists,
     broadcasts: Box<[Box<str>]>,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
+    stage_index: usize,
+    backdrops: Vec<IrCostume>,
 }
 
 impl IrProject {
@@ -48,11 +50,21 @@ impl IrProject {
         &self.broadcasts
     }
 
+    pub const fn stage_index(&self) -> usize {
+        self.stage_index
+    }
+
+    pub const fn backdrops(&self) -> &Vec<IrCostume> {
+        &self.backdrops
+    }
+
     #[must_use]
     pub fn new(
         global_variables: TargetVars,
         global_lists: TargetLists,
         broadcasts: Box<[Box<str>]>,
+        stage_index: usize,
+        backdrops: Vec<IrCostume>,
     ) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
@@ -61,6 +73,8 @@ impl IrProject {
             global_lists,
             broadcasts,
             targets: RefCell::new(IndexMap::default()),
+            stage_index,
+            backdrops,
         }
     }
 
@@ -95,7 +109,32 @@ impl IrProject {
             .cloned()
             .collect();
 
-        let project = Rc::new(Self::new(global_variables, global_lists, broadcasts));
+        let (stage_index, stage_target) = sb3
+            .targets
+            .iter()
+            .find_position(|target| target.is_stage)
+            .ok_or_else(|| make_hq_bug!("couldn't find stage target"))?;
+
+        let backdrops: Vec<_> = stage_target
+            .costumes
+            .iter()
+            .map(|costume| {
+                IrCostume {
+                    name: costume.name.clone(),
+                    data_format: costume.data_format,
+                    md5ext: costume.md5ext.clone(),
+                    //data: load_asset(costume.md5ext.as_str()),
+                }
+            })
+            .collect();
+
+        let project = Rc::new(Self::new(
+            global_variables,
+            global_lists,
+            broadcasts,
+            stage_index,
+            backdrops,
+        ));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets

@@ -218,6 +218,7 @@ export class ProjectRunner extends EventTarget {
         await waitAnimationFrame();
       }
     }
+    await waitAnimationFrame();
     this.#renderer.draw();
     this.#running = false;
     console.log("project stopped (or maybe paused)");

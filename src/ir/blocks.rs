@@ -250,6 +250,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_size
             | BlockOpcode::looks_nextcostume
             | BlockOpcode::looks_costumenumbername
+            | BlockOpcode::looks_backdrops
             | BlockOpcode::looks_hide
             | BlockOpcode::looks_show
             | BlockOpcode::pen_penDown
@@ -265,7 +266,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::event_broadcast_menu
             | BlockOpcode::sensing_timer
             | BlockOpcode::sensing_resettimer
-            | BlockOpcode::sensing_answer => vec![],
+            | BlockOpcode::sensing_answer
+            | BlockOpcode::looks_backdropnumbername
+            | BlockOpcode::looks_nextbackdrop => vec![],
             BlockOpcode::sensing_askandwait => vec!["QUESTION"],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
@@ -283,6 +286,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::control_repeat => vec!["TIMES"],
             BlockOpcode::operator_length => vec!["STRING"],
             BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
+            BlockOpcode::looks_switchbackdropto => vec!["BACKDROP"],
             BlockOpcode::looks_setsizeto | BlockOpcode::pen_setPenSizeTo => vec!["SIZE"],
             BlockOpcode::looks_changesizeby => vec!["CHANGE"],
             BlockOpcode::pen_setPenColorToColor => vec!["COLOR"],
@@ -678,6 +682,8 @@ fn generate_if_else(
         this_project.global_variables().clone(),
         this_project.global_lists().clone(),
         Box::from(this_project.broadcasts()),
+        0,
+        vec![],
     ));
     let dummy_target = Rc::new(Target::new(
         false,
@@ -2202,6 +2208,9 @@ fn from_normal_block(
                             IrOpcode::looks_setsizeto,
                         ],
                         BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+                        BlockOpcode::looks_switchbackdropto => {
+                            vec![IrOpcode::looks_switchbackdropto]
+                        }
                         BlockOpcode::looks_costumenumbername => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
                                 block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
@@ -2228,19 +2237,90 @@ fn from_normal_block(
                                 _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
                             }
                         }
-                        BlockOpcode::looks_nextcostume => vec![
-                            IrOpcode::looks_costumenumber,
-                            IrOpcode::hq_integer(HqIntegerFields(1)),
-                            IrOpcode::operator_add,
-                            IrOpcode::hq_integer(HqIntegerFields(
-                                context.target().costumes().len()
-                                    .try_into().map_err(|_| {
+                        BlockOpcode::looks_backdropnumbername => {
+                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
+                                block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field NUMBER_NAME"
+                                    )
+                                })?;
+                            let sb3::VarVal::String(number_name) =
+                                val.clone().ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - null backdrop name for \
+                                         NUMBER_NAME field"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - NUMBER_NAME field is not of type \
+                                     String"
+                                );
+                            };
+                            match &*number_name {
+                                "number" => vec![IrOpcode::looks_backdropnumber],
+                                "name" => hq_todo!("backdrop name"),
+                                _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
+                            }
+                        }
+                        BlockOpcode::looks_backdrops => {
+                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
+                                block_info.fields.get("BACKDROP").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field BACKDROP"
+                                    )
+                                })?;
+                            let sb3::VarVal::String(backdrop_name) =
+                                val.clone().ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - null backdrop name for BACKROP \
+                                         field"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - BACKDROP field is not of type String"
+                                );
+                            };
+                            let backdrop_index: i32 = context
+                                .project()?
+                                .backdrops()
+                                .iter()
+                                .find_position(|costume| costume.name == backdrop_name)
+                                .ok_or_else(|| make_hq_bug!("backdrop index not found"))?
+                                .0
+                                .try_into()
+                                .map_err(|_| make_hq_bug!("backdrop index out of bounds"))?;
+                            vec![IrOpcode::hq_integer(HqIntegerFields(backdrop_index))]
+                        }
+                        BlockOpcode::looks_nextcostume => {
+                            vec![
+                                IrOpcode::looks_costumenumber,
+                                IrOpcode::hq_integer(HqIntegerFields(1)),
+                                IrOpcode::operator_add,
+                                IrOpcode::hq_integer(HqIntegerFields(
+                                    context.target().costumes().len().try_into().map_err(|_| {
                                         make_hq_bug!("costumes length out of bounds")
                                     })?,
-                            )),
-                            IrOpcode::operator_modulo,
-                            IrOpcode::looks_switchcostumeto,
-                        ],
+                                )),
+                                IrOpcode::operator_modulo,
+                                IrOpcode::looks_switchcostumeto,
+                            ]
+                        }
+                        BlockOpcode::looks_nextbackdrop => {
+                            vec![
+                                IrOpcode::looks_backdropnumber,
+                                IrOpcode::hq_integer(HqIntegerFields(1)),
+                                IrOpcode::operator_add,
+                                IrOpcode::hq_integer(HqIntegerFields(
+                                    context.project()?.backdrops().len().try_into().map_err(
+                                        |_| make_hq_bug!("backdrops length out of bounds"),
+                                    )?,
+                                )),
+                                IrOpcode::operator_modulo,
+                                IrOpcode::looks_switchbackdropto,
+                            ]
+                        }
                         BlockOpcode::looks_costume => {
                             let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
                                 block_info.fields.get("COSTUME").ok_or_else(|| {
