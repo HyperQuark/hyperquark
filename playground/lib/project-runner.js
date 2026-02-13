@@ -40,8 +40,16 @@ export class ProjectRunner extends EventTarget {
   #mouseY;
   #mouseDown;
   #triggerSpriteClicked;
+  monitors;
 
-  constructor({ renderer, timeout, framerate_wait, turbo, exports }) {
+  constructor({
+    renderer,
+    timeout,
+    framerate_wait,
+    turbo,
+    exports,
+    project_json,
+  }) {
     super();
 
     this.#sensing_answer = exports.sensing_answer;
@@ -60,6 +68,21 @@ export class ProjectRunner extends EventTarget {
     this.#mouseY = exports.mouseY ?? { value: 0 };
     this.#mouseDown = exports.mouseDown ?? { value: false };
     this.#triggerSpriteClicked = exports.trigger_sprite_clicked;
+    this.monitors = Object.fromEntries(
+      project_json.monitors.map((monitor) => {
+        return [
+          monitor.id,
+          {
+            name: monitor.params.VARIABLE,
+            x: monitor.x,
+            y: monitor.y,
+            visible: monitor.visible,
+            value: monitor.value,
+            sprite: monitor.spriteName,
+          },
+        ];
+      }),
+    );
   }
 
   static async init({
@@ -91,6 +114,18 @@ export class ProjectRunner extends EventTarget {
         // runner doesn't exist yet, but it will by the time the function is called
         runner.dispatchEvent(
           new CustomEvent("queueQuestion", { detail: { question, struct } }),
+        );
+      },
+      (id, value) => {
+        runner.dispatchEvent(
+          new CustomEvent("updateVariableVal", { detail: { id, value } }),
+        );
+      },
+      (id, visible) => {
+        runner.dispatchEvent(
+          new CustomEvent("updateVariableVisibility", {
+            detail: { id, visible },
+          }),
         );
       },
     );
@@ -138,21 +173,7 @@ export class ProjectRunner extends EventTarget {
       importedStringConstants: "",
     });
 
-    const {
-      flag_clicked,
-      tick,
-      memory,
-      threads_count,
-      requests_refresh,
-      threads,
-      unreachable_dbg,
-      sensing_timer,
-      mark_waiting_flag,
-      sensing_answer,
-      mouseX,
-      mouseY,
-      mouseDown,
-    } = instance.exports;
+    const { flag_clicked, tick, memory, unreachable_dbg } = instance.exports;
 
     if (typeof window === "object") {
       window.memory = memory;
@@ -173,6 +194,7 @@ export class ProjectRunner extends EventTarget {
       timeout,
       framerate_wait,
       turbo,
+      project_json,
     });
 
     return runner;

@@ -18,6 +18,8 @@ export async function setup(
   assets,
   target_names,
   queue_question,
+  update_var_val,
+  update_var_visible,
 ) {
   if (is_setup()) return;
 
@@ -79,5 +81,7 @@ export async function setup(
     costumes,
     queue_question,
     stageIndex,
+    update_var_val,
+    update_var_visible,
   );
 }

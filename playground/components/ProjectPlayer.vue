@@ -22,6 +22,23 @@
     </div>
     <div id="stage-container">
       <canvas width="480" height="360" ref="canvas"></canvas>
+      <div
+        v-for="[id, { visible, x, y, name, sprite, value }] in Object.entries(
+          monitors,
+        )"
+        :key="id"
+        class="variable-monitor"
+        v-show="visible"
+        :style="{
+          left: x.toString() + 'px',
+          top: y.toString() + 'px',
+        }"
+      >
+        <span>
+          <span v-if="!!sprite">{{ sprite }}: </span>{{ name }}
+        </span>
+        <span class="variable-value">{{ value }}</span>
+      </div>
       <div v-show="queued_questions.length > 0" id="question-div">
         <div v-if="!!queued_questions[0]?.[0]?.length">
           {{ queued_questions[0]?.[0] }}
@@ -86,6 +103,7 @@ let canvas = ref(null);
 let loadingMsg = ref("compiling project");
 let loaded = ref(false);
 let questionInput = ref(null);
+let monitors = ref({});
 
 let greenFlag = () => null;
 let stop = () => null;
@@ -264,6 +282,18 @@ onMounted(async () => {
       "queueQuestion",
       ({ detail: { question, struct } }) => queue_question(question, struct),
     );
+    runner.addEventListener(
+      "updateVariableVal",
+      ({ detail: { id, value } }) => {
+        monitors.value[id].value = value;
+      },
+    );
+    runner.addEventListener(
+      "updateVariableVisibility",
+      ({ detail: { id, visible } }) => {
+        monitors.value[id].visible = visible;
+      },
+    );
 
     const onMouseMove = (e, isDown) => {
       const rect = canvas.value.getBoundingClientRect();
@@ -294,6 +324,8 @@ onMounted(async () => {
     stop = runner.stop.bind(runner);
     setAnswer = runner.setAnswer.bind(runner);
     mark_question_resolved = runner.mark_question_resolved.bind(runner);
+    monitors.value = runner.monitors;
+    console.log(monitors.value);
   } catch (e) {
     declareError(e, true, "An error", "instantiating");
   }
@@ -360,5 +392,26 @@ div.instructions {
   }
 
   white-space: pre-wrap;
+}
+
+div.variable-monitor {
+  position: absolute;
+  background-color: var(--color-background-soft);
+  border-radius: 5px;
+  padding: 0 0.4em 0.2em 0.4em;
+
+  & span {
+    padding: 0;
+    margin: 0;
+    vertical-align: middle;
+  }
+
+  & > span.variable-value {
+    background-color: hsl(39.3, 100%, 37%);
+    color: var(--color-background);
+    border-radius: 5px;
+    padding: 0 0.3em;
+    margin-left: 0.3em;
+  }
 }
 </style>

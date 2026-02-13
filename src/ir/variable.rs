@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::Type;
 use crate::ir::types::var_val_type;
 use crate::prelude::*;
-use crate::sb3::{Target as Sb3Target, VarVal};
+use crate::sb3::{Monitor as Sb3Monitor, Target as Sb3Target, VarVal};
 use crate::wasm::WasmFlags;
 use crate::wasm::flags::Switch;
 
@@ -15,17 +15,30 @@ struct Variable {
     possible_types: RefCell<Type>,
     initial_value: VarVal,
     id: String,
+    monitor: Option<IrMonitor>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RcVar(Rc<Variable>);
 
+#[derive(Debug)]
+pub struct IrMonitor {
+    pub name: Box<str>,
+    pub id: Box<str>,
+    pub sprite: Option<Box<str>>,
+    pub visible: bool,
+    pub is_ever_visible: RefCell<bool>,
+    pub x: f64,
+    pub y: f64,
+}
+
 impl RcVar {
-    pub fn new(ty: Type, initial_value: VarVal) -> HQResult<Self> {
+    pub fn new(ty: Type, initial_value: VarVal, monitor: Option<IrMonitor>) -> HQResult<Self> {
         Ok(Self(Rc::new(Variable {
             possible_types: RefCell::new(ty.or(var_val_type(&initial_value)?)),
             initial_value,
             id: Uuid::new_v4().to_string(),
+            monitor,
         })))
     }
 
@@ -36,6 +49,7 @@ impl RcVar {
             possible_types: RefCell::new(Type::none()),
             initial_value: VarVal::Bool(false), // arbitrary value
             id: Uuid::new_v4().to_string(),
+            monitor: None,
         }))
     }
 
@@ -57,6 +71,11 @@ impl RcVar {
     #[must_use]
     pub fn id(&self) -> &str {
         &self.0.id
+    }
+
+    #[must_use]
+    pub fn monitor(&self) -> &Option<IrMonitor> {
+        &self.0.monitor
     }
 }
 
@@ -128,11 +147,28 @@ pub type TargetVars = BTreeMap<Box<str>, Rc<TargetVar>>;
 
 pub type TargetLists = BTreeMap<Box<str>, Rc<TargetList>>;
 
-pub fn variables_from_target(target: &Sb3Target) -> HQResult<TargetVars> {
+pub fn variables_from_target(target: &Sb3Target, monitors: &[Sb3Monitor]) -> HQResult<TargetVars> {
     target
         .variables
         .iter()
         .map(|(id, var_info)| {
+            let monitor = monitors
+                .iter()
+                .find(|monitor| monitor.id() == Some(id))
+                .and_then(|monitor| {
+                    Some(IrMonitor {
+                        name: monitor
+                            .params()
+                            .map(|params| params.get("VARIABLE"))??
+                            .clone(),
+                        sprite: monitor.sprite_name().cloned().flatten(),
+                        visible: *monitor.visible()?,
+                        x: *monitor.x()?,
+                        y: *monitor.y()?,
+                        is_ever_visible: RefCell::new(*monitor.visible()?),
+                        id: id.clone(),
+                    })
+                });
             Ok((
                 id.clone(),
                 Rc::new(TargetVar {
@@ -143,6 +179,7 @@ pub fn variables_from_target(target: &Sb3Target) -> HQResult<TargetVars> {
                             reason = "this field exists on all variants"
                         )]
                         var_info.get_1().unwrap().clone(),
+                        monitor,
                     )?,
                     is_used: RefCell::new(false),
                 }),

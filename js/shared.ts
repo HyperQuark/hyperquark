@@ -7,6 +7,8 @@ let _target_skins: Array<[number, number]>;
 let _costumes: Array<Array<Costume>>;
 let _queue_question: (question: string, struct: object) => void = () => {};
 let _stageIndex: number;
+let _update_var_val: (id: string, val: any) => void = () => {};
+let _update_var_visible: (id: string, visible: boolean) => void = () => {};
 
 type Costume = {
   data: string;
@@ -22,6 +24,8 @@ export function unsetup() {
   _costumes = null;
   _queue_question = () => {};
   _stageIndex = null;
+  _update_var_val = () => {};
+  _update_var_visible = () => {};
   _setup = false;
 }
 
@@ -33,6 +37,8 @@ export function setup(
   costumes: Array<Array<Costume>>,
   queue_question: (question: string, struct: object) => void,
   stageIndex: number,
+  update_var_val: (id: string, val: any) => void,
+  update_var_visible: (id: string, visible: boolean) => void,
 ) {
   _target_names = target_names;
   _target_bubbles = _target_names.map((_) => null);
@@ -43,6 +49,8 @@ export function setup(
   _costumes = costumes;
   _queue_question = queue_question;
   _stageIndex = stageIndex;
+  _update_var_val = update_var_val;
+  _update_var_visible = update_var_visible;
   _setup = true;
 }
 
@@ -118,4 +126,14 @@ export function update_bubble(
 export function queue_question(question: string, struct: object) {
   check_setup();
   _queue_question(question, struct);
+}
+
+export function update_var_val(id: string, val: any) {
+  check_setup();
+  _update_var_val(id, val);
+}
+
+export function update_var_visible(id: string, visible: boolean) {
+  check_setup();
+  _update_var_visible(id, visible);
 }

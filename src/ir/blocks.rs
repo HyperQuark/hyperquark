@@ -10,9 +10,9 @@ use crate::instructions::{
     DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
     DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
     DataReplaceitemoflistFields, DataSetvariabletoFields, DataTeevariableFields,
-    DataVariableFields, EventBroadcastAndWaitFields, EventBroadcastFields, HqBooleanFields,
-    HqCastFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields, HqYieldFields,
-    IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
+    DataVariableFields, DataVisvariableFields, EventBroadcastAndWaitFields, EventBroadcastFields,
+    HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields,
+    HqYieldFields, IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
     ProceduresCallNonwarpFields, ProceduresCallWarpFields, SensingAskandwaitFields, YieldMode,
 };
 use crate::ir::{InlinedStep, MaybeInlinedStep, RcList, ReturnType, StepIndex};
@@ -268,7 +268,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::sensing_resettimer
             | BlockOpcode::sensing_answer
             | BlockOpcode::looks_backdropnumbername
-            | BlockOpcode::looks_nextbackdrop => vec![],
+            | BlockOpcode::looks_nextbackdrop
+            | BlockOpcode::data_showvariable
+            | BlockOpcode::data_hidevariable => vec![],
             BlockOpcode::sensing_askandwait => vec!["QUESTION"],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
@@ -906,8 +908,8 @@ fn generate_list_index_op<B>(
 where
     B: Fn() -> IrOpcode,
 {
-    let text_var = RcVar::new(IrType::String, VarVal::String("".into()))?;
-    let int_var = RcVar::new(IrType::Int, VarVal::Int(0))?;
+    let text_var = RcVar::new(IrType::String, VarVal::String("".into()), None)?;
+    let int_var = RcVar::new(IrType::Int, VarVal::Int(0), None)?;
     let extra_var = RcVar::new_empty();
     let result_var = RcVar::new_empty();
 
@@ -1151,7 +1153,7 @@ where
     S: Into<Box<str>> + Clone,
     F: Fn(Box<str>) -> IrOpcode,
 {
-    let var = RcVar::new(IrType::String, VarVal::String("".into()))?;
+    let var = RcVar::new(IrType::String, VarVal::String("".into()), None)?;
     Ok(vec![
         IrOpcode::hq_cast(HqCastFields(IrType::String)),
         IrOpcode::data_setvariableto(DataSetvariabletoFields {
@@ -1571,6 +1573,94 @@ fn from_normal_block(
                             vec![IrOpcode::data_variable(DataVariableFields {
                                 var: RefCell::new(variable.var.clone()),
                                 local_read: RefCell::new(false),
+                            })]
+                        }
+                        BlockOpcode::data_showvariable => {
+                            let sb3::Field::ValueId(_val, maybe_id) =
+                                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field VARIABLE"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing variable id for VARIABLE field"
+                                );
+                            };
+                            let id = maybe_id.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null variable id for VARIABLE field"
+                                )
+                            })?;
+                            let target = context.target();
+                            let variable = if let Some(var) = target.variables().get(&id) {
+                                var.clone()
+                            } else if let Some(var) = context
+                                .target()
+                                .project()
+                                .upgrade()
+                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                                .global_variables()
+                                .get(&id)
+                            {
+                                var.clone()
+                            } else {
+                                hq_bad_proj!("variable not found")
+                            };
+                            *variable.is_used.try_borrow_mut()? = true;
+                            let Some(monitor) = variable.var.monitor().as_ref() else {
+                                hq_bad_proj!(
+                                    "tried to change visibility of variable without monitor"
+                                );
+                            };
+                            *monitor.is_ever_visible.try_borrow_mut()? = true;
+                            // crate::log!("marked variable {:?} as used", id);
+                            vec![IrOpcode::data_visvariable(DataVisvariableFields {
+                                var: RefCell::new(variable.var.clone()),
+                                visible: true,
+                            })]
+                        }
+                        BlockOpcode::data_hidevariable => {
+                            let sb3::Field::ValueId(_val, maybe_id) =
+                                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field VARIABLE"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing variable id for VARIABLE field"
+                                );
+                            };
+                            let id = maybe_id.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null variable id for VARIABLE field"
+                                )
+                            })?;
+                            let target = context.target();
+                            let variable = if let Some(var) = target.variables().get(&id) {
+                                var.clone()
+                            } else if let Some(var) = context
+                                .target()
+                                .project()
+                                .upgrade()
+                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                                .global_variables()
+                                .get(&id)
+                            {
+                                var.clone()
+                            } else {
+                                hq_bad_proj!("variable not found")
+                            };
+                            *variable.is_used.try_borrow_mut()? = true;
+                            hq_assert!(
+                                variable.var.monitor().is_some(),
+                                "tried to change visibility of variable without monitor"
+                            );
+                            // crate::log!("marked variable {:?} as used", id);
+                            vec![IrOpcode::data_visvariable(DataVisvariableFields {
+                                var: RefCell::new(variable.var.clone()),
+                                visible: false,
                             })]
                         }
                         BlockOpcode::data_deletealloflist => {
@@ -2027,7 +2117,7 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::control_repeat => {
-                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Int(0))?;
+                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Int(0), None)?;
                             let local = context.warp;
                             let condition_instructions = vec![
                                 IrOpcode::data_variable(DataVariableFields {

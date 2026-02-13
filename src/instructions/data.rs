@@ -9,3 +9,4 @@ pub mod replaceitemoflist;
 pub mod setvariableto;
 pub mod teevariable;
 pub mod variable;
+pub mod visvariable;
