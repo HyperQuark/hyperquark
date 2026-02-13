@@ -13,6 +13,18 @@ type Costume = {
   dataFormat: string;
 };
 
+export function unsetup() {
+  _target_names = null;
+  _target_bubbles = null;
+  _renderer = null;
+  _pen_skin = null;
+  _target_skins = null;
+  _costumes = null;
+  _queue_question = () => {};
+  _stageIndex = null;
+  _setup = false;
+}
+
 export function setup(
   target_names: Array<string>,
   renderer: object,

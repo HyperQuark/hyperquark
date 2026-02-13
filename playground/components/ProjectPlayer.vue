@@ -60,9 +60,10 @@ import {
   WasmFlags,
 } from "../../js/compiler/hyperquark.js";
 import { ProjectRunner } from "../lib/project-runner.js";
-import { ref, onMounted, reactive, watch } from "vue";
+import { ref, onMounted, reactive, watch, onBeforeUnmount } from "vue";
 import { getSettings } from "../lib/settings.js";
 import { useDebugModeStore } from "../stores/debug.js";
+import { unsetup } from "../../js/shared.js";
 
 const debugModeStore = useDebugModeStore();
 
@@ -129,6 +130,16 @@ watch(queued_questions, () => {
 function queue_question(question, struct) {
   queued_questions.push([question, struct]);
 }
+
+let mouseMove, mouseDown, mouseUp, runner;
+
+onBeforeUnmount(() => {
+  document.removeEventListener("mousemove", mouseMove);
+  canvas.value.removeEventListener("mousedown", mouseDown);
+  canvas.value.removeEventListener("mouseup", mouseUp);
+  runner.stop();
+  unsetup();
+});
 
 onMounted(async () => {
   const load_asset = async (md5ext) => {
@@ -229,7 +240,7 @@ onMounted(async () => {
 
   try {
     loadingMsg.value = "instantiating project";
-    const runner = await ProjectRunner.init({
+    runner = await ProjectRunner.init({
       framerate: 30,
       turbo: turbo.value,
       wasm_bytes: wasmBytes,
@@ -264,17 +275,20 @@ onMounted(async () => {
       });
     };
 
-    document.addEventListener("mousemove", (e) => {
+    mouseMove = (e) => {
       onMouseMove(e);
-    });
-    canvas.value.addEventListener("mousedown", (e) => {
+    };
+    document.addEventListener("mousemove", mouseMove);
+    mouseDown = (e) => {
       onMouseMove(e, true);
       e.preventDefault();
-    });
-    canvas.value.addEventListener("mouseup", (e) => {
+    };
+    canvas.value.addEventListener("mousedown", mouseDown);
+    mouseUp = (e) => {
       onMouseMove(e, false);
       e.preventDefault();
-    });
+    };
+    canvas.value.addEventListener("mouseup", mouseUp);
 
     greenFlag = runner.greenFlag.bind(runner);
     stop = runner.stop.bind(runner);
