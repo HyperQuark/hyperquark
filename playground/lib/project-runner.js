@@ -69,7 +69,7 @@ export class ProjectRunner extends EventTarget {
     this.#mouseDown = exports.mouseDown ?? { value: false };
     this.#triggerSpriteClicked = exports.trigger_sprite_clicked;
     this.monitors = Object.fromEntries(
-      project_json.monitors.map((monitor) => {
+      project_json.monitors?.map?.((monitor) => {
         return [
           monitor.id,
           {
@@ -81,7 +81,7 @@ export class ProjectRunner extends EventTarget {
             sprite: monitor.spriteName,
           },
         ];
-      }),
+      }) ?? []
     );
   }
 
