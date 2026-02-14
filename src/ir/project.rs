@@ -217,8 +217,9 @@ impl IrProject {
         for target in project.targets().try_borrow()?.values() {
             fixup_proc_types(target)?;
         }
+        let fixed_proc_calls = &mut BTreeSet::new();
         for step in project.steps().try_borrow()?.iter() {
-            fixup_proc_calls(step)?;
+            fixup_proc_calls(step, fixed_proc_calls)?;
         }
         Ok(project)
     }
@@ -337,14 +338,26 @@ fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
 }
 
 /// Pass variables into procedure calls, and read them on return
-fn fixup_proc_calls<S>(step: S) -> HQResult<()>
+fn fixup_proc_calls<S>(step: S, visited_steps: &mut BTreeSet<Box<str>>) -> HQResult<()>
 where
     S: Deref<Target = RefCell<Step>>,
 {
+    if visited_steps.contains(step.try_borrow()?.id()) {
+        return Ok(());
+    }
+
+    visited_steps.insert(step.try_borrow()?.id().into());
+
     let mut call_indices = vec![];
     for (index, opcode) in step.try_borrow()?.opcodes().iter().enumerate() {
         if matches!(opcode, IrOpcode::procedures_call_warp(_)) {
             call_indices.push(index);
+        }
+
+        if let Some(inline_steps) = opcode.inline_steps() {
+            inline_steps.iter().try_for_each(|inline_step| {
+                fixup_proc_calls(Rc::clone(inline_step), visited_steps)
+            })?;
         }
     }
 
