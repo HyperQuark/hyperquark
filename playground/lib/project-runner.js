@@ -42,7 +42,7 @@ export class ProjectRunner extends EventTarget {
   #triggerSpriteClicked;
   monitors;
 
-  constructor({
+  #initProps({
     renderer,
     timeout,
     framerate_wait,
@@ -50,8 +50,6 @@ export class ProjectRunner extends EventTarget {
     exports,
     project_json,
   }) {
-    super();
-
     this.#sensing_answer = exports.sensing_answer;
     this.#mark_question_resolved_func = exports.mark_waiting_flag;
     this.#renderer = renderer;
@@ -81,11 +79,11 @@ export class ProjectRunner extends EventTarget {
             sprite: monitor.spriteName,
           },
         ];
-      }) ?? []
+      }) ?? [],
     );
   }
 
-  static async init({
+  async init({
     framerate = 30,
     turbo,
     wasm_bytes,
@@ -111,18 +109,17 @@ export class ProjectRunner extends EventTarget {
       assets,
       target_names,
       (question, struct) => {
-        // runner doesn't exist yet, but it will by the time the function is called
-        runner.dispatchEvent(
+        this.dispatchEvent(
           new CustomEvent("queueQuestion", { detail: { question, struct } }),
         );
       },
       (id, value) => {
-        runner.dispatchEvent(
+        this.dispatchEvent(
           new CustomEvent("updateVariableVal", { detail: { id, value } }),
         );
       },
       (id, visible) => {
-        runner.dispatchEvent(
+        this.dispatchEvent(
           new CustomEvent("updateVariableVisibility", {
             detail: { id, visible },
           }),
@@ -188,7 +185,7 @@ export class ProjectRunner extends EventTarget {
       console.info("synthetic error to expose wasm module to devtools:", error);
     }
 
-    const runner = new ProjectRunner({
+    this.#initProps({
       renderer,
       exports: instance.exports,
       timeout,
@@ -197,7 +194,7 @@ export class ProjectRunner extends EventTarget {
       project_json,
     });
 
-    return runner;
+    return this;
   }
 
   async run() {
@@ -228,7 +225,8 @@ export class ProjectRunner extends EventTarget {
       } while (
         Date.now() - thisTickStartTime < this.#framerate_wait * 0.8 &&
         !this.turbo &&
-        this.#requests_refresh.value === 0
+        this.#requests_refresh.value === 0 &&
+        this.#threads_count.value > 0
       );
       this.#requests_refresh.value = 0;
       this.#renderer.draw();

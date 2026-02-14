@@ -258,7 +258,8 @@ onMounted(async () => {
 
   try {
     loadingMsg.value = "instantiating project";
-    runner = await ProjectRunner.init({
+    runner = new ProjectRunner();
+    await runner.init({
       framerate: 30,
       turbo: turbo.value,
       wasm_bytes: wasmBytes,

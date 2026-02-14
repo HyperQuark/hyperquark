@@ -2075,7 +2075,7 @@ fn from_normal_block(
                                 )
                             };
                             match operator.to_lowercase().as_str() {
-                                "all" => hq_todo!("control_stop all"),
+                                "all" => vec![IrOpcode::control_stop_all],
                                 "this script" => vec![IrOpcode::hq_yield(HqYieldFields {
                                     mode: if context.warp {
                                         YieldMode::Return

@@ -172,7 +172,8 @@ describe("Integration tests", () => {
       // todo: run wasm-opt if specified in flags?
 
       // Run the project and once all threads are complete check the results.
-      const runner = await ProjectRunner.init({
+      const runner = new ProjectRunner();
+      await runner.init({
         wasm_bytes: project_wasm.wasm_bytes,
         target_names: project_wasm.target_names,
         project_json,
