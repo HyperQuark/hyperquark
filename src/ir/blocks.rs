@@ -423,21 +423,35 @@ fn procedure_argument(
     )])
 }
 
+/// Generates the next step to go to, based off of the block info, and the `NextBlocks`
+/// passed to it.
+///
+/// Returns a `MaybeInlinedStep` along with a `bool` indicating if the step should yield
+/// first.
 fn generate_next_step(
     block_info: &BlockInfo,
     blocks: &BTreeMap<Box<str>, Block>,
     context: &StepContext,
     final_next_blocks: NextBlocks,
     flags: &WasmFlags,
-) -> HQResult<MaybeInlinedStep> {
-    let (next_block, outer_next_blocks) = if let Some(ref next_block) = block_info.next {
-        (Some(NextBlock::ID(next_block.clone())), final_next_blocks)
+) -> HQResult<(MaybeInlinedStep, bool)> {
+    let (next_block, yield_first, outer_next_blocks) = if let Some(ref next_block) = block_info.next
+    {
+        (
+            Some(NextBlock::ID(next_block.clone())),
+            false,
+            final_next_blocks,
+        )
     } else if let (Some(next_block_info), popped_next_blocks) =
         final_next_blocks.clone().pop_inner()
     {
-        (Some(next_block_info.block), popped_next_blocks)
+        (
+            Some(next_block_info.block),
+            next_block_info.yield_first,
+            popped_next_blocks,
+        )
     } else {
-        (None, final_next_blocks)
+        (None, false, final_next_blocks)
     };
     let next_step = match next_block {
         Some(NextBlock::ID(id)) => {
@@ -463,7 +477,7 @@ fn generate_next_step(
             false,
         )),
     };
-    Ok(next_step)
+    Ok((next_step, yield_first))
 }
 
 fn generate_next_step_inlined(
@@ -473,10 +487,39 @@ fn generate_next_step_inlined(
     final_next_blocks: NextBlocks,
     flags: &WasmFlags,
 ) -> HQResult<InlinedStep> {
-    Ok(
-        match generate_next_step(block_info, blocks, context, final_next_blocks, flags)? {
-            MaybeInlinedStep::Inlined(step) => step,
-            MaybeInlinedStep::NonInlined(step_index) => {
+    let (next_step, yield_first) =
+        generate_next_step(block_info, blocks, context, final_next_blocks, flags)?;
+    Ok(match next_step {
+        MaybeInlinedStep::Inlined(step) => {
+            if yield_first {
+                let next_step_index = step
+                    .try_borrow()?
+                    .clone_to_non_inlined(&context.target().project())?;
+                Rc::new(RefCell::new(Step::new(
+                    None,
+                    context.clone(),
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Schedule(next_step_index),
+                    })],
+                    context.target().project(),
+                    false,
+                )))
+            } else {
+                step
+            }
+        }
+        MaybeInlinedStep::NonInlined(step_index) => {
+            if yield_first {
+                Rc::new(RefCell::new(Step::new(
+                    None,
+                    context.clone(),
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Schedule(step_index),
+                    })],
+                    context.target().project(),
+                    false,
+                )))
+            } else {
                 let mut step = context
                     .project()?
                     .steps()
@@ -488,14 +531,30 @@ fn generate_next_step_inlined(
                 step.make_inlined();
                 Rc::new(RefCell::new(step))
             }
-            MaybeInlinedStep::Undetermined(mut step) => {
+        }
+        MaybeInlinedStep::Undetermined(mut step) => {
+            if yield_first {
+                let step_index = step.clone_to_non_inlined(&context.target().project())?;
+                Rc::new(RefCell::new(Step::new(
+                    None,
+                    context.clone(),
+                    vec![IrOpcode::hq_yield(HqYieldFields {
+                        mode: YieldMode::Schedule(step_index),
+                    })],
+                    context.target().project(),
+                    false,
+                )))
+            } else {
                 step.make_inlined();
                 Rc::new(RefCell::new(step))
             }
-        },
-    )
+        }
+    })
 }
 
+/// Generates a `StepIndex` for the next step of the given block, based on the
+/// block info and the given `NextSteps`. The generated step must not be inlined
+/// at a later stage, as it may cause reference cycles.
 fn generate_next_step_non_inlined(
     block_info: &BlockInfo,
     blocks: &BTreeMap<Box<str>, Block>,
@@ -503,7 +562,9 @@ fn generate_next_step_non_inlined(
     final_next_blocks: NextBlocks,
     flags: &WasmFlags,
 ) -> HQResult<StepIndex> {
-    match generate_next_step(block_info, blocks, context, final_next_blocks, flags)? {
+    let (next_step, _yield_first) =
+        generate_next_step(block_info, blocks, context, final_next_blocks, flags)?;
+    match next_step {
         MaybeInlinedStep::Inlined(step) => step
             .try_borrow()?
             .clone_to_non_inlined(&context.target().project()),
