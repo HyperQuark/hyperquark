@@ -18,4 +18,4 @@ pub use step::{InlinedStep, MaybeInlinedStep, Step, StepIndex};
 pub use target::Target;
 use thread::Thread;
 pub use types::{ReturnType, Type, base_types, var_val_instruction, var_val_type};
-pub use variable::{RcList, RcVar, used_vars};
+pub use variable::{IrMonitor, RcList, RcVar, used_vars};

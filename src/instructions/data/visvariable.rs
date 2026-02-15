@@ -70,15 +70,17 @@ pub const fn const_fold(
 }
 
 crate::instructions_test!(
-    any_global;
+    test;
     data_visvariable;
-    t
     @ super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
                     crate::sb3::VarVal::Float(0.0),
-                    None,
+                    Some(crate::ir::IrMonitor {
+                        id: "".into(),
+                        is_ever_visible: RefCell::new(true,)
+                    }),
                 ).unwrap())
             ,
         visible: true

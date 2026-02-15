@@ -23,13 +23,8 @@ pub struct RcVar(Rc<Variable>);
 
 #[derive(Debug)]
 pub struct IrMonitor {
-    pub name: Box<str>,
     pub id: Box<str>,
-    pub sprite: Option<Box<str>>,
-    pub visible: bool,
     pub is_ever_visible: RefCell<bool>,
-    pub x: f64,
-    pub y: f64,
 }
 
 impl RcVar {
@@ -157,14 +152,6 @@ pub fn variables_from_target(target: &Sb3Target, monitors: &[Sb3Monitor]) -> HQR
                 .find(|monitor| monitor.id() == Some(id))
                 .and_then(|monitor| {
                     Some(IrMonitor {
-                        name: monitor
-                            .params()
-                            .map(|params| params.get("VARIABLE"))??
-                            .clone(),
-                        sprite: monitor.sprite_name().cloned().flatten(),
-                        visible: *monitor.visible()?,
-                        x: *monitor.x()?,
-                        y: *monitor.y()?,
                         is_ever_visible: RefCell::new(*monitor.visible()?),
                         id: id.clone(),
                     })
