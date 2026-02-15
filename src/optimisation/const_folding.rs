@@ -54,6 +54,20 @@ pub struct ConstFoldState {
     pub vars: BTreeMap<Box<str>, ConstFoldItem>,
 }
 
+impl ConstFoldState {
+    fn merge(&mut self, other: Self) {
+        for (var, _) in other.vars {
+            self.vars.insert(
+                var,
+                ConstFoldItem::Unknown {
+                    possible_types: IrType::none(), // this is ok because the unknown value is never actually used
+                    opcodes: Rc::from([]),
+                },
+            );
+        }
+    }
+}
+
 fn const_fold_step<S>(step: S, state: &mut ConstFoldState) -> HQResult<()>
 where
     S: Deref<Target = RefCell<Step>>,
@@ -89,12 +103,18 @@ where
         {
             let body_mut = Rc::new(Rc::unwrap_or_clone(body));
             let condition_mut = Rc::new(Rc::unwrap_or_clone(condition));
-            const_fold_step(Rc::clone(&body_mut), &mut ConstFoldState::default())?;
-            const_fold_step(Rc::clone(&condition_mut), &mut ConstFoldState::default())?;
+            let mut body_state = ConstFoldState::default();
+            const_fold_step(Rc::clone(&body_mut), &mut body_state)?;
+            state.merge(body_state);
+            let mut condition_state = ConstFoldState::default();
+            const_fold_step(Rc::clone(&condition_mut), &mut condition_state)?;
+            state.merge(condition_state);
             let first_condition_mut = first_condition
                 .map(|first_cond_step| -> HQResult<_> {
                     let first_cond_mut = Rc::new(Rc::unwrap_or_clone(first_cond_step));
-                    const_fold_step(Rc::clone(&first_cond_mut), &mut ConstFoldState::default())?;
+                    let mut cond_state = ConstFoldState::default();
+                    const_fold_step(Rc::clone(&first_cond_mut), &mut cond_state)?;
+                    state.merge(cond_state);
 
                     Ok(first_cond_mut)
                 })
