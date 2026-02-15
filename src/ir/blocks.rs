@@ -276,7 +276,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
                 vec!["BROADCAST_INPUT"]
             }
             BlockOpcode::control_wait => vec!["DURATION"],
-            BlockOpcode::data_setvariableto | BlockOpcode::data_changevariableby => vec!["VALUE"],
+            BlockOpcode::data_setvariableto
+            | BlockOpcode::data_changevariableby
+            | BlockOpcode::control_for_each => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
             BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
             BlockOpcode::control_if
@@ -586,6 +588,7 @@ fn generate_loop(
     final_next_blocks: NextBlocks,
     first_condition_instructions: Option<Vec<IrOpcode>>,
     condition_instructions: Vec<IrOpcode>,
+    pre_body_instructions: Option<Vec<IrOpcode>>,
     flip_if: bool,
     setup_instructions: Vec<IrOpcode>,
     flags: &WasmFlags,
@@ -649,12 +652,22 @@ fn generate_loop(
                 false,
             )))
         });
+        let pre_body_step = pre_body_instructions.map(|instrs| {
+            Rc::new(RefCell::new(Step::new(
+                None,
+                context.clone(),
+                instrs,
+                context.target().project(),
+                false,
+            )))
+        });
         Ok(setup_instructions
             .into_iter()
             .chain(vec![IrOpcode::control_loop(ControlLoopFields {
                 first_condition: first_condition_step,
                 condition: condition_step,
                 body: substack_step,
+                pre_body: pre_body_step,
                 flip_if,
             })])
             .collect())
@@ -684,6 +697,12 @@ fn generate_loop(
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             }));
         let condition_step_index = project.new_owned_step(condition_step)?;
+        if let Some(pre_body_blocks) = pre_body_instructions {
+            substack_step
+                .try_borrow_mut()?
+                .opcodes_mut()
+                .extend(pre_body_blocks);
+        }
         if let Some(block) = substack_block {
             let substack_blocks = from_block(
                 block,
@@ -2172,6 +2191,7 @@ fn from_normal_block(
                                 final_next_blocks.clone(),
                                 first_condition_instructions,
                                 condition_instructions,
+                                None,
                                 false,
                                 vec![],
                                 flags,
@@ -2213,6 +2233,115 @@ fn from_normal_block(
                                 final_next_blocks.clone(),
                                 first_condition_instructions,
                                 condition_instructions,
+                                None,
+                                false,
+                                setup_instructions,
+                                flags,
+                            )?
+                        }
+                        BlockOpcode::control_for_each => {
+                            let sb3::Field::ValueId(_val, maybe_id) =
+                                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field VARIABLE"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing variable id for VARIABLE field"
+                                );
+                            };
+                            let id = maybe_id.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null variable id for VARIABLE field"
+                                )
+                            })?;
+                            let target = context.target();
+                            let variable = if let Some(var) = target.variables().get(&id) {
+                                var.clone()
+                            } else if let Some(var) = context
+                                .target()
+                                .project()
+                                .upgrade()
+                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                                .global_variables()
+                                .get(&id)
+                            {
+                                var.clone()
+                            } else {
+                                hq_bad_proj!("variable not found")
+                            };
+                            *variable.is_used.try_borrow_mut()? = true;
+                            let counter = RcVar::new(IrType::Int, sb3::VarVal::Int(0), None)?;
+                            let local = context.warp;
+                            let condition_instructions = vec![
+                                IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(counter.clone()),
+                                    local_read: RefCell::new(local),
+                                }),
+                                IrOpcode::hq_integer(HqIntegerFields(1)),
+                                IrOpcode::operator_add,
+                                IrOpcode::data_teevariable(DataTeevariableFields {
+                                    var: RefCell::new(counter.clone()),
+                                    local_read_write: RefCell::new(local),
+                                }),
+                            ]
+                            .into_iter()
+                            .chain(inputs(
+                                block_info,
+                                blocks,
+                                context,
+                                &context.target().project(),
+                                flags,
+                            )?)
+                            .chain(vec![IrOpcode::operator_lt])
+                            .collect();
+                            let first_condition_instructions = Some(
+                                vec![IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(counter.clone()),
+                                    local_read: RefCell::new(local),
+                                })]
+                                .into_iter()
+                                .chain(inputs(
+                                    block_info,
+                                    blocks,
+                                    context,
+                                    &context.target().project(),
+                                    flags,
+                                )?)
+                                .chain(vec![IrOpcode::operator_lt])
+                                .collect(),
+                            );
+                            let setup_instructions = vec![
+                                IrOpcode::hq_drop,
+                                IrOpcode::hq_integer(HqIntegerFields(0)),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(counter.clone()),
+                                    local_write: RefCell::new(local),
+                                }),
+                            ];
+                            let pre_body_instructions = Some(vec![
+                                IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(counter),
+                                    local_read: RefCell::new(local),
+                                }),
+                                IrOpcode::hq_integer(HqIntegerFields(1)),
+                                IrOpcode::operator_add,
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(variable.var.clone()),
+                                    local_write: RefCell::new(false),
+                                }),
+                            ]);
+                            generate_loop(
+                                context.warp,
+                                &mut should_break,
+                                block_info,
+                                blocks,
+                                context,
+                                final_next_blocks.clone(),
+                                first_condition_instructions,
+                                condition_instructions,
+                                pre_body_instructions,
                                 false,
                                 setup_instructions,
                                 flags,
@@ -2237,6 +2366,7 @@ fn from_normal_block(
                                 final_next_blocks.clone(),
                                 first_condition_instructions,
                                 condition_instructions,
+                                None,
                                 true,
                                 setup_instructions,
                                 flags,
@@ -2261,6 +2391,7 @@ fn from_normal_block(
                                 final_next_blocks.clone(),
                                 first_condition_instructions,
                                 condition_instructions,
+                                None,
                                 false,
                                 setup_instructions,
                                 flags,

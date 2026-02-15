@@ -166,12 +166,18 @@ impl IrOpcode {
                 first_condition,
                 condition,
                 body,
+                pre_body,
                 ..
             }) => Some(
-                [first_condition.as_mut(), Some(condition), Some(body)]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
+                [
+                    first_condition.as_mut(),
+                    Some(condition),
+                    pre_body.as_mut(),
+                    Some(body),
+                ]
+                .into_iter()
+                .flatten()
+                .collect(),
             ),
             _ => None,
         }

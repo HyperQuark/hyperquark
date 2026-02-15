@@ -10,6 +10,7 @@ pub struct Fields {
     pub first_condition: Option<Rc<RefCell<Step>>>,
     pub condition: Rc<RefCell<Step>>,
     pub body: Rc<RefCell<Step>>,
+    pub pre_body: Option<Rc<RefCell<Step>>>,
     pub flip_if: bool,
 }
 
@@ -41,6 +42,7 @@ pub fn wasm(
         condition,
         body,
         flip_if,
+        pre_body,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let inner_instructions = func.compile_inner_step(Rc::clone(body))?;
@@ -50,6 +52,10 @@ pub fn wasm(
             .unwrap_or_else(|| Rc::clone(condition)),
     )?;
     let condition_instructions = func.compile_inner_step(Rc::clone(condition))?;
+    let pre_body_instructions = pre_body.as_ref().map_or_else(
+        || Ok(vec![]),
+        |post_step| func.compile_inner_step(Rc::clone(post_step)),
+    )?;
     Ok(wasm![Block(BlockType::Empty),]
         .into_iter()
         .chain(first_condition_instructions)
@@ -58,6 +64,7 @@ pub fn wasm(
         } else {
             wasm![I32Eqz, BrIf(0), Loop(BlockType::Empty)]
         })
+        .chain(pre_body_instructions)
         .chain(inner_instructions)
         .chain(condition_instructions)
         .chain(if *flip_if {

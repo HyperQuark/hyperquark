@@ -99,10 +99,21 @@ where
             first_condition,
             body,
             flip_if,
+            pre_body,
         }) = opcode
         {
             let body_mut = Rc::new(Rc::unwrap_or_clone(body));
             let condition_mut = Rc::new(Rc::unwrap_or_clone(condition));
+            let pre_body_mut = pre_body
+                .as_ref()
+                .map(|pre_body_real| -> HQResult<_> {
+                    let pre_body_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(pre_body_real)));
+                    let mut pre_body_state = ConstFoldState::default();
+                    const_fold_step(Rc::clone(&pre_body_mut), &mut pre_body_state)?;
+                    state.merge(pre_body_state);
+                    Ok(pre_body_mut)
+                })
+                .transpose()?;
             let mut body_state = ConstFoldState::default();
             const_fold_step(Rc::clone(&body_mut), &mut body_state)?;
             state.merge(body_state);
@@ -125,6 +136,7 @@ where
                 condition: condition_mut,
                 first_condition: first_condition_mut,
                 flip_if,
+                pre_body: pre_body_mut,
             });
         }
 

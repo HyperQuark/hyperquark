@@ -31,6 +31,7 @@ where
             condition,
             ref body,
             flip_if,
+            pre_body,
         },
     ) in loops
     {
@@ -51,15 +52,20 @@ where
                 branch_if: Rc::new(RefCell::new(Step::new(
                     None,
                     step.try_borrow()?.context().clone(),
-                    body.try_borrow()?
-                        .opcodes()
-                        .clone()
+                    pre_body
+                        .as_ref()
+                        .map_or_else(
+                            || -> HQResult<_> { Ok(vec![]) },
+                            |pb| Ok(pb.try_borrow()?.opcodes().clone()),
+                        )?
                         .into_iter()
+                        .chain(body.try_borrow()?.opcodes().clone())
                         .chain([IrOpcode::control_loop(ControlLoopFields {
                             first_condition: None,
                             condition: condition.clone(),
                             body: Rc::clone(body),
                             flip_if,
+                            pre_body: pre_body.clone(),
                         })])
                         .collect(),
                     step.try_borrow()?.project(),

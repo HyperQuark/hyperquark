@@ -536,6 +536,7 @@ impl VarGraph {
                     condition,
                     body,
                     flip_if,
+                    pre_body,
                 }) => {
                     let new_var_map: BTreeMap<_, _> = step
                         .try_borrow()?
@@ -642,6 +643,31 @@ impl VarGraph {
                         self.add_edge(first_cond_exit, header_node, EdgeType::Forward);
                         *self.exit_node().borrow_mut() = header_node;
 
+                        let pre_body_mut = pre_body
+                            .as_ref()
+                            .map(|pre_body_real| -> HQResult<_> {
+                                let pre_body_mut =
+                                    Rc::new(Rc::unwrap_or_clone(Rc::clone(pre_body_real)));
+                                let mut pre_body_variable_maps = variable_maps.clone();
+                                graphs.insert(
+                                    pre_body_mut.try_borrow()?.id().into(),
+                                    MaybeGraph::Started,
+                                );
+                                self.visit_step(
+                                    Rc::clone(&pre_body_mut),
+                                    &mut pre_body_variable_maps,
+                                    graphs,
+                                    type_stack,
+                                    next_steps,
+                                )?;
+                                graphs.insert(
+                                    pre_body_mut.try_borrow()?.id().into(),
+                                    MaybeGraph::Inlined,
+                                );
+                                Ok(pre_body_mut)
+                            })
+                            .transpose()?;
+
                         let body_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(body)));
                         let mut body_variable_maps = variable_maps.clone();
                         graphs.insert(body_mut.try_borrow()?.id().into(), MaybeGraph::Started);
@@ -681,6 +707,7 @@ impl VarGraph {
                                 first_condition: Some(first_condition_mut),
                                 flip_if: *flip_if,
                                 condition: condition_mut,
+                                pre_body: pre_body_mut,
                             }),
                         ));
 
@@ -704,6 +731,31 @@ impl VarGraph {
                         )?;
                         graphs.insert(condition_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                         type_stack.clear();
+
+                        let pre_body_mut = pre_body
+                            .as_ref()
+                            .map(|pre_body_real| -> HQResult<_> {
+                                let pre_body_mut =
+                                    Rc::new(Rc::unwrap_or_clone(Rc::clone(pre_body_real)));
+                                let mut pre_body_variable_maps = variable_maps.clone();
+                                graphs.insert(
+                                    pre_body_mut.try_borrow()?.id().into(),
+                                    MaybeGraph::Started,
+                                );
+                                self.visit_step(
+                                    Rc::clone(&pre_body_mut),
+                                    &mut pre_body_variable_maps,
+                                    graphs,
+                                    type_stack,
+                                    next_steps,
+                                )?;
+                                graphs.insert(
+                                    pre_body_mut.try_borrow()?.id().into(),
+                                    MaybeGraph::Inlined,
+                                );
+                                Ok(pre_body_mut)
+                            })
+                            .transpose()?;
 
                         let body_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(body)));
                         graphs.insert(body_mut.try_borrow()?.id().into(), MaybeGraph::Started);
@@ -733,6 +785,7 @@ impl VarGraph {
                                 body: body_mut,
                                 first_condition: None,
                                 condition: condition_mut,
+                                pre_body: pre_body_mut,
                             }),
                         ));
                     }
