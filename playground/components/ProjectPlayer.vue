@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("mousemove", mouseMove);
   canvas.value.removeEventListener("mousedown", mouseDown);
   canvas.value.removeEventListener("mouseup", mouseUp);
-  runner.stop();
+  runner?.stop?.();
   unsetup();
 });
 
