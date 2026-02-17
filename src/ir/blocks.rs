@@ -302,7 +302,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::data_replaceitemoflist | BlockOpcode::data_insertatlist => {
                 vec!["INDEX", "ITEM"]
             }
-            BlockOpcode::procedures_call => {
+            BlockOpcode::procedures_call => 'proc_block: {
                 let serde_json::Value::String(proccode) = block_info
                     .mutation
                     .mutations
@@ -312,7 +312,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
                     hq_bad_proj!("non-string proccode on procedures_call");
                 };
                 let Some(proc) = procs.get(proccode.as_str()) else {
-                    hq_bad_proj!("procedures_call proccode doesn't exist")
+                    break 'proc_block vec![];
                 };
                 proc.arg_ids().iter().map(|b| &**b).collect()
             }
@@ -2404,7 +2404,7 @@ fn from_normal_block(
                                 flags,
                             )?
                         }
-                        BlockOpcode::procedures_call => {
+                        BlockOpcode::procedures_call => 'proc_block: {
                             let target = context.target();
                             let procs = target.procedures()?;
                             let serde_json::Value::String(proccode) = block_info
@@ -2417,9 +2417,9 @@ fn from_normal_block(
                             else {
                                 hq_bad_proj!("non-string proccode on procedures_call")
                             };
-                            let proc = procs.get(proccode.as_str()).ok_or_else(|| {
-                                make_hq_bad_proj!("non-existant proccode on procedures_call")
-                            })?;
+                            let Some(proc) = procs.get(proccode.as_str()) else {
+                                break 'proc_block vec![];
+                            };
                             let warp = context.warp || proc.always_warped();
                             if warp {
                                 proc.compile_warped(blocks, flags)?;
