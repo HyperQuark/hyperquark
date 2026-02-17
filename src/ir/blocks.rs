@@ -762,221 +762,223 @@ fn generate_if_else(
     //     )
     //     .as_str(),
     // );
-    let this_project = context.project()?;
-    let dummy_project = Rc::new(IrProject::new(
-        this_project.global_variables().clone(),
-        this_project.global_lists().clone(),
-        Box::from(this_project.broadcasts()),
-        0,
-        vec![],
-    ));
-    let dummy_target = Rc::new(Target::new(
-        false,
-        context.target().variables().clone(),
-        context.target().lists().clone(),
-        Rc::downgrade(&dummy_project),
-        RefCell::new(context.target().procedures()?.clone()),
-        0,
-        context.target().costumes().into(),
-    ));
-    dummy_project
-        .targets()
-        .try_borrow_mut()
-        .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
-        .insert("".into(), Rc::clone(&dummy_target));
-    let dummy_context = StepContext {
-        target: Rc::clone(&dummy_target),
-        ..context.clone()
-    };
-    let dummy_if_step = Step::from_block(
-        if_block.0,
-        if_block.1.clone(),
-        blocks,
-        &dummy_context,
-        &Rc::downgrade(&dummy_project),
-        NextBlocks::new(false),
-        false,
-        flags,
-    )?;
-    let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
-        Step::from_block(
-            else_block,
-            else_block_id,
+
+    // let if_step_yields = dummy_if_step.does_yield()?;
+    // let else_step_yields = dummy_else_step.does_yield()?;
+    // crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
+    if !context.warp {
+        let this_project = context.project()?;
+        let dummy_project = Rc::new(IrProject::new(
+            this_project.global_variables().clone(),
+            this_project.global_lists().clone(),
+            Box::from(this_project.broadcasts()),
+            0,
+            vec![],
+        ));
+        let dummy_target = Rc::new(Target::new(
+            false,
+            context.target().variables().clone(),
+            context.target().lists().clone(),
+            Rc::downgrade(&dummy_project),
+            RefCell::new(context.target().procedures()?.clone()),
+            0,
+            context.target().costumes().into(),
+        ));
+        dummy_project
+            .targets()
+            .try_borrow_mut()
+            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+            .insert("".into(), Rc::clone(&dummy_target));
+        let dummy_context = StepContext {
+            target: Rc::clone(&dummy_target),
+            ..context.clone()
+        };
+        let dummy_if_step = Step::from_block(
+            if_block.0,
+            if_block.1.clone(),
             blocks,
             &dummy_context,
             &Rc::downgrade(&dummy_project),
             NextBlocks::new(false),
             false,
             flags,
-        )?
-    } else {
-        Step::new_empty(
-            Rc::downgrade(&dummy_project),
-            false,
-            Rc::clone(&dummy_target),
-        )
-    };
-    // let if_step_yields = dummy_if_step.does_yield()?;
-    // let else_step_yields = dummy_else_step.does_yield()?;
-    // crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
-    if !context.warp && (dummy_if_step.does_yield() || dummy_else_step.does_yield()) {
-        // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
-        // version inline after the branch, and the other tagged on in the substep's NextBlocks
-        // as usual, to allow for extra variable type optimisations.
-        #[expect(
-            clippy::option_if_let_else,
-            reason = "map_or_else alternative is too complex"
-        )]
-        let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
-            // crate::log("got next block from block_info.next");
-            (
-                Some(NextBlock::ID(next_block.clone())),
-                final_next_blocks.extend_with_inner(NextBlockInfo {
-                    yield_first: false,
-                    block: NextBlock::ID(next_block.clone()),
-                }),
-            )
-        } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
-            // crate::log("got next block from popping from final_next_blocks");
-            (Some(next_block_info.block), final_next_blocks.clone())
-        } else {
-            // crate::log("no next block found");
-            (
-                None,
-                final_next_blocks.clone(), // preserve termination behaviour
-            )
-        };
-        let final_if_step = {
-            Step::from_block(
-                if_block.0,
-                if_block.1,
-                blocks,
-                context,
-                &context.target().project(),
-                next_blocks.clone(),
-                false,
-                flags,
-            )?
-            // crate::log("recompiled if_step with correct next blocks");
-        };
-        let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
+        )?;
+        let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
             Step::from_block(
                 else_block,
                 else_block_id,
                 blocks,
-                context,
-                &context.target().project(),
-                next_blocks,
+                &dummy_context,
+                &Rc::downgrade(&dummy_project),
+                NextBlocks::new(false),
                 false,
                 flags,
             )?
-            // crate::log("recompiled else step with correct next blocks");
         } else {
-            let opcode = match next_block {
-                Some(NextBlock::ID(id)) => {
-                    let next_block = blocks
-                        .get(&id)
-                        .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                    // crate::log(
-                    //     format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
-                    // );
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(Rc::new(RefCell::new(Step::from_block(
-                            next_block,
-                            id.clone(),
-                            blocks,
-                            context,
-                            &context.target().project(),
-                            next_blocks,
-                            false,
-                            flags,
-                        )?))),
-                    })]
-                }
-                Some(NextBlock::Step(mut step)) => {
-                    step.make_inlined();
-                    // crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
-
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
-                    })]
-                }
-                Some(NextBlock::StepIndex(step_index)) => {
-                    let mut step = context
-                        .project()?
-                        .steps()
-                        .try_borrow()?
-                        .get(step_index.0)
-                        .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
-                        .try_borrow()?
-                        .clone();
-                    step.make_inlined();
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
-                    })]
-                }
-                None => {
-                    // crate::log("no next block after if!");
-                    if next_blocks.terminating() {
-                        // crate::log("terminating after if/else\n");
-                        vec![IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::None,
-                        })]
-                    } else {
-                        // crate::log("not terminating, at end of if/else");
-                        vec![]
-                    }
-                }
-            };
-            Step::new(
-                None,
-                context.clone(),
-                opcode,
-                context.target().project(),
+            Step::new_empty(
+                Rc::downgrade(&dummy_project),
                 false,
+                Rc::clone(&dummy_target),
             )
         };
-        *should_break = true;
-        Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
-            branch_if: Rc::new(RefCell::new(final_if_step)),
-            branch_else: Rc::new(RefCell::new(final_else_step)),
-        })])
-    } else {
-        let final_if_step = Step::from_block(
-            if_block.0,
-            if_block.1,
+        if dummy_if_step.does_yield() || dummy_else_step.does_yield() {
+            // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
+            // version inline after the branch, and the other tagged on in the substep's NextBlocks
+            // as usual, to allow for extra variable type optimisations.
+            #[expect(
+                clippy::option_if_let_else,
+                reason = "map_or_else alternative is too complex"
+            )]
+            let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
+                // crate::log("got next block from block_info.next");
+                (
+                    Some(NextBlock::ID(next_block.clone())),
+                    final_next_blocks.extend_with_inner(NextBlockInfo {
+                        yield_first: false,
+                        block: NextBlock::ID(next_block.clone()),
+                    }),
+                )
+            } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
+                // crate::log("got next block from popping from final_next_blocks");
+                (Some(next_block_info.block), final_next_blocks.clone())
+            } else {
+                // crate::log("no next block found");
+                (
+                    None,
+                    final_next_blocks.clone(), // preserve termination behaviour
+                )
+            };
+            let final_if_step = {
+                Step::from_block(
+                    if_block.0,
+                    if_block.1,
+                    blocks,
+                    context,
+                    &context.target().project(),
+                    next_blocks.clone(),
+                    false,
+                    flags,
+                )?
+                // crate::log("recompiled if_step with correct next blocks");
+            };
+            let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
+                Step::from_block(
+                    else_block,
+                    else_block_id,
+                    blocks,
+                    context,
+                    &context.target().project(),
+                    next_blocks,
+                    false,
+                    flags,
+                )?
+                // crate::log("recompiled else step with correct next blocks");
+            } else {
+                let opcode = match next_block {
+                    Some(NextBlock::ID(id)) => {
+                        let next_block = blocks
+                            .get(&id)
+                            .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
+                        // crate::log(
+                        //     format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
+                        // );
+                        vec![IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(Rc::new(RefCell::new(Step::from_block(
+                                next_block,
+                                id.clone(),
+                                blocks,
+                                context,
+                                &context.target().project(),
+                                next_blocks,
+                                false,
+                                flags,
+                            )?))),
+                        })]
+                    }
+                    Some(NextBlock::Step(mut step)) => {
+                        step.make_inlined();
+                        // crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
+
+                        vec![IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
+                        })]
+                    }
+                    Some(NextBlock::StepIndex(step_index)) => {
+                        let mut step = context
+                            .project()?
+                            .steps()
+                            .try_borrow()?
+                            .get(step_index.0)
+                            .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                            .try_borrow()?
+                            .clone();
+                        step.make_inlined();
+                        vec![IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
+                        })]
+                    }
+                    None => {
+                        // crate::log("no next block after if!");
+                        if next_blocks.terminating() {
+                            // crate::log("terminating after if/else\n");
+                            vec![IrOpcode::hq_yield(HqYieldFields {
+                                mode: YieldMode::None,
+                            })]
+                        } else {
+                            // crate::log("not terminating, at end of if/else");
+                            vec![]
+                        }
+                    }
+                };
+                Step::new(
+                    None,
+                    context.clone(),
+                    opcode,
+                    context.target().project(),
+                    false,
+                )
+            };
+            *should_break = true;
+            return Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
+                branch_if: Rc::new(RefCell::new(final_if_step)),
+                branch_else: Rc::new(RefCell::new(final_else_step)),
+            })]);
+        }
+    }
+    let final_if_step = Step::from_block(
+        if_block.0,
+        if_block.1,
+        blocks,
+        context,
+        &context.target().project(),
+        NextBlocks::new(false),
+        false,
+        flags,
+    )?;
+    let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
+        Step::from_block(
+            else_block,
+            else_block_id,
             blocks,
             context,
             &context.target().project(),
             NextBlocks::new(false),
             false,
             flags,
-        )?;
-        let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
-            Step::from_block(
-                else_block,
-                else_block_id,
-                blocks,
-                context,
-                &context.target().project(),
-                NextBlocks::new(false),
-                false,
-                flags,
-            )?
-        } else {
-            Step::new(
-                None,
-                context.clone(),
-                vec![],
-                context.target().project(),
-                false,
-            )
-        };
-        Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
-            branch_if: Rc::new(RefCell::new(final_if_step)),
-            branch_else: Rc::new(RefCell::new(final_else_step)),
-        })])
-    }
+        )?
+    } else {
+        Step::new(
+            None,
+            context.clone(),
+            vec![],
+            context.target().project(),
+            false,
+        )
+    };
+    Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
+        branch_if: Rc::new(RefCell::new(final_if_step)),
+        branch_else: Rc::new(RefCell::new(final_else_step)),
+    })])
 }
 
 fn generate_list_index_op<B>(
