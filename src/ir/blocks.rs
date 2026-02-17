@@ -270,7 +270,10 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::looks_backdropnumbername
             | BlockOpcode::looks_nextbackdrop
             | BlockOpcode::data_showvariable
-            | BlockOpcode::data_hidevariable => vec![],
+            | BlockOpcode::data_hidevariable
+            | BlockOpcode::sensing_mousex
+            | BlockOpcode::sensing_mousey
+            | BlockOpcode::sensing_mousedown => vec![],
             BlockOpcode::sensing_askandwait => vec!["QUESTION"],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
@@ -1346,6 +1349,9 @@ fn from_normal_block(
                         BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                         BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
                         BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+                        BlockOpcode::sensing_mousex => vec![IrOpcode::sensing_mousex],
+                        BlockOpcode::sensing_mousey => vec![IrOpcode::sensing_mousey],
+                        BlockOpcode::sensing_mousedown => vec![IrOpcode::sensing_mousedown],
                         BlockOpcode::sensing_answer => vec![IrOpcode::sensing_answer],
                         BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_reset_timer],
                         BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
