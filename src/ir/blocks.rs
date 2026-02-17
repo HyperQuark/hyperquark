@@ -229,7 +229,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::operator_subtract
             | BlockOpcode::operator_multiply
             | BlockOpcode::operator_mod => vec!["NUM1", "NUM2"],
-            BlockOpcode::operator_mathop => vec!["NUM"],
+            BlockOpcode::operator_mathop | BlockOpcode::operator_round => vec!["NUM"],
             BlockOpcode::operator_lt
             | BlockOpcode::operator_gt
             | BlockOpcode::operator_equals
@@ -1360,6 +1360,7 @@ fn from_normal_block(
                         BlockOpcode::operator_not => vec![IrOpcode::operator_not],
                         BlockOpcode::operator_and => vec![IrOpcode::operator_and],
                         BlockOpcode::operator_or => vec![IrOpcode::operator_or],
+                        BlockOpcode::operator_round => vec![IrOpcode::operator_round],
                         BlockOpcode::operator_mathop => {
                             let (sb3::Field::Value((Some(val),))
                             | sb3::Field::ValueId(Some(val), _)) =
