@@ -2524,7 +2524,7 @@ fn from_normal_block(
                             };
                             match &*number_name {
                                 "number" => vec![IrOpcode::looks_costumenumber],
-                                "name" => hq_todo!("costume name"),
+                                "name" => vec![IrOpcode::looks_costumename],
                                 _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
                             }
                         }

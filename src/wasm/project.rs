@@ -28,6 +28,7 @@ pub struct WasmProject {
     events: BTreeMap<Event, Vec<u32>>,
     registries: Rc<Registries>,
     target_names: Vec<Box<str>>,
+    costume_names: Rc<Vec<Vec<Box<str>>>>,
     environment: ExternalEnvironment,
 }
 
@@ -46,6 +47,7 @@ impl WasmProject {
             environment,
             registries: Rc::new(Registries::default()),
             target_names: vec![],
+            costume_names: Rc::new(vec![]),
         }
     }
 
@@ -217,6 +219,61 @@ impl WasmProject {
         ));
 
         Rc::unwrap_or_clone(self.registries().types().clone()).finish(&mut types);
+
+        // TODO: make an elements registry to deal with this at the site of the block
+        for (table_index, table_name) in self
+            .registries()
+            .tables()
+            .registry()
+            .try_borrow()?
+            .keys()
+            .enumerate()
+        {
+            if table_name.starts_with("costume_names_") {
+                #[expect(
+                    clippy::unwrap_used,
+                    reason = "checked immediately before that this is a prefix of the table name"
+                )]
+                let target_index: u32 = table_name
+                    .strip_prefix("costume_names_")
+                    .unwrap()
+                    .parse()
+                    .map_err(|_| make_hq_bug!("couldn't parse target index from table name"))?;
+                let costume_names = self
+                    .costume_names
+                    .get(target_index as usize)
+                    .ok_or_else(|| make_hq_bug!("target index out of bounds for costume names"))?;
+                let name_globals = costume_names
+                    .iter()
+                    .map(|costume_name| {
+                        Ok(ConstExpr::global_get(
+                            u32::try_from(
+                                self.registries()
+                                    .strings()
+                                    .registry()
+                                    .try_borrow()?
+                                    .get_index_of(costume_name)
+                                    .ok_or_else(|| {
+                                        make_hq_bug!(
+                                            "couldn't find costume name string in strings registry"
+                                        )
+                                    })?,
+                            )
+                            .map_err(|_| make_hq_bug!("string index out of bounds"))?,
+                        ))
+                    })
+                    .collect::<HQResult<Box<[_]>>>()?;
+                elements.active(
+                    Some(
+                        table_index
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("table index out of bounds"))?,
+                    ),
+                    &ConstExpr::i32_const(0),
+                    Elements::Expressions(RefType::EXTERNREF, Cow::Borrowed(&*name_globals)),
+                );
+            }
+        }
 
         self.registries()
             .tables()
@@ -681,6 +738,20 @@ impl WasmProject {
         let steps = Rc::new(RefCell::new(Vec::new()));
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
+        let costume_names = Rc::new(
+            ir_project
+                .targets()
+                .try_borrow()?
+                .values()
+                .map(|target| {
+                    target
+                        .costumes()
+                        .iter()
+                        .map(|costume| costume.name.clone())
+                        .collect()
+                })
+                .collect(),
+        );
         // StepFunc::compile_step(
         //     Rc::new(Step::new_empty(
         //         Rc::downgrade(ir_project),
@@ -701,7 +772,14 @@ impl WasmProject {
         // )?;
         // compile every step
         for (i, step) in ir_project.steps().try_borrow()?.iter().enumerate() {
-            StepFunc::compile_step(step, StepIndex(i), &steps, Rc::clone(&registries), flags)?;
+            StepFunc::compile_step(
+                step,
+                StepIndex(i),
+                &steps,
+                Rc::clone(&registries),
+                flags,
+                Rc::clone(&costume_names),
+            )?;
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
@@ -717,6 +795,7 @@ impl WasmProject {
             registries,
             environment: ExternalEnvironment::WebBrowser,
             target_names: ir_project.targets().try_borrow()?.keys().cloned().collect(),
+            costume_names,
         })
     }
 }
@@ -755,6 +834,7 @@ mod tests {
             environment: ExternalEnvironment::WebBrowser,
             registries,
             target_names: vec![],
+            costume_names: Rc::new(vec![]),
         };
         let wasm_bytes = project.finish().unwrap().wasm_bytes;
         if let Err(err) = wasmparser::validate(&wasm_bytes) {

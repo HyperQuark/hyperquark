@@ -68,7 +68,7 @@ macro_rules! instructions_test {
                 for ($($type_arg,)*) in types_iter(true) {
                     let output_type_result = output_type(Rc::from([$($type_arg,)*]), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
-                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
+                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
                     let wasm_result = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
@@ -100,7 +100,7 @@ macro_rules! instructions_test {
                         ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
                         ReturnType::None => vec![],
                     };
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
                     let Ok(wasm) = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?) else {
                         println!("skipping failed wasm");
                         continue;
@@ -142,7 +142,7 @@ macro_rules! instructions_test {
                         ReturnType::None => vec![],
                     };
                     println!("{result:?}");
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0);
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
                     let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::from([$($type_arg,)*]), &$crate::instructions::IrOpcode::$opcode$(($fields))?) {
                         Ok(a) => a,
                         Err(e) => {
