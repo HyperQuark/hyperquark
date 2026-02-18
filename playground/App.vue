@@ -50,6 +50,7 @@ main {
   position: sticky;
   top: 5px;
   background-color: var(--color-background);
+  z-index: 999;
 }
 </style>
 
