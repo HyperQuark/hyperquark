@@ -10,7 +10,7 @@ const opcodes = [
   "event_whenflagclicked",
   "event_whenbroadcastreceived",
   "event_whenthisspriteclicked",
-  "events_whenstageclicked",
+  "event_whenstageclicked",
   "procedures_definition",
 ].sort();
 await writeFile(
