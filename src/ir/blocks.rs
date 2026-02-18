@@ -297,7 +297,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::looks_setsizeto | BlockOpcode::pen_setPenSizeTo => vec!["SIZE"],
             BlockOpcode::looks_changesizeby => vec!["CHANGE"],
             BlockOpcode::pen_setPenColorToColor => vec!["COLOR"],
-            BlockOpcode::data_addtolist => vec!["ITEM"],
+            BlockOpcode::data_addtolist | BlockOpcode::data_itemnumoflist => vec!["ITEM"],
             BlockOpcode::data_itemoflist | BlockOpcode::data_deleteoflist => vec!["INDEX"],
             BlockOpcode::data_replaceitemoflist | BlockOpcode::data_insertatlist => {
                 vec!["INDEX", "ITEM"]
@@ -1825,6 +1825,135 @@ fn from_normal_block(
                             vec![IrOpcode::data_addtolist(DataAddtolistFields {
                                 list: list.list.clone(),
                             })]
+                        }
+                        BlockOpcode::data_itemnumoflist => {
+                            let sb3::Field::ValueId(_val, maybe_id) =
+                                block_info.fields.get("LIST").ok_or_else(|| {
+                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing variable id for LIST field"
+                                );
+                            };
+                            let id = maybe_id.clone().ok_or_else(|| {
+                                make_hq_bad_proj!(
+                                    "invalid project.json - null variable id for LIST field"
+                                )
+                            })?;
+                            let target = context.target();
+                            let list = if let Some(list) = target.lists().get(&id) {
+                                list.clone()
+                            } else if let Some(list) = context
+                                .target()
+                                .project()
+                                .upgrade()
+                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                                .global_lists()
+                                .get(&id)
+                            {
+                                list.clone()
+                            } else {
+                                hq_bad_proj!("list not found")
+                            };
+                            *list.is_used.try_borrow_mut()? = true;
+                            let item = RcVar::new_empty();
+                            let ret = RcVar::new(
+                                IrType::IntPos.or(IrType::IntZero),
+                                VarVal::Int(0),
+                                None,
+                            )?;
+                            let i = RcVar::new(
+                                IrType::IntPos.or(IrType::IntZero),
+                                VarVal::Int(0),
+                                None,
+                            )?;
+                            let condition = Rc::new(RefCell::new(Step::new(
+                                None,
+                                context.clone(),
+                                vec![
+                                    IrOpcode::data_variable(DataVariableFields {
+                                        var: RefCell::new(ret.clone()),
+                                        local_read: RefCell::new(true),
+                                    }),
+                                    IrOpcode::hq_integer(HqIntegerFields(0)),
+                                    IrOpcode::operator_equals,
+                                    IrOpcode::operator_not,
+                                    IrOpcode::data_variable(DataVariableFields {
+                                        var: RefCell::new(i.clone()),
+                                        local_read: RefCell::new(true),
+                                    }),
+                                    IrOpcode::hq_integer(HqIntegerFields(1)),
+                                    IrOpcode::operator_add,
+                                    IrOpcode::data_teevariable(DataTeevariableFields {
+                                        var: RefCell::new(i.clone()),
+                                        local_read_write: RefCell::new(true),
+                                    }),
+                                    IrOpcode::data_lengthoflist(DataLengthoflistFields {
+                                        list: list.list.clone(),
+                                    }),
+                                    IrOpcode::operator_gt,
+                                    IrOpcode::operator_or,
+                                ],
+                                Weak::clone(project),
+                                false,
+                            )));
+                            let body = Rc::new(RefCell::new(Step::new(
+                                None,
+                                context.clone(),
+                                vec![
+                                    IrOpcode::data_variable(DataVariableFields {
+                                        var: RefCell::new(i.clone()),
+                                        local_read: RefCell::new(true),
+                                    }),
+                                    IrOpcode::data_itemoflist(DataItemoflistFields {
+                                        list: list.list.clone(),
+                                    }),
+                                    IrOpcode::data_variable(DataVariableFields {
+                                        var: RefCell::new(item.clone()),
+                                        local_read: RefCell::new(true),
+                                    }),
+                                    IrOpcode::operator_equals,
+                                    IrOpcode::data_variable(DataVariableFields {
+                                        var: RefCell::new(i.clone()),
+                                        local_read: RefCell::new(true),
+                                    }),
+                                    IrOpcode::operator_multiply,
+                                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                        var: RefCell::new(ret.clone()),
+                                        local_write: RefCell::new(true),
+                                    }),
+                                ],
+                                Weak::clone(project),
+                                false,
+                            )));
+                            vec![
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(item.clone()),
+                                    local_write: RefCell::new(true),
+                                }),
+                                IrOpcode::hq_integer(HqIntegerFields(0)),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(i.clone()),
+                                    local_write: RefCell::new(true),
+                                }),
+                                IrOpcode::hq_integer(HqIntegerFields(0)),
+                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                    var: RefCell::new(ret.clone()),
+                                    local_write: RefCell::new(true),
+                                }),
+                                IrOpcode::control_loop(ControlLoopFields {
+                                    first_condition: None,
+                                    condition,
+                                    body,
+                                    pre_body: None,
+                                    flip_if: true,
+                                }),
+                                IrOpcode::data_variable(DataVariableFields {
+                                    var: RefCell::new(ret.clone()),
+                                    local_read: RefCell::new(true),
+                                }),
+                            ]
                         }
                         BlockOpcode::data_insertatlist => {
                             let sb3::Field::ValueId(_val, maybe_id) =
