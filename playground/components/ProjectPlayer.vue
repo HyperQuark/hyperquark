@@ -71,11 +71,6 @@
 
 <script setup>
 import Loading from "./Loading.vue";
-import {
-  sb3_to_wasm,
-  FinishedWasm,
-  WasmFlags,
-} from "../../js/compiler/hyperquark.js";
 import { ProjectRunner } from "../lib/project-runner.js";
 import { ref, onMounted, reactive, watch, onBeforeUnmount } from "vue";
 import { getSettings } from "../lib/settings.js";
@@ -149,7 +144,7 @@ function queue_question(question, struct) {
   queued_questions.push([question, struct]);
 }
 
-let mouseMove, mouseDown, mouseUp, runner;
+let mouseMove, mouseDown, mouseUp, runner, compileWorker;
 
 onBeforeUnmount(() => {
   document.removeEventListener("mousemove", mouseMove);
@@ -157,6 +152,7 @@ onBeforeUnmount(() => {
   canvas.value.removeEventListener("mouseup", mouseUp);
   runner?.stop?.();
   unsetup();
+  compileWorker?.terminate?.();
 });
 
 onMounted(async () => {
@@ -186,16 +182,35 @@ onMounted(async () => {
   console.log(props);
 
   try {
-    // we need to convert settings to and from a JsValue because the WasmFlags exported from the
-    // no-compiler version is not the same as that exported by the compiler... because reasons
-    wasmProject = sb3_to_wasm(
-      JSON.stringify(props.json),
-      WasmFlags.from_js(getSettings().to_js()),
+    // imports can take a long time, so need to wait for worker to tell us that it's initialised
+    await new Promise((resolve) => {
+      compileWorker = new Worker(
+        new URL("../lib/compile-worker.js", import.meta.url),
+        { type: "module" },
+      );
+      compileWorker.onmessage = resolve;
+    });
+    wasmProject = await new Promise((resolve, reject) => {
+      compileWorker.onmessage = ({ data }) => resolve(data);
+      compileWorker.onerror = (e) => {
+        reject(e.message);
+      };
+      compileWorker.postMessage({
+        proj: JSON.stringify(props.json),
+        flags: getSettings().to_js(),
+      });
+      console.log("message posted!");
+    });
+
+    console.log(
+      wasmProject.target_names,
+      wasmProject.strings,
+      wasmProject.wasm_bytes,
     );
 
-    if ((!wasmProject) instanceof FinishedWasm) {
-      throw new Error("unknown error occurred when compiling project");
-    }
+    // if ((!wasmProject instanceof FinishedWasm)) {
+    //   throw new Error("unknown error occurred when compiling project");
+    // }
 
     wasmBytes = wasmProject.wasm_bytes;
   } catch (e) {
