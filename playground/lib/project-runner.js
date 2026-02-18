@@ -218,15 +218,14 @@ export class ProjectRunner extends EventTarget {
       }
       previousTickStartTime = thisTickStartTime;
       do {
-        this.#tick();
         if (this.#threads_count.value === 0) {
           break $outertickloop;
         }
+        this.#tick();
       } while (
         Date.now() - thisTickStartTime < this.#framerate_wait * 0.8 &&
         !this.turbo &&
-        this.#requests_refresh.value === 0 &&
-        this.#threads_count.value > 0
+        this.#requests_refresh.value === 0
       );
       this.#requests_refresh.value = 0;
       this.#renderer.draw();
@@ -259,10 +258,14 @@ export class ProjectRunner extends EventTarget {
 
   stop() {
     console.log("stopping");
-    this.#threads_count.value = 0;
+    if (!!this.#threads_count) {
+      this.#threads_count.value = 0;
+    }
     this.#running = false;
-    for (let i = 0; i < this.#threads.length; i++) {
-      this.#threads.set(i, null);
+    if (!!this.#threads) {
+      for (let i = 0; i < this.#threads.length; i++) {
+        this.#threads.set(i, null);
+      }
     }
     this.dispatchEvent(new CustomEvent("stopped"));
   }

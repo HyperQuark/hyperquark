@@ -19,7 +19,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
 
     Ok(wasm![
         I32Const(0),
-        GlobalSet(threads_count),
+        #LazyGlobalSet(threads_count),
         I32Const(0),
         RefNull(HeapType::Concrete(thread_struct_type)),
         TableSize(threads_table),
