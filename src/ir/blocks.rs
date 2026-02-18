@@ -273,7 +273,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_hidevariable
             | BlockOpcode::sensing_mousex
             | BlockOpcode::sensing_mousey
-            | BlockOpcode::sensing_mousedown => vec![],
+            | BlockOpcode::sensing_mousedown
+            | BlockOpcode::motion_xposition
+            | BlockOpcode::motion_yposition => vec![],
             BlockOpcode::sensing_askandwait => vec!["QUESTION"],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
@@ -302,6 +304,10 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::data_replaceitemoflist | BlockOpcode::data_insertatlist => {
                 vec!["INDEX", "ITEM"]
             }
+            BlockOpcode::motion_changexby => vec!["DX"],
+            BlockOpcode::motion_changeyby => vec!["DY"],
+            BlockOpcode::motion_setx => vec!["X"],
+            BlockOpcode::motion_sety => vec!["Y"],
             BlockOpcode::procedures_call => 'proc_block: {
                 let serde_json::Value::String(proccode) = block_info
                     .mutation
@@ -1321,6 +1327,20 @@ fn from_normal_block(
                         BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
                         BlockOpcode::operator_mod => vec![IrOpcode::operator_modulo],
                         BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
+                        BlockOpcode::motion_setx => vec![IrOpcode::motion_setx],
+                        BlockOpcode::motion_sety => vec![IrOpcode::motion_sety],
+                        BlockOpcode::motion_xposition => vec![IrOpcode::motion_xposition],
+                        BlockOpcode::motion_yposition => vec![IrOpcode::motion_yposition],
+                        BlockOpcode::motion_changexby => vec![
+                            IrOpcode::motion_xposition,
+                            IrOpcode::operator_add,
+                            IrOpcode::motion_setx,
+                        ],
+                        BlockOpcode::motion_changeyby => vec![
+                            IrOpcode::motion_yposition,
+                            IrOpcode::operator_add,
+                            IrOpcode::motion_sety,
+                        ],
                         BlockOpcode::motion_direction => vec![IrOpcode::motion_direction],
                         BlockOpcode::motion_pointindirection => {
                             vec![IrOpcode::motion_pointindirection]
