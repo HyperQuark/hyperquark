@@ -18,6 +18,10 @@ export default defineConfig({
       },
     }),
   ],
+  worker: {
+    format: "es",
+    plugins: [wasm()],
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./playground", import.meta.url)),
