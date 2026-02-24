@@ -102,6 +102,14 @@ where
             pre_body,
         }) = opcode
         {
+            let first_condition_mut = first_condition
+                .map(|first_cond_step| -> HQResult<_> {
+                    let first_cond_mut = Rc::new(Rc::unwrap_or_clone(first_cond_step));
+                    const_fold_step(Rc::clone(&first_cond_mut), state)?;
+
+                    Ok(first_cond_mut)
+                })
+                .transpose()?;
             let body_mut = Rc::new(Rc::unwrap_or_clone(body));
             let condition_mut = Rc::new(Rc::unwrap_or_clone(condition));
             let pre_body_mut = pre_body
@@ -120,16 +128,6 @@ where
             let mut condition_state = ConstFoldState::default();
             const_fold_step(Rc::clone(&condition_mut), &mut condition_state)?;
             state.merge(condition_state);
-            let first_condition_mut = first_condition
-                .map(|first_cond_step| -> HQResult<_> {
-                    let first_cond_mut = Rc::new(Rc::unwrap_or_clone(first_cond_step));
-                    let mut cond_state = ConstFoldState::default();
-                    const_fold_step(Rc::clone(&first_cond_mut), &mut cond_state)?;
-                    state.merge(cond_state);
-
-                    Ok(first_cond_mut)
-                })
-                .transpose()?;
 
             opcode = IrOpcode::control_loop(ControlLoopFields {
                 body: body_mut,

@@ -121,7 +121,7 @@ impl IrOpcode {
         }
     }
 
-    pub fn inline_steps(&self) -> Option<Box<[Rc<RefCell<Step>>]>> {
+    pub fn inline_steps(&self, ignore_conditions: bool) -> Option<Box<[Rc<RefCell<Step>>]>> {
         #[expect(
             clippy::wildcard_enum_match_arm,
             reason = "too many variants to match explicitly"
@@ -138,18 +138,31 @@ impl IrOpcode {
                 first_condition,
                 condition,
                 body,
+                pre_body,
                 ..
             }) => Some(
-                [first_condition.as_ref(), Some(condition), Some(body)]
-                    .into_iter()
-                    .filter_map(Option::<&_>::cloned)
-                    .collect(),
+                if ignore_conditions {
+                    vec![pre_body.as_ref(), Some(body)]
+                } else {
+                    vec![
+                        first_condition.as_ref(),
+                        Some(condition),
+                        pre_body.as_ref(),
+                        Some(body),
+                    ]
+                }
+                .into_iter()
+                .filter_map(Option::<&_>::cloned)
+                .collect(),
             ),
             _ => None,
         }
     }
 
-    pub fn inline_steps_mut(&mut self) -> Option<Box<[&mut Rc<RefCell<Step>>]>> {
+    pub fn inline_steps_mut(
+        &mut self,
+        ignore_conditions: bool,
+    ) -> Option<Box<[&mut Rc<RefCell<Step>>]>> {
         #[expect(
             clippy::wildcard_enum_match_arm,
             reason = "too many variants to match explicitly"
@@ -169,12 +182,16 @@ impl IrOpcode {
                 pre_body,
                 ..
             }) => Some(
-                [
-                    first_condition.as_mut(),
-                    Some(condition),
-                    pre_body.as_mut(),
-                    Some(body),
-                ]
+                if ignore_conditions {
+                    vec![pre_body.as_mut(), Some(body)]
+                } else {
+                    vec![
+                        first_condition.as_mut(),
+                        Some(condition),
+                        pre_body.as_mut(),
+                        Some(body),
+                    ]
+                }
                 .into_iter()
                 .flatten()
                 .collect(),

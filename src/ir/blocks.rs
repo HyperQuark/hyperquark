@@ -129,7 +129,7 @@ pub fn insert_casts(
             }
         }
 
-        if recurse && let Some(inline_steps) = block.inline_steps() {
+        if recurse && let Some(inline_steps) = block.inline_steps(false) {
             for inline_step in inline_steps {
                 insert_casts(
                     inline_step.try_borrow_mut()?.opcodes_mut(),

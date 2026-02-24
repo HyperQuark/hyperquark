@@ -12,7 +12,7 @@ where
     let mut loops = vec![];
 
     for (i, opcode) in step.try_borrow()?.opcodes().iter().enumerate().rev() {
-        if let Some(inline_steps) = opcode.inline_steps() {
+        if let Some(inline_steps) = opcode.inline_steps(true) {
             inline_steps
                 .iter()
                 .cloned()

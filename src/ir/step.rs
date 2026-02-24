@@ -277,7 +277,7 @@ impl Step {
                 return true;
             }
             if opcode
-                .inline_steps()
+                .inline_steps(true)
                 .is_some_and(|steps| steps.iter().any(|step| RefCell::borrow(step).does_yield()))
             {
                 return true;

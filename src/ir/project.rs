@@ -249,7 +249,7 @@ where
             );
             has_return = true;
         }
-        if let Some(inline_steps) = opcode.inline_steps() {
+        if let Some(inline_steps) = opcode.inline_steps(true) {
             inline_steps.iter().try_for_each(|inline_step| {
                 add_proc_return_vars_before_return(
                     Rc::clone(inline_step),
@@ -354,7 +354,7 @@ where
             call_indices.push(index);
         }
 
-        if let Some(inline_steps) = opcode.inline_steps() {
+        if let Some(inline_steps) = opcode.inline_steps(true) {
             inline_steps.iter().try_for_each(|inline_step| {
                 fixup_proc_calls(Rc::clone(inline_step), visited_steps)
             })?;

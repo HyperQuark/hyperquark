@@ -915,10 +915,10 @@ impl VarGraph {
             && step.try_borrow()?.context().warp
             && let Some(proc_context) = maybe_proc_context.as_ref()
         {
-            crate::log!(
-                "found spare items on type stack at end of step visit, in warped proc: \
-                 {type_stack:?}"
-            );
+            // crate::log!(
+            //     "found spare items on type stack at end of step visit, in warped proc: \
+            //      {type_stack:?}"
+            // );
             // crate::log!(
             //     "return vars: {}",
             //     proc_context.return_vars().try_borrow()?.len()
@@ -1297,17 +1297,17 @@ where
     loop {
         let mut changed_vars: BTreeSet<VarTarget> = BTreeSet::new();
         for graph in graphs.clone() {
-            use petgraph::dot::Dot;
-            crate::log!(
-                "{:?}exit node: {:?}",
-                Dot::with_config(
-                    &*graph.graph().borrow(),
-                    &[
-                    //DotConfig::NodeIndexLabel
-                    ]
-                ),
-                *graph.exit_node().borrow()
-            );
+            // use petgraph::dot::Dot;
+            // crate::log!(
+            //     "{:?}exit node: {:?}",
+            //     Dot::with_config(
+            //         &*graph.graph().borrow(),
+            //         &[
+            //         //DotConfig::NodeIndexLabel
+            //         ]
+            //     ),
+            //     *graph.exit_node().borrow()
+            // );
             hq_assert!(
                 {
                     let inner_graph = graph.graph().try_borrow()?;
@@ -1356,7 +1356,7 @@ where
             .opcodes()
             .get(i)
             .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))?
-            .inline_steps();
+            .inline_steps(true);
         if let Some(inline_steps) = inlined_steps {
             let new_inline_steps = inline_steps
                 .iter()
@@ -1371,7 +1371,7 @@ where
                 .opcodes_mut()
                 .get_mut(i)
                 .ok_or_else(|| make_hq_bug!("opcode index out of bounds"))?
-                .inline_steps_mut()
+                .inline_steps_mut(true)
                 .ok_or_else(|| {
                     make_hq_bug!("inline_steps_mut was None when inline_steps was Some")
                 })?
