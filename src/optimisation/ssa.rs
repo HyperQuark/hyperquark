@@ -899,7 +899,7 @@ impl VarGraph {
                             }
                         }
                         ReturnType::None => {
-                            type_stack.extend(core::iter::repeat_n(StackElement::Drop, inputs_len))
+                            type_stack.extend(core::iter::repeat_n(StackElement::Drop, inputs_len));
                         }
                     }
                 }
@@ -1245,12 +1245,12 @@ fn visit_node(
     changed_vars: &mut BTreeSet<VarTarget>,
     stop_at: NodeIndex,
 ) -> HQResult<()> {
+    use petgraph::dot::Dot;
     // crate::log!("node index: {node:?}");
     if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
         // crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
         // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
-        use petgraph::dot::Dot;
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),
@@ -1490,7 +1490,7 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
         .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
     // crate::log!("graphs num: {}", graphs.len());
-    iterate_graphs(&graphs.iter().map(|(s, g)| (g.clone(), s.clone().clone())))?;
+    iterate_graphs(&graphs.iter().map(|(s, g)| (*g, (*s).clone())))?;
     for step in project.steps().try_borrow()?.iter() {
         // crate::log!("inserting casts for step {}", step.id());
         insert_casts(step.try_borrow_mut()?.opcodes_mut(), false, true)?;
