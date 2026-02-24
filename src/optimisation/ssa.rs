@@ -463,7 +463,7 @@ impl VarGraph {
                     branch_else,
                 }) => {
                     // crate::log("found control_if_else");
-                    type_stack.clear(); // the top item on the stack should be consumed by control_if_else
+                    type_stack.push(StackElement::Drop); // the top item on the stack should be consumed by control_if_else
                     let last_node = *self.exit_node().borrow();
 
                     let branch_if_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(branch_if)));
@@ -529,7 +529,6 @@ impl VarGraph {
                     let exit_node = *self.exit_node().borrow();
                     self.add_edge(if_branch_exit, exit_node, EdgeType::Forward);
                     self.add_edge(else_branch_exit, exit_node, EdgeType::Forward);
-                    type_stack.clear();
                 }
                 IrOpcode::control_loop(ControlLoopFields {
                     first_condition,
@@ -636,7 +635,7 @@ impl VarGraph {
                             first_condition_mut.try_borrow()?.id().into(),
                             MaybeGraph::Inlined,
                         );
-                        type_stack.clear(); // we consume the top item on the type stack as an i32.eqz
+                        type_stack.push(StackElement::Drop); // we consume the top item on the type stack as an i32.eqz
                         let first_cond_exit = *self.exit_node().borrow();
 
                         let header_node = self.add_node(None);
@@ -691,7 +690,7 @@ impl VarGraph {
                             next_steps,
                         )?;
                         graphs.insert(condition_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
-                        type_stack.clear();
+                        type_stack.push(StackElement::Drop);
                         let mut cond_exit = *self.exit_node().borrow();
 
                         self.ssa_phi(
@@ -730,7 +729,7 @@ impl VarGraph {
                             next_steps,
                         )?;
                         graphs.insert(condition_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
-                        type_stack.clear();
+                        type_stack.push(StackElement::Drop);
 
                         let pre_body_mut = pre_body
                             .as_ref()
@@ -899,7 +898,9 @@ impl VarGraph {
                                 type_stack.push(StackElement::Opcode(opcode.clone()));
                             }
                         }
-                        ReturnType::None => type_stack.clear(),
+                        ReturnType::None => {
+                            type_stack.extend(core::iter::repeat_n(StackElement::Drop, inputs_len))
+                        }
                     }
                 }
             }
@@ -1249,10 +1250,19 @@ fn visit_node(
         // crate::log!("vars: {vars:?}");
         let reduced_stack = evaluate_type_stack(type_stack)?;
         // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
+        use petgraph::dot::Dot;
         hq_assert_eq!(
             vars.len(),
             reduced_stack.len(),
-            "variables stack should have the same length as the corresponding type stack"
+            "variables stack should have the same length as the corresponding type stack. At node \
+             {:?}. The graph looked like this:\n{:?}",
+            node,
+            Dot::with_config(
+                &*graph.graph().borrow(),
+                &[
+                    //DotConfig::NodeIndexLabel
+                    ]
+            ),
         );
         for (var, new_type) in vars.iter().rev().zip(reduced_stack) {
             if matches!(var, VarTarget::Drop) {
@@ -1292,11 +1302,12 @@ fn visit_node(
 
 fn iterate_graphs<'a, I>(graphs: &'a I) -> HQResult<()>
 where
-    I: Iterator<Item = &'a VarGraph> + Clone,
+    I: Iterator<Item = (&'a VarGraph, Box<str>)> + Clone,
 {
     loop {
         let mut changed_vars: BTreeSet<VarTarget> = BTreeSet::new();
         for graph in graphs.clone() {
+            crate::log!("visiting graph for step {}", graph.1);
             // use petgraph::dot::Dot;
             // crate::log!(
             //     "{:?}exit node: {:?}",
@@ -1310,7 +1321,7 @@ where
             // );
             hq_assert!(
                 {
-                    let inner_graph = graph.graph().try_borrow()?;
+                    let inner_graph = graph.0.graph().try_borrow()?;
                     let mut externals = inner_graph.externals(EdgeIn);
                     externals.next().is_some_and(|e| e == NodeIndex::new(0))
                         && externals.next().is_none()
@@ -1319,10 +1330,10 @@ where
             );
             let first_node = NodeIndex::new(0);
             visit_node(
-                graph,
+                graph.0,
                 first_node,
                 &mut changed_vars,
-                *graph.exit_node().try_borrow()?,
+                *graph.0.exit_node().try_borrow()?,
             )?;
         }
         // this must eventually converge, because the sequence of types for each variable at each
@@ -1479,7 +1490,7 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
         .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
     // crate::log!("graphs num: {}", graphs.len());
-    iterate_graphs(&graphs.values().copied())?;
+    iterate_graphs(&graphs.iter().map(|(s, g)| (g.clone(), s.clone().clone())))?;
     for step in project.steps().try_borrow()?.iter() {
         // crate::log!("inserting casts for step {}", step.id());
         insert_casts(step.try_borrow_mut()?.opcodes_mut(), false, true)?;
