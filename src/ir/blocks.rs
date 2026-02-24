@@ -286,7 +286,9 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::data_changevariableby
             | BlockOpcode::control_for_each => vec!["VALUE"],
             BlockOpcode::operator_random => vec!["FROM", "TO"],
-            BlockOpcode::pen_setPenColorParamTo => vec!["COLOR_PARAM", "VALUE"],
+            BlockOpcode::pen_setPenColorParamTo | BlockOpcode::pen_changePenColorParamBy => {
+                vec!["COLOR_PARAM", "VALUE"]
+            }
             BlockOpcode::control_if
             | BlockOpcode::control_if_else
             | BlockOpcode::control_repeat_until
@@ -2636,6 +2638,9 @@ fn from_normal_block(
                         BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setpensizeto],
                         BlockOpcode::pen_setPenColorToColor => {
                             vec![IrOpcode::pen_setpencolortocolor]
+                        }
+                        BlockOpcode::pen_changePenColorParamBy => {
+                            vec![IrOpcode::pen_changecolorparamby]
                         }
                         BlockOpcode::pen_setPenColorParamTo => {
                             vec![IrOpcode::pen_setpencolorparamto]
