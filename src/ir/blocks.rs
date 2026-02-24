@@ -240,6 +240,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             }
             BlockOpcode::operator_letter_of => vec!["LETTER", "STRING"],
             BlockOpcode::motion_gotoxy => vec!["X", "Y"],
+            BlockOpcode::motion_movesteps => vec!["STEPS"],
             BlockOpcode::motion_pointindirection => vec!["DIRECTION"],
             BlockOpcode::motion_turnleft | BlockOpcode::motion_turnright => vec!["DEGREES"],
             BlockOpcode::sensing_dayssince2000
@@ -1340,6 +1341,26 @@ fn from_normal_block(
                             IrOpcode::motion_yposition,
                             IrOpcode::operator_add,
                             IrOpcode::motion_sety,
+                        ],
+                        BlockOpcode::motion_movesteps => vec![
+                            // this is a really lazy implementation but wasm-opt should optimise it
+                            IrOpcode::hq_dup,
+                            IrOpcode::hq_float(HqFloatFields(90.0)),
+                            IrOpcode::motion_direction,
+                            IrOpcode::operator_subtract,
+                            IrOpcode::operator_cos,
+                            IrOpcode::operator_multiply,
+                            IrOpcode::motion_xposition,
+                            IrOpcode::operator_add,
+                            IrOpcode::hq_swap,
+                            IrOpcode::hq_float(HqFloatFields(90.0)),
+                            IrOpcode::motion_direction,
+                            IrOpcode::operator_subtract,
+                            IrOpcode::operator_sin,
+                            IrOpcode::operator_multiply,
+                            IrOpcode::motion_yposition,
+                            IrOpcode::operator_add,
+                            IrOpcode::motion_gotoxy,
                         ],
                         BlockOpcode::motion_direction => vec![IrOpcode::motion_direction],
                         BlockOpcode::motion_pointindirection => {
