@@ -98,7 +98,7 @@ impl Proc {
     }
 }
 
-static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"[^\\]%[nbs]"#);
+static ARG_REGEX: Lazy<Regex> = lazy_regex!(r#"([^\\]|^)%[nbs]"#);
 
 fn arg_vars_from_proccode(proccode: &str) -> Rc<RefCell<Vec<RcVar>>> {
     // based off of https://github.com/scratchfoundation/scratch-blocks/blob/abbfe9/blocks_vertical/procedures.js#L207-L215
