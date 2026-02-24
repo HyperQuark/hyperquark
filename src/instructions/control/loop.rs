@@ -54,7 +54,7 @@ pub fn wasm(
     let condition_instructions = func.compile_inner_step(Rc::clone(condition))?;
     let pre_body_instructions = pre_body.as_ref().map_or_else(
         || Ok(vec![]),
-        |post_step| func.compile_inner_step(Rc::clone(post_step)),
+        |pre_body_step| func.compile_inner_step(Rc::clone(pre_body_step)),
     )?;
     Ok(wasm![Block(BlockType::Empty),]
         .into_iter()
