@@ -8,6 +8,7 @@
 //!   written to inside that procedure yet
 //! - Assign the narrowest type possible to each variable
 //! - Reinsert casts to account for newly assigned variable types.
+//! - Box procedure returns if needed
 //!
 //! This will create a lot of unnecessary variables; this is ok, as wasm-opt does local merging
 //! and should remove unnecessary tees etc. But this might be an area in which performance could
@@ -75,7 +76,7 @@
 //!
 //! A note on naming: I call this SSA, but it is not strictly true. In SSA, each variable is assigned to
 //! exactly once, and at a dominance frontier, SSAs from preceding blocks are merged into one using a 'phi node'
-//! or 'phi function', why picks the correct variable to read based on which branch was just taken. Carrying
+//! or 'phi function', which picks the correct variable to read based on which branch was just taken. Carrying
 //! around additional information about which block was just taken isn't something that I want to do, so our
 //! 'phi function' actually inserts the relevant assignment into the preceding blocks directly. This does mean
 //! that some variables can be written to from different blocks, especially where loops are concerned (as the
@@ -95,7 +96,6 @@ use core::marker::PhantomData;
 use core::mem;
 use core::ops::Deref;
 
-// use petgraph::dot::Dot;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableDiGraph;
 use petgraph::visit::EdgeRef;
@@ -114,31 +114,33 @@ use crate::ir::{
 use crate::prelude::*;
 
 #[derive(Clone, Debug)]
-enum StackElement {
+enum StackOperation {
     Drop,
-    Var(RcVar),
-    List(RcList),
-    // for things where we can guarantee the output type. e.g. for constants (int, float, string)
-    Type(IrType),
-    /// this shouldn't be anything that branches or mutates anything in any way,
+    Push(StackElement),
+    Pop(VarTarget),
+    /// this shouldn't be anything that branches or mutates variables in any way,
     /// i.e. not loop, if/else, yield, set variable, etc
     Opcode(IrOpcode),
+}
+
+#[derive(Clone, Debug)]
+enum StackElement {
+    Var(RcVar),
+    List(RcList),
+    Type(IrType),
 }
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
 enum VarTarget {
     Var(RcVar),
     List(RcList),
-    Drop,
 }
 
 impl VarTarget {
-    /// SAFETY: do not call with `VarTarget::Drop`
     fn possible_types(&self) -> core::cell::Ref<'_, IrType> {
         match self {
             Self::Var(var) => var.possible_types(),
             Self::List(list) => list.possible_types(),
-            Self::Drop => unreachable!(),
         }
     }
 
@@ -146,7 +148,6 @@ impl VarTarget {
         match self {
             Self::Var(var) => var.add_type(ty),
             Self::List(list) => list.add_type(ty),
-            Self::Drop => (),
         }
     }
 }
@@ -161,7 +162,7 @@ enum EdgeType {
     BackLink,
 }
 
-type NodeWeight = Option<(Vec<VarTarget>, Vec<StackElement>)>;
+type NodeWeight = Option<StackOperation>;
 
 #[derive(Debug)]
 struct BaseVarGraph {
@@ -1207,36 +1208,53 @@ fn split_variables_and_make_graphs(
     Ok(graphs)
 }
 
-fn evaluate_type_stack(type_stack: &Vec<StackElement>) -> HQResult<Vec<IrType>> {
-    let mut stack = vec![];
+fn evaluate_type_stack(type_stack: &[IrType], stack_op: &StackOperation, changed_vars: &mut BTreeSet<VarTarget>,) -> HQResult<Vec<IrType>> {
     // crate::log!("type stack: {type_stack:?}");
-    for el in type_stack {
-        match el {
-            StackElement::Opcode(op) => {
-                let inputs_len = op.acceptable_inputs()?.len();
-                // crate::log!("opcode: {op}");
-                // crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
-                // crate::log!("stack: {:?}", stack);
-                let inputs: Rc<[_]> = stack
-                    .splice((stack.len() - inputs_len).., [])
-                    .map(|ty: IrType| if ty.is_none() { IrType::Any } else { ty })
-                    .collect();
-                let output = op.output_type(inputs)?;
-                match output {
-                    ReturnType::Singleton(ty) => stack.push(ty),
-                    ReturnType::MultiValue(tys) => stack.extend(tys.iter().copied()),
-                    ReturnType::None => (),
-                }
-            }
-            StackElement::Drop => {
-                stack.pop();
-            }
-            StackElement::Type(ty) => stack.push(*ty),
-            StackElement::Var(var) => stack.push(*var.possible_types()),
-            StackElement::List(list) => stack.push(*list.possible_types()),
+    Ok(match stack_op {
+        StackOperation::Opcode(op) => {
+            let mut local_stack = Vec::from(type_stack);
+            let inputs_len = op.acceptable_inputs()?.len();
+            // crate::log!("opcode: {op}");
+            // crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
+            // crate::log!("stack: {:?}", stack);
+            hq_assert!(local_stack.len() >= inputs_len, " can't pop {} elements from stack of length {}", inputs_len, local_stack.len());
+            let inputs: Rc<[_]> = local_stack
+                .splice((local_stack.len() - inputs_len).., [])
+                .map(|ty: IrType| if ty.is_none() { IrType::Any } else { ty })
+                .collect();
+            let output = op.output_type(inputs)?;
+            match output {
+                ReturnType::Singleton(ty) => local_stack.push(ty),
+                ReturnType::MultiValue(tys) => local_stack.extend(tys.iter().copied()),
+                ReturnType::None => (),
+            };
+            local_stack
         }
-    }
-    Ok(stack)
+        StackOperation::Drop => {
+            hq_assert!(!type_stack.is_empty(), "can't drop from empty stack");
+            Vec::from(&type_stack[0..type_stack.len() - 1])
+        }
+        StackOperation::Push(stack_el) => {
+            let mut local_stack = Vec::from(type_stack);
+            match stack_el {
+                StackElement::Type(ty) => local_stack.push(*ty),
+                StackElement::Var(var) => local_stack.push(*var.possible_types()),
+                StackElement::List(list) => local_stack.push(*list.possible_types()),
+            };
+            local_stack
+        }
+        StackOperation::Pop(target) => {
+            hq_assert!(!type_stack.is_empty(), "can't pop from empty stack");
+            let mut local_stack = Vec::from(type_stack);
+            #[expect(clippy::unwrap_used, reason = "checked non-empty")]
+            let popped = local_stack.pop().unwrap();
+            if !target.possible_types().contains(popped) {
+                changed_vars.insert(target.clone());
+            }
+            target.add_type(popped);
+            local_stack
+        }
+    })
 }
 
 fn visit_node(
@@ -1244,37 +1262,17 @@ fn visit_node(
     node: NodeIndex,
     changed_vars: &mut BTreeSet<VarTarget>,
     stop_at: NodeIndex,
+    base_stack: &Vec<IrType>,
 ) -> HQResult<()> {
-    use petgraph::dot::Dot;
+    let mut local_stack = &base_stack[..];
     // crate::log!("node index: {node:?}");
-    if let Some(Some((vars, type_stack))) = graph.graph().try_borrow()?.node_weight(node) {
-        // crate::log!("vars: {vars:?}");
-        let reduced_stack = evaluate_type_stack(type_stack)?;
-        // crate::log!("stack: {type_stack:?}\nreduced stack: {reduced_stack:?}");
-        hq_assert_eq!(
-            vars.len(),
-            reduced_stack.len(),
-            "variables stack should have the same length as the corresponding type stack. At node \
-             {:?}. The graph looked like this:\n{:?}",
-            node,
-            Dot::with_config(
-                &*graph.graph().borrow(),
-                &[
-                    //DotConfig::NodeIndexLabel
-                    ]
-            ),
-        );
-        for (var, new_type) in vars.iter().rev().zip(reduced_stack) {
-            if matches!(var, VarTarget::Drop) {
-                continue;
-            }
-            if !var.possible_types().contains(new_type) {
-                changed_vars.insert(var.clone());
-            }
-            var.add_type(new_type);
-        }
-    }
+    let new_stack = if let Some(Some(stack_op)) = graph.graph().try_borrow()?.node_weight(node) {
+       &evaluate_type_stack(base_stack, stack_op, changed_vars)?
+    } else {
+        base_stack
+    };
     if node == stop_at {
+        hq_assert!(new_stack.is_empty(), "type stack should be empty at exit node");
         return Ok(());
     }
     let inner_graph = graph.graph().try_borrow()?;
