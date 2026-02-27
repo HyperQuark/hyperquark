@@ -2032,11 +2032,7 @@ fn from_normal_block(
                             };
                             *list.is_used.try_borrow_mut()? = true;
                             let item = RcVar::new_empty();
-                            let ret = RcVar::new(
-                                IrType::Boolean,
-                                VarVal::Bool(false),
-                                None,
-                            )?;
+                            let ret = RcVar::new(IrType::Boolean, VarVal::Bool(false), None)?;
                             let i = RcVar::new(
                                 IrType::IntPos.or(IrType::IntZero),
                                 VarVal::Int(0),
