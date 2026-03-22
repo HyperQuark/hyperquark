@@ -57,16 +57,11 @@ where
             })
             .collect::<Box<[_]>>();
         // crate::log!("{mapped:?}");
-        let inins = mapped
+        mapped
             .iter()
             .cloned()
             .multi_cartesian_product()
             .map(|ins| outputs_func(ins.into_iter().collect()))
-            .collect::<Box<[_]>>();
-        // crate::log!("{:?}", inins);
-        inins
-            .iter()
-            .cloned()
             .try_reduce(|acc, el| {
                 #[expect(clippy::redundant_clone, reason = "false positives")]
                 Ok(match acc? {
