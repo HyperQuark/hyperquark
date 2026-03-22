@@ -422,8 +422,8 @@ impl VarGraph {
                 }
                 IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields { list })
                 | IrOpcode::data_insertatlist(DataInsertatlistFields { list }) => {
-                    self.add_node_at_end(Some(StackOperation::Drop));
                     self.add_node_at_end(Some(StackOperation::Pop(VarTarget::List(list.clone()))));
+                    self.add_node_at_end(Some(StackOperation::Drop));
                 }
                 IrOpcode::control_if_else(ControlIfElseFields {
                     branch_if,
