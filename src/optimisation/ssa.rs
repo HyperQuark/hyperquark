@@ -221,7 +221,9 @@ impl<'a> VariableMaps<'a> {
 impl VarGraph {
     pub fn new() -> Self {
         let mut graph = StableDiGraph::new();
+        let first_node = graph.add_node(None);
         let exit_node = graph.add_node(None);
+        graph.add_edge(first_node, exit_node, EdgeType::Forward);
         Self(Rc::new(BaseVarGraph {
             graph: RefCell::new(graph),
             exit_node: RefCell::new(exit_node),
@@ -1145,115 +1147,157 @@ fn split_variables_and_make_graphs(
 }
 
 fn evaluate_type_stack(
-    type_stack: &[IrType],
+    type_stack: &Rc<TypeStack>,
     stack_op: &StackOperation,
     changed_vars: &mut BTreeSet<VarTarget>,
-) -> HQResult<Vec<IrType>> {
+) -> HQResult<Rc<TypeStack>> {
     // crate::log!("type stack: {type_stack:?}");
     Ok(match stack_op {
         StackOperation::Opcode(op) => {
-            let mut local_stack = Vec::from(type_stack);
+            let mut local_stack = Rc::clone(type_stack);
             let inputs_len = op.acceptable_inputs()?.len();
             // crate::log!("opcode: {op}");
             // crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
             // crate::log!("stack: {:?}", stack);
-            hq_assert!(
-                local_stack.len() >= inputs_len,
-                "can't pop {} elements from stack of length {}",
-                inputs_len,
-                local_stack.len()
-            );
             let inputs: Rc<[_]> = local_stack
-                .splice((local_stack.len() - inputs_len).., [])
+                .by_ref()
+                .take(inputs_len)
                 .map(|ty: IrType| if ty.is_none() { IrType::Any } else { ty })
                 .collect();
+            hq_assert!(
+                inputs.len() == inputs_len,
+                "can't pop {} elements from stack of length {}",
+                inputs_len,
+                inputs.len()
+            );
             let output = op.output_type(inputs)?;
             match output {
-                ReturnType::Singleton(ty) => local_stack.push(ty),
-                ReturnType::MultiValue(tys) => local_stack.extend(tys.iter().copied()),
+                ReturnType::Singleton(ty) => {
+                    local_stack = Rc::new(TypeStack::Cons(ty, Rc::clone(&local_stack)));
+                }
+                ReturnType::MultiValue(tys) => {
+                    for ty in tys.iter().copied() {
+                        local_stack = Rc::new(TypeStack::Cons(ty, local_stack));
+                    }
+                }
                 ReturnType::None => (),
             }
             local_stack
         }
         StackOperation::Drop => {
-            hq_assert!(!type_stack.is_empty(), "can't drop from empty stack");
-            Vec::from(&type_stack[0..type_stack.len() - 1])
+            let TypeStack::Cons(_, tail) = &**type_stack else {
+                hq_bug!("can't drop from empty stack");
+            };
+            Rc::clone(tail)
         }
-        StackOperation::Push(var_target) => {
-            let mut local_stack = Vec::from(type_stack);
-            local_stack.push(*var_target.possible_types());
-            local_stack
-        }
+        StackOperation::Push(var_target) => Rc::new(TypeStack::Cons(
+            *var_target.possible_types(),
+            Rc::clone(type_stack),
+        )),
         StackOperation::Pop(target) => {
-            hq_assert!(!type_stack.is_empty(), "can't pop from empty stack");
-            let mut local_stack = Vec::from(type_stack);
-            #[expect(clippy::unwrap_used, reason = "checked non-empty")]
-            let popped = local_stack.pop().unwrap();
-            if !target.possible_types().contains(popped) {
+            let TypeStack::Cons(head, tail) = &**type_stack else {
+                hq_bug!("can't pop from empty stack");
+            };
+            let expanded_type = head.base_types().fold(IrType::none(), IrType::or);
+            // let expanded_type = IrType::Any;
+            if !target.possible_types().contains(expanded_type) {
                 changed_vars.insert(target.clone());
             }
-            target.add_type(popped);
-            local_stack
+            target.add_type(expanded_type);
+            Rc::clone(tail)
         }
     })
 }
 
-fn visit_node(
-    graph: &VarGraph,
-    node: NodeIndex,
-    changed_vars: &mut BTreeSet<VarTarget>,
-    stop_at: NodeIndex,
-    base_stack: &Vec<IrType>,
-) -> HQResult<()> {
-    // crate::log!("node index: {node:?}; stack size {}", base_stack.len());
-    let new_stack = if let Some(Some(stack_op)) = graph.graph().try_borrow()?.node_weight(node) {
-        &evaluate_type_stack(base_stack, stack_op, changed_vars)?
-    } else {
-        base_stack
-    };
-    if node == stop_at {
-        // crate::log("stopping!");
-        return Ok(());
-    }
-    let inner_graph = graph.graph().try_borrow()?;
-    let edges = inner_graph.edges_directed(node, EdgeOut);
-    let (backlinks, forlinks): (Vec<_>, _) =
-        edges.partition(|edge| *edge.weight() == EdgeType::BackLink);
-    hq_assert!(
-        backlinks.len() <= 1,
-        "Each node should have at most 1 backlink"
-    );
-    // crate::log("loopy loop (backlink)");
-    if let Some(backlink) = backlinks.first() {
-        loop {
-            let mut loop_changed_vars = BTreeSet::new();
-            visit_node(
-                graph,
-                backlink.target(),
-                &mut loop_changed_vars,
-                node,
-                base_stack,
-            )?;
-            crate::log!(
-                "at backlink from node {:?}, changed {} vars (isEmpty: {})",
-                node,
-                loop_changed_vars.len(),
-                loop_changed_vars.is_empty()
-            );
-            if loop_changed_vars.is_empty() {
-                break;
-            }
+#[derive(Debug, Clone)]
+enum TypeStack {
+    Nil,
+    Cons(IrType, Rc<Self>),
+}
+
+impl Iterator for Rc<TypeStack> {
+    type Item = IrType;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let TypeStack::Cons(ty, tail) = &*self.clone() {
+            *self = Self::clone(tail);
+            Some(*ty)
+        } else {
+            None
         }
     }
-    // crate::log("forward links!");
-    for forlink in forlinks {
-        visit_node(graph, forlink.target(), changed_vars, stop_at, new_stack)?;
+}
+
+#[derive(Clone, Debug)]
+struct DFSQueueItem {
+    pub edge: EdgeIndex,
+    pub type_stack: Rc<TypeStack>,
+}
+
+fn visit_graph(graph: &VarGraph, changed_vars: &mut BTreeSet<VarTarget>) -> HQResult<()> {
+    let inner_graph = graph.graph().try_borrow()?;
+    let mut dfs_queue = vec![DFSQueueItem {
+        edge: EdgeIndex::new(0), // this assumes that the first node is empty and has a single forward edge. TODO: is this the case?
+        type_stack: Rc::new(TypeStack::Nil),
+    }];
+    let mut joining_edges: BTreeMap<EdgeIndex, Rc<RefCell<u32>>> = BTreeMap::default();
+    while let Some(DFSQueueItem { edge, type_stack }) = dfs_queue.pop() {
+        let should_wait_for_all_incoming_edges =
+            if let Entry::Occupied(mut waiting_to_join) = joining_edges.entry(edge) {
+                let waiting = *waiting_to_join.get().try_borrow()? > 1;
+                *waiting_to_join.get_mut().try_borrow_mut()? -= 1;
+                waiting_to_join.remove();
+                if waiting {
+                    // we're still waiting for some incoming edges to be visited before we move on
+                    continue;
+                }
+                // we've already previously waited for incoming edges, and we've now seen them all
+                false
+            } else {
+                true
+            };
+        let node = inner_graph
+            .edge_endpoints(edge)
+            .ok_or_else(|| make_hq_bug!("couldn't find edge in graph"))?
+            .1;
+        let new_stack = if let Some(Some(stack_op)) = inner_graph.node_weight(node) {
+            evaluate_type_stack(&type_stack, stack_op, changed_vars)?
+        } else {
+            Rc::clone(&type_stack)
+        };
+        // crate::log!("edge: {edge:?}, node: {node:?}");
+        let can_continue = if should_wait_for_all_incoming_edges {
+            let joining_this = Rc::new(RefCell::new(0));
+            for in_edge in inner_graph
+                .edges_directed(node, EdgeIn)
+                .filter(|e| e.id() != edge && e.weight() == &EdgeType::Forward)
+            {
+                *joining_this.try_borrow_mut()? += 1;
+                hq_assert!(
+                    !joining_edges.contains_key(&in_edge.id()),
+                    "tried to add duplicate edge {:?} to joining_edges",
+                    in_edge
+                );
+                joining_edges.insert(in_edge.id(), Rc::clone(&joining_this));
+            }
+            *joining_this.try_borrow()? == 0
+        } else {
+            true
+        };
+        if can_continue {
+            for for_edge in inner_graph
+                .edges_directed(node, EdgeOut)
+                .filter(|e| e.weight() == &EdgeType::Forward)
+            {
+                dfs_queue.push(DFSQueueItem {
+                    edge: for_edge.id(),
+                    type_stack: Rc::clone(&new_stack),
+                });
+            }
+        }
+        // crate::log!("dfs queue: {dfs_queue:?}");
+        // crate::log!("joining_edges: {joining_edges:?}");
     }
-    crate::log!(
-        "finished node {:?}, changed {} vars",
-        node,
-        changed_vars.len()
-    );
     // crate::log("ok.");
     Ok(())
 }
@@ -1277,23 +1321,7 @@ where
             //     ),
             //     *graph.exit_node().borrow()
             // );
-            hq_assert!(
-                {
-                    let inner_graph = graph.0.graph().try_borrow()?;
-                    let mut externals = inner_graph.externals(EdgeIn);
-                    externals.next().is_some_and(|e| e == NodeIndex::new(0))
-                        && externals.next().is_none()
-                },
-                "Variable graph should only have one source node, at index 0"
-            );
-            let first_node = NodeIndex::new(0);
-            visit_node(
-                graph.0,
-                first_node,
-                &mut changed_vars,
-                *graph.0.exit_node().try_borrow()?,
-                &vec![],
-            )?;
+            visit_graph(graph.0, &mut changed_vars)?;
         }
         // this must eventually converge, because the sequence of types for each variable at each
         // iteration is increasing, but the set of types is finite
