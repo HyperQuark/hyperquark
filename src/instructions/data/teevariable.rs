@@ -42,7 +42,7 @@ pub fn wasm(
             (
                 "data",
                 match t1.base_type() {
-                    Some(IrType::Boolean) => "update_var_val_bool",
+                    Some(IrType::Boolean) => "update_var_val_boolean",
                     Some(IrType::String) => "update_var_val_string",
                     Some(IrType::Int) => "update_var_val_int",
                     Some(IrType::Float) => "update_var_val_float",
