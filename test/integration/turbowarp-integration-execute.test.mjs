@@ -86,6 +86,7 @@ describe("Integration tests", () => {
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
           "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3",
+          "tw-procedure-return-non-existent.sb3",
         ].includes(uri),
     );
   for (const uri of files) {
