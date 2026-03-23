@@ -1,6 +1,8 @@
 use core::ops::Deref;
 
-use crate::instructions::{ControlIfElseFields, ControlLoopFields, IrOpcode};
+use crate::instructions::{
+    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, IrOpcode,
+};
 use crate::ir::{IrProject, Step};
 use crate::prelude::*;
 use crate::wasm::WasmFlags;
@@ -77,12 +79,33 @@ where
                     Rc::clone(step.try_borrow()?.context().target()),
                 ))),
             })]);
+        remove_first_writes(Rc::clone(body))?;
+        remove_first_writes(condition)?;
+        pre_body.map(remove_first_writes).transpose()?;
         #[expect(clippy::range_plus_one, reason = "i don't like inclusive range")]
         step.try_borrow_mut()?
             .opcodes_mut()
             .splice(i..(i + 1), replacement);
     }
 
+    Ok(())
+}
+
+fn remove_first_writes<S>(step: S) -> HQResult<()>
+where
+    S: Deref<Target = RefCell<Step>>,
+{
+    for opcode in step.try_borrow()?.opcodes() {
+        if let IrOpcode::data_setvariableto(DataSetvariabletoFields { first_write, .. }) = opcode {
+            *first_write.try_borrow_mut()? = false;
+        }
+
+        if let Some(inline_steps) = opcode.inline_steps(false) {
+            for inline_step in inline_steps {
+                remove_first_writes(inline_step)?;
+            }
+        }
+    }
     Ok(())
 }
 

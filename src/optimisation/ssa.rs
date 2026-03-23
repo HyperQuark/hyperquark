@@ -307,6 +307,7 @@ impl VarGraph {
                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                     var,
                     local_write: locality,
+                    first_write,
                 }) => {
                     // crate::log!("found a variable write operation, type stack: {type_stack:?}");
                     let already_local = *locality.try_borrow()?;
@@ -333,6 +334,7 @@ impl VarGraph {
                             .insert(var.try_borrow()?.clone(), new_variable.clone());
                     }
                     *var.try_borrow_mut()? = new_variable;
+                    *first_write.try_borrow_mut()? = true;
                     *locality.try_borrow_mut()? = true;
                     let pop_node = self.add_node(Some(StackOperation::Pop(VarTarget::Var(
                         var.try_borrow()?.clone(),
@@ -577,6 +579,7 @@ impl VarGraph {
                                     IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                         var: RefCell::new(new_var.clone()),
                                         local_write: RefCell::new(true),
+                                        first_write: RefCell::new(true),
                                     }),
                                 ])
                             })
@@ -933,6 +936,7 @@ impl VarGraph {
                     IrOpcode::data_setvariableto(DataSetvariabletoFields {
                         var: RefCell::new(global_var.clone()),
                         local_write: RefCell::new(false),
+                        first_write: RefCell::new(false),
                     }),
                 ]);
             }
@@ -953,6 +957,7 @@ impl VarGraph {
         ssa_write_map: &BTreeMap<RcVar, RcVar>,
     ) -> HQResult<()> {
         let mut lower_ssas: BTreeMap<_, BTreeMap<_, _>> = BTreeMap::new();
+        let write_map_was_empty = ssa_write_map.is_empty();
 
         for (block, block_ssa, _) in &ssa_blocks {
             for (global, block_local) in block_ssa {
@@ -1031,6 +1036,8 @@ impl VarGraph {
                         IrOpcode::data_setvariableto(DataSetvariabletoFields {
                             var: RefCell::new(var_write.clone()),
                             local_write: RefCell::new(true),
+                            // TODO: might this actually be the first write?
+                            first_write: RefCell::new(write_map_was_empty),
                         }),
                     ]);
                 }
@@ -1481,9 +1488,14 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
         .collect::<HQResult<BTreeMap<_, _>>>()?;
     // crate::log!("graphs num: {}", graphs.len());
     iterate_graphs(&graphs.iter().map(|(s, g)| (*g, (*s).clone())))?;
+    crate::log("finished iterating graphs");
     for step in project.steps().try_borrow()?.iter() {
-        // crate::log!("inserting casts for step {}", step.id());
+        crate::log!("inserting casts for step {}", step.try_borrow()?.id());
         insert_casts(step.try_borrow_mut()?.opcodes_mut(), false, true)?;
+        crate::log!(
+            "finished inserting casts for step {}",
+            step.try_borrow()?.id()
+        );
     }
 
     // we might have made some procedure return types boxed, so we now need to go through and box the

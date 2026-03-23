@@ -378,6 +378,7 @@ where
                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                     var: RefCell::new(var),
                     local_write: RefCell::new(false),
+                    first_write: RefCell::new(false),
                 })
             }),
         );

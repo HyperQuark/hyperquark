@@ -7,6 +7,8 @@ use crate::wasm::WasmProject;
 pub struct Fields {
     pub var: RefCell<RcVar>,
     pub local_write: RefCell<bool>,
+    /// is this the first time this (local) variable has been written to?
+    pub first_write: RefCell<bool>,
 }
 
 impl fmt::Display for Fields {
@@ -15,10 +17,12 @@ impl fmt::Display for Fields {
             f,
             r#"{{
         "variable": {},
-        "local_write": {}
+        "local_write": {},
+        "first_write": {},
     }}"#,
             self.var.borrow(),
-            self.local_write.borrow()
+            self.local_write.borrow(),
+            self.first_write.borrow()
         )
     }
 }
@@ -26,7 +30,7 @@ impl fmt::Display for Fields {
 pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
-    Fields { var, local_write }: &Fields,
+    Fields { var, local_write, .. }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let t1 = inputs[0];
     Ok(if let Some(monitor) = var.borrow().monitor().as_ref()
@@ -139,7 +143,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::Float(0.0),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(false)
+        local_write: RefCell::new(false), first_write: RefCell::new(false)
     }
 );
 
@@ -153,7 +157,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::Float(0.0),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(false)
+        local_write: RefCell::new(false), first_write: RefCell::new(false)
     }
 );
 
@@ -167,7 +171,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::String("".into()),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(false)
+        local_write: RefCell::new(false), first_write: RefCell::new(false)
     }
 );
 
@@ -181,7 +185,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::Int(1),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(false)
+        local_write: RefCell::new(false), first_write: RefCell::new(false)
     }
 );
 
@@ -195,7 +199,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::Float(0.0),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(true)
+        local_write: RefCell::new(true), first_write: RefCell::new(false)
     }
 );
 
@@ -209,7 +213,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::Float(0.0),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(true)
+        local_write: RefCell::new(true), first_write: RefCell::new(false)
     }
 );
 
@@ -223,7 +227,7 @@ crate::instructions_test!(
                     crate::sb3::VarVal::String("".into()),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(true)
+        local_write: RefCell::new(true), first_write: RefCell::new(false)
     }
 );
 
@@ -237,6 +241,6 @@ crate::instructions_test!(
                     crate::sb3::VarVal::Int(1),
                     None,
             ).unwrap()),
-        local_write: RefCell::new(true)
+        local_write: RefCell::new(true), first_write: RefCell::new(false)
     }
 );

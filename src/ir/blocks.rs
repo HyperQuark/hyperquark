@@ -81,13 +81,14 @@ pub fn insert_casts(
                         "attempted to insert a cast before a variable/list operation - variables \
                          should encompass all possible types, rather than causing values to be \
                          coerced.
-                        Tried to cast from {} to {}, at position {}.
+                        Tried to cast from {} (at position {}) to {} (at position {}).
                         Occurred on these opcodes: [
                         {}
                         ]",
                         actual.0,
-                        expected,
                         actual.1,
+                        expected,
+                        i,
                         blocks.iter().map(|block| format!("{block}")).join(",\n"),
                     )
                 }
@@ -122,7 +123,6 @@ pub fn insert_casts(
             match block.output_type(Rc::from(dummy_actual_inputs))? {
                 ReturnType::Singleton(output) => type_stack.push((output, i)),
                 ReturnType::MultiValue(outputs) => {
-                    // crate::log!("{outputs:?}");
                     type_stack.extend(outputs.iter().copied().zip(core::iter::repeat(i)));
                 }
                 ReturnType::None => (),
@@ -1019,6 +1019,7 @@ where
             opcodes.push(IrOpcode::data_setvariableto(DataSetvariabletoFields {
                 var: RefCell::new(result_var.clone()),
                 local_write: RefCell::new(true),
+                first_write: RefCell::new(false),
             }));
         }
         Rc::new(RefCell::new(Step::new(
@@ -1246,16 +1247,19 @@ where
         IrOpcode::data_setvariableto(DataSetvariabletoFields {
             var: RefCell::new(int_var.clone()),
             local_write: RefCell::new(true),
+            first_write: RefCell::new(true),
         }),
         IrOpcode::data_setvariableto(DataSetvariabletoFields {
             var: RefCell::new(text_var),
             local_write: RefCell::new(true),
+            first_write: RefCell::new(true),
         }),
     ])
     .chain(if other_argument {
         vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
             var: RefCell::new(extra_var),
             local_write: RefCell::new(true),
+            first_write: RefCell::new(true),
         })]
     } else {
         vec![]
@@ -1301,6 +1305,7 @@ where
         IrOpcode::data_setvariableto(DataSetvariabletoFields {
             var: RefCell::new(var.clone()),
             local_write: RefCell::new(true),
+            first_write: RefCell::new(true),
         }),
     ]
     .into_iter()
@@ -1689,6 +1694,7 @@ fn from_normal_block(
                             vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                 var: RefCell::new(variable.var.clone()),
                                 local_write: RefCell::new(false),
+                                first_write: RefCell::new(false),
                             })]
                         }
                         BlockOpcode::data_changevariableby => {
@@ -1734,6 +1740,7 @@ fn from_normal_block(
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(variable.var.clone()),
                                     local_write: RefCell::new(false),
+                                    first_write: RefCell::new(false),
                                 }),
                             ]
                         }
@@ -2034,6 +2041,7 @@ fn from_normal_block(
                                     IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                         var: RefCell::new(ret.clone()),
                                         local_write: RefCell::new(true),
+                                        first_write: RefCell::new(false),
                                     }),
                                 ],
                                 Weak::clone(project),
@@ -2043,16 +2051,19 @@ fn from_normal_block(
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(item.clone()),
                                     local_write: RefCell::new(true),
+                                    first_write: RefCell::new(true),
                                 }),
                                 IrOpcode::hq_integer(HqIntegerFields(0)),
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(i.clone()),
                                     local_write: RefCell::new(true),
+                                    first_write: RefCell::new(true),
                                 }),
                                 IrOpcode::hq_integer(HqIntegerFields(0)),
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(ret.clone()),
                                     local_write: RefCell::new(true),
+                                    first_write: RefCell::new(true),
                                 }),
                                 IrOpcode::control_loop(ControlLoopFields {
                                     first_condition: None,
@@ -2151,6 +2162,7 @@ fn from_normal_block(
                                     IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                         var: RefCell::new(ret.clone()),
                                         local_write: RefCell::new(true),
+                                        first_write: RefCell::new(false),
                                     }),
                                 ],
                                 Weak::clone(project),
@@ -2160,16 +2172,19 @@ fn from_normal_block(
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(item.clone()),
                                     local_write: RefCell::new(true),
+                                    first_write: RefCell::new(true),
                                 }),
                                 IrOpcode::hq_integer(HqIntegerFields(0)),
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(i.clone()),
                                     local_write: RefCell::new(true),
+                                    first_write: RefCell::new(true),
                                 }),
                                 IrOpcode::hq_boolean(HqBooleanFields(false)),
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(ret.clone()),
                                     local_write: RefCell::new(true),
+                                    first_write: RefCell::new(true),
                                 }),
                                 IrOpcode::control_loop(ControlLoopFields {
                                     first_condition: None,
@@ -2593,6 +2608,7 @@ fn from_normal_block(
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(variable),
                                     local_write: RefCell::new(local),
+                                    first_write: RefCell::new(local),
                                 }),
                             ];
                             generate_loop(
@@ -2689,6 +2705,7 @@ fn from_normal_block(
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(counter.clone()),
                                     local_write: RefCell::new(local),
+                                    first_write: RefCell::new(true),
                                 }),
                             ];
                             let pre_body_instructions = Some(vec![
@@ -2701,6 +2718,7 @@ fn from_normal_block(
                                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                     var: RefCell::new(variable.var.clone()),
                                     local_write: RefCell::new(false),
+                                    first_write: RefCell::new(false),
                                 }),
                             ]);
                             generate_loop(
