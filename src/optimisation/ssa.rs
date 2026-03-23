@@ -1163,6 +1163,9 @@ fn evaluate_type_stack(
                 .by_ref()
                 .take(inputs_len)
                 .map(|ty: IrType| if ty.is_none() { IrType::Any } else { ty })
+                .collect::<Box<[_]>>()
+                .into_iter()
+                .rev()
                 .collect();
             hq_assert!(
                 inputs.len() == inputs_len,
