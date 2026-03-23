@@ -56,7 +56,7 @@ export class ProjectRunner extends EventTarget {
     this.#tick = exports.tick;
     this.#timeout = timeout;
     this.#framerate_wait = framerate_wait;
-    this.#requests_refresh = exports.requests_refresh;
+    this.#requests_refresh = exports.requests_refresh ?? { value: 0 };
     this.turbo = turbo;
     this.#sensing_timer = exports.sensing_timer;
     this.#threads_count = exports.threads_count;
