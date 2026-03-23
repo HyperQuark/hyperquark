@@ -243,6 +243,7 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             BlockOpcode::motion_movesteps => vec!["STEPS"],
             BlockOpcode::motion_pointindirection => vec!["DIRECTION"],
             BlockOpcode::motion_turnleft | BlockOpcode::motion_turnright => vec!["DEGREES"],
+            BlockOpcode::sensing_keypressed => vec!["KEY_OPTION"],
             BlockOpcode::sensing_dayssince2000
             | BlockOpcode::data_variable
             | BlockOpcode::argument_reporter_boolean
@@ -276,7 +277,8 @@ pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Ve
             | BlockOpcode::sensing_mousey
             | BlockOpcode::sensing_mousedown
             | BlockOpcode::motion_xposition
-            | BlockOpcode::motion_yposition => vec![],
+            | BlockOpcode::motion_yposition
+            | BlockOpcode::sensing_keyoptions => vec![],
             BlockOpcode::sensing_askandwait => vec!["QUESTION"],
             BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
                 vec!["BROADCAST_INPUT"]
@@ -1439,6 +1441,27 @@ fn from_normal_block(
                         BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
                         BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
                         BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
+                        BlockOpcode::sensing_keypressed => vec![IrOpcode::sensing_keypressed],
+                        BlockOpcode::sensing_keyoptions => {
+                            let (sb3::Field::Value((Some(val),))
+                            | sb3::Field::ValueId(Some(val), _)) =
+                                block_info.fields.get("KEY_OPTION").ok_or_else(|| {
+                                    make_hq_bad_proj!(
+                                        "invalid project.json - missing field KEY_OPTION"
+                                    )
+                                })?
+                            else {
+                                hq_bad_proj!(
+                                    "invalid project.json - missing value for KEY_OPTION field"
+                                )
+                            };
+                            let VarVal::String(key_option) = val else {
+                                hq_bad_proj!(
+                                    "invalid project.json - non-string value for KEY_OPTION field"
+                                )
+                            };
+                            vec![IrOpcode::hq_text(HqTextFields(key_option.clone()))]
+                        }
                         BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
                         BlockOpcode::sensing_mousex => vec![IrOpcode::sensing_mousex],
                         BlockOpcode::sensing_mousey => vec![IrOpcode::sensing_mousey],

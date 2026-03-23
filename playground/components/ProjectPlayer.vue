@@ -144,12 +144,14 @@ function queue_question(question, struct) {
   queued_questions.push([question, struct]);
 }
 
-let mouseMove, mouseDown, mouseUp, runner, compileWorker;
+let mouseMove, mouseDown, mouseUp, keyDown, keyUp, runner, compileWorker;
 
 onBeforeUnmount(() => {
   document.removeEventListener("mousemove", mouseMove);
   canvas.value.removeEventListener("mousedown", mouseDown);
   canvas.value.removeEventListener("mouseup", mouseUp);
+  document.removeEventListener("keydown", keyDown);
+  document.removeEventListener("keyup", keyUp);
   runner?.stop?.();
   unsetup();
   compileWorker?.terminate?.();
@@ -335,6 +337,20 @@ onMounted(async () => {
       e.preventDefault();
     };
     canvas.value.addEventListener("mouseup", mouseUp);
+    keyDown = (e) => {
+      runner.onKeyPressChange({
+        key: e.key,
+        pressed: true,
+      });
+    };
+    document.addEventListener("keydown", keyDown);
+    keyUp = (e) => {
+      runner.onKeyPressChange({
+        key: e.key,
+        pressed: false,
+      });
+    };
+    document.addEventListener("keyup", keyUp);
 
     greenFlag = runner.greenFlag.bind(runner);
     stop = runner.stop.bind(runner);

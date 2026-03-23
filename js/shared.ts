@@ -9,6 +9,7 @@ let _queue_question: (question: string, struct: object) => void = () => {};
 let _stageIndex: number;
 let _update_var_val: (id: string, val: any) => void = () => {};
 let _update_var_visible: (id: string, visible: boolean) => void = () => {};
+let _get_key_pressed: (key: string) => boolean = (_) => false;
 
 type Costume = {
   data: string;
@@ -26,6 +27,7 @@ export function unsetup() {
   _stageIndex = null;
   _update_var_val = () => {};
   _update_var_visible = () => {};
+  _get_key_pressed = (_) => false;
   _setup = false;
 }
 
@@ -35,10 +37,18 @@ export function setup(
   pen_skin: number,
   target_skins: Array<[number, number]>,
   costumes: Array<Array<Costume>>,
-  queue_question: (question: string, struct: object) => void,
   stageIndex: number,
-  update_var_val: (id: string, val: any) => void,
-  update_var_visible: (id: string, visible: boolean) => void,
+  {
+    queue_question,
+    update_var_val,
+    update_var_visible,
+    get_key_pressed,
+  }: {
+    queue_question: (question: string, struct: object) => void;
+    update_var_val: (id: string, val: any) => void;
+    update_var_visible: (id: string, visible: boolean) => void;
+    get_key_pressed: (key: string) => boolean;
+  },
 ) {
   _target_names = target_names;
   _target_bubbles = _target_names.map((_) => null);
@@ -51,6 +61,7 @@ export function setup(
   _stageIndex = stageIndex;
   _update_var_val = update_var_val;
   _update_var_visible = update_var_visible;
+  _get_key_pressed = get_key_pressed;
   _setup = true;
 }
 
@@ -136,4 +147,9 @@ export function update_var_val(id: string, val: any) {
 export function update_var_visible(id: string, visible: boolean) {
   check_setup();
   _update_var_visible(id, visible);
+}
+
+export function get_key_pressed(key: string): boolean {
+  check_setup();
+  return _get_key_pressed(key);
 }

@@ -17,9 +17,7 @@ export async function setup(
   project_json,
   assets,
   target_names,
-  queue_question,
-  update_var_val,
-  update_var_visible,
+  { queue_question, update_var_val, update_var_visible, get_key_pressed },
 ) {
   if (is_setup()) return;
 
@@ -79,9 +77,12 @@ export async function setup(
     pen_skin,
     target_skins,
     costumes,
-    queue_question,
     stageIndex,
-    update_var_val,
-    update_var_visible,
+    {
+      queue_question,
+      update_var_val,
+      update_var_visible,
+      get_key_pressed,
+    },
   );
 }

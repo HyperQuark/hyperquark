@@ -41,6 +41,7 @@ export class ProjectRunner extends EventTarget {
   #mouseDown;
   #triggerSpriteClicked;
   monitors;
+  #keysPressed = {};
 
   #initProps({
     renderer,
@@ -81,6 +82,7 @@ export class ProjectRunner extends EventTarget {
         ];
       }) ?? [],
     );
+    this.keysPressed = {};
   }
 
   async init({
@@ -103,29 +105,26 @@ export class ProjectRunner extends EventTarget {
         ),
       );
 
-    await setup(
-      makeRenderer,
-      project_json,
-      assets,
-      target_names,
-      (question, struct) => {
+    await setup(makeRenderer, project_json, assets, target_names, {
+      queue_question: (question, struct) => {
         this.dispatchEvent(
           new CustomEvent("queueQuestion", { detail: { question, struct } }),
         );
       },
-      (id, value) => {
+      update_var_val: (id, value) => {
         this.dispatchEvent(
           new CustomEvent("updateVariableVal", { detail: { id, value } }),
         );
       },
-      (id, visible) => {
+      update_var_visible: (id, visible) => {
         this.dispatchEvent(
           new CustomEvent("updateVariableVisibility", {
             detail: { id, visible },
           }),
         );
       },
-    );
+      get_key_pressed: this.#getKeyPressed.bind(this)
+    });
 
     const renderer = get_renderer();
 
@@ -304,6 +303,42 @@ export class ProjectRunner extends EventTarget {
     if (this.#mouseDown.value) {
       // TODO: update 'this sprite clicked?' values to be maybe clicked depending on mouse position
     }
+  }
+
+  onKeyPressChange({ key, pressed }) {
+    let keyName;
+    switch (key) {
+      case " ":
+        keyName = "space";
+        break;
+      case "Left":
+      case "ArrowLeft":
+        keyName = "left arrow";
+        break;
+      case "Right":
+      case "ArrowRight":
+        keyName = "right arrow";
+        break;
+      case "Up":
+      case "ArrowUp":
+        keyName = "up arrow";
+        break;
+      case "Down":
+      case "DownArrow":
+        keyName = "down arrow";
+        break;
+      case "Enter":
+        keyName = "enter";
+        break;
+      default:
+        if (key.length > 1) return;
+        keyName = key.toUpperCase();
+    }
+    this.#keysPressed[keyName] = pressed;
+  }
+
+  #getKeyPressed(key) {
+    return this.#keysPressed[key] ?? false;
   }
 
   #pickMouseOverTarget(x, y) {
