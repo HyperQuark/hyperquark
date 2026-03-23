@@ -2090,7 +2090,6 @@ fn from_normal_block(
                                         var: RefCell::new(ret.clone()),
                                         local_read: RefCell::new(true),
                                     }),
-                                    IrOpcode::operator_not,
                                     IrOpcode::data_variable(DataVariableFields {
                                         var: RefCell::new(i.clone()),
                                         local_read: RefCell::new(true),
