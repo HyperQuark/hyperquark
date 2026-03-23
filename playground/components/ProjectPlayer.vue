@@ -198,10 +198,11 @@ onMounted(async () => {
         reject(e.message);
       };
       compileWorker.postMessage({
+        stage: "compile",
         proj: JSON.stringify(props.json),
         flags: getSettings().to_js(),
       });
-      console.log("message posted!");
+      console.log("compile message posted!");
     });
 
     console.log(
@@ -224,16 +225,17 @@ onMounted(async () => {
   if (getSettings().to_js().wasm_opt == "On") {
     try {
       loadingMsg.value = "optimising project";
-      console.log(getSettings().to_js().scheduler);
-      const binaryen = (await import("binaryen")).default; // only load binaryen if it's used.
-      const binaryenModule = binaryen.readBinary(wasmBytes);
-      binaryenModule.setFeatures(binaryen.Features.All);
-      binaryen.setOptimizeLevel(3);
-      binaryen.setShrinkLevel(0);
-      binaryenModule.runPasses(["generate-global-effects"]);
-      binaryenModule.optimize();
-      binaryenModule.optimize();
-      wasmBytes = binaryenModule.emitBinary();
+      wasmBytes = await new Promise((resolve, reject) => {
+        compileWorker.onmessage = ({ data }) => resolve(data.wasmBytes);
+        compileWorker.onerror = (e) => {
+          reject(e.message);
+        };
+        compileWorker.postMessage({
+          stage: "optimise",
+          wasmBytes: wasmBytes
+        }, [wasmBytes.buffer]);
+        console.log("optimise message posted!");
+      });
     } catch (e) {
       declareError(
         e,
