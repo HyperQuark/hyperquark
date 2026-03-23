@@ -997,6 +997,7 @@ fn generate_list_index_op<B>(
     block: B,
     maybe_all_block: Option<IrOpcode>,
     other_argument: bool,
+    add_one_to_length: bool,
     default_output: Option<&IrOpcode>,
     context: &StepContext,
     project: &Weak<IrProject>,
@@ -1052,39 +1053,82 @@ where
     });
 
     let last_step = result_step(if other_argument {
-        vec![
-            IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
+        vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
+            list: list.clone(),
+        })]
+        .into_iter()
+        .chain(if add_one_to_length {
+            vec![
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+            ]
+        } else {
+            vec![]
+        })
+        .chain(vec![
             IrOpcode::data_variable(DataVariableFields {
                 var: RefCell::new(extra_var.clone()),
                 local_read: RefCell::new(true),
             }),
             block(),
-        ]
+        ])
+        .collect()
     } else {
-        vec![
-            IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
-            block(),
-        ]
+        vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
+            list: list.clone(),
+        })]
+        .into_iter()
+        .chain(if add_one_to_length {
+            vec![
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+            ]
+        } else {
+            vec![]
+        })
+        .chain(vec![block()])
+        .collect()
     });
 
     let random_step = result_step(if other_argument {
         vec![
             IrOpcode::hq_integer(HqIntegerFields(1)),
             IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
+        ]
+        .into_iter()
+        .chain(if add_one_to_length {
+            vec![
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+            ]
+        } else {
+            vec![]
+        })
+        .chain(vec![
             IrOpcode::operator_random,
             IrOpcode::data_variable(DataVariableFields {
                 var: RefCell::new(extra_var.clone()),
                 local_read: RefCell::new(true),
             }),
             block(),
-        ]
+        ])
+        .collect()
     } else {
         vec![
             IrOpcode::hq_integer(HqIntegerFields(1)),
             IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
-            IrOpcode::operator_random,
-            block(),
         ]
+        .into_iter()
+        .chain(if add_one_to_length {
+            vec![
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+            ]
+        } else {
+            vec![]
+        })
+        .chain(vec![IrOpcode::operator_random, block()])
+        .collect()
     });
 
     let default_step = if let Some(default_block) = default_output {
@@ -2160,6 +2204,7 @@ fn from_normal_block(
                                 },
                                 None,
                                 true,
+                                true,
                                 None,
                                 context,
                                 project,
@@ -2207,6 +2252,7 @@ fn from_normal_block(
                                 },
                                 None,
                                 false,
+                                false,
                                 None,
                                 context,
                                 project,
@@ -2252,6 +2298,7 @@ fn from_normal_block(
                                     })
                                 },
                                 None,
+                                false,
                                 false,
                                 Some(&IrOpcode::hq_text(HqTextFields("".into()))),
                                 context,
@@ -2335,6 +2382,7 @@ fn from_normal_block(
                                 },
                                 None,
                                 true,
+                                false,
                                 None,
                                 context,
                                 project,

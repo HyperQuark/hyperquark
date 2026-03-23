@@ -50,6 +50,8 @@ pub fn wasm(
         BrIf(0),
         LocalGet(index_local),
         #LazyGlobalGet(length_global),
+        I32Const(1),
+        I32Add,
         I32GtS,
         BrIf(0),
         #LazyGlobalGet(list_global),
