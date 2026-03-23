@@ -87,18 +87,6 @@ describe("Integration tests", () => {
           "tw-procedure-return-warp.sb3",
           "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3",
         ].includes(uri),
-    )
-    // ignore tests that crash the runner, usually by having an infinite loop
-    // in the compiler; these should be unignored at some point
-    .filter(
-      (uri) =>
-        ![
-          "tw-comparison-matrix-inline.sb3",
-          "tw-comparison-matrix-runtime.sb3",
-          "tw-unsafe-equals.sb3",
-          "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
-          "tw-gh-249-quicksort.sb3",
-        ].includes(uri),
     );
   for (const uri of files) {
     test.sequential(`${uri} (default flags)`, async ({ skip }) => {
