@@ -160,6 +160,12 @@ impl IrOpcode {{
         if inputs.iter().any(crate::ir::Type::is_none) {{
             hq_bug!("got none input type :scream: \n at opcode {{:}}", self)
         }}
+        if let Self::procedures_call_warp(_) = self {{
+            // special case for procedure calls because they can accumulate a LOT
+            // of arguments, which makes boxed_output_type very slow, and we know
+            // that the output type does not depend upon the input types (for now).
+            return self.base_output_type(inputs);
+        }}
         boxed_output_type(|ins| self.base_output_type(ins), inputs)
     }}
 
