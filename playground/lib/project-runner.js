@@ -123,7 +123,7 @@ export class ProjectRunner extends EventTarget {
           }),
         );
       },
-      get_key_pressed: this.#getKeyPressed.bind(this)
+      get_key_pressed: this.#getKeyPressed.bind(this),
     });
 
     const renderer = get_renderer();

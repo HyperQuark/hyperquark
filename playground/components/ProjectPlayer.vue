@@ -230,10 +230,13 @@ onMounted(async () => {
         compileWorker.onerror = (e) => {
           reject(e.message);
         };
-        compileWorker.postMessage({
-          stage: "optimise",
-          wasmBytes: wasmBytes
-        }, [wasmBytes.buffer]);
+        compileWorker.postMessage(
+          {
+            stage: "optimise",
+            wasmBytes: wasmBytes,
+          },
+          [wasmBytes.buffer],
+        );
         console.log("optimise message posted!");
       });
     } catch (e) {
