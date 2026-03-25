@@ -270,7 +270,7 @@ impl RcList {
                         Ok(t.or(var_val_type(v)?))
                     })?),
             ),
-            length_mutable: RefCell::new(true),
+            length_mutable: RefCell::new(false),
             initial_value: init,
             id: Uuid::new_v4().to_string(),
         })))
