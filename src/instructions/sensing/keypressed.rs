@@ -25,4 +25,4 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; sensing_dayssince2000; ;}
+crate::instructions_test! {tests; sensing_keypressed; t ;}
