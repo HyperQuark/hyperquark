@@ -30,7 +30,9 @@ impl fmt::Display for Fields {
 pub fn wasm(
     func: &StepFunc,
     inputs: Rc<[IrType]>,
-    Fields { var, local_write, .. }: &Fields,
+    Fields {
+        var, local_write, ..
+    }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let t1 = inputs[0];
     Ok(if let Some(monitor) = var.borrow().monitor().as_ref()
