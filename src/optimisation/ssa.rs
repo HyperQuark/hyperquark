@@ -888,7 +888,7 @@ impl VarGraph {
                     opcode_replacement;
             }
 
-            for (index, additional_opcodes) in additional_opcodes {
+            for (index, additional_opcodes) in additional_opcodes.into_iter().rev() {
                 opcodes.splice(index..index, additional_opcodes);
             }
         }
