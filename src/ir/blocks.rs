@@ -3259,21 +3259,22 @@ fn from_special_block(
                 }
             }
             // string
-            10 => {
+            10 => 'textBlock: {
                 // we sadly can't proactively convert to a number because of lists :(
-                // if let Ok(float) = value.parse::<f64>()
-                //     && *float.to_string() == **value
-                // {
-                //     break 'textBlock if flags.integers == Switch::On && float % 1.0 == 0.0 {
-                //         #[expect(
-                //             clippy::cast_possible_truncation,
-                //             reason = "integer-ness already confirmed; `as` is saturating."
-                //         )]
-                //         IrOpcode::hq_integer(HqIntegerFields(float as i32))
-                //     } else {
-                //         IrOpcode::hq_float(HqFloatFields(float))
-                //     };
-                // }
+                if flags.eager_number_parsing == Switch::On
+                    && let Ok(float) = value.parse::<f64>()
+                    && *float.to_string() == **value
+                {
+                    break 'textBlock if flags.integers == Switch::On && float % 1.0 == 0.0 {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "integer-ness already confirmed; `as` is saturating."
+                        )]
+                        IrOpcode::hq_integer(HqIntegerFields(float as i32))
+                    } else {
+                        IrOpcode::hq_float(HqFloatFields(float))
+                    };
+                }
                 IrOpcode::hq_text(HqTextFields(value.clone()))
             }
             _ => hq_bad_proj!("bad project json (block array of type ({}, string))", ty),

@@ -185,6 +185,7 @@ pub struct WasmFlags {
     pub unroll_loops: u32,
     pub var_type_convergence: VarTypeConvergence,
     pub do_ssa: Switch,
+    pub eager_number_parsing: Switch,
     // pub memory_layout: MemoryLayout
 }
 
@@ -229,6 +230,7 @@ impl WasmFlags {
             unroll_loops: 2,
             var_type_convergence: VarTypeConvergence::Tight,
             do_ssa: Switch::On,
+            eager_number_parsing: Switch::On,
         }
     }
 
@@ -311,7 +313,14 @@ impl WasmFlags {
                 This can improve runtime performance but can drastically slow down WASM optimisation, \
                 or produce modules too large for the browser to compile.")
                 .with_ty(ty_str!(Switch)),
-            _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str())
+            "eager_number_parsing" => FlagInfo::new()
+                .with_name("Eagerly parse strings as numbers")
+                .with_description("Eagerly convert strings to numbers at compile time.\
+                <br>\
+                Improves performance but breaks scratch compatibility for list_contents; \
+                this behaviour matches TurboWarp.")
+                .with_ty(ty_str!(Switch)),
+            _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str()),
         }
     }
 }
