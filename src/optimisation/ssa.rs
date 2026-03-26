@@ -111,6 +111,7 @@ use crate::ir::{
     Type as IrType, insert_casts,
 };
 use crate::prelude::*;
+use crate::wasm::flags::{Switch, VarTypeConvergence};
 
 #[derive(Clone, Debug)]
 enum StackOperation {
@@ -260,6 +261,7 @@ impl VarGraph {
         variable_maps: &mut VariableMaps<'_>,
         graphs: &mut BTreeMap<Box<str>, MaybeGraph>,
         next_steps: &mut Vec<StepIndex>,
+        do_ssa: bool,
     ) -> HQResult<()>
     where
         S: Deref<Target = RefCell<Step>>,
@@ -327,6 +329,15 @@ impl VarGraph {
                         }
                         continue 'opcode_loop;
                     }
+                    if !do_ssa {
+                        let pop_node = self.add_node(Some(StackOperation::Pop(VarTarget::Var(
+                            var.try_borrow()?.clone(),
+                        ))));
+                        let last_node = *self.exit_node().borrow();
+                        self.add_edge(last_node, pop_node, EdgeType::Forward);
+                        *self.exit_node().borrow_mut() = pop_node;
+                        continue 'opcode_loop;
+                    }
                     let new_variable = RcVar::new_empty();
                     {
                         variable_maps
@@ -349,7 +360,7 @@ impl VarGraph {
                 }) => {
                     // crate::log("found a variable tee operation");
                     let already_local = *locality.try_borrow()?;
-                    if already_local {
+                    if !do_ssa || already_local {
                         self.add_node_at_end(Some(StackOperation::Push(VarTarget::Var(
                             var.try_borrow()?.clone(),
                         ))));
@@ -446,6 +457,7 @@ impl VarGraph {
                         &mut branch_if_variable_maps,
                         graphs,
                         next_steps,
+                        do_ssa,
                     )?;
                     graphs.insert(branch_if_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                     let mut if_branch_exit = *self.exit_node().borrow();
@@ -461,6 +473,7 @@ impl VarGraph {
                         &mut branch_else_variable_maps,
                         graphs,
                         next_steps,
+                        do_ssa,
                     )?;
                     graphs.insert(
                         branch_else_mut.try_borrow()?.id().into(),
@@ -469,22 +482,24 @@ impl VarGraph {
                     let mut else_branch_exit = *self.exit_node().borrow();
                     *self.exit_node().borrow_mut() = self.add_node(None);
 
-                    self.ssa_phi(
-                        vec![
-                            (
-                                &branch_if_mut,
-                                branch_if_variable_maps.ssa,
-                                &mut if_branch_exit,
-                            ),
-                            (
-                                &branch_else_mut,
-                                branch_else_variable_maps.ssa,
-                                &mut else_branch_exit,
-                            ),
-                        ],
-                        variable_maps,
-                        &BTreeMap::new(),
-                    )?;
+                    if do_ssa {
+                        self.ssa_phi(
+                            vec![
+                                (
+                                    &branch_if_mut,
+                                    branch_if_variable_maps.ssa,
+                                    &mut if_branch_exit,
+                                ),
+                                (
+                                    &branch_else_mut,
+                                    branch_else_variable_maps.ssa,
+                                    &mut else_branch_exit,
+                                ),
+                            ],
+                            variable_maps,
+                            &BTreeMap::new(),
+                        )?;
+                    }
 
                     opcode_replacements.push((
                         i,
@@ -510,84 +525,86 @@ impl VarGraph {
                         .globally_scoped_variables()?
                         .map(|global_var| (global_var, RcVar::new_empty()))
                         .collect();
-                    additional_opcodes.push((
-                        i,
-                        new_var_map
-                            .iter()
-                            .map(|(global_var, new_var)| {
-                                let (var_access, accessed_var) = variable_maps
-                                    .use_current_ssa_for_global::<_, _, _, HQResult<_>>(
-                                        global_var,
-                                        |ssa_var| {
-                                            Ok((
-                                                IrOpcode::data_variable(DataVariableFields {
-                                                    var: RefCell::new(ssa_var.clone()),
-                                                    local_read: RefCell::new(true),
-                                                }),
-                                                ssa_var.clone(),
-                                            ))
-                                        },
-                                        |arg_index, arg_var| {
-                                            Ok((
-                                                IrOpcode::procedures_argument(
-                                                    ProceduresArgumentFields {
-                                                        index: arg_index,
-                                                        arg_var: arg_var.clone(),
-                                                        in_warped: true,
-                                                        arg_vars: Rc::clone(
-                                                            &maybe_proc_context
-                                                                .as_ref()
-                                                                .ok_or_else(|| {
-                                                                    make_hq_bug!(
-                                                                        "tried to access proc \
-                                                                         argument when proc \
-                                                                         context was None"
-                                                                    )
-                                                                })?
-                                                                .arg_vars,
-                                                        ),
-                                                    },
-                                                ),
-                                                arg_var.clone(),
-                                            ))
-                                        },
-                                        || {
-                                            Ok((
-                                                IrOpcode::data_variable(DataVariableFields {
-                                                    var: RefCell::new(global_var.clone()),
-                                                    local_read: RefCell::new(false),
-                                                }),
-                                                global_var.clone(),
-                                            ))
-                                        },
-                                    )?;
-                                let push_node = self.add_node(Some(StackOperation::Push(
-                                    VarTarget::Var(accessed_var),
-                                )));
-                                let pop_node = self.add_node(Some(StackOperation::Pop(
-                                    VarTarget::Var(new_var.clone()),
-                                )));
-                                let exit_node = *self.exit_node().borrow();
-                                self.add_edge(exit_node, push_node, EdgeType::Forward);
-                                self.add_edge(push_node, pop_node, EdgeType::Forward);
-                                *self.exit_node().borrow_mut() = pop_node;
-                                variable_maps
-                                    .ssa
-                                    .insert(global_var.clone(), new_var.clone());
-                                Ok([
-                                    var_access,
-                                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                        var: RefCell::new(new_var.clone()),
-                                        local_write: RefCell::new(true),
-                                        first_write: RefCell::new(true),
-                                    }),
-                                ])
-                            })
-                            .collect::<HQResult<Vec<_>>>()?
-                            .into_iter()
-                            .flatten()
-                            .collect(),
-                    ));
+                    if do_ssa {
+                        additional_opcodes.push((
+                            i,
+                            new_var_map
+                                .iter()
+                                .map(|(global_var, new_var)| {
+                                    let (var_access, accessed_var) = variable_maps
+                                        .use_current_ssa_for_global::<_, _, _, HQResult<_>>(
+                                            global_var,
+                                            |ssa_var| {
+                                                Ok((
+                                                    IrOpcode::data_variable(DataVariableFields {
+                                                        var: RefCell::new(ssa_var.clone()),
+                                                        local_read: RefCell::new(true),
+                                                    }),
+                                                    ssa_var.clone(),
+                                                ))
+                                            },
+                                            |arg_index, arg_var| {
+                                                Ok((
+                                                    IrOpcode::procedures_argument(
+                                                        ProceduresArgumentFields {
+                                                            index: arg_index,
+                                                            arg_var: arg_var.clone(),
+                                                            in_warped: true,
+                                                            arg_vars: Rc::clone(
+                                                                &maybe_proc_context
+                                                                    .as_ref()
+                                                                    .ok_or_else(|| {
+                                                                        make_hq_bug!(
+                                                                            "tried to access proc \
+                                                                             argument when proc \
+                                                                             context was None"
+                                                                        )
+                                                                    })?
+                                                                    .arg_vars,
+                                                            ),
+                                                        },
+                                                    ),
+                                                    arg_var.clone(),
+                                                ))
+                                            },
+                                            || {
+                                                Ok((
+                                                    IrOpcode::data_variable(DataVariableFields {
+                                                        var: RefCell::new(global_var.clone()),
+                                                        local_read: RefCell::new(false),
+                                                    }),
+                                                    global_var.clone(),
+                                                ))
+                                            },
+                                        )?;
+                                    let push_node = self.add_node(Some(StackOperation::Push(
+                                        VarTarget::Var(accessed_var),
+                                    )));
+                                    let pop_node = self.add_node(Some(StackOperation::Pop(
+                                        VarTarget::Var(new_var.clone()),
+                                    )));
+                                    let exit_node = *self.exit_node().borrow();
+                                    self.add_edge(exit_node, push_node, EdgeType::Forward);
+                                    self.add_edge(push_node, pop_node, EdgeType::Forward);
+                                    *self.exit_node().borrow_mut() = pop_node;
+                                    variable_maps
+                                        .ssa
+                                        .insert(global_var.clone(), new_var.clone());
+                                    Ok([
+                                        var_access,
+                                        IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                                            var: RefCell::new(new_var.clone()),
+                                            local_write: RefCell::new(true),
+                                            first_write: RefCell::new(true),
+                                        }),
+                                    ])
+                                })
+                                .collect::<HQResult<Vec<_>>>()?
+                                .into_iter()
+                                .flatten()
+                                .collect(),
+                        ));
+                    }
                     if let Some(first_condition_step) = first_condition {
                         let first_condition_mut =
                             Rc::new(Rc::unwrap_or_clone(Rc::clone(first_condition_step)));
@@ -601,6 +618,7 @@ impl VarGraph {
                             &mut variable_maps.clone(),
                             graphs,
                             next_steps,
+                            do_ssa,
                         )?;
                         graphs.insert(
                             first_condition_mut.try_borrow()?.id().into(),
@@ -631,6 +649,7 @@ impl VarGraph {
                                     &mut pre_body_variable_maps,
                                     graphs,
                                     next_steps,
+                                    do_ssa,
                                 )?;
                                 graphs.insert(
                                     pre_body_mut.try_borrow()?.id().into(),
@@ -648,6 +667,7 @@ impl VarGraph {
                             &mut body_variable_maps,
                             graphs,
                             next_steps,
+                            do_ssa,
                         )?;
                         graphs.insert(body_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
 
@@ -659,6 +679,7 @@ impl VarGraph {
                             &mut body_variable_maps,
                             graphs,
                             next_steps,
+                            do_ssa,
                         )?;
                         graphs.insert(condition_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                         let drop_node = self.add_node(Some(StackOperation::Drop));
@@ -667,11 +688,13 @@ impl VarGraph {
                         *self.exit_node().borrow_mut() = drop_node;
                         let mut cond_exit = drop_node;
 
-                        self.ssa_phi(
-                            vec![(&condition_mut, body_variable_maps.ssa, &mut cond_exit)],
-                            variable_maps,
-                            &new_var_map,
-                        )?;
+                        if do_ssa {
+                            self.ssa_phi(
+                                vec![(&condition_mut, body_variable_maps.ssa, &mut cond_exit)],
+                                variable_maps,
+                                &new_var_map,
+                            )?;
+                        }
 
                         opcode_replacements.push((
                             i,
@@ -700,6 +723,7 @@ impl VarGraph {
                             &mut body_variable_maps,
                             graphs,
                             next_steps,
+                            do_ssa,
                         )?;
                         graphs.insert(condition_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                         let drop_node = self.add_node(Some(StackOperation::Drop));
@@ -722,6 +746,7 @@ impl VarGraph {
                                     &mut pre_body_variable_maps,
                                     graphs,
                                     next_steps,
+                                    do_ssa,
                                 )?;
                                 graphs.insert(
                                     pre_body_mut.try_borrow()?.id().into(),
@@ -738,15 +763,18 @@ impl VarGraph {
                             &mut body_variable_maps,
                             graphs,
                             next_steps,
+                            do_ssa,
                         )?;
                         graphs.insert(body_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                         let mut body_exit = *self.exit_node().borrow();
 
-                        self.ssa_phi(
-                            vec![(&body_mut, body_variable_maps.ssa, &mut body_exit)],
-                            variable_maps,
-                            &new_var_map,
-                        )?;
+                        if do_ssa {
+                            self.ssa_phi(
+                                vec![(&body_mut, body_variable_maps.ssa, &mut body_exit)],
+                                variable_maps,
+                                &new_var_map,
+                            )?;
+                        }
 
                         self.add_edge(body_exit, header_node, EdgeType::BackLink);
                         *self.exit_node().borrow_mut() = body_exit;
@@ -835,7 +863,13 @@ impl VarGraph {
                         // crate::log("found inline step to visit");
                         let step_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(step)));
                         graphs.insert(step_mut.try_borrow()?.id().into(), MaybeGraph::Started);
-                        self.visit_step(Rc::clone(&step_mut), variable_maps, graphs, next_steps)?;
+                        self.visit_step(
+                            Rc::clone(&step_mut),
+                            variable_maps,
+                            graphs,
+                            next_steps,
+                            do_ssa,
+                        )?;
                         graphs.insert(step_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                     }
                     YieldMode::None | YieldMode::Return => {
@@ -1053,6 +1087,7 @@ fn visit_step_recursively(
     project: &Rc<IrProject>,
     graphs: &mut BTreeMap<Box<str>, MaybeGraph>,
     proc_args: &BTreeMap<RcVar, (usize, RcVar)>,
+    do_ssa: bool,
 ) -> HQResult<()> {
     let steps = project.steps().try_borrow()?;
     let next_steps = &mut vec![step_index];
@@ -1075,6 +1110,7 @@ fn visit_step_recursively(
                 &mut VariableMaps::new_with_proc_args(proc_args),
                 graphs,
                 next_steps,
+                do_ssa,
             )?;
             graphs.insert(
                 next_step.try_borrow()?.id().into(),
@@ -1090,6 +1126,7 @@ fn visit_procedure(
     proc: &Rc<Proc>,
     graphs: &mut BTreeMap<Box<str>, MaybeGraph>,
     project: &Rc<IrProject>,
+    do_ssa: bool,
 ) -> HQResult<()> {
     // crate::log("visiting procedure");
     if let Some(warped_specific_proc) = &*proc.warped_specific_proc()
@@ -1120,13 +1157,14 @@ fn visit_procedure(
                         .dropping(arg_vars_drop),
                 )
                 .collect(),
+            do_ssa,
         )?;
     }
     if let Some(nonwarped_specific_proc) = &*proc.nonwarped_specific_proc()
         && let PartialStep::Finished(step_index) = nonwarped_specific_proc.first_step()?.clone()
     {
         // crate::log!("visiting procedure's step: {}", step.id());
-        visit_step_recursively(step_index, project, graphs, &BTreeMap::new())?;
+        visit_step_recursively(step_index, project, graphs, &BTreeMap::new(), do_ssa)?;
     }
     Ok(())
 }
@@ -1136,18 +1174,19 @@ fn visit_procedure(
 /// be analyzed to determine the best types for variables.
 fn split_variables_and_make_graphs(
     project: &Rc<IrProject>,
+    do_ssa: bool,
 ) -> HQResult<BTreeMap<Box<str>, MaybeGraph>> {
     // crate::log("splitting variables and making graphs");
     let mut graphs = BTreeMap::new();
     for (_, target) in project.targets().borrow().iter() {
         for (_, proc) in target.procedures()?.iter() {
-            visit_procedure(proc, &mut graphs, project)?;
+            visit_procedure(proc, &mut graphs, project, do_ssa)?;
         }
     }
     for thread in project.threads().try_borrow()?.iter() {
         let step_index = thread.first_step();
         // crate::log!("visiting (recursively) step from thread: {}", step.id());
-        visit_step_recursively(step_index, project, &mut graphs, &BTreeMap::new())?;
+        visit_step_recursively(step_index, project, &mut graphs, &BTreeMap::new(), do_ssa)?;
     }
     // crate::log("finished splitting variables and making graphs");
     Ok(graphs)
@@ -1157,6 +1196,7 @@ fn evaluate_type_stack(
     type_stack: &Rc<TypeStack>,
     stack_op: &StackOperation,
     changed_vars: &mut BTreeSet<VarTarget>,
+    type_convergence: VarTypeConvergence,
 ) -> HQResult<Rc<TypeStack>> {
     // crate::log!("type stack: {type_stack:?}");
     Ok(match stack_op {
@@ -1208,8 +1248,11 @@ fn evaluate_type_stack(
             let TypeStack::Cons(head, tail) = &**type_stack else {
                 hq_bug!("can't pop from empty stack");
             };
-            let expanded_type = head.base_types().fold(IrType::none(), IrType::or);
-            // let expanded_type = IrType::Any;
+            let expanded_type = match type_convergence {
+                VarTypeConvergence::Any => IrType::Any,
+                VarTypeConvergence::Base => head.base_types().fold(IrType::none(), IrType::or),
+                VarTypeConvergence::Tight => *head,
+            };
             if !target.possible_types().contains(expanded_type) {
                 changed_vars.insert(target.clone());
             }
@@ -1244,7 +1287,11 @@ struct DFSQueueItem {
     pub type_stack: Rc<TypeStack>,
 }
 
-fn visit_graph(graph: &VarGraph, changed_vars: &mut BTreeSet<VarTarget>) -> HQResult<()> {
+fn visit_graph(
+    graph: &VarGraph,
+    changed_vars: &mut BTreeSet<VarTarget>,
+    type_convergence: VarTypeConvergence,
+) -> HQResult<()> {
     let inner_graph = graph.graph().try_borrow()?;
     let mut dfs_queue = vec![DFSQueueItem {
         edge: EdgeIndex::new(0), // this assumes that the first node is empty and has a single forward edge. TODO: is this the case?
@@ -1271,7 +1318,7 @@ fn visit_graph(graph: &VarGraph, changed_vars: &mut BTreeSet<VarTarget>) -> HQRe
             .ok_or_else(|| make_hq_bug!("couldn't find edge in graph"))?
             .1;
         let new_stack = if let Some(Some(stack_op)) = inner_graph.node_weight(node) {
-            evaluate_type_stack(&type_stack, stack_op, changed_vars)?
+            evaluate_type_stack(&type_stack, stack_op, changed_vars, type_convergence)?
         } else {
             Rc::clone(&type_stack)
         };
@@ -1312,7 +1359,7 @@ fn visit_graph(graph: &VarGraph, changed_vars: &mut BTreeSet<VarTarget>) -> HQRe
     Ok(())
 }
 
-fn iterate_graphs<'a, I>(graphs: &'a I) -> HQResult<()>
+fn iterate_graphs<'a, I>(graphs: &'a I, type_convergence: VarTypeConvergence) -> HQResult<()>
 where
     I: Iterator<Item = (&'a VarGraph, Box<str>)> + Clone,
 {
@@ -1331,7 +1378,7 @@ where
             //     ),
             //     *graph.exit_node().borrow()
             // );
-            visit_graph(graph.0, &mut changed_vars)?;
+            visit_graph(graph.0, &mut changed_vars, type_convergence)?;
         }
         // this must eventually converge, because the sequence of types for each variable at each
         // iteration is increasing, but the set of types is finite
@@ -1472,9 +1519,14 @@ where
 #[derive(Copy, Clone)]
 pub struct SSAToken(PhantomData<()>);
 
-pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
+pub fn optimise_variables(
+    project: &Rc<IrProject>,
+    type_convergence: VarTypeConvergence,
+    do_ssa: Switch,
+) -> HQResult<SSAToken> {
     // crate::log("carrying out variable optimisation");
-    let maybe_graphs = split_variables_and_make_graphs(project)?;
+    let induced_do_ssa = do_ssa == Switch::On && type_convergence != VarTypeConvergence::Any;
+    let maybe_graphs = split_variables_and_make_graphs(project, induced_do_ssa)?;
     let graphs = maybe_graphs
         .iter()
         .map(|(step, graph)| {
@@ -1487,7 +1539,10 @@ pub fn optimise_variables(project: &Rc<IrProject>) -> HQResult<SSAToken> {
         .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
     // crate::log!("graphs num: {}", graphs.len());
-    iterate_graphs(&graphs.iter().map(|(s, g)| (*g, (*s).clone())))?;
+    iterate_graphs(
+        &graphs.iter().map(|(s, g)| (*g, (*s).clone())),
+        type_convergence,
+    )?;
     crate::log("finished iterating graphs");
     for step in project.steps().try_borrow()?.iter() {
         crate::log!("inserting casts for step {}", step.try_borrow()?.id());

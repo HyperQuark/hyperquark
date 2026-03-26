@@ -19,7 +19,7 @@ pub fn ir_optimise(ir: &Rc<IrProject>, flags: &WasmFlags) -> HQResult<SSAToken> 
         crate::log(format!("{ir}").as_str());
     }
 
-    let ssa_token = ssa::optimise_variables(ir)?;
+    let ssa_token = ssa::optimise_variables(ir, flags.var_type_convergence, flags.do_ssa)?;
 
     if flags.print_ir == Switch::On {
         crate::log("ir (after SSA):");
