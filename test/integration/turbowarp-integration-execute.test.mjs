@@ -47,6 +47,10 @@ const makeTestDrawable = () => ({
   updateScale() {},
 });
 
+const makeTestSkin = () => ({
+  setSVG() {},
+});
+
 const makeTestRenderer = () =>
   new Proxy(
     {
@@ -54,6 +58,7 @@ const makeTestRenderer = () =>
       updateTextSkin() {},
       setLayerGroupOrdering() {},
       getDrawable: () => makeTestDrawable(),
+      getSkin: () => makeTestSkin(),
       penClear() {},
       penLine() {},
       penPoint() {},
@@ -65,7 +70,7 @@ const makeTestRenderer = () =>
     },
     {
       set(t, p, v) {
-        if (p === "getDrawable") return true;
+        if (p === "getDrawable" || p === "getSkin") return true;
         return Reflect.set(t, p, v);
       },
     },
