@@ -236,8 +236,8 @@ impl StepFunc {
         Rc::clone(&self.registries)
     }
 
-    pub const fn flags(&self) -> WasmFlags {
-        self.flags
+    pub const fn flags(&self) -> &WasmFlags {
+        &self.flags
     }
 
     pub const fn instructions(&self) -> &RefCell<Vec<Instruction>> {
