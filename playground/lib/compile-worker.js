@@ -27,7 +27,7 @@ addEventListener("message", ({ data }) => {
         const binaryenModule = binaryen.readBinary(data.wasmBytes);
         console.log(binaryenModule.emitBinary().length);
         binaryenModule.setFeatures(binaryen.Features.All);
-        binaryen.setOptimizeLevel(2);
+        binaryen.setOptimizeLevel(3);
         binaryen.setShrinkLevel(0);
         binaryenModule.runPasses(["generate-global-effects"]);
         console.log(binaryenModule.emitBinary().length);
