@@ -18,7 +18,7 @@ impl fmt::Display for Fields {
             r#"{{
         "variable": {},
         "local_write": {},
-        "first_write": {},
+        "first_write": {}
     }}"#,
             self.var.borrow(),
             self.local_write.borrow(),

@@ -14,7 +14,7 @@ impl fmt::Display for Fields {
         write!(
             f,
             r#"{{
-        "proc": {:?},
+        "proc": {:?}
     }}"#,
             self.proc.proccode()
         )

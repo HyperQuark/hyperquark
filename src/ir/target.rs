@@ -105,7 +105,7 @@ impl fmt::Display for Target {
         "index": {index},
         "variables": {{ {variables} }},
         "lists": {{ {lists} }},
-        "procedures": {{ {procedures} }},
+        "procedures": {{ {procedures} }}
     }}"#
         )
     }

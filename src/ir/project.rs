@@ -440,7 +440,7 @@ impl fmt::Display for IrProject {
         "global_lists": {{{lists}}},
         "broadcasts": [{broadcasts}],
         "threads": [{threads}],
-        "steps": [{steps}],
+        "steps": [{steps}]
     }}"#
         )
     }

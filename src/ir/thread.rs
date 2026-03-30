@@ -99,8 +99,8 @@ impl fmt::Display for Thread {
         write!(
             f,
             r#"{{
-            "event": '{event:?}',
-            "first_step_index": "{}",
+            "event": "{event:?}",
+            "first_step_index": "{}"
         }}"#,
             first_step.0
         )
