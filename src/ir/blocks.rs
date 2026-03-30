@@ -1,190 +1,36 @@
-use lazy_regex::{Lazy, lazy_regex};
-use regex::Regex;
-use sb3::{Block, BlockArray, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Input};
+mod cast;
+mod control_flow;
+mod inputs;
+mod list_op;
+mod next;
+mod proc_arg;
+mod special;
+
+pub use cast::insert_casts;
+use control_flow::{generate_exhaustive_string_comparison, generate_if_else, generate_loop};
+use inputs::inputs;
+use list_op::generate_list_index_op;
+pub use next::NextBlocks;
+use next::{NextBlock, NextBlockInfo, generate_next_step_inlined, generate_next_step_non_inlined};
+use proc_arg::{ProcArgType, procedure_argument};
+use special::from_special_block;
 
 use super::context::StepContext;
-use super::target::Target;
 use super::{IrProject, RcVar, Step, Type as IrType};
 use crate::instructions::{
-    ControlIfElseFields, ControlLoopFields, ControlWaitFields, DataAddtolistFields,
-    DataDeletealloflistFields, DataDeleteoflistFields, DataInsertatlistFields,
-    DataItemoflistFields, DataLengthoflistFields, DataListcontentsFields,
-    DataReplaceitemoflistFields, DataSetvariabletoFields, DataTeevariableFields,
-    DataVariableFields, DataVisvariableFields, EventBroadcastAndWaitFields, EventBroadcastFields,
-    HqBooleanFields, HqCastFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields,
-    HqYieldFields, IrOpcode, LooksSayFields, LooksThinkFields, ProceduresArgumentFields,
+    ControlLoopFields, ControlWaitFields, DataAddtolistFields, DataDeletealloflistFields,
+    DataDeleteoflistFields, DataInsertatlistFields, DataItemoflistFields, DataLengthoflistFields,
+    DataListcontentsFields, DataReplaceitemoflistFields, DataSetvariabletoFields,
+    DataTeevariableFields, DataVariableFields, DataVisvariableFields, EventBroadcastAndWaitFields,
+    EventBroadcastFields, HqBooleanFields, HqCastFields, HqFloatFields, HqIntegerFields,
+    HqTextFields, HqYieldFields, IrOpcode, LooksSayFields, LooksThinkFields,
     ProceduresCallNonwarpFields, ProceduresCallWarpFields, SensingAskandwaitFields, YieldMode,
 };
-use crate::ir::{InlinedStep, MaybeInlinedStep, RcList, ReturnType, StepIndex};
 use crate::prelude::*;
-use crate::sb3::{self, Field, VarVal};
+use crate::sb3::{
+    Block, BlockArrayOrId, BlockInfo, BlockMap, BlockOpcode, Field as Sb3Field, VarVal,
+};
 use crate::wasm::WasmFlags;
-use crate::wasm::flags::Switch;
-
-pub fn insert_casts(
-    blocks: &mut Vec<IrOpcode>,
-    ignore_variables: bool,
-    recurse: bool,
-) -> HQResult<()> {
-    let mut type_stack: Vec<(IrType, usize)> = vec![]; // a vector of types, and where they came from
-    let mut casts: Vec<(usize, IrType)> = vec![]; // a vector of cast targets, and where they're needed
-    for (i, block) in blocks.iter().enumerate() {
-        let mut expected_inputs = if ignore_variables
-            && (matches!(
-                block,
-                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                    local_write, ..
-                }) if !*local_write.borrow())
-                || matches!(block,
-                    IrOpcode::data_teevariable(DataTeevariableFields { local_read_write, .. }) if !*local_read_write.borrow())
-                || matches!(
-                    block,
-                    IrOpcode::data_addtolist(_) | IrOpcode::data_replaceitemoflist(_)
-                )) {
-            vec![IrType::Any]
-        } else {
-            block
-                .acceptable_inputs()?
-                .iter()
-                .copied()
-                .map(|ty| if ty.is_none() { IrType::Any } else { ty })
-                .collect::<Vec<_>>()
-        };
-        if type_stack.len() < expected_inputs.len() {
-            hq_bug!(
-                "didn't have enough inputs on the type stack\nat block {}",
-                block
-            );
-        }
-        let actual_inputs: Vec<_> = type_stack
-            .splice((type_stack.len() - expected_inputs.len()).., [])
-            .collect();
-        let mut dummy_actual_inputs: Vec<_> = actual_inputs.iter().map(|a| a.0).collect();
-        for (j, (expected, actual)) in
-            core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
-        {
-            if !expected.is_none()
-                && !expected
-                    .base_types()
-                    .fold(IrType::none(), IrType::or)
-                    .contains(actual.0)
-            {
-                if matches!(
-                    block,
-                    IrOpcode::data_setvariableto(_)
-                        | IrOpcode::data_teevariable(_)
-                        | IrOpcode::data_addtolist(_)
-                        | IrOpcode::data_replaceitemoflist(_)
-                ) {
-                    hq_bug!(
-                        "attempted to insert a cast before a variable/list operation - variables \
-                         should encompass all possible types, rather than causing values to be \
-                         coerced.
-                        Tried to cast from {} (at position {}) to {} (at position {}).
-                        Occurred on these opcodes: [
-                        {}
-                        ]",
-                        actual.0,
-                        actual.1,
-                        expected,
-                        i,
-                        blocks.iter().map(|block| format!("{block}")).join(",\n"),
-                    )
-                }
-                casts.push((actual.1, expected));
-                dummy_actual_inputs[j] = expected;
-                expected_inputs[j] = IrOpcode::hq_cast(HqCastFields(expected))
-                    .output_type(Rc::from([if actual.0.is_none() {
-                        IrType::Any
-                    } else {
-                        actual.0
-                    }]))?
-                    .singleton_or_else(|| {
-                        make_hq_bug!("hq_cast returned no output type, or multiple output types")
-                    })?;
-            }
-        }
-        if ignore_variables
-            && (matches!(
-                block,
-                IrOpcode::data_variable(DataVariableFields {
-                    local_read, ..
-                }) if !*local_read.borrow())
-                || matches!(block,
-                    IrOpcode::data_teevariable(DataTeevariableFields { local_read_write, .. }) if !*local_read_write.borrow())
-                || matches!(
-                    block,
-                    IrOpcode::data_itemoflist(_) | IrOpcode::procedures_argument(_)
-                ))
-        {
-            type_stack.push((IrType::Any, i));
-        } else {
-            match block.output_type(Rc::from(dummy_actual_inputs))? {
-                ReturnType::Singleton(output) => type_stack.push((output, i)),
-                ReturnType::MultiValue(outputs) => {
-                    type_stack.extend(outputs.iter().copied().zip(core::iter::repeat(i)));
-                }
-                ReturnType::None => (),
-            }
-        }
-
-        if recurse && let Some(inline_steps) = block.inline_steps(false) {
-            for inline_step in inline_steps {
-                insert_casts(
-                    inline_step.try_borrow_mut()?.opcodes_mut(),
-                    ignore_variables,
-                    true,
-                )?;
-            }
-        }
-    }
-    for (pos, ty) in casts.into_iter().rev() {
-        blocks.insert(pos + 1, IrOpcode::hq_cast(HqCastFields(ty)));
-    }
-    Ok(())
-}
-
-#[derive(Clone, Debug)]
-pub enum NextBlock {
-    ID(Box<str>),
-    Step(Step),
-    StepIndex(StepIndex),
-}
-
-#[derive(Clone, Debug)]
-pub struct NextBlockInfo {
-    pub yield_first: bool,
-    pub block: NextBlock,
-}
-
-/// contains a vector of next blocks, as well as information on how to proceed when
-/// there are no next blocks: true => terminate the thread, false => do nothing
-/// (useful for e.g. loop bodies, or for non-stack blocks)
-#[derive(Clone, Debug)]
-pub struct NextBlocks(Vec<NextBlockInfo>, bool);
-
-impl NextBlocks {
-    pub const fn new(terminating: bool) -> Self {
-        Self(vec![], terminating)
-    }
-
-    pub const fn terminating(&self) -> bool {
-        self.1
-    }
-
-    pub fn extend_with_inner(&self, new: NextBlockInfo) -> Self {
-        let mut cloned = self.0.clone();
-        cloned.push(new);
-        Self(cloned, self.terminating())
-    }
-
-    pub fn pop_inner(self) -> (Option<NextBlockInfo>, Self) {
-        let terminating = self.terminating();
-        let mut vec = self.0;
-        let popped = vec.pop();
-        (popped, Self(vec, terminating))
-    }
-}
 
 pub fn from_block(
     block: &Block,
@@ -210,1117 +56,6 @@ pub fn from_block(
     Ok(opcodes)
 }
 
-pub fn input_names(block_info: &BlockInfo, context: &StepContext) -> HQResult<Vec<String>> {
-    let opcode = &block_info.opcode;
-    // target and procs need to be declared outside of the match block
-    // to prevent lifetime issues
-    let target = context.target();
-    let procs = target.procedures()?;
-    Ok(
-        #[expect(
-            clippy::wildcard_enum_match_arm,
-            reason = "too many opcodes to match individually"
-        )]
-        match opcode {
-            BlockOpcode::looks_say | BlockOpcode::looks_think => vec!["MESSAGE"],
-            BlockOpcode::operator_add
-            | BlockOpcode::operator_divide
-            | BlockOpcode::operator_subtract
-            | BlockOpcode::operator_multiply
-            | BlockOpcode::operator_mod => vec!["NUM1", "NUM2"],
-            BlockOpcode::operator_mathop | BlockOpcode::operator_round => vec!["NUM"],
-            BlockOpcode::operator_lt
-            | BlockOpcode::operator_gt
-            | BlockOpcode::operator_equals
-            | BlockOpcode::operator_and
-            | BlockOpcode::operator_or => vec!["OPERAND1", "OPERAND2"],
-            BlockOpcode::operator_join | BlockOpcode::operator_contains => {
-                vec!["STRING1", "STRING2"]
-            }
-            BlockOpcode::operator_letter_of => vec!["LETTER", "STRING"],
-            BlockOpcode::motion_gotoxy => vec!["X", "Y"],
-            BlockOpcode::motion_movesteps => vec!["STEPS"],
-            BlockOpcode::motion_pointindirection => vec!["DIRECTION"],
-            BlockOpcode::motion_turnleft | BlockOpcode::motion_turnright => vec!["DEGREES"],
-            BlockOpcode::sensing_keypressed => vec!["KEY_OPTION"],
-            BlockOpcode::sensing_dayssince2000
-            | BlockOpcode::data_variable
-            | BlockOpcode::argument_reporter_boolean
-            | BlockOpcode::argument_reporter_string_number
-            | BlockOpcode::looks_costume
-            | BlockOpcode::looks_size
-            | BlockOpcode::looks_nextcostume
-            | BlockOpcode::looks_costumenumbername
-            | BlockOpcode::looks_backdrops
-            | BlockOpcode::looks_hide
-            | BlockOpcode::looks_show
-            | BlockOpcode::pen_penDown
-            | BlockOpcode::pen_penUp
-            | BlockOpcode::pen_clear
-            | BlockOpcode::control_forever
-            | BlockOpcode::pen_menu_colorParam
-            | BlockOpcode::motion_direction
-            | BlockOpcode::data_deletealloflist
-            | BlockOpcode::data_lengthoflist
-            | BlockOpcode::data_listcontents
-            | BlockOpcode::control_stop
-            | BlockOpcode::event_broadcast_menu
-            | BlockOpcode::sensing_timer
-            | BlockOpcode::sensing_resettimer
-            | BlockOpcode::sensing_answer
-            | BlockOpcode::looks_backdropnumbername
-            | BlockOpcode::looks_nextbackdrop
-            | BlockOpcode::data_showvariable
-            | BlockOpcode::data_hidevariable
-            | BlockOpcode::sensing_mousex
-            | BlockOpcode::sensing_mousey
-            | BlockOpcode::sensing_mousedown
-            | BlockOpcode::motion_xposition
-            | BlockOpcode::motion_yposition
-            | BlockOpcode::sensing_keyoptions => vec![],
-            BlockOpcode::sensing_askandwait => vec!["QUESTION"],
-            BlockOpcode::event_broadcast | BlockOpcode::event_broadcastandwait => {
-                vec!["BROADCAST_INPUT"]
-            }
-            BlockOpcode::control_wait => vec!["DURATION"],
-            BlockOpcode::data_setvariableto
-            | BlockOpcode::data_changevariableby
-            | BlockOpcode::control_for_each => vec!["VALUE"],
-            BlockOpcode::operator_random => vec!["FROM", "TO"],
-            BlockOpcode::pen_setPenColorParamTo | BlockOpcode::pen_changePenColorParamBy => {
-                vec!["COLOR_PARAM", "VALUE"]
-            }
-            BlockOpcode::control_if
-            | BlockOpcode::control_if_else
-            | BlockOpcode::control_repeat_until
-            | BlockOpcode::control_while
-            | BlockOpcode::control_wait_until => vec!["CONDITION"],
-            BlockOpcode::operator_not => vec!["OPERAND"],
-            BlockOpcode::control_repeat => vec!["TIMES"],
-            BlockOpcode::operator_length => vec!["STRING"],
-            BlockOpcode::looks_switchcostumeto => vec!["COSTUME"],
-            BlockOpcode::looks_switchbackdropto => vec!["BACKDROP"],
-            BlockOpcode::looks_setsizeto | BlockOpcode::pen_setPenSizeTo => vec!["SIZE"],
-            BlockOpcode::looks_changesizeby => vec!["CHANGE"],
-            BlockOpcode::pen_setPenColorToColor => vec!["COLOR"],
-            BlockOpcode::data_addtolist
-            | BlockOpcode::data_itemnumoflist
-            | BlockOpcode::data_listcontainsitem => vec!["ITEM"],
-            BlockOpcode::data_itemoflist | BlockOpcode::data_deleteoflist => vec!["INDEX"],
-            BlockOpcode::data_replaceitemoflist | BlockOpcode::data_insertatlist => {
-                vec!["INDEX", "ITEM"]
-            }
-            BlockOpcode::motion_changexby => vec!["DX"],
-            BlockOpcode::motion_changeyby => vec!["DY"],
-            BlockOpcode::motion_setx => vec!["X"],
-            BlockOpcode::motion_sety => vec!["Y"],
-            BlockOpcode::procedures_call => 'proc_block: {
-                let serde_json::Value::String(proccode) = block_info
-                    .mutation
-                    .mutations
-                    .get("proccode")
-                    .ok_or_else(|| make_hq_bad_proj!("missing proccode on procedures_call"))?
-                else {
-                    hq_bad_proj!("non-string proccode on procedures_call");
-                };
-                let Some(proc) = procs.get(proccode.as_str()) else {
-                    break 'proc_block vec![];
-                };
-                proc.arg_ids().iter().map(|b| &**b).collect()
-            }
-            other => hq_todo!("unimplemented input_names for {:?}", other),
-        }
-        .into_iter()
-        .map(String::from)
-        .collect(),
-    )
-}
-
-pub fn inputs(
-    block_info: &BlockInfo,
-    blocks: &BlockMap,
-    context: &StepContext,
-    project: &Weak<IrProject>,
-    flags: &WasmFlags,
-) -> HQResult<Vec<IrOpcode>> {
-    Ok(input_names(block_info, context)?
-        .into_iter()
-        .map(|name| -> HQResult<Vec<IrOpcode>> {
-            let input = match block_info.inputs.get((*name).into()) {
-                Some(noshadow @ Input::NoShadow(_, Some(_))) => noshadow,
-                Some(shadow @ Input::Shadow(_, Some(_), _)) => shadow,
-                None | Some(Input::NoShadow(_, None) | Input::Shadow(_, None, _)) => {
-                    // revert to a sensible default
-                    &Input::NoShadow(
-                        0,
-                        Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
-                    )
-                }
-            };
-            #[expect(
-                clippy::wildcard_enum_match_arm,
-                reason = "all variants covered in previous match guards"
-            )]
-            match input {
-                Input::NoShadow(_, Some(block)) | Input::Shadow(_, Some(block), _) => match block {
-                    BlockArrayOrId::Array(arr) => {
-                        Ok(vec![from_special_block(arr, context, flags)?])
-                    }
-                    BlockArrayOrId::Id(id) => from_block(
-                        blocks.get(id).ok_or_else(|| {
-                            make_hq_bad_proj!("block for input {} doesn't exist", name)
-                        })?,
-                        blocks,
-                        context,
-                        project,
-                        NextBlocks::new(false),
-                        flags,
-                    ),
-                },
-                _ => hq_bad_proj!("missing input block for {}", name),
-            }
-        })
-        .collect::<HQResult<Vec<_>>>()?
-        .iter()
-        .flatten()
-        .cloned()
-        .collect())
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ProcArgType {
-    Boolean,
-    StringNumber,
-}
-
-fn procedure_argument(
-    _arg_type: ProcArgType,
-    block_info: &BlockInfo,
-    context: &StepContext,
-) -> HQResult<Vec<IrOpcode>> {
-    let Some(proc_context) = context.proc_context.clone() else {
-        // this is always the default, regardless of type
-        return Ok(vec![IrOpcode::hq_integer(HqIntegerFields(0))]);
-    };
-    let sb3::VarVal::String(arg_name) = block_info
-        .fields
-        .get("VALUE")
-        .ok_or_else(|| make_hq_bad_proj!("missing VALUE field for proc argument"))?
-        .get_0()
-        .ok_or_else(|| make_hq_bad_proj!("missing value of VALUE field"))?
-    else {
-        hq_bad_proj!("non-string proc argument name")
-    };
-    let Some(index) = proc_context
-        .arg_names
-        .iter()
-        .position(|name| name == arg_name)
-    else {
-        return Ok(vec![IrOpcode::hq_integer(HqIntegerFields(0))]);
-    };
-    let arg_vars = (*proc_context.arg_vars).borrow();
-    let arg_var = arg_vars
-        .get(index)
-        .ok_or_else(|| make_hq_bad_proj!("argument index not in range of argumenttypes"))?;
-    Ok(vec![IrOpcode::procedures_argument(
-        ProceduresArgumentFields {
-            index,
-            arg_var: arg_var.clone(),
-            in_warped: context.warp,
-            arg_vars: Rc::clone(&proc_context.arg_vars),
-        },
-    )])
-}
-
-/// Generates the next step to go to, based off of the block info, and the `NextBlocks`
-/// passed to it.
-///
-/// Returns a `MaybeInlinedStep` along with a `bool` indicating if the step should yield
-/// first.
-fn generate_next_step(
-    block_info: &BlockInfo,
-    blocks: &BTreeMap<Box<str>, Block>,
-    context: &StepContext,
-    final_next_blocks: NextBlocks,
-    flags: &WasmFlags,
-) -> HQResult<(MaybeInlinedStep, bool)> {
-    let (next_block, yield_first, outer_next_blocks) = if let Some(ref next_block) = block_info.next
-    {
-        (
-            Some(NextBlock::ID(next_block.clone())),
-            false,
-            final_next_blocks,
-        )
-    } else if let (Some(next_block_info), popped_next_blocks) =
-        final_next_blocks.clone().pop_inner()
-    {
-        (
-            Some(next_block_info.block),
-            next_block_info.yield_first,
-            popped_next_blocks,
-        )
-    } else {
-        (None, false, final_next_blocks)
-    };
-    let next_step = match next_block {
-        Some(NextBlock::ID(id)) => {
-            let Some(next_block_block) = blocks.get(&id) else {
-                hq_bad_proj!("next block doesn't exist")
-            };
-            MaybeInlinedStep::Undetermined(Step::from_block(
-                next_block_block,
-                id,
-                blocks,
-                context,
-                &context.target().project(),
-                outer_next_blocks,
-                false,
-                flags,
-            )?)
-        }
-        Some(NextBlock::Step(step)) => MaybeInlinedStep::Undetermined(step),
-        Some(NextBlock::StepIndex(step_index)) => MaybeInlinedStep::NonInlined(step_index),
-        None => MaybeInlinedStep::Undetermined(Step::new_terminating(
-            context.clone(),
-            context.target().project(),
-            false,
-        )),
-    };
-    Ok((next_step, yield_first))
-}
-
-fn generate_next_step_inlined(
-    block_info: &BlockInfo,
-    blocks: &BTreeMap<Box<str>, Block>,
-    context: &StepContext,
-    final_next_blocks: NextBlocks,
-    flags: &WasmFlags,
-) -> HQResult<InlinedStep> {
-    let (next_step, yield_first) =
-        generate_next_step(block_info, blocks, context, final_next_blocks, flags)?;
-    Ok(match next_step {
-        MaybeInlinedStep::Inlined(step) => {
-            if yield_first {
-                let next_step_index = step
-                    .try_borrow()?
-                    .clone_to_non_inlined(&context.target().project())?;
-                Rc::new(RefCell::new(Step::new(
-                    None,
-                    context.clone(),
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Schedule(next_step_index),
-                    })],
-                    context.target().project(),
-                    false,
-                )))
-            } else {
-                step
-            }
-        }
-        MaybeInlinedStep::NonInlined(step_index) => {
-            if yield_first {
-                Rc::new(RefCell::new(Step::new(
-                    None,
-                    context.clone(),
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Schedule(step_index),
-                    })],
-                    context.target().project(),
-                    false,
-                )))
-            } else {
-                let mut step = context
-                    .project()?
-                    .steps()
-                    .try_borrow()?
-                    .get(step_index.0)
-                    .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
-                    .try_borrow()?
-                    .clone();
-                step.make_inlined();
-                Rc::new(RefCell::new(step))
-            }
-        }
-        MaybeInlinedStep::Undetermined(mut step) => {
-            if yield_first {
-                let step_index = step.clone_to_non_inlined(&context.target().project())?;
-                Rc::new(RefCell::new(Step::new(
-                    None,
-                    context.clone(),
-                    vec![IrOpcode::hq_yield(HqYieldFields {
-                        mode: YieldMode::Schedule(step_index),
-                    })],
-                    context.target().project(),
-                    false,
-                )))
-            } else {
-                step.make_inlined();
-                Rc::new(RefCell::new(step))
-            }
-        }
-    })
-}
-
-/// Generates a `StepIndex` for the next step of the given block, based on the
-/// block info and the given `NextSteps`. The generated step must not be inlined
-/// at a later stage, as it may cause reference cycles.
-fn generate_next_step_non_inlined(
-    block_info: &BlockInfo,
-    blocks: &BTreeMap<Box<str>, Block>,
-    context: &StepContext,
-    final_next_blocks: NextBlocks,
-    flags: &WasmFlags,
-) -> HQResult<StepIndex> {
-    let (next_step, _yield_first) =
-        generate_next_step(block_info, blocks, context, final_next_blocks, flags)?;
-    match next_step {
-        MaybeInlinedStep::Inlined(step) => step
-            .try_borrow()?
-            .clone_to_non_inlined(&context.target().project()),
-        MaybeInlinedStep::NonInlined(step_index) => Ok(step_index),
-        MaybeInlinedStep::Undetermined(step) => {
-            step.clone_to_non_inlined(&context.target().project())
-        }
-    }
-}
-
-#[expect(clippy::too_many_arguments, reason = "too many arguments!")]
-// TODO: put these arguments into a struct?
-fn generate_loop(
-    warp: bool,
-    should_break: &mut bool,
-    block_info: &BlockInfo,
-    blocks: &BTreeMap<Box<str>, Block>,
-    context: &StepContext,
-    final_next_blocks: NextBlocks,
-    first_condition_instructions: Option<Vec<IrOpcode>>,
-    condition_instructions: Vec<IrOpcode>,
-    pre_body_instructions: Option<Vec<IrOpcode>>,
-    flip_if: bool,
-    setup_instructions: Vec<IrOpcode>,
-    flags: &WasmFlags,
-) -> HQResult<Vec<IrOpcode>> {
-    let substack_id = match block_info.inputs.get("SUBSTACK") {
-        Some(
-            Input::NoShadow(_, Some(substack_input)) | Input::Shadow(_, Some(substack_input), _),
-        ) => {
-            let BlockArrayOrId::Id(id) = substack_input else {
-                hq_bad_proj!("malformed SUBSTACK input")
-            };
-            Some(id)
-        }
-        _ => None,
-    };
-
-    let substack_block = if let Some(id) = substack_id {
-        Some(
-            blocks
-                .get(id)
-                .ok_or_else(|| make_hq_bad_proj!("SUBSTACK block doesn't seem to exist"))?,
-        )
-    } else {
-        None
-    };
-    if warp {
-        // TODO: can this be expressed in the same way as non-warping loops,
-        // just with yield_first: false?
-        let substack_blocks = if let Some(block) = substack_block {
-            from_block(
-                block,
-                blocks,
-                context,
-                &context.target().project(),
-                NextBlocks::new(false),
-                flags,
-            )?
-        } else {
-            vec![]
-        };
-        let substack_step = Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            substack_blocks,
-            context.target().project(),
-            false,
-        )));
-        let condition_step = Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            condition_instructions,
-            context.target().project(),
-            false,
-        )));
-        let first_condition_step = first_condition_instructions.map(|instrs| {
-            Rc::new(RefCell::new(Step::new(
-                None,
-                context.clone(),
-                instrs,
-                context.target().project(),
-                false,
-            )))
-        });
-        let pre_body_step = pre_body_instructions.map(|instrs| {
-            Rc::new(RefCell::new(Step::new(
-                None,
-                context.clone(),
-                instrs,
-                context.target().project(),
-                false,
-            )))
-        });
-        Ok(setup_instructions
-            .into_iter()
-            .chain(vec![IrOpcode::control_loop(ControlLoopFields {
-                first_condition: first_condition_step,
-                condition: condition_step,
-                body: substack_step,
-                pre_body: pre_body_step,
-                flip_if,
-            })])
-            .collect())
-    } else {
-        *should_break = true;
-        let next_step =
-            generate_next_step_inlined(block_info, blocks, context, final_next_blocks, flags)?;
-        let project = context.project()?;
-        let mut condition_step = Step::new(
-            None,
-            context.clone(),
-            condition_instructions.clone(),
-            context.target().project(),
-            true,
-        );
-        let substack_step = Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            vec![],
-            context.target().project(),
-            false,
-        )));
-        condition_step
-            .opcodes_mut()
-            .push(IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
-                branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
-            }));
-        let condition_step_index = project.new_owned_step(condition_step)?;
-        if let Some(pre_body_blocks) = pre_body_instructions {
-            substack_step
-                .try_borrow_mut()?
-                .opcodes_mut()
-                .extend(pre_body_blocks);
-        }
-        if let Some(block) = substack_block {
-            let substack_blocks = from_block(
-                block,
-                blocks,
-                context,
-                &context.target().project(),
-                NextBlocks::new(false).extend_with_inner(NextBlockInfo {
-                    yield_first: true,
-                    block: NextBlock::StepIndex(condition_step_index),
-                }),
-                flags,
-            )?;
-            substack_step
-                .try_borrow_mut()?
-                .opcodes_mut()
-                .extend(substack_blocks);
-        } else {
-            substack_step
-                .try_borrow_mut()?
-                .opcodes_mut()
-                .push(IrOpcode::hq_yield(HqYieldFields {
-                    mode: YieldMode::Schedule(condition_step_index),
-                }));
-        }
-        Ok(setup_instructions
-            .into_iter()
-            .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
-            .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
-                branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
-            })])
-            .collect())
-    }
-}
-
-#[expect(clippy::too_many_arguments, reason = "will fix later. maybe.")]
-fn generate_if_else(
-    if_block: (&Block, Box<str>),
-    maybe_else_block: Option<(&Block, Box<str>)>,
-    block_info: &BlockInfo,
-    final_next_blocks: &NextBlocks,
-    blocks: &BTreeMap<Box<str>, Block>,
-    context: &StepContext,
-    should_break: &mut bool,
-    flags: &WasmFlags,
-) -> HQResult<Vec<IrOpcode>> {
-    if !context.warp {
-        let this_project = context.project()?;
-        let dummy_project = Rc::new(IrProject::new(
-            this_project.global_variables().clone(),
-            this_project.global_lists().clone(),
-            Box::from(this_project.broadcasts()),
-            0,
-            vec![],
-        ));
-        let dummy_target = Rc::new(Target::new(
-            false,
-            context.target().variables().clone(),
-            context.target().lists().clone(),
-            Rc::downgrade(&dummy_project),
-            RefCell::new(context.target().procedures()?.clone()),
-            0,
-            context.target().costumes().into(),
-        ));
-        dummy_project
-            .targets()
-            .try_borrow_mut()
-            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
-            .insert("".into(), Rc::clone(&dummy_target));
-        let dummy_context = StepContext {
-            target: Rc::clone(&dummy_target),
-            ..context.clone()
-        };
-        let dummy_if_step = Step::from_block(
-            if_block.0,
-            if_block.1.clone(),
-            blocks,
-            &dummy_context,
-            &Rc::downgrade(&dummy_project),
-            NextBlocks::new(false),
-            false,
-            flags,
-        )?;
-        let dummy_else_step = if let Some((else_block, else_block_id)) = maybe_else_block.clone() {
-            Step::from_block(
-                else_block,
-                else_block_id,
-                blocks,
-                &dummy_context,
-                &Rc::downgrade(&dummy_project),
-                NextBlocks::new(false),
-                false,
-                flags,
-            )?
-        } else {
-            Step::new_empty(
-                Rc::downgrade(&dummy_project),
-                false,
-                Rc::clone(&dummy_target),
-            )
-        };
-        if dummy_if_step.does_yield() || dummy_else_step.does_yield() {
-            // TODO: ideally if only one branch yields then we'd duplicate the next step and put one
-            // version inline after the branch, and the other tagged on in the substep's NextBlocks
-            // as usual, to allow for extra variable type optimisations.
-            #[expect(
-                clippy::option_if_let_else,
-                reason = "map_or_else alternative is too complex"
-            )]
-            let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
-                (
-                    Some(NextBlock::ID(next_block.clone())),
-                    final_next_blocks.extend_with_inner(NextBlockInfo {
-                        yield_first: false,
-                        block: NextBlock::ID(next_block.clone()),
-                    }),
-                )
-            } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
-                (Some(next_block_info.block), final_next_blocks.clone())
-            } else {
-                (
-                    None,
-                    final_next_blocks.clone(), // preserve termination behaviour
-                )
-            };
-            let final_if_step = {
-                Step::from_block(
-                    if_block.0,
-                    if_block.1,
-                    blocks,
-                    context,
-                    &context.target().project(),
-                    next_blocks.clone(),
-                    false,
-                    flags,
-                )?
-            };
-            let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
-                Step::from_block(
-                    else_block,
-                    else_block_id,
-                    blocks,
-                    context,
-                    &context.target().project(),
-                    next_blocks,
-                    false,
-                    flags,
-                )?
-            } else {
-                let opcode = match next_block {
-                    Some(NextBlock::ID(id)) => {
-                        let next_block = blocks
-                            .get(&id)
-                            .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                        vec![IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(Rc::new(RefCell::new(Step::from_block(
-                                next_block,
-                                id.clone(),
-                                blocks,
-                                context,
-                                &context.target().project(),
-                                next_blocks,
-                                false,
-                                flags,
-                            )?))),
-                        })]
-                    }
-                    Some(NextBlock::Step(mut step)) => {
-                        step.make_inlined();
-                        vec![IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
-                        })]
-                    }
-                    Some(NextBlock::StepIndex(step_index)) => {
-                        let mut step = context
-                            .project()?
-                            .steps()
-                            .try_borrow()?
-                            .get(step_index.0)
-                            .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
-                            .try_borrow()?
-                            .clone();
-                        step.make_inlined();
-                        vec![IrOpcode::hq_yield(HqYieldFields {
-                            mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
-                        })]
-                    }
-                    None => {
-                        if next_blocks.terminating() {
-                            vec![IrOpcode::hq_yield(HqYieldFields {
-                                mode: YieldMode::None,
-                            })]
-                        } else {
-                            vec![]
-                        }
-                    }
-                };
-                Step::new(
-                    None,
-                    context.clone(),
-                    opcode,
-                    context.target().project(),
-                    false,
-                )
-            };
-            *should_break = true;
-            return Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Rc::new(RefCell::new(final_if_step)),
-                branch_else: Rc::new(RefCell::new(final_else_step)),
-            })]);
-        }
-    }
-    let final_if_step = Step::from_block(
-        if_block.0,
-        if_block.1,
-        blocks,
-        context,
-        &context.target().project(),
-        NextBlocks::new(false),
-        false,
-        flags,
-    )?;
-    let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
-        Step::from_block(
-            else_block,
-            else_block_id,
-            blocks,
-            context,
-            &context.target().project(),
-            NextBlocks::new(false),
-            false,
-            flags,
-        )?
-    } else {
-        Step::new(
-            None,
-            context.clone(),
-            vec![],
-            context.target().project(),
-            false,
-        )
-    };
-    Ok(vec![IrOpcode::control_if_else(ControlIfElseFields {
-        branch_if: Rc::new(RefCell::new(final_if_step)),
-        branch_else: Rc::new(RefCell::new(final_else_step)),
-    })])
-}
-
-fn generate_list_index_op<B>(
-    list: &RcList,
-    block: B,
-    maybe_all_block: Option<IrOpcode>,
-    other_argument: bool,
-    add_one_to_length: bool,
-    default_output: Option<&IrOpcode>,
-    context: &StepContext,
-    project: &Weak<IrProject>,
-    flags: &WasmFlags,
-) -> HQResult<Vec<IrOpcode>>
-where
-    B: Fn() -> IrOpcode,
-{
-    let text_var = RcVar::new(IrType::String, &VarVal::String("".into()), None, flags)?;
-    let int_var = RcVar::new(IrType::Int, &VarVal::Int(0), None, flags)?;
-    let extra_var = RcVar::new_empty();
-    let result_var = RcVar::new_empty();
-
-    let has_output = default_output.is_some();
-
-    let result_step = |mut opcodes: Vec<IrOpcode>| {
-        if has_output {
-            opcodes.push(IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                var: RefCell::new(result_var.clone()),
-                local_write: RefCell::new(true),
-                first_write: RefCell::new(false),
-            }));
-        }
-        Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            opcodes,
-            Weak::clone(project),
-            false,
-        )))
-    };
-
-    let int_step = result_step(if other_argument {
-        vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(int_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(extra_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            block(),
-        ]
-    } else {
-        vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(int_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-            block(),
-        ]
-    });
-
-    let last_step = result_step(if other_argument {
-        vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
-            list: list.clone(),
-        })]
-        .into_iter()
-        .chain(if add_one_to_length {
-            vec![
-                IrOpcode::hq_integer(HqIntegerFields(1)),
-                IrOpcode::operator_add,
-            ]
-        } else {
-            vec![]
-        })
-        .chain(vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(extra_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            block(),
-        ])
-        .collect()
-    } else {
-        vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
-            list: list.clone(),
-        })]
-        .into_iter()
-        .chain(if add_one_to_length {
-            vec![
-                IrOpcode::hq_integer(HqIntegerFields(1)),
-                IrOpcode::operator_add,
-            ]
-        } else {
-            vec![]
-        })
-        .chain(vec![block()])
-        .collect()
-    });
-
-    let random_step = result_step(if other_argument {
-        vec![
-            IrOpcode::hq_integer(HqIntegerFields(1)),
-            IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
-        ]
-        .into_iter()
-        .chain(if add_one_to_length {
-            vec![
-                IrOpcode::hq_integer(HqIntegerFields(1)),
-                IrOpcode::operator_add,
-            ]
-        } else {
-            vec![]
-        })
-        .chain(vec![
-            IrOpcode::operator_random,
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(extra_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            block(),
-        ])
-        .collect()
-    } else {
-        vec![
-            IrOpcode::hq_integer(HqIntegerFields(1)),
-            IrOpcode::data_lengthoflist(DataLengthoflistFields { list: list.clone() }),
-        ]
-        .into_iter()
-        .chain(if add_one_to_length {
-            vec![
-                IrOpcode::hq_integer(HqIntegerFields(1)),
-                IrOpcode::operator_add,
-            ]
-        } else {
-            vec![]
-        })
-        .chain(vec![IrOpcode::operator_random, block()])
-        .collect()
-    });
-
-    let default_step = if let Some(default_block) = default_output {
-        result_step(vec![default_block.clone()])
-    } else {
-        Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            vec![],
-            Weak::clone(project),
-            false,
-        )))
-    };
-
-    let not_any_step = maybe_all_block.map(|all_block| {
-        let all_step = Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            vec![all_block],
-            Weak::clone(project),
-            false,
-        )));
-
-        Rc::new(RefCell::new(Step::new(
-            None,
-            context.clone(),
-            vec![
-                IrOpcode::data_variable(DataVariableFields {
-                    var: RefCell::new(text_var.clone()),
-                    local_read: RefCell::new(true),
-                }),
-                IrOpcode::hq_text(HqTextFields("all".into())),
-                IrOpcode::operator_equals,
-                IrOpcode::control_if_else(ControlIfElseFields {
-                    branch_if: all_step,
-                    branch_else: Rc::clone(&default_step),
-                }),
-            ],
-            Weak::clone(project),
-            false,
-        )))
-    });
-
-    let not_random_step = Rc::new(RefCell::new(Step::new(
-        None,
-        context.clone(),
-        vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(text_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            IrOpcode::hq_text(HqTextFields("any".into())),
-            IrOpcode::operator_equals,
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: Rc::clone(&random_step),
-                branch_else: not_any_step.unwrap_or(default_step),
-            }),
-        ],
-        Weak::clone(project),
-        false,
-    )));
-
-    let not_last_step = Rc::new(RefCell::new(Step::new(
-        None,
-        context.clone(),
-        vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(text_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            IrOpcode::hq_text(HqTextFields("random".into())),
-            IrOpcode::operator_equals,
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: random_step,
-                branch_else: not_random_step,
-            }),
-        ],
-        Weak::clone(project),
-        false,
-    )));
-
-    let not_int_step = Rc::new(RefCell::new(Step::new(
-        None,
-        context.clone(),
-        vec![
-            IrOpcode::data_variable(DataVariableFields {
-                var: RefCell::new(text_var.clone()),
-                local_read: RefCell::new(true),
-            }),
-            IrOpcode::hq_text(HqTextFields("last".into())),
-            IrOpcode::operator_equals,
-            IrOpcode::control_if_else(ControlIfElseFields {
-                branch_if: last_step,
-                branch_else: not_last_step,
-            }),
-        ],
-        Weak::clone(project),
-        false,
-    )));
-
-    // we do some silly shennanigans with swapping to make sure that the SSA optimiser stays happy
-    Ok(if other_argument {
-        vec![IrOpcode::hq_swap]
-    } else {
-        vec![]
-    }
-    .into_iter()
-    .chain(vec![
-        IrOpcode::hq_dup,
-        IrOpcode::hq_cast(HqCastFields(IrType::String)),
-        IrOpcode::hq_swap,
-        IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-        IrOpcode::data_setvariableto(DataSetvariabletoFields {
-            var: RefCell::new(int_var.clone()),
-            local_write: RefCell::new(true),
-            first_write: RefCell::new(true),
-        }),
-        IrOpcode::data_setvariableto(DataSetvariabletoFields {
-            var: RefCell::new(text_var),
-            local_write: RefCell::new(true),
-            first_write: RefCell::new(true),
-        }),
-    ])
-    .chain(if other_argument {
-        vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
-            var: RefCell::new(extra_var),
-            local_write: RefCell::new(true),
-            first_write: RefCell::new(true),
-        })]
-    } else {
-        vec![]
-    })
-    .chain(vec![
-        IrOpcode::data_variable(DataVariableFields {
-            var: RefCell::new(int_var),
-            local_read: RefCell::new(true),
-        }),
-        IrOpcode::hq_integer(HqIntegerFields(0)),
-        IrOpcode::operator_gt,
-        IrOpcode::control_if_else(ControlIfElseFields {
-            branch_if: int_step,
-            branch_else: not_int_step,
-        }),
-    ])
-    .chain(if has_output {
-        vec![IrOpcode::data_variable(DataVariableFields {
-            var: RefCell::new(result_var),
-            local_read: RefCell::new(true),
-        })]
-    } else {
-        vec![]
-    })
-    .collect())
-}
-
-fn generate_exhaustive_string_comparison<I, S, F>(
-    string_source: I,
-    instruction: F,
-    fallback: Vec<IrOpcode>,
-    context: &StepContext,
-    project: &Weak<IrProject>,
-    flags: &WasmFlags,
-) -> HQResult<Vec<IrOpcode>>
-where
-    I: IntoIterator<Item = S>,
-    S: Into<Box<str>> + Clone,
-    F: Fn(Box<str>) -> IrOpcode,
-{
-    let var = RcVar::new(IrType::String, &VarVal::String("".into()), None, flags)?;
-    Ok(vec![
-        IrOpcode::hq_cast(HqCastFields(IrType::String)),
-        IrOpcode::data_setvariableto(DataSetvariabletoFields {
-            var: RefCell::new(var.clone()),
-            local_write: RefCell::new(true),
-            first_write: RefCell::new(true),
-        }),
-    ]
-    .into_iter()
-    .chain(
-        string_source
-            .into_iter()
-            .fold(
-                Rc::new(RefCell::new(Step::new(
-                    None,
-                    context.clone(),
-                    fallback,
-                    Weak::clone(project),
-                    false,
-                ))),
-                |branch_else, string| {
-                    let branch_if = Rc::new(RefCell::new(Step::new(
-                        None,
-                        context.clone(),
-                        vec![instruction(string.clone().into())],
-                        Weak::clone(project),
-                        false,
-                    )));
-                    Rc::new(RefCell::new(Step::new(
-                        None,
-                        context.clone(),
-                        vec![
-                            IrOpcode::data_variable(DataVariableFields {
-                                var: RefCell::new(var.clone()),
-                                local_read: RefCell::new(true),
-                            }),
-                            IrOpcode::hq_text(HqTextFields(string.into())),
-                            IrOpcode::operator_equals, // todo: this should be a case-sensitive comparison
-                            IrOpcode::control_if_else(ControlIfElseFields {
-                                branch_if,
-                                branch_else,
-                            }),
-                        ],
-                        Weak::clone(project),
-                        false,
-                    )))
-                },
-            )
-            .try_borrow()?
-            .opcodes()
-            .clone(),
-    )
-    .collect())
-}
-
 fn from_normal_block(
     block_info: &BlockInfo,
     blocks: &BlockMap,
@@ -1337,1667 +72,15 @@ fn from_normal_block(
         opcodes.append(
             &mut inputs(block_info, blocks, context, project, flags)?
                 .into_iter()
-                .chain(
-                    #[expect(
-                        clippy::wildcard_enum_match_arm,
-                        reason = "too many opcodes to match individually"
-                    )]
-                    match &block_info.opcode {
-                        BlockOpcode::operator_add => vec![IrOpcode::operator_add],
-                        BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
-                        BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
-                        BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
-                        BlockOpcode::operator_mod => vec![IrOpcode::operator_modulo],
-                        BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
-                        BlockOpcode::motion_setx => vec![IrOpcode::motion_setx],
-                        BlockOpcode::motion_sety => vec![IrOpcode::motion_sety],
-                        BlockOpcode::motion_xposition => vec![IrOpcode::motion_xposition],
-                        BlockOpcode::motion_yposition => vec![IrOpcode::motion_yposition],
-                        BlockOpcode::motion_changexby => vec![
-                            IrOpcode::motion_xposition,
-                            IrOpcode::operator_add,
-                            IrOpcode::motion_setx,
-                        ],
-                        BlockOpcode::motion_changeyby => vec![
-                            IrOpcode::motion_yposition,
-                            IrOpcode::operator_add,
-                            IrOpcode::motion_sety,
-                        ],
-                        BlockOpcode::motion_movesteps => vec![
-                            // this is a really lazy implementation but wasm-opt should optimise it
-                            IrOpcode::hq_dup,
-                            IrOpcode::hq_float(HqFloatFields(90.0)),
-                            IrOpcode::motion_direction,
-                            IrOpcode::operator_subtract,
-                            IrOpcode::operator_cos,
-                            IrOpcode::operator_multiply,
-                            IrOpcode::motion_xposition,
-                            IrOpcode::operator_add,
-                            IrOpcode::hq_swap,
-                            IrOpcode::hq_float(HqFloatFields(90.0)),
-                            IrOpcode::motion_direction,
-                            IrOpcode::operator_subtract,
-                            IrOpcode::operator_sin,
-                            IrOpcode::operator_multiply,
-                            IrOpcode::motion_yposition,
-                            IrOpcode::operator_add,
-                            IrOpcode::motion_gotoxy,
-                        ],
-                        BlockOpcode::motion_direction => vec![IrOpcode::motion_direction],
-                        BlockOpcode::motion_pointindirection => {
-                            vec![IrOpcode::motion_pointindirection]
-                        }
-                        BlockOpcode::motion_turnright => vec![
-                            IrOpcode::motion_direction,
-                            IrOpcode::operator_add,
-                            IrOpcode::motion_pointindirection,
-                        ],
-                        BlockOpcode::motion_turnleft => vec![
-                            IrOpcode::motion_direction,
-                            IrOpcode::operator_subtract,
-                            IrOpcode::hq_integer(HqIntegerFields(-1)),
-                            IrOpcode::operator_multiply,
-                            IrOpcode::motion_pointindirection,
-                        ],
-                        BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
-                            debug: context.debug,
-                            target_idx: context.target().index(),
-                        })],
-                        BlockOpcode::looks_think => vec![IrOpcode::looks_think(LooksThinkFields {
-                            debug: context.debug,
-                            target_idx: context.target().index(),
-                        })],
-                        BlockOpcode::operator_join => vec![IrOpcode::operator_join],
-                        BlockOpcode::operator_length => vec![IrOpcode::operator_length],
-                        BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
-                        BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
-                        BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
-                        BlockOpcode::sensing_keypressed => vec![IrOpcode::sensing_keypressed],
-                        BlockOpcode::sensing_keyoptions => {
-                            let (sb3::Field::Value((Some(val),))
-                            | sb3::Field::ValueId(Some(val), _)) =
-                                block_info.fields.get("KEY_OPTION").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field KEY_OPTION"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing value for KEY_OPTION field"
-                                )
-                            };
-                            let VarVal::String(key_option) = val else {
-                                hq_bad_proj!(
-                                    "invalid project.json - non-string value for KEY_OPTION field"
-                                )
-                            };
-                            vec![IrOpcode::hq_text(HqTextFields(key_option.clone()))]
-                        }
-                        BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
-                        BlockOpcode::sensing_mousex => vec![IrOpcode::sensing_mousex],
-                        BlockOpcode::sensing_mousey => vec![IrOpcode::sensing_mousey],
-                        BlockOpcode::sensing_mousedown => vec![IrOpcode::sensing_mousedown],
-                        BlockOpcode::sensing_answer => vec![IrOpcode::sensing_answer],
-                        BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_reset_timer],
-                        BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
-                        BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
-                        BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
-                        BlockOpcode::operator_not => vec![IrOpcode::operator_not],
-                        BlockOpcode::operator_and => vec![IrOpcode::operator_and],
-                        BlockOpcode::operator_or => vec![IrOpcode::operator_or],
-                        BlockOpcode::operator_round => vec![IrOpcode::operator_round],
-                        BlockOpcode::operator_mathop => {
-                            let (sb3::Field::Value((Some(val),))
-                            | sb3::Field::ValueId(Some(val), _)) =
-                                block_info.fields.get("OPERATOR").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field OPERATOR"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing value for OPERATOR field"
-                                )
-                            };
-                            let VarVal::String(operator) = val else {
-                                hq_bad_proj!(
-                                    "invalid project.json - non-string value for OPERATOR field"
-                                )
-                            };
-                            match operator.to_lowercase().as_str() {
-                                "abs" => vec![IrOpcode::operator_abs],
-                                "floor" => vec![IrOpcode::operator_floor],
-                                "ceiling" => vec![IrOpcode::operator_ceiling],
-                                "sqrt" => vec![IrOpcode::operator_sqrt],
-                                "sin" => vec![IrOpcode::operator_sin],
-                                "cos" => vec![IrOpcode::operator_cos],
-                                "tan" => vec![IrOpcode::operator_tan],
-                                "asin" => vec![IrOpcode::operator_asin],
-                                "acos" => vec![IrOpcode::operator_acos],
-                                "atan" => vec![IrOpcode::operator_atan],
-                                "ln" => vec![IrOpcode::operator_ln],
-                                "log" => vec![IrOpcode::operator_log],
-                                "e ^" => vec![IrOpcode::operator_exp],
-                                "10 ^" => vec![IrOpcode::operator_pow10],
-                                other => hq_bad_proj!("unknown mathop {}", other),
-                            }
-                        }
-                        BlockOpcode::operator_random => vec![IrOpcode::operator_random],
-                        BlockOpcode::event_broadcast_menu => {
-                            let sb3::Field::ValueId(val, _id) =
-                                block_info.fields.get("BROADCAST_OPTION").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field BROADCAST_OPTION"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing broadcast name for \
-                                     BROADCAST_OPTION field"
-                                );
-                            };
-                            let VarVal::String(name) = val.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null broadcast name for \
-                                     BROADCAST_OPTION field"
-                                )
-                            })?
-                            else {
-                                hq_bad_proj!("non-string broadcast name")
-                            };
-                            vec![IrOpcode::hq_text(HqTextFields(name))]
-                        }
-                        BlockOpcode::event_broadcast => generate_exhaustive_string_comparison(
-                            context.project()?.broadcasts().iter().cloned(),
-                            |broadcast| IrOpcode::event_broadcast(EventBroadcastFields(broadcast)),
-                            vec![],
-                            context,
-                            project,
-                            flags,
-                        )?,
-                        BlockOpcode::event_broadcastandwait => {
-                            let poll_step = context.project()?.new_owned_step(
-                                Step::new_poll_waiting_threads(
-                                    context.clone(),
-                                    Weak::clone(project),
-                                ),
-                            )?;
-                            should_break = true;
-                            let next_step = generate_next_step_non_inlined(
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                flags,
-                            )?;
-                            generate_exhaustive_string_comparison(
-                                context.project()?.broadcasts().iter().cloned(),
-                                |broadcast| {
-                                    IrOpcode::event_broadcast_and_wait(
-                                        EventBroadcastAndWaitFields {
-                                            broadcast,
-                                            poll_step,
-                                            next_step,
-                                        },
-                                    )
-                                },
-                                vec![IrOpcode::hq_yield(HqYieldFields {
-                                    mode: YieldMode::Schedule(next_step),
-                                })],
-                                context,
-                                project,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::sensing_askandwait => {
-                            let poll_step =
-                                context
-                                    .project()?
-                                    .new_owned_step(Step::new_poll_waiting_event(
-                                        context.clone(),
-                                        Weak::clone(project),
-                                    ))?;
-                            should_break = true;
-                            if context.target().is_stage() {
-                                let next_step = generate_next_step_non_inlined(
-                                    block_info,
-                                    blocks,
-                                    context,
-                                    final_next_blocks.clone(),
-                                    flags,
-                                )?;
-                                vec![IrOpcode::sensing_askandwait(SensingAskandwaitFields {
-                                    poll_step,
-                                    next_step,
-                                })]
-                            } else {
-                                let next_step = generate_next_step_inlined(
-                                    block_info,
-                                    blocks,
-                                    context,
-                                    final_next_blocks.clone(),
-                                    flags,
-                                )?;
-                                let real_next_step = Step::new(
-                                    None,
-                                    context.clone(),
-                                    vec![
-                                        IrOpcode::hq_text(HqTextFields("".into())),
-                                        IrOpcode::looks_say(LooksSayFields {
-                                            debug: false,
-                                            target_idx: context.target().index(),
-                                        }),
-                                        IrOpcode::hq_yield(HqYieldFields {
-                                            mode: YieldMode::Inline(next_step),
-                                        }),
-                                    ],
-                                    Weak::clone(project),
-                                    true,
-                                )
-                                .clone_to_non_inlined(project)?;
-                                vec![
-                                    IrOpcode::looks_say(LooksSayFields {
-                                        debug: false,
-                                        target_idx: context.target().index(),
-                                    }),
-                                    IrOpcode::hq_text(HqTextFields("".into())),
-                                    IrOpcode::sensing_askandwait(SensingAskandwaitFields {
-                                        poll_step,
-                                        next_step: real_next_step,
-                                    }),
-                                ]
-                            }
-                        }
-                        BlockOpcode::control_wait => {
-                            let poll_step = context.project()?.new_owned_step(
-                                Step::new_poll_timer(context.clone(), Weak::clone(project)),
-                            )?;
-                            should_break = true;
-                            let next_step = generate_next_step_non_inlined(
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                flags,
-                            )?;
-                            vec![IrOpcode::control_wait(ControlWaitFields {
-                                poll_step,
-                                next_step,
-                            })]
-                        }
-                        BlockOpcode::data_setvariableto => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field VARIABLE"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for VARIABLE field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let variable = if let Some(var) = target.variables().get(&id) {
-                                var.clone()
-                            } else if let Some(var) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_variables()
-                                .get(&id)
-                            {
-                                var.clone()
-                            } else {
-                                hq_bad_proj!("variable not found")
-                            };
-                            *variable.is_used.try_borrow_mut()? = true;
-                            vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                var: RefCell::new(variable.var.clone()),
-                                local_write: RefCell::new(false),
-                                first_write: RefCell::new(false),
-                            })]
-                        }
-                        BlockOpcode::data_changevariableby => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field VARIABLE"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for VARIABLE field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let variable = if let Some(var) = target.variables().get(&id) {
-                                var.clone()
-                            } else if let Some(var) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_variables()
-                                .get(&id)
-                            {
-                                var.clone()
-                            } else {
-                                hq_bad_proj!("variable not found")
-                            };
-                            *variable.is_used.try_borrow_mut()? = true;
-                            vec![
-                                IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(variable.var.clone()),
-                                    local_read: RefCell::new(false),
-                                }),
-                                IrOpcode::operator_add,
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(variable.var.clone()),
-                                    local_write: RefCell::new(false),
-                                    first_write: RefCell::new(false),
-                                }),
-                            ]
-                        }
-                        BlockOpcode::data_variable => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field VARIABLE"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for VARIABLE field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let variable = if let Some(var) = target.variables().get(&id) {
-                                var.clone()
-                            } else if let Some(var) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_variables()
-                                .get(&id)
-                            {
-                                var.clone()
-                            } else {
-                                hq_bad_proj!("variable not found")
-                            };
-                            *variable.is_used.try_borrow_mut()? = true;
-                            vec![IrOpcode::data_variable(DataVariableFields {
-                                var: RefCell::new(variable.var.clone()),
-                                local_read: RefCell::new(false),
-                            })]
-                        }
-                        BlockOpcode::data_showvariable => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field VARIABLE"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for VARIABLE field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let variable = if let Some(var) = target.variables().get(&id) {
-                                var.clone()
-                            } else if let Some(var) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_variables()
-                                .get(&id)
-                            {
-                                var.clone()
-                            } else {
-                                hq_bad_proj!("variable not found")
-                            };
-                            *variable.is_used.try_borrow_mut()? = true;
-                            let Some(monitor) = variable.var.monitor().as_ref() else {
-                                hq_bad_proj!(
-                                    "tried to change visibility of variable without monitor"
-                                );
-                            };
-                            *monitor.is_ever_visible.try_borrow_mut()? = true;
-                            vec![IrOpcode::data_visvariable(DataVisvariableFields {
-                                var: RefCell::new(variable.var.clone()),
-                                visible: true,
-                            })]
-                        }
-                        BlockOpcode::data_hidevariable => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field VARIABLE"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for VARIABLE field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let variable = if let Some(var) = target.variables().get(&id) {
-                                var.clone()
-                            } else if let Some(var) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_variables()
-                                .get(&id)
-                            {
-                                var.clone()
-                            } else {
-                                hq_bad_proj!("variable not found")
-                            };
-                            *variable.is_used.try_borrow_mut()? = true;
-                            hq_assert!(
-                                variable.var.monitor().is_some(),
-                                "tried to change visibility of variable without monitor"
-                            );
-                            vec![IrOpcode::data_visvariable(DataVisvariableFields {
-                                var: RefCell::new(variable.var.clone()),
-                                visible: false,
-                            })]
-                        }
-                        BlockOpcode::data_deletealloflist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            *list.list.length_mutable().try_borrow_mut()? = true;
-                            vec![IrOpcode::data_deletealloflist(DataDeletealloflistFields {
-                                list: list.list.clone(),
-                            })]
-                        }
-                        BlockOpcode::data_addtolist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            *list.list.length_mutable().try_borrow_mut()? = true;
-                            vec![IrOpcode::data_addtolist(DataAddtolistFields {
-                                list: list.list.clone(),
-                            })]
-                        }
-                        BlockOpcode::data_itemnumoflist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            let item = RcVar::new_empty();
-                            let ret = RcVar::new(
-                                IrType::IntPos.or(IrType::IntZero),
-                                &VarVal::Int(0),
-                                None,
-                                flags,
-                            )?;
-                            let i = RcVar::new(
-                                IrType::IntPos.or(IrType::IntZero),
-                                &VarVal::Int(0),
-                                None,
-                                flags,
-                            )?;
-                            let condition = Rc::new(RefCell::new(Step::new(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(ret.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::hq_integer(HqIntegerFields(0)),
-                                    IrOpcode::operator_equals,
-                                    IrOpcode::operator_not,
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::hq_integer(HqIntegerFields(1)),
-                                    IrOpcode::operator_add,
-                                    IrOpcode::data_teevariable(DataTeevariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read_write: RefCell::new(true),
-                                    }),
-                                    IrOpcode::data_lengthoflist(DataLengthoflistFields {
-                                        list: list.list.clone(),
-                                    }),
-                                    IrOpcode::operator_gt,
-                                    IrOpcode::operator_or,
-                                ],
-                                Weak::clone(project),
-                                false,
-                            )));
-                            let body = Rc::new(RefCell::new(Step::new(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::data_itemoflist(DataItemoflistFields {
-                                        list: list.list.clone(),
-                                    }),
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(item.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::operator_equals,
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::operator_multiply,
-                                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                        var: RefCell::new(ret.clone()),
-                                        local_write: RefCell::new(true),
-                                        first_write: RefCell::new(false),
-                                    }),
-                                ],
-                                Weak::clone(project),
-                                false,
-                            )));
-                            vec![
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(item.clone()),
-                                    local_write: RefCell::new(true),
-                                    first_write: RefCell::new(true),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(i.clone()),
-                                    local_write: RefCell::new(true),
-                                    first_write: RefCell::new(true),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(ret.clone()),
-                                    local_write: RefCell::new(true),
-                                    first_write: RefCell::new(true),
-                                }),
-                                IrOpcode::control_loop(ControlLoopFields {
-                                    first_condition: None,
-                                    condition,
-                                    body,
-                                    pre_body: None,
-                                    flip_if: true,
-                                }),
-                                IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(ret.clone()),
-                                    local_read: RefCell::new(true),
-                                }),
-                            ]
-                        }
-                        BlockOpcode::data_listcontainsitem => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            let item = RcVar::new_empty();
-                            let ret =
-                                RcVar::new(IrType::Boolean, &VarVal::Bool(false), None, flags)?;
-                            let i = RcVar::new(
-                                IrType::IntPos.or(IrType::IntZero),
-                                &VarVal::Int(0),
-                                None,
-                                flags,
-                            )?;
-                            let condition = Rc::new(RefCell::new(Step::new(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(ret.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::hq_integer(HqIntegerFields(1)),
-                                    IrOpcode::operator_add,
-                                    IrOpcode::data_teevariable(DataTeevariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read_write: RefCell::new(true),
-                                    }),
-                                    IrOpcode::data_lengthoflist(DataLengthoflistFields {
-                                        list: list.list.clone(),
-                                    }),
-                                    IrOpcode::operator_gt,
-                                    IrOpcode::operator_or,
-                                ],
-                                Weak::clone(project),
-                                false,
-                            )));
-                            let body = Rc::new(RefCell::new(Step::new(
-                                None,
-                                context.clone(),
-                                vec![
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(i.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::data_itemoflist(DataItemoflistFields {
-                                        list: list.list.clone(),
-                                    }),
-                                    IrOpcode::data_variable(DataVariableFields {
-                                        var: RefCell::new(item.clone()),
-                                        local_read: RefCell::new(true),
-                                    }),
-                                    IrOpcode::operator_equals,
-                                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                        var: RefCell::new(ret.clone()),
-                                        local_write: RefCell::new(true),
-                                        first_write: RefCell::new(false),
-                                    }),
-                                ],
-                                Weak::clone(project),
-                                false,
-                            )));
-                            vec![
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(item.clone()),
-                                    local_write: RefCell::new(true),
-                                    first_write: RefCell::new(true),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(i.clone()),
-                                    local_write: RefCell::new(true),
-                                    first_write: RefCell::new(true),
-                                }),
-                                IrOpcode::hq_boolean(HqBooleanFields(false)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(ret.clone()),
-                                    local_write: RefCell::new(true),
-                                    first_write: RefCell::new(true),
-                                }),
-                                IrOpcode::control_loop(ControlLoopFields {
-                                    first_condition: None,
-                                    condition,
-                                    body,
-                                    pre_body: None,
-                                    flip_if: true,
-                                }),
-                                IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(ret.clone()),
-                                    local_read: RefCell::new(true),
-                                }),
-                            ]
-                        }
-                        BlockOpcode::data_insertatlist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            *list.list.length_mutable().try_borrow_mut()? = true;
-
-                            generate_list_index_op(
-                                &list.list,
-                                || {
-                                    IrOpcode::data_insertatlist(DataInsertatlistFields {
-                                        list: list.list.clone(),
-                                    })
-                                },
-                                None,
-                                true,
-                                true,
-                                None,
-                                context,
-                                project,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::data_deleteoflist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            *list.list.length_mutable().try_borrow_mut()? = true;
-
-                            generate_list_index_op(
-                                &list.list,
-                                || {
-                                    IrOpcode::data_deleteoflist(DataDeleteoflistFields {
-                                        list: list.list.clone(),
-                                    })
-                                },
-                                None,
-                                false,
-                                false,
-                                None,
-                                context,
-                                project,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::data_itemoflist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-
-                            generate_list_index_op(
-                                &list.list,
-                                || {
-                                    IrOpcode::data_itemoflist(DataItemoflistFields {
-                                        list: list.list.clone(),
-                                    })
-                                },
-                                None,
-                                false,
-                                false,
-                                Some(&IrOpcode::hq_text(HqTextFields("".into()))),
-                                context,
-                                project,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::data_lengthoflist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
-                                list: list.list.clone(),
-                            })]
-                        }
-                        BlockOpcode::data_replaceitemoflist => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-
-                            generate_list_index_op(
-                                &list.list,
-                                || {
-                                    IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields {
-                                        list: list.list.clone(),
-                                    })
-                                },
-                                None,
-                                true,
-                                false,
-                                None,
-                                context,
-                                project,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::data_listcontents => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("LIST").ok_or_else(|| {
-                                    make_hq_bad_proj!("invalid project.json - missing field LIST")
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for LIST field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for LIST field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let list = if let Some(list) = target.lists().get(&id) {
-                                list.clone()
-                            } else if let Some(list) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_lists()
-                                .get(&id)
-                            {
-                                list.clone()
-                            } else {
-                                hq_bad_proj!("list not found")
-                            };
-                            *list.is_used.try_borrow_mut()? = true;
-                            vec![IrOpcode::data_listcontents(DataListcontentsFields {
-                                list: list.list.clone(),
-                            })]
-                        }
-                        BlockOpcode::control_stop => {
-                            let (sb3::Field::Value((Some(val),))
-                            | sb3::Field::ValueId(Some(val), _)) =
-                                block_info.fields.get("STOP_OPTION").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field STOP_OPTION"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing value for STOP_OPTION field"
-                                )
-                            };
-                            let VarVal::String(operator) = val else {
-                                hq_bad_proj!(
-                                    "invalid project.json - non-string value for STOP_OPTION field"
-                                )
-                            };
-                            match operator.to_lowercase().as_str() {
-                                "all" => vec![IrOpcode::control_stop_all],
-                                "this script" => vec![IrOpcode::hq_yield(HqYieldFields {
-                                    mode: if context.warp {
-                                        YieldMode::Return
-                                    } else {
-                                        YieldMode::None
-                                    },
-                                })],
-                                "other scripts in sprite" => {
-                                    hq_todo!("control_stop other scripts in sprite")
-                                }
-                                other => hq_bad_proj!("unknown mathop {}", other),
-                            }
-                        }
-
-                        BlockOpcode::control_if => 'block: {
-                            let BlockArrayOrId::Id(substack_id) =
-                                match block_info.inputs.get("SUBSTACK") {
-                                    Some(input) => input,
-                                    None => break 'block vec![IrOpcode::hq_drop],
-                                }
-                                .get_1()
-                                .ok_or_else(|| make_hq_bug!(""))?
-                                .clone()
-                                .ok_or_else(|| make_hq_bug!(""))?
-                            else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let Some(substack_block) = blocks.get(&substack_id) else {
-                                hq_bad_proj!("SUBSTACK block doesn't seem to exist")
-                            };
-                            generate_if_else(
-                                (substack_block, substack_id),
-                                None,
-                                block_info,
-                                &final_next_blocks,
-                                blocks,
-                                context,
-                                &mut should_break,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::control_if_else => 'block: {
-                            let BlockArrayOrId::Id(substack1_id) =
-                                match block_info.inputs.get("SUBSTACK") {
-                                    Some(input) => input,
-                                    None => break 'block vec![IrOpcode::hq_drop],
-                                }
-                                .get_1()
-                                .ok_or_else(|| make_hq_bug!(""))?
-                                .clone()
-                                .ok_or_else(|| make_hq_bug!(""))?
-                            else {
-                                hq_bad_proj!("malformed SUBSTACK input")
-                            };
-                            let Some(substack1_block) = blocks.get(&substack1_id) else {
-                                hq_bad_proj!("SUBSTACK block doesn't seem to exist")
-                            };
-                            let BlockArrayOrId::Id(substack2_id) =
-                                match block_info.inputs.get("SUBSTACK2") {
-                                    Some(input) => input,
-                                    None => break 'block vec![IrOpcode::hq_drop],
-                                }
-                                .get_1()
-                                .ok_or_else(|| make_hq_bug!(""))?
-                                .clone()
-                                .ok_or_else(|| make_hq_bug!(""))?
-                            else {
-                                hq_bad_proj!("malformed SUBSTACK2 input")
-                            };
-                            let Some(substack2_block) = blocks.get(&substack2_id) else {
-                                hq_bad_proj!("SUBSTACK2 block doesn't seem to exist")
-                            };
-                            generate_if_else(
-                                (substack1_block, substack1_id),
-                                Some((substack2_block, substack2_id)),
-                                block_info,
-                                &final_next_blocks,
-                                blocks,
-                                context,
-                                &mut should_break,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::control_forever => {
-                            let condition_instructions =
-                                vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
-                            let first_condition_instructions = None;
-                            generate_loop(
-                                context.warp,
-                                &mut should_break,
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                first_condition_instructions,
-                                condition_instructions,
-                                None,
-                                false,
-                                vec![],
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::control_repeat => {
-                            let variable =
-                                RcVar::new(IrType::Int, &sb3::VarVal::Int(0), None, flags)?;
-                            let local = context.warp;
-                            let condition_instructions = vec![
-                                IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(variable.clone()),
-                                    local_read: RefCell::new(local),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(1)),
-                                IrOpcode::operator_subtract,
-                                IrOpcode::data_teevariable(DataTeevariableFields {
-                                    var: RefCell::new(variable.clone()),
-                                    local_read_write: RefCell::new(local),
-                                }),
-                            ];
-                            let first_condition_instructions =
-                                Some(vec![IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(variable.clone()),
-                                    local_read: RefCell::new(local),
-                                })]);
-                            let setup_instructions = vec![
-                                IrOpcode::hq_cast(HqCastFields(IrType::Int)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(variable),
-                                    local_write: RefCell::new(local),
-                                    first_write: RefCell::new(local),
-                                }),
-                            ];
-                            generate_loop(
-                                context.warp,
-                                &mut should_break,
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                first_condition_instructions,
-                                condition_instructions,
-                                None,
-                                false,
-                                setup_instructions,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::control_for_each => {
-                            let sb3::Field::ValueId(_val, maybe_id) =
-                                block_info.fields.get("VARIABLE").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field VARIABLE"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - missing variable id for VARIABLE field"
-                                );
-                            };
-                            let id = maybe_id.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null variable id for VARIABLE field"
-                                )
-                            })?;
-                            let target = context.target();
-                            let variable = if let Some(var) = target.variables().get(&id) {
-                                var.clone()
-                            } else if let Some(var) = context
-                                .target()
-                                .project()
-                                .upgrade()
-                                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                                .global_variables()
-                                .get(&id)
-                            {
-                                var.clone()
-                            } else {
-                                hq_bad_proj!("variable not found")
-                            };
-                            *variable.is_used.try_borrow_mut()? = true;
-                            let counter =
-                                RcVar::new(IrType::Int, &sb3::VarVal::Int(0), None, flags)?;
-                            let local = context.warp;
-                            let condition_instructions = vec![
-                                IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(counter.clone()),
-                                    local_read: RefCell::new(local),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(1)),
-                                IrOpcode::operator_add,
-                                IrOpcode::data_teevariable(DataTeevariableFields {
-                                    var: RefCell::new(counter.clone()),
-                                    local_read_write: RefCell::new(local),
-                                }),
-                            ]
-                            .into_iter()
-                            .chain(inputs(
-                                block_info,
-                                blocks,
-                                context,
-                                &context.target().project(),
-                                flags,
-                            )?)
-                            .chain(vec![IrOpcode::operator_lt])
-                            .collect();
-                            let first_condition_instructions = Some(
-                                vec![IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(counter.clone()),
-                                    local_read: RefCell::new(local),
-                                })]
-                                .into_iter()
-                                .chain(inputs(
-                                    block_info,
-                                    blocks,
-                                    context,
-                                    &context.target().project(),
-                                    flags,
-                                )?)
-                                .chain(vec![IrOpcode::operator_lt])
-                                .collect(),
-                            );
-                            let setup_instructions = vec![
-                                IrOpcode::hq_drop,
-                                IrOpcode::hq_integer(HqIntegerFields(0)),
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(counter.clone()),
-                                    local_write: RefCell::new(local),
-                                    first_write: RefCell::new(true),
-                                }),
-                            ];
-                            let pre_body_instructions = Some(vec![
-                                IrOpcode::data_variable(DataVariableFields {
-                                    var: RefCell::new(counter),
-                                    local_read: RefCell::new(local),
-                                }),
-                                IrOpcode::hq_integer(HqIntegerFields(1)),
-                                IrOpcode::operator_add,
-                                IrOpcode::data_setvariableto(DataSetvariabletoFields {
-                                    var: RefCell::new(variable.var.clone()),
-                                    local_write: RefCell::new(false),
-                                    first_write: RefCell::new(false),
-                                }),
-                            ]);
-                            generate_loop(
-                                context.warp,
-                                &mut should_break,
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                first_condition_instructions,
-                                condition_instructions,
-                                pre_body_instructions,
-                                false,
-                                setup_instructions,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::control_repeat_until | BlockOpcode::control_wait_until => {
-                            let condition_instructions = inputs(
-                                block_info,
-                                blocks,
-                                context,
-                                &context.target().project(),
-                                flags,
-                            )?;
-                            let first_condition_instructions = None;
-                            let setup_instructions = vec![IrOpcode::hq_drop];
-                            generate_loop(
-                                context.warp,
-                                &mut should_break,
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                first_condition_instructions,
-                                condition_instructions,
-                                None,
-                                true,
-                                setup_instructions,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::control_while => {
-                            let condition_instructions = inputs(
-                                block_info,
-                                blocks,
-                                context,
-                                &context.target().project(),
-                                flags,
-                            )?;
-                            let first_condition_instructions = None;
-                            let setup_instructions = vec![IrOpcode::hq_drop];
-                            generate_loop(
-                                context.warp,
-                                &mut should_break,
-                                block_info,
-                                blocks,
-                                context,
-                                final_next_blocks.clone(),
-                                first_condition_instructions,
-                                condition_instructions,
-                                None,
-                                false,
-                                setup_instructions,
-                                flags,
-                            )?
-                        }
-                        BlockOpcode::procedures_call => 'proc_block: {
-                            let target = context.target();
-                            let procs = target.procedures()?;
-                            let serde_json::Value::String(proccode) = block_info
-                                .mutation
-                                .mutations
-                                .get("proccode")
-                                .ok_or_else(|| {
-                                    make_hq_bad_proj!("missing proccode on procedures_call")
-                                })?
-                            else {
-                                hq_bad_proj!("non-string proccode on procedures_call")
-                            };
-                            let Some(proc) = procs.get(proccode.as_str()) else {
-                                break 'proc_block vec![];
-                            };
-                            let warp = context.warp || proc.always_warped();
-                            if warp {
-                                proc.compile_warped(blocks, flags)?;
-                                vec![IrOpcode::procedures_call_warp(ProceduresCallWarpFields {
-                                    proc: Rc::clone(proc),
-                                })]
-                            } else {
-                                should_break = true;
-                                let next_step = generate_next_step_non_inlined(
-                                    block_info,
-                                    blocks,
-                                    context,
-                                    final_next_blocks.clone(),
-                                    flags,
-                                )?;
-                                proc.compile_nonwarped(blocks, flags)?;
-                                vec![IrOpcode::procedures_call_nonwarp(
-                                    ProceduresCallNonwarpFields {
-                                        proc: Rc::clone(proc),
-                                        next_step,
-                                    },
-                                )]
-                            }
-                        }
-                        BlockOpcode::argument_reporter_boolean => {
-                            procedure_argument(ProcArgType::Boolean, block_info, context)?
-                        }
-                        BlockOpcode::argument_reporter_string_number => {
-                            procedure_argument(ProcArgType::StringNumber, block_info, context)?
-                        }
-                        BlockOpcode::looks_show => vec![
-                            IrOpcode::hq_boolean(HqBooleanFields(true)),
-                            IrOpcode::looks_setvisible,
-                        ],
-                        BlockOpcode::looks_hide => vec![
-                            IrOpcode::hq_boolean(HqBooleanFields(false)),
-                            IrOpcode::looks_setvisible,
-                        ],
-                        BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
-                        BlockOpcode::pen_penDown => vec![IrOpcode::pen_pendown],
-                        BlockOpcode::pen_penUp => vec![IrOpcode::pen_penup],
-                        BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setpensizeto],
-                        BlockOpcode::pen_setPenColorToColor => {
-                            vec![IrOpcode::pen_setpencolortocolor]
-                        }
-                        BlockOpcode::pen_changePenColorParamBy => {
-                            vec![IrOpcode::pen_changecolorparamby]
-                        }
-                        BlockOpcode::pen_setPenColorParamTo => {
-                            vec![IrOpcode::pen_setpencolorparamto]
-                        }
-                        BlockOpcode::pen_menu_colorParam => {
-                            let maybe_val =
-                                match block_info.fields.get("colorParam").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field colorParam"
-                                    )
-                                })? {
-                                    Field::Value((v,)) | Field::ValueId(v, _) => v,
-                                };
-                            let val_varval = maybe_val.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null value for OPERATOR field"
-                                )
-                            })?;
-                            let VarVal::String(val) = val_varval else {
-                                hq_bad_proj!(
-                                    "invalid project.json - expected colorParam field to be string"
-                                );
-                            };
-                            vec![IrOpcode::hq_text(HqTextFields(val))]
-                        }
-                        BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
-                        BlockOpcode::looks_size => vec![IrOpcode::looks_size],
-                        BlockOpcode::looks_changesizeby => vec![
-                            IrOpcode::looks_size,
-                            IrOpcode::operator_add,
-                            IrOpcode::looks_setsizeto,
-                        ],
-                        BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
-                        BlockOpcode::looks_switchbackdropto => {
-                            vec![IrOpcode::looks_switchbackdropto]
-                        }
-                        BlockOpcode::looks_costumenumbername => {
-                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
-                                block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field NUMBER_NAME"
-                                    )
-                                })?;
-                            let sb3::VarVal::String(number_name) =
-                                val.clone().ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - null costume name for NUMBER_NAME \
-                                         field"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - NUMBER_NAME field is not of type \
-                                     String"
-                                );
-                            };
-                            match &*number_name {
-                                "number" => vec![IrOpcode::looks_costumenumber],
-                                "name" => vec![IrOpcode::looks_costumename],
-                                _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
-                            }
-                        }
-                        BlockOpcode::looks_backdropnumbername => {
-                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
-                                block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field NUMBER_NAME"
-                                    )
-                                })?;
-                            let sb3::VarVal::String(number_name) =
-                                val.clone().ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - null backdrop name for \
-                                         NUMBER_NAME field"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - NUMBER_NAME field is not of type \
-                                     String"
-                                );
-                            };
-                            match &*number_name {
-                                "number" => vec![IrOpcode::looks_backdropnumber],
-                                "name" => hq_todo!("backdrop name"),
-                                _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
-                            }
-                        }
-                        BlockOpcode::looks_backdrops => {
-                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
-                                block_info.fields.get("BACKDROP").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field BACKDROP"
-                                    )
-                                })?;
-                            let sb3::VarVal::String(backdrop_name) =
-                                val.clone().ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - null backdrop name for BACKROP \
-                                         field"
-                                    )
-                                })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - BACKDROP field is not of type String"
-                                );
-                            };
-                            let backdrop_index: i32 = context
-                                .project()?
-                                .backdrops()
-                                .iter()
-                                .find_position(|costume| costume.name == backdrop_name)
-                                .ok_or_else(|| make_hq_bug!("backdrop index not found"))?
-                                .0
-                                .try_into()
-                                .map_err(|_| make_hq_bug!("backdrop index out of bounds"))?;
-                            vec![IrOpcode::hq_integer(HqIntegerFields(backdrop_index))]
-                        }
-                        BlockOpcode::looks_nextcostume => {
-                            vec![
-                                IrOpcode::looks_costumenumber,
-                                IrOpcode::hq_integer(HqIntegerFields(1)),
-                                IrOpcode::operator_add,
-                                IrOpcode::hq_integer(HqIntegerFields(
-                                    context.target().costumes().len().try_into().map_err(|_| {
-                                        make_hq_bug!("costumes length out of bounds")
-                                    })?,
-                                )),
-                                IrOpcode::operator_modulo,
-                                IrOpcode::looks_switchcostumeto,
-                            ]
-                        }
-                        BlockOpcode::looks_nextbackdrop => {
-                            vec![
-                                IrOpcode::looks_backdropnumber,
-                                IrOpcode::hq_integer(HqIntegerFields(1)),
-                                IrOpcode::operator_add,
-                                IrOpcode::hq_integer(HqIntegerFields(
-                                    context.project()?.backdrops().len().try_into().map_err(
-                                        |_| make_hq_bug!("backdrops length out of bounds"),
-                                    )?,
-                                )),
-                                IrOpcode::operator_modulo,
-                                IrOpcode::looks_switchbackdropto,
-                            ]
-                        }
-                        BlockOpcode::looks_costume => {
-                            let (sb3::Field::Value((val,)) | sb3::Field::ValueId(val, _)) =
-                                block_info.fields.get("COSTUME").ok_or_else(|| {
-                                    make_hq_bad_proj!(
-                                        "invalid project.json - missing field COSTUME"
-                                    )
-                                })?;
-                            let sb3::VarVal::String(name) = val.clone().ok_or_else(|| {
-                                make_hq_bad_proj!(
-                                    "invalid project.json - null costume name for COSTUME field"
-                                )
-                            })?
-                            else {
-                                hq_bad_proj!(
-                                    "invalid project.json - COSTUME field is not of type String"
-                                );
-                            };
-                            let index = context
-                                .target()
-                                .costumes()
-                                .iter()
-                                .position(|costume| costume.name == name)
-                                .ok_or_else(|| {
-                                    make_hq_bad_proj!("missing costume with name {}", name)
-                                })?;
-                            vec![IrOpcode::hq_integer(HqIntegerFields(
-                                index
-                                    .try_into()
-                                    .map_err(|_| make_hq_bug!("costume index out of bounds"))?,
-                            ))]
-                        }
-                        other => hq_todo!("unimplemented block: {:?}", other),
-                    },
-                )
+                .chain(block_to_ir(
+                    block_info,
+                    blocks,
+                    context,
+                    project,
+                    &final_next_blocks,
+                    flags,
+                    &mut should_break,
+                )?)
                 .collect(),
         );
         if should_break {
@@ -3081,185 +164,1522 @@ fn from_normal_block(
     Ok(opcodes.into_iter().collect())
 }
 
-static SHORTHAND_HEX_COLOUR_REGEX: Lazy<Regex> = lazy_regex!(r#"^#?([a-f\d])([a-f\d])([a-f\d])$"#i);
-static HEX_COLOUR_REGEX: Lazy<Regex> = lazy_regex!(r#"^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$"#i);
-
-fn from_special_block(
-    block_array: &BlockArray,
+fn block_to_ir(
+    block_info: &BlockInfo,
+    blocks: &BlockMap,
     context: &StepContext,
+    project: &Weak<IrProject>,
+    final_next_blocks: &NextBlocks,
     flags: &WasmFlags,
-) -> HQResult<IrOpcode> {
-    Ok(match block_array {
-        BlockArray::NumberOrAngle(ty, value) => match ty {
-            // number, positive number or angle
-            4 | 5 | 8 => {
-                // proactively convert to an integer if possible;
-                // if a float is needed, it will be cast at const-fold time (TODO),
-                // and if integers are disabled a float will be emitted anyway
-                if flags.integers == Switch::On && value % 1.0 == 0.0 {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "integer-ness already confirmed; `as` is saturating."
-                    )]
-                    IrOpcode::hq_integer(HqIntegerFields(*value as i32))
-                } else {
-                    IrOpcode::hq_float(HqFloatFields(*value))
-                }
-            }
-            // positive integer, integer
-            6 | 7 => {
-                hq_assert!(
-                    value % 1.0 == 0.0,
-                    "inputs of integer or positive integer types should be integers"
-                );
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "integer-ness already confirmed; `as` is saturating."
-                )]
-                if flags.integers == Switch::On {
-                    IrOpcode::hq_integer(HqIntegerFields(*value as i32))
-                } else {
-                    IrOpcode::hq_float(HqFloatFields(*value))
-                }
-            }
-            // string
-            10 => IrOpcode::hq_text(HqTextFields(value.to_string().into_boxed_str())),
-            _ => hq_bad_proj!("bad project json (block array of type ({}, f64))", ty),
-        },
-        // a string input should really be a colour or a string, but often numbers
-        // are serialised as strings in the project.json
-        BlockArray::ColorOrString(ty, value) => match ty {
-            // number, positive number or integer
-            4 | 5 | 8 => {
-                if let Ok(float) = value.parse() {
-                    // proactively convert to an integer if possible;
-                    // if a float is needed, it will be cast at const-fold time (TODO),
-                    // and if integers are disabled a float will be emitted anyway
-                    if flags.integers == Switch::On && float % 1.0 == 0.0 {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "integer-ness already confirmed; `as` is saturating."
-                        )]
-                        IrOpcode::hq_integer(HqIntegerFields(float as i32))
-                    } else {
-                        IrOpcode::hq_float(HqFloatFields(float))
-                    }
-                } else {
-                    IrOpcode::hq_text(HqTextFields(value.clone()))
-                }
-            }
-            // integer, positive integer
-            6 | 7 =>
-            {
-                #[expect(
-                    clippy::same_functions_in_if_condition,
-                    reason = "false positive; called with different generic args"
-                )]
-                if flags.integers == Switch::On {
-                    if let Ok(int) = value.parse() {
-                        IrOpcode::hq_integer(HqIntegerFields(int))
-                    } else if let Ok(float) = value.parse() {
-                        IrOpcode::hq_float(HqFloatFields(float))
-                    } else {
-                        IrOpcode::hq_text(HqTextFields(value.clone()))
-                    }
-                } else if let Ok(float) = value.parse() {
-                    IrOpcode::hq_float(HqFloatFields(float))
-                } else {
-                    IrOpcode::hq_text(HqTextFields(value.clone()))
-                }
-            }
-            // colour
-            9 => {
-                let hex = (*SHORTHAND_HEX_COLOUR_REGEX).replace(value, "$1$1$2$2$3$3");
-                if let Some(captures) = (*HEX_COLOUR_REGEX).captures(&hex) {
-                    if let box [r, g, b] = (1..4)
-                        .map(|i| &captures[i])
-                        .map(|capture| {
-                            u8::from_str_radix(capture, 16)
-                                .map_err(|_| make_hq_bug!("hex substring out of u8 bounds"))
-                        })
-                        .collect::<HQResult<Box<[_]>>>()?
-                    {
-                        IrOpcode::hq_color_rgb(HqColorRgbFields { r, g, b })
-                    } else {
-                        IrOpcode::hq_color_rgb(HqColorRgbFields { r: 0, g: 0, b: 0 })
-                    }
-                } else {
-                    IrOpcode::hq_color_rgb(HqColorRgbFields { r: 0, g: 0, b: 0 })
-                }
-            }
-            // string
-            10 => 'textBlock: {
-                if flags.eager_number_parsing == Switch::On
-                    && let Ok(float) = value.parse::<f64>()
-                    && *float.to_string() == **value
-                {
-                    break 'textBlock if flags.integers == Switch::On && float % 1.0 == 0.0 {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "integer-ness already confirmed; `as` is saturating."
-                        )]
-                        IrOpcode::hq_integer(HqIntegerFields(float as i32))
-                    } else {
-                        IrOpcode::hq_float(HqFloatFields(float))
-                    };
-                }
-                IrOpcode::hq_text(HqTextFields(value.clone()))
-            }
-            _ => hq_bad_proj!("bad project json (block array of type ({}, string))", ty),
-        },
-        BlockArray::Broadcast(ty, name, id) | BlockArray::VariableOrList(ty, name, id, _, _) => {
-            match ty {
-                11 => IrOpcode::hq_text(HqTextFields(name.clone())),
-                12 => {
-                    let target = context.target();
-                    let variable = if let Some(var) = target.variables().get(id) {
-                        var.clone()
-                    } else if let Some(var) = context
-                        .target()
-                        .project()
-                        .upgrade()
-                        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                        .global_variables()
-                        .get(id)
-                    {
-                        var.clone()
-                    } else {
-                        hq_bad_proj!("variable not found")
-                    };
-                    *variable.is_used.try_borrow_mut()? = true;
-                    IrOpcode::data_variable(DataVariableFields {
-                        var: RefCell::new(variable.var.clone()),
-                        local_read: RefCell::new(false),
-                    })
-                }
-                13 => {
-                    let target = context.target();
-                    let list = if let Some(list) = target.lists().get(id) {
-                        list.clone()
-                    } else if let Some(list) = context
-                        .target()
-                        .project()
-                        .upgrade()
-                        .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
-                        .global_lists()
-                        .get(id)
-                    {
-                        list.clone()
-                    } else {
-                        hq_bad_proj!("list not found")
-                    };
-                    *list.is_used.try_borrow_mut()? = true;
-                    IrOpcode::data_listcontents(DataListcontentsFields {
-                        list: list.list.clone(),
-                    })
-                }
-                _ => hq_bad_proj!(
-                    "bad project json (block array of type ({}, string, string))",
-                    ty
-                ),
+    should_break: &mut bool,
+) -> HQResult<Vec<IrOpcode>> {
+    #[expect(
+        clippy::wildcard_enum_match_arm,
+        reason = "too many opcodes to match individually"
+    )]
+    Ok(match &block_info.opcode {
+        BlockOpcode::operator_add => vec![IrOpcode::operator_add],
+        BlockOpcode::operator_subtract => vec![IrOpcode::operator_subtract],
+        BlockOpcode::operator_multiply => vec![IrOpcode::operator_multiply],
+        BlockOpcode::operator_divide => vec![IrOpcode::operator_divide],
+        BlockOpcode::operator_mod => vec![IrOpcode::operator_modulo],
+        BlockOpcode::motion_gotoxy => vec![IrOpcode::motion_gotoxy],
+        BlockOpcode::motion_setx => vec![IrOpcode::motion_setx],
+        BlockOpcode::motion_sety => vec![IrOpcode::motion_sety],
+        BlockOpcode::motion_xposition => vec![IrOpcode::motion_xposition],
+        BlockOpcode::motion_yposition => vec![IrOpcode::motion_yposition],
+        BlockOpcode::motion_changexby => vec![
+            IrOpcode::motion_xposition,
+            IrOpcode::operator_add,
+            IrOpcode::motion_setx,
+        ],
+        BlockOpcode::motion_changeyby => vec![
+            IrOpcode::motion_yposition,
+            IrOpcode::operator_add,
+            IrOpcode::motion_sety,
+        ],
+        BlockOpcode::motion_movesteps => vec![
+            // this is a really lazy implementation but wasm-opt should optimise it
+            IrOpcode::hq_dup,
+            IrOpcode::hq_float(HqFloatFields(90.0)),
+            IrOpcode::motion_direction,
+            IrOpcode::operator_subtract,
+            IrOpcode::operator_cos,
+            IrOpcode::operator_multiply,
+            IrOpcode::motion_xposition,
+            IrOpcode::operator_add,
+            IrOpcode::hq_swap,
+            IrOpcode::hq_float(HqFloatFields(90.0)),
+            IrOpcode::motion_direction,
+            IrOpcode::operator_subtract,
+            IrOpcode::operator_sin,
+            IrOpcode::operator_multiply,
+            IrOpcode::motion_yposition,
+            IrOpcode::operator_add,
+            IrOpcode::motion_gotoxy,
+        ],
+        BlockOpcode::motion_direction => vec![IrOpcode::motion_direction],
+        BlockOpcode::motion_pointindirection => {
+            vec![IrOpcode::motion_pointindirection]
+        }
+        BlockOpcode::motion_turnright => vec![
+            IrOpcode::motion_direction,
+            IrOpcode::operator_add,
+            IrOpcode::motion_pointindirection,
+        ],
+        BlockOpcode::motion_turnleft => vec![
+            IrOpcode::motion_direction,
+            IrOpcode::operator_subtract,
+            IrOpcode::hq_integer(HqIntegerFields(-1)),
+            IrOpcode::operator_multiply,
+            IrOpcode::motion_pointindirection,
+        ],
+        BlockOpcode::looks_say => vec![IrOpcode::looks_say(LooksSayFields {
+            debug: context.debug,
+            target_idx: context.target().index(),
+        })],
+        BlockOpcode::looks_think => vec![IrOpcode::looks_think(LooksThinkFields {
+            debug: context.debug,
+            target_idx: context.target().index(),
+        })],
+        BlockOpcode::operator_join => vec![IrOpcode::operator_join],
+        BlockOpcode::operator_length => vec![IrOpcode::operator_length],
+        BlockOpcode::operator_contains => vec![IrOpcode::operator_contains],
+        BlockOpcode::operator_letter_of => vec![IrOpcode::operator_letter_of],
+        BlockOpcode::sensing_dayssince2000 => vec![IrOpcode::sensing_dayssince2000],
+        BlockOpcode::sensing_keypressed => vec![IrOpcode::sensing_keypressed],
+        BlockOpcode::sensing_keyoptions => {
+            let (Sb3Field::Value((Some(val),)) | Sb3Field::ValueId(Some(val), _)) =
+                block_info.fields.get("KEY_OPTION").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field KEY_OPTION")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing value for KEY_OPTION field")
+            };
+            let VarVal::String(key_option) = val else {
+                hq_bad_proj!("invalid project.json - non-string value for KEY_OPTION field")
+            };
+            vec![IrOpcode::hq_text(HqTextFields(key_option.clone()))]
+        }
+        BlockOpcode::sensing_timer => vec![IrOpcode::sensing_timer],
+        BlockOpcode::sensing_mousex => vec![IrOpcode::sensing_mousex],
+        BlockOpcode::sensing_mousey => vec![IrOpcode::sensing_mousey],
+        BlockOpcode::sensing_mousedown => vec![IrOpcode::sensing_mousedown],
+        BlockOpcode::sensing_answer => vec![IrOpcode::sensing_answer],
+        BlockOpcode::sensing_resettimer => vec![IrOpcode::sensing_reset_timer],
+        BlockOpcode::operator_lt => vec![IrOpcode::operator_lt],
+        BlockOpcode::operator_gt => vec![IrOpcode::operator_gt],
+        BlockOpcode::operator_equals => vec![IrOpcode::operator_equals],
+        BlockOpcode::operator_not => vec![IrOpcode::operator_not],
+        BlockOpcode::operator_and => vec![IrOpcode::operator_and],
+        BlockOpcode::operator_or => vec![IrOpcode::operator_or],
+        BlockOpcode::operator_round => vec![IrOpcode::operator_round],
+        BlockOpcode::operator_mathop => {
+            let (Sb3Field::Value((Some(val),)) | Sb3Field::ValueId(Some(val), _)) =
+                block_info.fields.get("OPERATOR").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field OPERATOR")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing value for OPERATOR field")
+            };
+            let VarVal::String(operator) = val else {
+                hq_bad_proj!("invalid project.json - non-string value for OPERATOR field")
+            };
+            match operator.to_lowercase().as_str() {
+                "abs" => vec![IrOpcode::operator_abs],
+                "floor" => vec![IrOpcode::operator_floor],
+                "ceiling" => vec![IrOpcode::operator_ceiling],
+                "sqrt" => vec![IrOpcode::operator_sqrt],
+                "sin" => vec![IrOpcode::operator_sin],
+                "cos" => vec![IrOpcode::operator_cos],
+                "tan" => vec![IrOpcode::operator_tan],
+                "asin" => vec![IrOpcode::operator_asin],
+                "acos" => vec![IrOpcode::operator_acos],
+                "atan" => vec![IrOpcode::operator_atan],
+                "ln" => vec![IrOpcode::operator_ln],
+                "log" => vec![IrOpcode::operator_log],
+                "e ^" => vec![IrOpcode::operator_exp],
+                "10 ^" => vec![IrOpcode::operator_pow10],
+                other => hq_bad_proj!("unknown mathop {}", other),
             }
         }
+        BlockOpcode::operator_random => vec![IrOpcode::operator_random],
+        BlockOpcode::event_broadcast_menu => {
+            let Sb3Field::ValueId(val, _id) =
+                block_info.fields.get("BROADCAST_OPTION").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field BROADCAST_OPTION")
+                })?
+            else {
+                hq_bad_proj!(
+                    "invalid project.json - missing broadcast name for BROADCAST_OPTION field"
+                );
+            };
+            let VarVal::String(name) = val.clone().ok_or_else(|| {
+                make_hq_bad_proj!(
+                    "invalid project.json - null broadcast name for BROADCAST_OPTION field"
+                )
+            })?
+            else {
+                hq_bad_proj!("non-string broadcast name")
+            };
+            vec![IrOpcode::hq_text(HqTextFields(name))]
+        }
+        BlockOpcode::event_broadcast => generate_exhaustive_string_comparison(
+            context.project()?.broadcasts().iter().cloned(),
+            |broadcast| IrOpcode::event_broadcast(EventBroadcastFields(broadcast)),
+            vec![],
+            context,
+            project,
+            flags,
+        )?,
+        BlockOpcode::event_broadcastandwait => {
+            let poll_step = context
+                .project()?
+                .new_owned_step(Step::new_poll_waiting_threads(
+                    context.clone(),
+                    Weak::clone(project),
+                ))?;
+            *should_break = true;
+            let next_step = generate_next_step_non_inlined(
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                flags,
+            )?;
+            generate_exhaustive_string_comparison(
+                context.project()?.broadcasts().iter().cloned(),
+                |broadcast| {
+                    IrOpcode::event_broadcast_and_wait(EventBroadcastAndWaitFields {
+                        broadcast,
+                        poll_step,
+                        next_step,
+                    })
+                },
+                vec![IrOpcode::hq_yield(HqYieldFields {
+                    mode: YieldMode::Schedule(next_step),
+                })],
+                context,
+                project,
+                flags,
+            )?
+        }
+        BlockOpcode::sensing_askandwait => {
+            let poll_step = context
+                .project()?
+                .new_owned_step(Step::new_poll_waiting_event(
+                    context.clone(),
+                    Weak::clone(project),
+                ))?;
+            *should_break = true;
+            if context.target().is_stage() {
+                let next_step = generate_next_step_non_inlined(
+                    block_info,
+                    blocks,
+                    context,
+                    final_next_blocks.clone(),
+                    flags,
+                )?;
+                vec![IrOpcode::sensing_askandwait(SensingAskandwaitFields {
+                    poll_step,
+                    next_step,
+                })]
+            } else {
+                let next_step = generate_next_step_inlined(
+                    block_info,
+                    blocks,
+                    context,
+                    final_next_blocks.clone(),
+                    flags,
+                )?;
+                let real_next_step = Step::new(
+                    None,
+                    context.clone(),
+                    vec![
+                        IrOpcode::hq_text(HqTextFields("".into())),
+                        IrOpcode::looks_say(LooksSayFields {
+                            debug: false,
+                            target_idx: context.target().index(),
+                        }),
+                        IrOpcode::hq_yield(HqYieldFields {
+                            mode: YieldMode::Inline(next_step),
+                        }),
+                    ],
+                    Weak::clone(project),
+                    true,
+                )
+                .clone_to_non_inlined(project)?;
+                vec![
+                    IrOpcode::looks_say(LooksSayFields {
+                        debug: false,
+                        target_idx: context.target().index(),
+                    }),
+                    IrOpcode::hq_text(HqTextFields("".into())),
+                    IrOpcode::sensing_askandwait(SensingAskandwaitFields {
+                        poll_step,
+                        next_step: real_next_step,
+                    }),
+                ]
+            }
+        }
+        BlockOpcode::control_wait => {
+            let poll_step = context
+                .project()?
+                .new_owned_step(Step::new_poll_timer(context.clone(), Weak::clone(project)))?;
+            *should_break = true;
+            let next_step = generate_next_step_non_inlined(
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                flags,
+            )?;
+            vec![IrOpcode::control_wait(ControlWaitFields {
+                poll_step,
+                next_step,
+            })]
+        }
+        BlockOpcode::data_setvariableto => {
+            let Sb3Field::ValueId(_val, maybe_id) =
+                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field")
+            })?;
+            let target = context.target();
+            let variable = if let Some(var) = target.variables().get(&id) {
+                var.clone()
+            } else if let Some(var) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_variables()
+                .get(&id)
+            {
+                var.clone()
+            } else {
+                hq_bad_proj!("variable not found")
+            };
+            *variable.is_used.try_borrow_mut()? = true;
+            vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                var: RefCell::new(variable.var.clone()),
+                local_write: RefCell::new(false),
+                first_write: RefCell::new(false),
+            })]
+        }
+        BlockOpcode::data_changevariableby => {
+            let Sb3Field::ValueId(_val, maybe_id) =
+                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field")
+            })?;
+            let target = context.target();
+            let variable = if let Some(var) = target.variables().get(&id) {
+                var.clone()
+            } else if let Some(var) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_variables()
+                .get(&id)
+            {
+                var.clone()
+            } else {
+                hq_bad_proj!("variable not found")
+            };
+            *variable.is_used.try_borrow_mut()? = true;
+            vec![
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(variable.var.clone()),
+                    local_read: RefCell::new(false),
+                }),
+                IrOpcode::operator_add,
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(variable.var.clone()),
+                    local_write: RefCell::new(false),
+                    first_write: RefCell::new(false),
+                }),
+            ]
+        }
+        BlockOpcode::data_variable => {
+            let Sb3Field::ValueId(_val, maybe_id) =
+                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field")
+            })?;
+            let target = context.target();
+            let variable = if let Some(var) = target.variables().get(&id) {
+                var.clone()
+            } else if let Some(var) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_variables()
+                .get(&id)
+            {
+                var.clone()
+            } else {
+                hq_bad_proj!("variable not found")
+            };
+            *variable.is_used.try_borrow_mut()? = true;
+            vec![IrOpcode::data_variable(DataVariableFields {
+                var: RefCell::new(variable.var.clone()),
+                local_read: RefCell::new(false),
+            })]
+        }
+        BlockOpcode::data_showvariable => {
+            let Sb3Field::ValueId(_val, maybe_id) =
+                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field")
+            })?;
+            let target = context.target();
+            let variable = if let Some(var) = target.variables().get(&id) {
+                var.clone()
+            } else if let Some(var) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_variables()
+                .get(&id)
+            {
+                var.clone()
+            } else {
+                hq_bad_proj!("variable not found")
+            };
+            *variable.is_used.try_borrow_mut()? = true;
+            let Some(monitor) = variable.var.monitor().as_ref() else {
+                hq_bad_proj!("tried to change visibility of variable without monitor");
+            };
+            *monitor.is_ever_visible.try_borrow_mut()? = true;
+            vec![IrOpcode::data_visvariable(DataVisvariableFields {
+                var: RefCell::new(variable.var.clone()),
+                visible: true,
+            })]
+        }
+        BlockOpcode::data_hidevariable => {
+            let Sb3Field::ValueId(_val, maybe_id) =
+                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field")
+            })?;
+            let target = context.target();
+            let variable = if let Some(var) = target.variables().get(&id) {
+                var.clone()
+            } else if let Some(var) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_variables()
+                .get(&id)
+            {
+                var.clone()
+            } else {
+                hq_bad_proj!("variable not found")
+            };
+            *variable.is_used.try_borrow_mut()? = true;
+            hq_assert!(
+                variable.var.monitor().is_some(),
+                "tried to change visibility of variable without monitor"
+            );
+            vec![IrOpcode::data_visvariable(DataVisvariableFields {
+                var: RefCell::new(variable.var.clone()),
+                visible: false,
+            })]
+        }
+        BlockOpcode::data_deletealloflist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            *list.list.length_mutable().try_borrow_mut()? = true;
+            vec![IrOpcode::data_deletealloflist(DataDeletealloflistFields {
+                list: list.list.clone(),
+            })]
+        }
+        BlockOpcode::data_addtolist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            *list.list.length_mutable().try_borrow_mut()? = true;
+            vec![IrOpcode::data_addtolist(DataAddtolistFields {
+                list: list.list.clone(),
+            })]
+        }
+        BlockOpcode::data_itemnumoflist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            let item = RcVar::new_empty();
+            let ret = RcVar::new(
+                IrType::IntPos.or(IrType::IntZero),
+                &VarVal::Int(0),
+                None,
+                flags,
+            )?;
+            let i = RcVar::new(
+                IrType::IntPos.or(IrType::IntZero),
+                &VarVal::Int(0),
+                None,
+                flags,
+            )?;
+            let condition = Rc::new(RefCell::new(Step::new(
+                None,
+                context.clone(),
+                vec![
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(ret.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::hq_integer(HqIntegerFields(0)),
+                    IrOpcode::operator_equals,
+                    IrOpcode::operator_not,
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::hq_integer(HqIntegerFields(1)),
+                    IrOpcode::operator_add,
+                    IrOpcode::data_teevariable(DataTeevariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read_write: RefCell::new(true),
+                    }),
+                    IrOpcode::data_lengthoflist(DataLengthoflistFields {
+                        list: list.list.clone(),
+                    }),
+                    IrOpcode::operator_gt,
+                    IrOpcode::operator_or,
+                ],
+                Weak::clone(project),
+                false,
+            )));
+            let body = Rc::new(RefCell::new(Step::new(
+                None,
+                context.clone(),
+                vec![
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::data_itemoflist(DataItemoflistFields {
+                        list: list.list.clone(),
+                    }),
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(item.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::operator_equals,
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::operator_multiply,
+                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                        var: RefCell::new(ret.clone()),
+                        local_write: RefCell::new(true),
+                        first_write: RefCell::new(false),
+                    }),
+                ],
+                Weak::clone(project),
+                false,
+            )));
+            vec![
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(item),
+                    local_write: RefCell::new(true),
+                    first_write: RefCell::new(true),
+                }),
+                IrOpcode::hq_integer(HqIntegerFields(0)),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(i),
+                    local_write: RefCell::new(true),
+                    first_write: RefCell::new(true),
+                }),
+                IrOpcode::hq_integer(HqIntegerFields(0)),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(ret.clone()),
+                    local_write: RefCell::new(true),
+                    first_write: RefCell::new(true),
+                }),
+                IrOpcode::control_loop(ControlLoopFields {
+                    first_condition: None,
+                    condition,
+                    body,
+                    pre_body: None,
+                    flip_if: true,
+                }),
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(ret),
+                    local_read: RefCell::new(true),
+                }),
+            ]
+        }
+        BlockOpcode::data_listcontainsitem => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            let item = RcVar::new_empty();
+            let ret = RcVar::new(IrType::Boolean, &VarVal::Bool(false), None, flags)?;
+            let i = RcVar::new(
+                IrType::IntPos.or(IrType::IntZero),
+                &VarVal::Int(0),
+                None,
+                flags,
+            )?;
+            let condition = Rc::new(RefCell::new(Step::new(
+                None,
+                context.clone(),
+                vec![
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(ret.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::hq_integer(HqIntegerFields(1)),
+                    IrOpcode::operator_add,
+                    IrOpcode::data_teevariable(DataTeevariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read_write: RefCell::new(true),
+                    }),
+                    IrOpcode::data_lengthoflist(DataLengthoflistFields {
+                        list: list.list.clone(),
+                    }),
+                    IrOpcode::operator_gt,
+                    IrOpcode::operator_or,
+                ],
+                Weak::clone(project),
+                false,
+            )));
+            let body = Rc::new(RefCell::new(Step::new(
+                None,
+                context.clone(),
+                vec![
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(i.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::data_itemoflist(DataItemoflistFields {
+                        list: list.list.clone(),
+                    }),
+                    IrOpcode::data_variable(DataVariableFields {
+                        var: RefCell::new(item.clone()),
+                        local_read: RefCell::new(true),
+                    }),
+                    IrOpcode::operator_equals,
+                    IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                        var: RefCell::new(ret.clone()),
+                        local_write: RefCell::new(true),
+                        first_write: RefCell::new(false),
+                    }),
+                ],
+                Weak::clone(project),
+                false,
+            )));
+            vec![
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(item),
+                    local_write: RefCell::new(true),
+                    first_write: RefCell::new(true),
+                }),
+                IrOpcode::hq_integer(HqIntegerFields(0)),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(i),
+                    local_write: RefCell::new(true),
+                    first_write: RefCell::new(true),
+                }),
+                IrOpcode::hq_boolean(HqBooleanFields(false)),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(ret.clone()),
+                    local_write: RefCell::new(true),
+                    first_write: RefCell::new(true),
+                }),
+                IrOpcode::control_loop(ControlLoopFields {
+                    first_condition: None,
+                    condition,
+                    body,
+                    pre_body: None,
+                    flip_if: true,
+                }),
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(ret),
+                    local_read: RefCell::new(true),
+                }),
+            ]
+        }
+        BlockOpcode::data_insertatlist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            *list.list.length_mutable().try_borrow_mut()? = true;
+
+            generate_list_index_op(
+                &list.list,
+                || {
+                    IrOpcode::data_insertatlist(DataInsertatlistFields {
+                        list: list.list.clone(),
+                    })
+                },
+                None,
+                true,
+                true,
+                None,
+                context,
+                project,
+                flags,
+            )?
+        }
+        BlockOpcode::data_deleteoflist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            *list.list.length_mutable().try_borrow_mut()? = true;
+
+            generate_list_index_op(
+                &list.list,
+                || {
+                    IrOpcode::data_deleteoflist(DataDeleteoflistFields {
+                        list: list.list.clone(),
+                    })
+                },
+                None,
+                false,
+                false,
+                None,
+                context,
+                project,
+                flags,
+            )?
+        }
+        BlockOpcode::data_itemoflist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+
+            generate_list_index_op(
+                &list.list,
+                || {
+                    IrOpcode::data_itemoflist(DataItemoflistFields {
+                        list: list.list.clone(),
+                    })
+                },
+                None,
+                false,
+                false,
+                Some(&IrOpcode::hq_text(HqTextFields("".into()))),
+                context,
+                project,
+                flags,
+            )?
+        }
+        BlockOpcode::data_lengthoflist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
+                list: list.list.clone(),
+            })]
+        }
+        BlockOpcode::data_replaceitemoflist => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+
+            generate_list_index_op(
+                &list.list,
+                || {
+                    IrOpcode::data_replaceitemoflist(DataReplaceitemoflistFields {
+                        list: list.list.clone(),
+                    })
+                },
+                None,
+                true,
+                false,
+                None,
+                context,
+                project,
+                flags,
+            )?
+        }
+        BlockOpcode::data_listcontents => {
+            let Sb3Field::ValueId(_val, maybe_id) = block_info
+                .fields
+                .get("LIST")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field LIST"))?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for LIST field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for LIST field")
+            })?;
+            let target = context.target();
+            let list = if let Some(list) = target.lists().get(&id) {
+                list.clone()
+            } else if let Some(list) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_lists()
+                .get(&id)
+            {
+                list.clone()
+            } else {
+                hq_bad_proj!("list not found")
+            };
+            *list.is_used.try_borrow_mut()? = true;
+            vec![IrOpcode::data_listcontents(DataListcontentsFields {
+                list: list.list.clone(),
+            })]
+        }
+        BlockOpcode::control_stop => {
+            let (Sb3Field::Value((Some(val),)) | Sb3Field::ValueId(Some(val), _)) =
+                block_info.fields.get("STOP_OPTION").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field STOP_OPTION")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing value for STOP_OPTION field")
+            };
+            let VarVal::String(operator) = val else {
+                hq_bad_proj!("invalid project.json - non-string value for STOP_OPTION field")
+            };
+            match operator.to_lowercase().as_str() {
+                "all" => vec![IrOpcode::control_stop_all],
+                "this script" => vec![IrOpcode::hq_yield(HqYieldFields {
+                    mode: if context.warp {
+                        YieldMode::Return
+                    } else {
+                        YieldMode::None
+                    },
+                })],
+                "other scripts in sprite" => {
+                    hq_todo!("control_stop other scripts in sprite")
+                }
+                other => hq_bad_proj!("unknown mathop {}", other),
+            }
+        }
+
+        BlockOpcode::control_if => 'block: {
+            let BlockArrayOrId::Id(substack_id) = match block_info.inputs.get("SUBSTACK") {
+                Some(input) => input,
+                None => break 'block vec![IrOpcode::hq_drop],
+            }
+            .get_1()
+            .ok_or_else(|| make_hq_bug!(""))?
+            .clone()
+            .ok_or_else(|| make_hq_bug!(""))?
+            else {
+                hq_bad_proj!("malformed SUBSTACK input")
+            };
+            let Some(substack_block) = blocks.get(&substack_id) else {
+                hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+            };
+            generate_if_else(
+                (substack_block, substack_id),
+                None,
+                block_info,
+                final_next_blocks,
+                blocks,
+                context,
+                should_break,
+                flags,
+            )?
+        }
+        BlockOpcode::control_if_else => 'block: {
+            let BlockArrayOrId::Id(substack1_id) = match block_info.inputs.get("SUBSTACK") {
+                Some(input) => input,
+                None => break 'block vec![IrOpcode::hq_drop],
+            }
+            .get_1()
+            .ok_or_else(|| make_hq_bug!(""))?
+            .clone()
+            .ok_or_else(|| make_hq_bug!(""))?
+            else {
+                hq_bad_proj!("malformed SUBSTACK input")
+            };
+            let Some(substack1_block) = blocks.get(&substack1_id) else {
+                hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+            };
+            let BlockArrayOrId::Id(substack2_id) = match block_info.inputs.get("SUBSTACK2") {
+                Some(input) => input,
+                None => break 'block vec![IrOpcode::hq_drop],
+            }
+            .get_1()
+            .ok_or_else(|| make_hq_bug!(""))?
+            .clone()
+            .ok_or_else(|| make_hq_bug!(""))?
+            else {
+                hq_bad_proj!("malformed SUBSTACK2 input")
+            };
+            let Some(substack2_block) = blocks.get(&substack2_id) else {
+                hq_bad_proj!("SUBSTACK2 block doesn't seem to exist")
+            };
+            generate_if_else(
+                (substack1_block, substack1_id),
+                Some((substack2_block, substack2_id)),
+                block_info,
+                final_next_blocks,
+                blocks,
+                context,
+                should_break,
+                flags,
+            )?
+        }
+        BlockOpcode::control_forever => {
+            let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
+            let first_condition_instructions = None;
+            generate_loop(
+                context.warp,
+                should_break,
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                first_condition_instructions,
+                condition_instructions,
+                None,
+                false,
+                vec![],
+                flags,
+            )?
+        }
+        BlockOpcode::control_repeat => {
+            let variable = RcVar::new(IrType::Int, &VarVal::Int(0), None, flags)?;
+            let local = context.warp;
+            let condition_instructions = vec![
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(variable.clone()),
+                    local_read: RefCell::new(local),
+                }),
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_subtract,
+                IrOpcode::data_teevariable(DataTeevariableFields {
+                    var: RefCell::new(variable.clone()),
+                    local_read_write: RefCell::new(local),
+                }),
+            ];
+            let first_condition_instructions =
+                Some(vec![IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(variable.clone()),
+                    local_read: RefCell::new(local),
+                })]);
+            let setup_instructions = vec![
+                IrOpcode::hq_cast(HqCastFields(IrType::Int)),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(variable),
+                    local_write: RefCell::new(local),
+                    first_write: RefCell::new(local),
+                }),
+            ];
+            generate_loop(
+                context.warp,
+                should_break,
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                first_condition_instructions,
+                condition_instructions,
+                None,
+                false,
+                setup_instructions,
+                flags,
+            )?
+        }
+        BlockOpcode::control_for_each => {
+            let Sb3Field::ValueId(_val, maybe_id) =
+                block_info.fields.get("VARIABLE").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field VARIABLE")
+                })?
+            else {
+                hq_bad_proj!("invalid project.json - missing variable id for VARIABLE field");
+            };
+            let id = maybe_id.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null variable id for VARIABLE field")
+            })?;
+            let target = context.target();
+            let variable = if let Some(var) = target.variables().get(&id) {
+                var.clone()
+            } else if let Some(var) = context
+                .target()
+                .project()
+                .upgrade()
+                .ok_or_else(|| make_hq_bug!("couldn't upgrade Weak<Project>"))?
+                .global_variables()
+                .get(&id)
+            {
+                var.clone()
+            } else {
+                hq_bad_proj!("variable not found")
+            };
+            *variable.is_used.try_borrow_mut()? = true;
+            let counter = RcVar::new(IrType::Int, &VarVal::Int(0), None, flags)?;
+            let local = context.warp;
+            let condition_instructions = vec![
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(counter.clone()),
+                    local_read: RefCell::new(local),
+                }),
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+                IrOpcode::data_teevariable(DataTeevariableFields {
+                    var: RefCell::new(counter.clone()),
+                    local_read_write: RefCell::new(local),
+                }),
+            ]
+            .into_iter()
+            .chain(inputs(
+                block_info,
+                blocks,
+                context,
+                &context.target().project(),
+                flags,
+            )?)
+            .chain(vec![IrOpcode::operator_lt])
+            .collect();
+            let first_condition_instructions = Some(
+                vec![IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(counter.clone()),
+                    local_read: RefCell::new(local),
+                })]
+                .into_iter()
+                .chain(inputs(
+                    block_info,
+                    blocks,
+                    context,
+                    &context.target().project(),
+                    flags,
+                )?)
+                .chain(vec![IrOpcode::operator_lt])
+                .collect(),
+            );
+            let setup_instructions = vec![
+                IrOpcode::hq_drop,
+                IrOpcode::hq_integer(HqIntegerFields(0)),
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(counter.clone()),
+                    local_write: RefCell::new(local),
+                    first_write: RefCell::new(true),
+                }),
+            ];
+            let pre_body_instructions = Some(vec![
+                IrOpcode::data_variable(DataVariableFields {
+                    var: RefCell::new(counter),
+                    local_read: RefCell::new(local),
+                }),
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+                IrOpcode::data_setvariableto(DataSetvariabletoFields {
+                    var: RefCell::new(variable.var.clone()),
+                    local_write: RefCell::new(false),
+                    first_write: RefCell::new(false),
+                }),
+            ]);
+            generate_loop(
+                context.warp,
+                should_break,
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                first_condition_instructions,
+                condition_instructions,
+                pre_body_instructions,
+                false,
+                setup_instructions,
+                flags,
+            )?
+        }
+        BlockOpcode::control_repeat_until | BlockOpcode::control_wait_until => {
+            let condition_instructions = inputs(
+                block_info,
+                blocks,
+                context,
+                &context.target().project(),
+                flags,
+            )?;
+            let first_condition_instructions = None;
+            let setup_instructions = vec![IrOpcode::hq_drop];
+            generate_loop(
+                context.warp,
+                should_break,
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                first_condition_instructions,
+                condition_instructions,
+                None,
+                true,
+                setup_instructions,
+                flags,
+            )?
+        }
+        BlockOpcode::control_while => {
+            let condition_instructions = inputs(
+                block_info,
+                blocks,
+                context,
+                &context.target().project(),
+                flags,
+            )?;
+            let first_condition_instructions = None;
+            let setup_instructions = vec![IrOpcode::hq_drop];
+            generate_loop(
+                context.warp,
+                should_break,
+                block_info,
+                blocks,
+                context,
+                final_next_blocks.clone(),
+                first_condition_instructions,
+                condition_instructions,
+                None,
+                false,
+                setup_instructions,
+                flags,
+            )?
+        }
+        BlockOpcode::procedures_call => 'proc_block: {
+            let target = context.target();
+            let procs = target.procedures()?;
+            let serde_json::Value::String(proccode) = block_info
+                .mutation
+                .mutations
+                .get("proccode")
+                .ok_or_else(|| make_hq_bad_proj!("missing proccode on procedures_call"))?
+            else {
+                hq_bad_proj!("non-string proccode on procedures_call")
+            };
+            let Some(proc) = procs.get(proccode.as_str()) else {
+                break 'proc_block vec![];
+            };
+            let warp = context.warp || proc.always_warped();
+            if warp {
+                proc.compile_warped(blocks, flags)?;
+                vec![IrOpcode::procedures_call_warp(ProceduresCallWarpFields {
+                    proc: Rc::clone(proc),
+                })]
+            } else {
+                *should_break = true;
+                let next_step = generate_next_step_non_inlined(
+                    block_info,
+                    blocks,
+                    context,
+                    final_next_blocks.clone(),
+                    flags,
+                )?;
+                proc.compile_nonwarped(blocks, flags)?;
+                vec![IrOpcode::procedures_call_nonwarp(
+                    ProceduresCallNonwarpFields {
+                        proc: Rc::clone(proc),
+                        next_step,
+                    },
+                )]
+            }
+        }
+        BlockOpcode::argument_reporter_boolean => {
+            procedure_argument(ProcArgType::Boolean, block_info, context)?
+        }
+        BlockOpcode::argument_reporter_string_number => {
+            procedure_argument(ProcArgType::StringNumber, block_info, context)?
+        }
+        BlockOpcode::looks_show => vec![
+            IrOpcode::hq_boolean(HqBooleanFields(true)),
+            IrOpcode::looks_setvisible,
+        ],
+        BlockOpcode::looks_hide => vec![
+            IrOpcode::hq_boolean(HqBooleanFields(false)),
+            IrOpcode::looks_setvisible,
+        ],
+        BlockOpcode::pen_clear => vec![IrOpcode::pen_clear],
+        BlockOpcode::pen_penDown => vec![IrOpcode::pen_pendown],
+        BlockOpcode::pen_penUp => vec![IrOpcode::pen_penup],
+        BlockOpcode::pen_setPenSizeTo => vec![IrOpcode::pen_setpensizeto],
+        BlockOpcode::pen_setPenColorToColor => {
+            vec![IrOpcode::pen_setpencolortocolor]
+        }
+        BlockOpcode::pen_changePenColorParamBy => {
+            vec![IrOpcode::pen_changecolorparamby]
+        }
+        BlockOpcode::pen_setPenColorParamTo => {
+            vec![IrOpcode::pen_setpencolorparamto]
+        }
+        BlockOpcode::pen_menu_colorParam => {
+            let maybe_val = match block_info.fields.get("colorParam").ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - missing field colorParam")
+            })? {
+                Sb3Field::Value((v,)) | Sb3Field::ValueId(v, _) => v,
+            };
+            let val_varval = maybe_val.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null value for OPERATOR field")
+            })?;
+            let VarVal::String(val) = val_varval else {
+                hq_bad_proj!("invalid project.json - expected colorParam field to be string");
+            };
+            vec![IrOpcode::hq_text(HqTextFields(val))]
+        }
+        BlockOpcode::looks_setsizeto => vec![IrOpcode::looks_setsizeto],
+        BlockOpcode::looks_size => vec![IrOpcode::looks_size],
+        BlockOpcode::looks_changesizeby => vec![
+            IrOpcode::looks_size,
+            IrOpcode::operator_add,
+            IrOpcode::looks_setsizeto,
+        ],
+        BlockOpcode::looks_switchcostumeto => vec![IrOpcode::looks_switchcostumeto],
+        BlockOpcode::looks_switchbackdropto => {
+            vec![IrOpcode::looks_switchbackdropto]
+        }
+        BlockOpcode::looks_costumenumbername => {
+            let (Sb3Field::Value((val,)) | Sb3Field::ValueId(val, _)) =
+                block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field NUMBER_NAME")
+                })?;
+            let VarVal::String(number_name) = val.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null costume name for NUMBER_NAME field")
+            })?
+            else {
+                hq_bad_proj!("invalid project.json - NUMBER_NAME field is not of type String");
+            };
+            match &*number_name {
+                "number" => vec![IrOpcode::looks_costumenumber],
+                "name" => vec![IrOpcode::looks_costumename],
+                _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
+            }
+        }
+        BlockOpcode::looks_backdropnumbername => {
+            let (Sb3Field::Value((val,)) | Sb3Field::ValueId(val, _)) =
+                block_info.fields.get("NUMBER_NAME").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field NUMBER_NAME")
+                })?;
+            let VarVal::String(number_name) = val.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null backdrop name for NUMBER_NAME field")
+            })?
+            else {
+                hq_bad_proj!("invalid project.json - NUMBER_NAME field is not of type String");
+            };
+            match &*number_name {
+                "number" => vec![IrOpcode::looks_backdropnumber],
+                "name" => hq_todo!("backdrop name"),
+                _ => hq_bad_proj!("invalid value for NUMBER_NAME field"),
+            }
+        }
+        BlockOpcode::looks_backdrops => {
+            let (Sb3Field::Value((val,)) | Sb3Field::ValueId(val, _)) =
+                block_info.fields.get("BACKDROP").ok_or_else(|| {
+                    make_hq_bad_proj!("invalid project.json - missing field BACKDROP")
+                })?;
+            let VarVal::String(backdrop_name) = val.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null backdrop name for BACKROP field")
+            })?
+            else {
+                hq_bad_proj!("invalid project.json - BACKDROP field is not of type String");
+            };
+            let backdrop_index: i32 = context
+                .project()?
+                .backdrops()
+                .iter()
+                .find_position(|costume| costume.name == backdrop_name)
+                .ok_or_else(|| make_hq_bug!("backdrop index not found"))?
+                .0
+                .try_into()
+                .map_err(|_| make_hq_bug!("backdrop index out of bounds"))?;
+            vec![IrOpcode::hq_integer(HqIntegerFields(backdrop_index))]
+        }
+        BlockOpcode::looks_nextcostume => {
+            vec![
+                IrOpcode::looks_costumenumber,
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+                IrOpcode::hq_integer(HqIntegerFields(
+                    context
+                        .target()
+                        .costumes()
+                        .len()
+                        .try_into()
+                        .map_err(|_| make_hq_bug!("costumes length out of bounds"))?,
+                )),
+                IrOpcode::operator_modulo,
+                IrOpcode::looks_switchcostumeto,
+            ]
+        }
+        BlockOpcode::looks_nextbackdrop => {
+            vec![
+                IrOpcode::looks_backdropnumber,
+                IrOpcode::hq_integer(HqIntegerFields(1)),
+                IrOpcode::operator_add,
+                IrOpcode::hq_integer(HqIntegerFields(
+                    context
+                        .project()?
+                        .backdrops()
+                        .len()
+                        .try_into()
+                        .map_err(|_| make_hq_bug!("backdrops length out of bounds"))?,
+                )),
+                IrOpcode::operator_modulo,
+                IrOpcode::looks_switchbackdropto,
+            ]
+        }
+        BlockOpcode::looks_costume => {
+            let (Sb3Field::Value((val,)) | Sb3Field::ValueId(val, _)) = block_info
+                .fields
+                .get("COSTUME")
+                .ok_or_else(|| make_hq_bad_proj!("invalid project.json - missing field COSTUME"))?;
+            let VarVal::String(name) = val.clone().ok_or_else(|| {
+                make_hq_bad_proj!("invalid project.json - null costume name for COSTUME field")
+            })?
+            else {
+                hq_bad_proj!("invalid project.json - COSTUME field is not of type String");
+            };
+            let index = context
+                .target()
+                .costumes()
+                .iter()
+                .position(|costume| costume.name == name)
+                .ok_or_else(|| make_hq_bad_proj!("missing costume with name {}", name))?;
+            vec![IrOpcode::hq_integer(HqIntegerFields(
+                index
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("costume index out of bounds"))?,
+            ))]
+        }
+        other => hq_todo!("unimplemented block: {:?}", other),
     })
 }
