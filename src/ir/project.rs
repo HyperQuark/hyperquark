@@ -255,9 +255,7 @@ where
 
     if has_return {
         let mut step_mut = step.try_borrow_mut()?;
-        crate::log("borrowing opcodes mutably");
         let opcodes_mut = step_mut.opcodes_mut();
-        crate::log("borrowed opcodes mutably");
 
         opcodes_mut.pop();
 

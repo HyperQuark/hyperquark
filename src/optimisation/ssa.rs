@@ -1476,14 +1476,8 @@ pub fn optimise_variables(
         &graphs.iter().map(|(s, g)| (*g, (*s).clone())),
         type_convergence,
     )?;
-    crate::log("finished iterating graphs");
     for step in project.steps().try_borrow()?.iter() {
-        crate::log!("inserting casts for step {}", step.try_borrow()?.id());
         insert_casts(step.try_borrow_mut()?.opcodes_mut(), false, true)?;
-        crate::log!(
-            "finished inserting casts for step {}",
-            step.try_borrow()?.id()
-        );
     }
 
     // we might have made some procedure return types boxed, so we now need to go through and box the
