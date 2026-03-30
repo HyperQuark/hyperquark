@@ -19,11 +19,7 @@ const fileStore = useProjectFileStore();
 
 async function handleFileInput() {
   loading.value = true;
-  console.log(fileInput);
   let file = fileInput.value.files[0];
-  console.log(file);
-  //console.log(Buffer.from(file.arrayBuffer()));
-  //console.log(file.arrayBuffer());
   if (!file) {
     emit("error", "file doesn't exist");
     loading.value = false;
@@ -31,11 +27,9 @@ async function handleFileInput() {
   }
   let json, zip, res;
   try {
-    //console.log(Buffer.from(file.arrayBuffer()));
     res = await unpackProject(await file.arrayBuffer());
     [json, zip] = res;
   } catch (e) {
-    console.log("error", e);
     emit(
       "error",
       e.hasOwnProperty("validationError")
@@ -45,7 +39,6 @@ async function handleFileInput() {
     loading.value = false;
     return;
   }
-  console.log(res, json, zip);
   fileStore.json = json;
   fileStore.title = file.name.replace(/\..+?$/, "");
   fileStore.zip = zip;

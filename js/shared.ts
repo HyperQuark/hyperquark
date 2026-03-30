@@ -52,7 +52,6 @@ export function setup(
 ) {
   _target_names = target_names;
   _target_bubbles = _target_names.map((_) => null);
-  console.log(_target_names, _target_bubbles);
   _renderer = renderer;
   _pen_skin = pen_skin;
   _target_skins = target_skins;

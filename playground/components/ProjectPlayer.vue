@@ -161,10 +161,8 @@ onMounted(async () => {
   const load_asset = async (md5ext) => {
     try {
       if (props.zip) {
-        console.log(props.zip);
         const file = props.zip.file(md5ext) ?? props.zip.files[md5ext];
-        const data = await file.async("text"); //.then(console.log);
-        //console.log(file, data);
+        const data = await file.async("text");
         return data;
       }
       return await (
@@ -180,8 +178,6 @@ onMounted(async () => {
   let wasmBytes;
   let assets = null;
   let wasmProject;
-
-  console.log(props);
 
   try {
     // imports can take a long time, so need to wait for worker to tell us that it's initialised
@@ -202,19 +198,7 @@ onMounted(async () => {
         proj: JSON.stringify(props.json),
         flags: getSettings().to_js(),
       });
-      console.log("compile message posted!");
     });
-
-    console.log(
-      wasmProject.target_names,
-      wasmProject.strings,
-      wasmProject.wasm_bytes,
-    );
-
-    // if ((!wasmProject instanceof FinishedWasm)) {
-    //   throw new Error("unknown error occurred when compiling project");
-    // }
-
     wasmBytes = wasmProject.wasm_bytes;
   } catch (e) {
     declareError(e, true, "An error", "compiling");
@@ -237,7 +221,6 @@ onMounted(async () => {
           },
           [wasmBytes.buffer],
         );
-        console.log("optimise message posted!");
       });
     } catch (e) {
       declareError(
@@ -362,7 +345,6 @@ onMounted(async () => {
     setAnswer = runner.setAnswer.bind(runner);
     mark_question_resolved = runner.mark_question_resolved.bind(runner);
     monitors.value = runner.monitors;
-    console.log(monitors.value);
   } catch (e) {
     declareError(e, true, "An error", "instantiating");
   }

@@ -56,16 +56,9 @@ import {
   defaultSettings,
 } from "../lib/settings.js";
 
-console.log(settingsInfo);
-console.log(defaultSettings.to_js());
-
 const settings = reactive(getSettings().to_js());
 const route = useRoute();
-console.log(getUsedWasmFeatures());
 const wasmFeatures = ref(getUsedWasmFeatures());
-console.log(wasmFeatures);
-
-console.log(settings);
 
 function scrollToAnchor() {
   if (!!route.hash) {
@@ -89,7 +82,6 @@ window.settings = settings;
 window.WasmFlags = WasmFlags;
 
 watch(settings, (value, oldValue) => {
-  console.log(settings);
   saveSettings(WasmFlags.from_js(settings));
 });
 
@@ -97,7 +89,6 @@ watch(
   settings,
   () => {
     wasmFeatures.value = getUsedWasmFeatures();
-    console.log(wasmFeatures);
   },
   {
     immediate: true,

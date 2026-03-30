@@ -66,7 +66,6 @@ export async function setup(
     }
     return [skin, drawableId];
   });
-  console.log(target_skins);
 
   const stageIndex = project_json.targets.findIndex((target) => target.isStage);
 

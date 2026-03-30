@@ -36,7 +36,7 @@ const description = ref("");
 try {
   const apiRes = await (
     await fetch(`https://trampoline.turbowarp.org/api/projects/${props.id}/`)
-  ).json(); //.project_token;
+  ).json();
   title.value = apiRes.title;
   author.value = apiRes.author.username;
   instructions.value = apiRes.instructions;
@@ -48,7 +48,6 @@ try {
     throw new Error("response was not OK");
   }
   const [_json, _zip] = await unpackProject(await res.arrayBuffer());
-  console.log(json);
   zip.value = _zip;
   json.value = _json;
   success.value = true;

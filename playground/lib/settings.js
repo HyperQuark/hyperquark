@@ -8,7 +8,6 @@ import {
 import * as WasmFeatureDetect from "wasm-feature-detect";
 export { WasmFlags };
 
-console.log(WasmFeature);
 if (typeof window !== "undefined") window.hyperquarkExports = hyperquarkExports;
 
 export const supportedWasmFeatures = await getSupportedWasmFeatures();
@@ -74,7 +73,6 @@ export function getSettings() {
  * @param {WasmFlags} settings
  */
 export function saveSettings(settings) {
-  console.log(settings.to_js());
   localStorage["settings"] = JSON.stringify(settings.to_js());
 }
 
@@ -91,14 +89,11 @@ export async function getSupportedWasmFeatures() {
   return featureSet;
 }
 
-console.log(await getSupportedWasmFeatures());
-
 /**
  * @returns {Set<string>}
  */
 export function getUsedWasmFeatures() {
   const settings = getSettings().to_js();
-  console.log(settings);
   const featureSet = new Set();
   for (const [id, info] of Object.entries(settingsInfo)) {
     if (info.type === "radio") {

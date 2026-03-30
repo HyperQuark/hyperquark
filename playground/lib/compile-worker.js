@@ -7,7 +7,6 @@ postMessage("ready");
 addEventListener("message", ({ data }) => {
   switch (data.stage) {
     case "compile": {
-      console.log("compile message received");
       let wasmProject = sb3_to_wasm(data.proj, WasmFlags.from_js(data.flags));
       postMessage(
         {
@@ -20,8 +19,6 @@ addEventListener("message", ({ data }) => {
       break;
     }
     case "optimise": {
-      console.log("optimise message received!");
-      console.log(data);
       import("binaryen").then((imports) => {
         const binaryen = imports.default;
         const binaryenModule = binaryen.readBinary(data.wasmBytes);
