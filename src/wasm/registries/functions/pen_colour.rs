@@ -1,12 +1,10 @@
 use mem_layout::{sprite as sprite_layout, stage as stage_layout};
-use wasm_encoder::{
-    BlockType as WasmBlockType, MemArg, ValType,
-};
+use wasm_encoder::{BlockType as WasmBlockType, MemArg, ValType};
 use wasm_gen::wasm_const;
 
 use super::{MaybeStaticFunction, StaticFunction};
 use crate::prelude::*;
-use crate::wasm::{f32_to_ieeef32, mem_layout};
+use crate::wasm::mem_layout;
 
 index_counter! {
     hsv2rgb_locals
@@ -54,7 +52,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(2.55)),
+                    F32Const(2.55.into()),
                     F32Mul,
                     I32TruncF32S,
                     LocalSet(hsv2rgb_locals::HUE),
@@ -64,7 +62,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(2.55)),
+                    F32Const(2.55.into()),
                     F32Mul,
                     I32TruncF32S,
                     LocalSet(hsv2rgb_locals::SAT), // saturation ∈ [0, 256)
@@ -74,12 +72,12 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(2.55)),
+                    F32Const(2.55.into()),
                     F32Mul,
                     I32TruncF32S,
                     LocalSet(hsv2rgb_locals::VAL), // value ∈ [0, 256)
                     LocalGet(hsv2rgb_locals::MEM_POS),
-                    F32Const(f32_to_ieeef32(100.0)),
+                    F32Const(100.0.into()),
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     F32Load(MemArg {
                         offset: sprite_layout::PEN_TRANSPARENCY.into(),
@@ -87,7 +85,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                         memory_index: 0,
                     }), // transparency ∈ [0, 100]
                     F32Sub,
-                    F32Const(f32_to_ieeef32(100.0)),
+                    F32Const(100.0.into()),
                     F32Div, // alpha ∈ [0, 1]
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR_A.into(),
@@ -100,11 +98,11 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(0.01)),
+                    F32Const(0.01.into()),
                     F32Lt,
                     If(WasmBlockType::Empty),
                     LocalGet(hsv2rgb_locals::MEM_POS),
-                    F32Const(f32_to_ieeef32(0.0)),
+                    F32Const(0.0.into()),
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR_A.into(),
                         align: 2,
@@ -117,7 +115,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     If(WasmBlockType::Empty),
                     LocalGet(hsv2rgb_locals::VAL),
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Div,
                     LocalSet(hsv2rgb_locals::VAL_F),
                     LocalGet(hsv2rgb_locals::MEM_POS),
@@ -255,7 +253,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     LocalGet(hsv2rgb_locals::R),
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Div,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR_R.into(),
@@ -265,7 +263,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     LocalGet(hsv2rgb_locals::G),
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Div,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR_G.into(),
@@ -275,7 +273,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     LocalGet(hsv2rgb_locals::B),
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Div,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR_B.into(),
@@ -333,7 +331,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Mul,
                     I32TruncF32S,
                     LocalSet(rgb2hsv_locals::R),
@@ -343,7 +341,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Mul,
                     I32TruncF32S,
                     LocalSet(rgb2hsv_locals::G),
@@ -353,7 +351,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                         align: 2,
                         memory_index: 0,
                     }),
-                    F32Const(f32_to_ieeef32(255.0)),
+                    F32Const(255.0.into()),
                     F32Mul,
                     I32TruncF32S,
                     LocalSet(rgb2hsv_locals::B),
@@ -364,10 +362,10 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                         align: 2,
                         memory_index: 0,
                     }), // transparency ∈ [0, 100]
-                    F32Const(f32_to_ieeef32(100.0)),
+                    F32Const(100.0.into()),
                     F32Mul, // alpha ∈ [0, 1]
                     LocalTee(rgb2hsv_locals::A),
-                    F32Const(f32_to_ieeef32(100.0)),
+                    F32Const(100.0.into()),
                     F32Sub,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_TRANSPARENCY.into(),
@@ -405,7 +403,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     LocalGet(rgb2hsv_locals::MEM_POS),
                     LocalGet(rgb2hsv_locals::RGB_MAX),
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(2.55)),
+                    F32Const(2.55.into()),
                     F32Div,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_BRIGHTNESS.into(),
@@ -416,14 +414,14 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     I32Eqz,
                     If(WasmBlockType::Empty),
                     LocalGet(rgb2hsv_locals::MEM_POS),
-                    F32Const(f32_to_ieeef32(0.0)),
+                    F32Const(0.0.into()),
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR.into(),
                         align: 2,
                         memory_index: 0,
                     }),
                     LocalGet(rgb2hsv_locals::MEM_POS),
-                    F32Const(f32_to_ieeef32(0.0)),
+                    F32Const(0.0.into()),
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_SATURATION.into(),
                         align: 2,
@@ -442,14 +440,14 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     I32Eqz,
                     If(WasmBlockType::Empty),
                     LocalGet(rgb2hsv_locals::MEM_POS),
-                    F32Const(f32_to_ieeef32(0.0)),
+                    F32Const(0.0.into()),
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR.into(),
                         align: 2,
                         memory_index: 0,
                     }),
                     LocalGet(rgb2hsv_locals::MEM_POS),
-                    F32Const(f32_to_ieeef32(0.0)),
+                    F32Const(0.0.into()),
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_SATURATION.into(),
                         align: 2,
@@ -460,7 +458,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     LocalGet(rgb2hsv_locals::MEM_POS),
                     LocalGet(rgb2hsv_locals::SAT),
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(2.55)),
+                    F32Const(2.55.into()),
                     F32Div,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_SATURATION.into(),
@@ -512,7 +510,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     End,
                     End,
                     F32ConvertI32S,
-                    F32Const(f32_to_ieeef32(2.55)),
+                    F32Const(2.55.into()),
                     F32Div,
                     F32Store(MemArg {
                         offset: sprite_layout::PEN_COLOR.into(),
