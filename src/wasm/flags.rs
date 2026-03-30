@@ -186,6 +186,7 @@ pub struct WasmFlags {
     pub var_type_convergence: VarTypeConvergence,
     pub do_ssa: Switch,
     pub eager_number_parsing: Switch,
+    pub variable_merging: Switch,
     // pub memory_layout: MemoryLayout
 }
 
@@ -231,6 +232,7 @@ impl WasmFlags {
             var_type_convergence: VarTypeConvergence::Tight,
             do_ssa: Switch::On,
             eager_number_parsing: Switch::On,
+            variable_merging: Switch::On,
         }
     }
 
@@ -319,6 +321,10 @@ impl WasmFlags {
                 <br>\
                 Improves performance but breaks scratch compatibility for list_contents; \
                 this behaviour matches TurboWarp.")
+                .with_ty(ty_str!(Switch)),
+            "variable_merging" => FlagInfo::new()
+                .with_name("Merge variables")
+                .with_description("Merges variables of the same type. Can improve wasm-opt performance.")
                 .with_ty(ty_str!(Switch)),
             _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str()),
         }

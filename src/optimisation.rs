@@ -33,7 +33,9 @@ pub fn ir_optimise(ir: &Rc<IrProject>, flags: &WasmFlags) -> HQResult<SSAToken> 
         crate::log(format!("{ir}").as_str());
     }
 
-    variable_merging::merge_variables(ir, ssa_token)?;
+    if flags.variable_merging == Switch::On {
+        variable_merging::merge_variables(ir, ssa_token)?;
+    }
 
     Ok(ssa_token)
 }
