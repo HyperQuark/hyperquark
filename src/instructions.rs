@@ -57,16 +57,11 @@ where
             })
             .collect::<Box<[_]>>();
         // crate::log!("{mapped:?}");
-        let inins = mapped
+        mapped
             .iter()
             .cloned()
             .multi_cartesian_product()
             .map(|ins| outputs_func(ins.into_iter().collect()))
-            .collect::<Box<[_]>>();
-        // crate::log!("{:?}", inins);
-        inins
-            .iter()
-            .cloned()
             .try_reduce(|acc, el| {
                 #[expect(clippy::redundant_clone, reason = "false positives")]
                 Ok(match acc? {
@@ -113,12 +108,15 @@ impl IrOpcode {
             })
             | Self::event_broadcast_and_wait(EventBroadcastAndWaitFields { next_step, .. })
             | Self::procedures_call_nonwarp(ProceduresCallNonwarpFields { next_step, .. })
-            | Self::control_wait(ControlWaitFields { next_step, .. }) => Some(*next_step),
+            | Self::control_wait(ControlWaitFields { next_step, .. })
+            | Self::sensing_askandwait(SensingAskandwaitFields { next_step, .. }) => {
+                Some(*next_step)
+            }
             _ => None,
         }
     }
 
-    pub fn inline_steps(&self) -> Option<Box<[Rc<RefCell<Step>>]>> {
+    pub fn inline_steps(&self, ignore_conditions: bool) -> Option<Box<[Rc<RefCell<Step>>]>> {
         #[expect(
             clippy::wildcard_enum_match_arm,
             reason = "too many variants to match explicitly"
@@ -135,18 +133,31 @@ impl IrOpcode {
                 first_condition,
                 condition,
                 body,
+                pre_body,
                 ..
             }) => Some(
-                [first_condition.as_ref(), Some(condition), Some(body)]
-                    .into_iter()
-                    .filter_map(Option::<&_>::cloned)
-                    .collect(),
+                if ignore_conditions {
+                    vec![pre_body.as_ref(), Some(body)]
+                } else {
+                    vec![
+                        first_condition.as_ref(),
+                        Some(condition),
+                        pre_body.as_ref(),
+                        Some(body),
+                    ]
+                }
+                .into_iter()
+                .filter_map(Option::<&_>::cloned)
+                .collect(),
             ),
             _ => None,
         }
     }
 
-    pub fn inline_steps_mut(&mut self) -> Option<Box<[&mut Rc<RefCell<Step>>]>> {
+    pub fn inline_steps_mut(
+        &mut self,
+        ignore_conditions: bool,
+    ) -> Option<Box<[&mut Rc<RefCell<Step>>]>> {
         #[expect(
             clippy::wildcard_enum_match_arm,
             reason = "too many variants to match explicitly"
@@ -163,12 +174,22 @@ impl IrOpcode {
                 first_condition,
                 condition,
                 body,
+                pre_body,
                 ..
             }) => Some(
-                [first_condition.as_mut(), Some(condition), Some(body)]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
+                if ignore_conditions {
+                    vec![pre_body.as_mut(), Some(body)]
+                } else {
+                    vec![
+                        first_condition.as_mut(),
+                        Some(condition),
+                        pre_body.as_mut(),
+                        Some(body),
+                    ]
+                }
+                .into_iter()
+                .flatten()
+                .collect(),
             ),
             _ => None,
         }

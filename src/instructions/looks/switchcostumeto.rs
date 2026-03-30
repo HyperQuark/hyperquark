@@ -12,13 +12,14 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         ("looks", "switchcostumeto".into()),
         (vec![ValType::I32, ValType::I32], vec![]),
     )?;
-    let wasm_target_index = match func.target() {
-        StepTarget::Sprite(index) => index,
-        StepTarget::Stage => 0,
+    let offset = match func.target() {
+        StepTarget::Sprite(index) => {
+            mem_layout::stage::BLOCK_SIZE
+                + index * mem_layout::sprite::BLOCK_SIZE
+                + mem_layout::sprite::COSTUME
+        }
+        StepTarget::Stage => mem_layout::stage::COSTUME,
     };
-    let offset = mem_layout::stage::BLOCK_SIZE
-        + wasm_target_index * mem_layout::sprite::BLOCK_SIZE
-        + mem_layout::sprite::COSTUME;
 
     let local_index = func.local(ValType::I32)?;
     Ok(if IrType::QuasiInt.contains(inputs[0]) {

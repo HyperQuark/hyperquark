@@ -15,7 +15,7 @@ impl fmt::Display for Fields {
             f,
             r#"{{
         "branch_if": {},
-        "branch_else": {},
+        "branch_else": {}
     }}"#,
             RefCell::borrow(&self.branch_if),
             RefCell::borrow(&self.branch_else)

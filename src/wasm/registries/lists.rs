@@ -189,9 +189,9 @@ impl ListRegistry {
                         .iter()
                         .map(|val| {
                             let VarVal::Float(f) = val else {
-                                hq_bug!("VarVal type should be included in var's possible types")
+                                hq_bug!("VarVal type should be included in var's possible types");
                             };
-                            Ok(f.to_le_bytes())
+                            Ok((*f).to_le_bytes())
                         })
                         .collect::<HQResult<Box<[_]>>>()?
                         .into_iter()
@@ -211,17 +211,9 @@ impl ListRegistry {
                         .iter()
                         .map(|val| {
                             Ok(match val {
-                                #[expect(
-                                    clippy::cast_possible_truncation,
-                                    reason = "integer-ness already confirmed; `as` is saturating."
-                                )]
-                                VarVal::Float(f) => {
-                                    hq_assert!(f % 1.0 == 0.0);
-                                    *f as i32
-                                }
                                 VarVal::Int(i) => *i,
                                 VarVal::Bool(b) => (*b).into(),
-                                VarVal::String(_) => {
+                                VarVal::String(_) | VarVal::Float(_) => {
                                     hq_bug!(
                                         "VarVal type should be included in var's possible types"
                                     )
@@ -248,15 +240,10 @@ impl ListRegistry {
                         .initial_value()
                         .iter()
                         .map(|val| {
-                            Ok(match val {
-                                VarVal::Bool(b) => i32::from(*b),
-                                VarVal::Int(_) | VarVal::Float(_) | VarVal::String(_) => {
-                                    hq_bug!(
-                                        "VarVal type should be included in var's possible types"
-                                    )
-                                }
-                            }
-                            .to_le_bytes())
+                            let VarVal::Bool(b) = val else {
+                                hq_bug!("VarVal type should be included in var's possible types")
+                            };
+                            Ok(i32::from(*b).to_le_bytes())
                         })
                         .collect::<HQResult<Box<[_]>>>()?
                         .into_iter()

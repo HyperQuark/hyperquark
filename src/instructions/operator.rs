@@ -24,6 +24,7 @@ pub mod not;
 pub mod or;
 pub mod pow10;
 pub mod random;
+pub mod round;
 pub mod sin;
 pub mod sqrt;
 pub mod subtract;

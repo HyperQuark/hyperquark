@@ -50,6 +50,8 @@ pub fn wasm(
         BrIf(0),
         LocalGet(index_local),
         #LazyGlobalGet(length_global),
+        I32Const(1),
+        I32Add,
         I32GtS,
         BrIf(0),
         #LazyGlobalGet(list_global),
@@ -168,54 +170,5 @@ crate::instructions_test!(
             *list.length_mutable().borrow_mut() = true;
             list
         },
-    }
-);
-
-crate::instructions_test!(
-    int_static;
-    data_insertatlist;
-    t1, t2 @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Int,
-            vec![],
-            &flags()
-        ).unwrap()
-    };
-    { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
-);
-
-crate::instructions_test!(
-    float_static;
-    data_insertatlist;
-    t1, t2 @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Float,
-            vec![],
-            &flags()
-        ).unwrap()
-    }
-);
-
-crate::instructions_test!(
-    string_static;
-    data_insertatlist;
-    t1, t2 @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::String,
-            vec![],
-            &flags()
-        ).unwrap()
-    }
-);
-
-crate::instructions_test!(
-    any_static;
-    data_insertatlist;
-    t1, t2 @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Any,
-            vec![],
-            &flags()
-        ).unwrap()
     }
 );

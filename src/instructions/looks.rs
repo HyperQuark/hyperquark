@@ -1,7 +1,10 @@
+pub mod backdropnumber;
+pub mod costumename;
 pub mod costumenumber;
 pub mod say;
 pub mod setsizeto;
 pub mod setvisible;
 pub mod size;
+pub mod switchbackdropto;
 pub mod switchcostumeto;
 pub mod think;

@@ -114,6 +114,10 @@ pub trait Registry: Sized + RegistryType {
         )
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
+
+    // TODO: register_override_ifexists or similar - for things like mark_waiting_flag,
+    // which need to be overriden if they are registered, but don't actually need to be
+    // registered always.
 }
 
 pub trait RegistryDefault: Registry<Value: Default> {
@@ -227,6 +231,7 @@ where
         self.0.registry()
     }
 
+    /// Registers a `NamedRegistryItem` using its key function and its `const VALUE`
     pub fn register<T, N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
@@ -236,6 +241,28 @@ where
         self.0.register(R::name::<T>(), T::VALUE)
     }
 
+    /// Registers a runtime key-value pair; just calls `register` on the underlying
+    /// `Registry`
+    pub fn register_dyn<N>(&self, key: R::Key, value: R::Value) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.0.register(key, value)
+    }
+
+    /// Override a runtime key-value pair with a runtime value; just calls
+    /// `register_override` on the underlying `Registry`
+    pub fn register_dyn_override<N>(&self, key: R::Key, value: R::Value) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.0.register_override(key, value)
+    }
+
+    /// Overrides a `NamedRegistryItem` entry using the override argument types
+    /// associated with the corresponding `NamedRegistryItemOverride`
     pub fn register_override<T, N, A>(&self, override_arg: A) -> HQResult<N>
     where
         N: TryFrom<usize>,
@@ -246,6 +273,8 @@ where
             .register_override(R::name::<T>(), T::r#override(override_arg))
     }
 
+    /// Tries to override a `NamedRegistryItem` entry using the override argument
+    /// types associated with the corresponding `TryNamedRegistryItemOverride`
     pub fn try_register_override<T, N, A>(&self, override_arg: A) -> HQResult<N>
     where
         N: TryFrom<usize>,

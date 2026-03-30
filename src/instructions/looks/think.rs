@@ -12,7 +12,7 @@ impl fmt::Display for Fields {
             f,
             r#"{{
         "debug": {},
-        "target_idx": {},
+        "target_idx": {}
     }}"#,
             self.debug, self.target_idx
         )

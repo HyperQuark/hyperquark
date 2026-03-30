@@ -228,6 +228,7 @@ pub struct StepFunc {
     target: StepTarget,
     // the actual target index, for interfacing with js
     target_index: u32,
+    costume_names: Rc<Vec<Vec<Box<str>>>>,
 }
 
 impl StepFunc {
@@ -235,8 +236,8 @@ impl StepFunc {
         Rc::clone(&self.registries)
     }
 
-    pub const fn flags(&self) -> WasmFlags {
-        self.flags
+    pub const fn flags(&self) -> &WasmFlags {
+        &self.flags
     }
 
     pub const fn instructions(&self) -> &RefCell<Vec<Instruction>> {
@@ -255,6 +256,10 @@ impl StepFunc {
         self.target_index
     }
 
+    pub const fn costume_names(&self) -> &Rc<Vec<Vec<Box<str>>>> {
+        &self.costume_names
+    }
+
     /// creates a new step function, with one paramter
     #[must_use]
     pub fn new(
@@ -262,6 +267,7 @@ impl StepFunc {
         flags: WasmFlags,
         target: StepTarget,
         target_index: u32,
+        costume_names: Rc<Vec<Vec<Box<str>>>>,
     ) -> Self {
         Self {
             locals: RefCell::new(vec![]),
@@ -273,6 +279,7 @@ impl StepFunc {
             local_variables: RefCell::new(BTreeMap::default()),
             target,
             target_index,
+            costume_names,
         }
     }
 
@@ -286,6 +293,7 @@ impl StepFunc {
         flags: WasmFlags,
         target: StepTarget,
         target_index: u32,
+        costume_names: Rc<Vec<Vec<Box<str>>>>,
     ) -> Self {
         Self {
             locals: RefCell::new(vec![]),
@@ -297,6 +305,7 @@ impl StepFunc {
             local_variables: RefCell::new(BTreeMap::default()),
             target,
             target_index,
+            costume_names,
         }
     }
 
@@ -407,6 +416,7 @@ impl StepFunc {
         steps: &Rc<RefCell<Vec<Self>>>,
         registries: Rc<Registries>,
         flags: WasmFlags,
+        costume_names: Rc<Vec<Vec<Box<str>>>>,
     ) -> HQResult<Self> {
         hq_assert!(
             step.try_borrow()?.used_non_inline(),
@@ -454,9 +464,17 @@ impl StepFunc {
             } else {
                 Box::from([])
             };
-            Self::new_with_types(params, outputs, registries, flags, target, target_index)
+            Self::new_with_types(
+                params,
+                outputs,
+                registries,
+                flags,
+                target,
+                target_index,
+                costume_names,
+            )
         } else {
-            Self::new(registries, flags, target, target_index)
+            Self::new(registries, flags, target, target_index, costume_names)
         };
         if let Some(ref proc_context) = step.try_borrow()?.context().proc_context
             && !step.try_borrow()?.context().warp

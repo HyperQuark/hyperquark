@@ -21,6 +21,8 @@ pub struct IrProject {
     global_lists: TargetLists,
     broadcasts: Box<[Box<str>]>,
     targets: RefCell<IndexMap<Box<str>, Rc<Target>>>,
+    stage_index: usize,
+    backdrops: Vec<IrCostume>,
 }
 
 impl IrProject {
@@ -48,11 +50,21 @@ impl IrProject {
         &self.broadcasts
     }
 
+    pub const fn stage_index(&self) -> usize {
+        self.stage_index
+    }
+
+    pub const fn backdrops(&self) -> &Vec<IrCostume> {
+        &self.backdrops
+    }
+
     #[must_use]
     pub fn new(
         global_variables: TargetVars,
         global_lists: TargetLists,
         broadcasts: Box<[Box<str>]>,
+        stage_index: usize,
+        backdrops: Vec<IrCostume>,
     ) -> Self {
         Self {
             threads: RefCell::new(Box::new([])),
@@ -61,6 +73,8 @@ impl IrProject {
             global_lists,
             broadcasts,
             targets: RefCell::new(IndexMap::default()),
+            stage_index,
+            backdrops,
         }
     }
 
@@ -78,6 +92,8 @@ impl IrProject {
                 .iter()
                 .find(|target| target.is_stage)
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
+            &sb3.monitors,
+            flags,
         )?;
 
         let global_lists = lists_from_target(
@@ -95,7 +111,32 @@ impl IrProject {
             .cloned()
             .collect();
 
-        let project = Rc::new(Self::new(global_variables, global_lists, broadcasts));
+        let (stage_index, stage_target) = sb3
+            .targets
+            .iter()
+            .find_position(|target| target.is_stage)
+            .ok_or_else(|| make_hq_bug!("couldn't find stage target"))?;
+
+        let backdrops: Vec<_> = stage_target
+            .costumes
+            .iter()
+            .map(|costume| {
+                IrCostume {
+                    name: costume.name.clone(),
+                    data_format: costume.data_format,
+                    md5ext: costume.md5ext.clone(),
+                    //data: load_asset(costume.md5ext.as_str()),
+                }
+            })
+            .collect();
+
+        let project = Rc::new(Self::new(
+            global_variables,
+            global_lists,
+            broadcasts,
+            stage_index,
+            backdrops,
+        ));
 
         let (threads_vec, targets): (Vec<_>, Vec<_>) = sb3
             .targets
@@ -105,7 +146,7 @@ impl IrProject {
                 let variables = if target.is_stage {
                     BTreeMap::new()
                 } else {
-                    variables_from_target(target)?
+                    variables_from_target(target, &sb3.monitors, flags)?
                 };
                 let lists = if target.is_stage {
                     BTreeMap::new()
@@ -177,8 +218,9 @@ impl IrProject {
         for target in project.targets().try_borrow()?.values() {
             fixup_proc_types(target)?;
         }
+        let fixed_proc_calls = &mut BTreeSet::new();
         for step in project.steps().try_borrow()?.iter() {
-            fixup_proc_calls(step)?;
+            fixup_proc_calls(step, fixed_proc_calls)?;
         }
         Ok(project)
     }
@@ -208,7 +250,7 @@ where
             );
             has_return = true;
         }
-        if let Some(inline_steps) = opcode.inline_steps() {
+        if let Some(inline_steps) = opcode.inline_steps(true) {
             inline_steps.iter().try_for_each(|inline_step| {
                 add_proc_return_vars_before_return(
                     Rc::clone(inline_step),
@@ -297,14 +339,26 @@ fn fixup_proc_types(target: &Rc<Target>) -> HQResult<()> {
 }
 
 /// Pass variables into procedure calls, and read them on return
-fn fixup_proc_calls<S>(step: S) -> HQResult<()>
+fn fixup_proc_calls<S>(step: S, visited_steps: &mut BTreeSet<Box<str>>) -> HQResult<()>
 where
     S: Deref<Target = RefCell<Step>>,
 {
+    if visited_steps.contains(step.try_borrow()?.id()) {
+        return Ok(());
+    }
+
+    visited_steps.insert(step.try_borrow()?.id().into());
+
     let mut call_indices = vec![];
     for (index, opcode) in step.try_borrow()?.opcodes().iter().enumerate() {
         if matches!(opcode, IrOpcode::procedures_call_warp(_)) {
             call_indices.push(index);
+        }
+
+        if let Some(inline_steps) = opcode.inline_steps(true) {
+            inline_steps.iter().try_for_each(|inline_step| {
+                fixup_proc_calls(Rc::clone(inline_step), visited_steps)
+            })?;
         }
     }
 
@@ -325,6 +379,7 @@ where
                 IrOpcode::data_setvariableto(DataSetvariabletoFields {
                     var: RefCell::new(var),
                     local_write: RefCell::new(false),
+                    first_write: RefCell::new(false),
                 })
             }),
         );
@@ -385,7 +440,7 @@ impl fmt::Display for IrProject {
         "global_lists": {{{lists}}},
         "broadcasts": [{broadcasts}],
         "threads": [{threads}],
-        "steps": [{steps}],
+        "steps": [{steps}]
     }}"#
         )
     }

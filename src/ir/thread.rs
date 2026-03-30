@@ -36,7 +36,7 @@ impl Thread {
         };
         #[expect(clippy::wildcard_enum_match_arm, reason = "too many variants to match")]
         let event = match block_info.opcode {
-            BlockOpcode::event_whenflagclicked => Event::FlagCLicked,
+            BlockOpcode::event_whenflagclicked => Event::FlagClicked,
             BlockOpcode::event_whenbroadcastreceived => {
                 let sb3::Field::ValueId(val, _id) =
                     block_info.fields.get("BROADCAST_OPTION").ok_or_else(|| {
@@ -57,11 +57,12 @@ impl Thread {
                 };
                 Event::Broadcast(name)
             }
+            BlockOpcode::event_whenthisspriteclicked | BlockOpcode::event_whenstageclicked => {
+                Event::SpriteClicked(target.index())
+            }
             BlockOpcode::event_whenbackdropswitchesto
             | BlockOpcode::event_whengreaterthan
             | BlockOpcode::event_whenkeypressed
-            | BlockOpcode::event_whenstageclicked
-            | BlockOpcode::event_whenthisspriteclicked
             | BlockOpcode::event_whentouchingobject => {
                 hq_todo!("unimplemented event {:?}", block_info.opcode)
             }
@@ -98,8 +99,8 @@ impl fmt::Display for Thread {
         write!(
             f,
             r#"{{
-            "event": '{event:?}',
-            "first_step_index": "{}",
+            "event": "{event:?}",
+            "first_step_index": "{}"
         }}"#,
             first_step.0
         )

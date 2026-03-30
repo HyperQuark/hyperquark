@@ -20,7 +20,41 @@
       <input type="checkbox" id="turbo" :value="turbo" />
       <label for="turbo">turbo mode</label>
     </div>
-    <canvas width="480" height="360" ref="canvas"></canvas>
+    <div id="stage-container">
+      <canvas width="480" height="360" ref="canvas"></canvas>
+      <div
+        v-for="[id, { visible, x, y, name, sprite, value }] in Object.entries(
+          monitors,
+        )"
+        :key="id"
+        class="variable-monitor"
+        v-show="visible"
+        :style="{
+          left: x.toString() + 'px',
+          top: y.toString() + 'px',
+        }"
+      >
+        <span>
+          <span v-if="!!sprite">{{ sprite }}: </span>{{ name }}
+        </span>
+        <span class="variable-value">{{ value }}</span>
+      </div>
+      <div v-show="queued_questions.length > 0" id="question-div">
+        <div v-if="!!queued_questions[0]?.[0]?.length">
+          {{ queued_questions[0]?.[0] }}
+        </div>
+        <form @submit.prevent="submitQuestion">
+          <input
+            type="text"
+            name="answer"
+            v-model="question_response"
+            ref="questionInput"
+            autocomplete="off"
+          />
+          <button type="submit">✓</button>
+        </form>
+      </div>
+    </div>
     <div class="instructions">
       <div v-if="props.instructions">
         <h2>Instructions</h2>
@@ -37,15 +71,11 @@
 
 <script setup>
 import Loading from "./Loading.vue";
-import {
-  sb3_to_wasm,
-  FinishedWasm,
-  WasmFlags,
-} from "../../js/compiler/hyperquark.js";
-import { instantiateProject } from "../lib/project-runner.js";
-import { ref, onMounted, registerRuntimeCompiler } from "vue";
+import { ProjectRunner } from "../lib/project-runner.js";
+import { ref, onMounted, reactive, watch, onBeforeUnmount } from "vue";
 import { getSettings } from "../lib/settings.js";
 import { useDebugModeStore } from "../stores/debug.js";
+import { unsetup } from "../../js/shared.js";
 
 const debugModeStore = useDebugModeStore();
 
@@ -67,6 +97,8 @@ let turbo = ref(false);
 let canvas = ref(null);
 let loadingMsg = ref("compiling project");
 let loaded = ref(false);
+let questionInput = ref(null);
+let monitors = ref({});
 
 let greenFlag = () => null;
 let stop = () => null;
@@ -88,6 +120,42 @@ const declareError = (e, terminate, mode, stage, extra) => {
     loaded.value = true;
   }
 };
+
+const queued_questions = reactive([]);
+let question_response = ref("");
+let mark_question_resolved = () => {};
+
+let setAnswer = () => {};
+
+function submitQuestion() {
+  setAnswer(question_response.value);
+  question_response.value = "";
+  const [_, struct] = queued_questions.shift();
+  mark_question_resolved(struct);
+}
+
+watch(queued_questions, () => {
+  if (queued_questions.length > 0) {
+    questionInput.value.focus();
+  }
+});
+
+function queue_question(question, struct) {
+  queued_questions.push([question, struct]);
+}
+
+let mouseMove, mouseDown, mouseUp, keyDown, keyUp, runner, compileWorker;
+
+onBeforeUnmount(() => {
+  document.removeEventListener("mousemove", mouseMove);
+  canvas.value.removeEventListener("mousedown", mouseDown);
+  canvas.value.removeEventListener("mouseup", mouseUp);
+  document.removeEventListener("keydown", keyDown);
+  document.removeEventListener("keyup", keyUp);
+  runner?.stop?.();
+  unsetup();
+  compileWorker?.terminate?.();
+});
 
 onMounted(async () => {
   const load_asset = async (md5ext) => {
@@ -116,16 +184,36 @@ onMounted(async () => {
   console.log(props);
 
   try {
-    // we need to convert settings to and from a JsValue because the WasmFlags exported from the
-    // no-compiler version is not the same as that exported by the compiler... because reasons
-    wasmProject = sb3_to_wasm(
-      JSON.stringify(props.json),
-      WasmFlags.from_js(getSettings().to_js()),
+    // imports can take a long time, so need to wait for worker to tell us that it's initialised
+    await new Promise((resolve) => {
+      compileWorker = new Worker(
+        new URL("../lib/compile-worker.js", import.meta.url),
+        { type: "module" },
+      );
+      compileWorker.onmessage = resolve;
+    });
+    wasmProject = await new Promise((resolve, reject) => {
+      compileWorker.onmessage = ({ data }) => resolve(data);
+      compileWorker.onerror = (e) => {
+        reject(e.message);
+      };
+      compileWorker.postMessage({
+        stage: "compile",
+        proj: JSON.stringify(props.json),
+        flags: getSettings().to_js(),
+      });
+      console.log("compile message posted!");
+    });
+
+    console.log(
+      wasmProject.target_names,
+      wasmProject.strings,
+      wasmProject.wasm_bytes,
     );
 
-    if ((!wasmProject) instanceof FinishedWasm) {
-      throw new Error("unknown error occurred when compiling project");
-    }
+    // if ((!wasmProject instanceof FinishedWasm)) {
+    //   throw new Error("unknown error occurred when compiling project");
+    // }
 
     wasmBytes = wasmProject.wasm_bytes;
   } catch (e) {
@@ -137,16 +225,20 @@ onMounted(async () => {
   if (getSettings().to_js().wasm_opt == "On") {
     try {
       loadingMsg.value = "optimising project";
-      console.log(getSettings().to_js().scheduler);
-      const binaryen = (await import("binaryen")).default; // only load binaryen if it's used.
-      const binaryenModule = binaryen.readBinary(wasmBytes);
-      binaryenModule.setFeatures(binaryen.Features.All);
-      binaryen.setOptimizeLevel(3);
-      binaryen.setShrinkLevel(0);
-      binaryenModule.runPasses(["generate-global-effects"]);
-      binaryenModule.optimize();
-      binaryenModule.optimize();
-      wasmBytes = binaryenModule.emitBinary();
+      wasmBytes = await new Promise((resolve, reject) => {
+        compileWorker.onmessage = ({ data }) => resolve(data.wasmBytes);
+        compileWorker.onerror = (e) => {
+          reject(e.message);
+        };
+        compileWorker.postMessage(
+          {
+            stage: "optimise",
+            wasmBytes: wasmBytes,
+          },
+          [wasmBytes.buffer],
+        );
+        console.log("optimise message posted!");
+      });
     } catch (e) {
       declareError(
         e,
@@ -188,7 +280,8 @@ onMounted(async () => {
 
   try {
     loadingMsg.value = "instantiating project";
-    const runner = await instantiateProject({
+    runner = new ProjectRunner();
+    await runner.init({
       framerate: 30,
       turbo: turbo.value,
       wasm_bytes: wasmBytes,
@@ -207,8 +300,69 @@ onMounted(async () => {
 
     loaded.value = true;
 
-    greenFlag = runner.greenFlag;
-    stop = runner.stop;
+    runner.addEventListener("stopped", () => queued_questions.splice(0));
+    runner.addEventListener(
+      "queueQuestion",
+      ({ detail: { question, struct } }) => queue_question(question, struct),
+    );
+    runner.addEventListener(
+      "updateVariableVal",
+      ({ detail: { id, value } }) => {
+        monitors.value[id].value = value;
+      },
+    );
+    runner.addEventListener(
+      "updateVariableVisibility",
+      ({ detail: { id, visible } }) => {
+        monitors.value[id].visible = visible;
+      },
+    );
+
+    const onMouseMove = (e, isDown) => {
+      const rect = canvas.value.getBoundingClientRect();
+      runner.onMouseMove({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        rect,
+        isDown,
+      });
+    };
+
+    mouseMove = (e) => {
+      onMouseMove(e);
+    };
+    document.addEventListener("mousemove", mouseMove);
+    mouseDown = (e) => {
+      onMouseMove(e, true);
+      e.preventDefault();
+    };
+    canvas.value.addEventListener("mousedown", mouseDown);
+    mouseUp = (e) => {
+      onMouseMove(e, false);
+      e.preventDefault();
+    };
+    canvas.value.addEventListener("mouseup", mouseUp);
+    keyDown = (e) => {
+      runner.onKeyPressChange({
+        key: e.key,
+        pressed: true,
+      });
+    };
+    document.addEventListener("keydown", keyDown);
+    keyUp = (e) => {
+      runner.onKeyPressChange({
+        key: e.key,
+        pressed: false,
+      });
+    };
+    document.addEventListener("keyup", keyUp);
+
+    greenFlag = runner.greenFlag.bind(runner);
+    stop = runner.stop.bind(runner);
+    setAnswer = runner.setAnswer.bind(runner);
+    mark_question_resolved = runner.mark_question_resolved.bind(runner);
+    monitors.value = runner.monitors;
+    console.log(monitors.value);
   } catch (e) {
     declareError(e, true, "An error", "instantiating");
   }
@@ -219,10 +373,44 @@ onMounted(async () => {
 canvas {
   border: 1px solid black;
   background: white;
-  max-width: calc((100vw - 1rem) * 0.95);
+  width: 100%;
+  height: 100%;
+}
+
+div#stage-container {
   float: left;
   margin-right: 1em;
   margin-bottom: 1.5em;
+  width: 480px;
+  height: 360px;
+  position: relative;
+
+  & > div#question-div {
+    width: calc(100% - 1em);
+    position: absolute;
+    bottom: 0;
+    margin: 0.5em;
+    padding: 0.5em;
+    background: var(--color-background-soft);
+    border-radius: 5px;
+    box-sizing: border-box;
+
+    & > div {
+      padding: 0;
+      margin-top: 0;
+      line-height: 1em;
+      margin-bottom: 0.4em;
+    }
+
+    & > form {
+      display: flex;
+
+      & > input {
+        flex-grow: 100;
+        border-radius: 5px;
+      }
+    }
+  }
 }
 
 div.instructions {
@@ -241,5 +429,26 @@ div.instructions {
   }
 
   white-space: pre-wrap;
+}
+
+div.variable-monitor {
+  position: absolute;
+  background-color: var(--color-background-soft);
+  border-radius: 5px;
+  padding: 0 0.4em 0.2em 0.4em;
+
+  & span {
+    padding: 0;
+    margin: 0;
+    vertical-align: middle;
+  }
+
+  & > span.variable-value {
+    background-color: hsl(39.3, 100%, 37%);
+    color: var(--color-background);
+    border-radius: 5px;
+    padding: 0 0.3em;
+    margin-left: 0.3em;
+  }
 }
 </style>

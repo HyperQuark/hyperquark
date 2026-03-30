@@ -1,6 +1,8 @@
 use core::ops::Deref;
 
-use crate::instructions::{ControlIfElseFields, ControlLoopFields, IrOpcode};
+use crate::instructions::{
+    ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, IrOpcode,
+};
 use crate::ir::{IrProject, Step};
 use crate::prelude::*;
 use crate::wasm::WasmFlags;
@@ -12,7 +14,7 @@ where
     let mut loops = vec![];
 
     for (i, opcode) in step.try_borrow()?.opcodes().iter().enumerate().rev() {
-        if let Some(inline_steps) = opcode.inline_steps() {
+        if let Some(inline_steps) = opcode.inline_steps(true) {
             inline_steps
                 .iter()
                 .cloned()
@@ -31,6 +33,7 @@ where
             condition,
             ref body,
             flip_if,
+            pre_body,
         },
     ) in loops
     {
@@ -51,15 +54,20 @@ where
                 branch_if: Rc::new(RefCell::new(Step::new(
                     None,
                     step.try_borrow()?.context().clone(),
-                    body.try_borrow()?
-                        .opcodes()
-                        .clone()
+                    pre_body
+                        .as_ref()
+                        .map_or_else(
+                            || -> HQResult<_> { Ok(vec![]) },
+                            |pb| Ok(pb.try_borrow()?.opcodes().clone()),
+                        )?
                         .into_iter()
+                        .chain(body.try_borrow()?.opcodes().clone())
                         .chain([IrOpcode::control_loop(ControlLoopFields {
                             first_condition: None,
-                            condition: condition.clone(),
+                            condition: Rc::clone(&condition),
                             body: Rc::clone(body),
                             flip_if,
+                            pre_body: pre_body.clone(),
                         })])
                         .collect(),
                     step.try_borrow()?.project(),
@@ -71,12 +79,33 @@ where
                     Rc::clone(step.try_borrow()?.context().target()),
                 ))),
             })]);
+        remove_first_writes(Rc::clone(body))?;
+        remove_first_writes(condition)?;
+        pre_body.map(remove_first_writes).transpose()?;
         #[expect(clippy::range_plus_one, reason = "i don't like inclusive range")]
         step.try_borrow_mut()?
             .opcodes_mut()
             .splice(i..(i + 1), replacement);
     }
 
+    Ok(())
+}
+
+fn remove_first_writes<S>(step: S) -> HQResult<()>
+where
+    S: Deref<Target = RefCell<Step>>,
+{
+    for opcode in step.try_borrow()?.opcodes() {
+        if let IrOpcode::data_setvariableto(DataSetvariabletoFields { first_write, .. }) = opcode {
+            *first_write.try_borrow_mut()? = false;
+        }
+
+        if let Some(inline_steps) = opcode.inline_steps(false) {
+            for inline_step in inline_steps {
+                remove_first_writes(inline_step)?;
+            }
+        }
+    }
     Ok(())
 }
 

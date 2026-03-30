@@ -27,6 +27,14 @@ pub enum ListType {
     LinearMemory,
 }
 
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[wasm_bindgen]
+pub enum VarTypeConvergence {
+    Any,
+    Base,
+    Tight,
+}
+
 // #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 // #[wasm_bindgen]
 // pub enum MemoryLayout {
@@ -175,6 +183,10 @@ pub struct WasmFlags {
     pub integers: Switch,
     pub list_type: ListType,
     pub unroll_loops: u32,
+    pub var_type_convergence: VarTypeConvergence,
+    pub do_ssa: Switch,
+    pub eager_number_parsing: Switch,
+    pub variable_merging: Switch,
     // pub memory_layout: MemoryLayout
 }
 
@@ -217,6 +229,10 @@ impl WasmFlags {
                 ListType::LinearMemory
             },
             unroll_loops: 2,
+            var_type_convergence: VarTypeConvergence::Tight,
+            do_ssa: Switch::On,
+            eager_number_parsing: Switch::On,
+            variable_merging: Switch::On,
         }
     }
 
@@ -279,7 +295,38 @@ impl WasmFlags {
                 <br>\
                 Recommended: 2; set to 0 to disable loop unrolling.")
                 .with_ty(ty_str!(u32)),
-            _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str())
+            "var_type_convergence" => FlagInfo::new()
+                .with_name("Variable type convergence")
+                .with_description("How much work to spend on figuring out tight bounds on variable types, \
+                vs how much performance we get out of that.\
+                <br>\
+                Any - don't try to tighten type bounds at all, giving better compilation speed at the \
+                cost of (possibly significantly) worse performance. This implies that SSA is disabled.\
+                <br>\
+                Base - tighten to the nearest base type(s) - longer compilation for good runtime performance\
+                <br>\
+                Tight - find the tightest type bounds, giving slightly worse compilation time for slightly \
+                better runtime performance")
+                .with_ty(ty_str!(VarTypeConvergence)),
+            "do_ssa" => FlagInfo::new()
+                .with_name("SSA")
+                .with_description("Should we produce an SSA form?\
+                <br>\
+                This can improve runtime performance but can drastically slow down WASM optimisation, \
+                or produce modules too large for the browser to compile.")
+                .with_ty(ty_str!(Switch)),
+            "eager_number_parsing" => FlagInfo::new()
+                .with_name("Eagerly parse strings as numbers")
+                .with_description("Eagerly convert strings to numbers at compile time.\
+                <br>\
+                Improves performance but breaks scratch compatibility for list_contents; \
+                this behaviour matches TurboWarp.")
+                .with_ty(ty_str!(Switch)),
+            "variable_merging" => FlagInfo::new()
+                .with_name("Merge variables")
+                .with_description("Merges variables of the same type. Can improve wasm-opt performance.")
+                .with_ty(ty_str!(Switch)),
+            _ => FlagInfo::new().with_name(format!("unknown setting '{flag}'").as_str()),
         }
     }
 }

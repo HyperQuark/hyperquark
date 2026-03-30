@@ -15,7 +15,7 @@ import { describe, test } from "vitest";
 
 import { imports as baseImports } from "../../js/imports.ts";
 import { unpackProject } from "../../playground/lib/project-loader.js";
-import { instantiateProject } from "../../playground/lib/project-runner.js";
+import { ProjectRunner } from "../../playground/lib/project-runner.js";
 import { sb3_to_wasm, WasmFlags } from "../../js/compiler/hyperquark.js";
 import { WasmStringType } from "../../js/no-compiler/hyperquark";
 import { defaultSettings } from "../../playground/lib/settings.js";
@@ -47,6 +47,10 @@ const makeTestDrawable = () => ({
   updateScale() {},
 });
 
+const makeTestSkin = () => ({
+  setSVG() {},
+});
+
 const makeTestRenderer = () =>
   new Proxy(
     {
@@ -54,6 +58,7 @@ const makeTestRenderer = () =>
       updateTextSkin() {},
       setLayerGroupOrdering() {},
       getDrawable: () => makeTestDrawable(),
+      getSkin: () => makeTestSkin(),
       penClear() {},
       penLine() {},
       penPoint() {},
@@ -65,7 +70,7 @@ const makeTestRenderer = () =>
     },
     {
       set(t, p, v) {
-        if (p === "getDrawable") return true;
+        if (p === "getDrawable" || p === "getSkin") return true;
         return Reflect.set(t, p, v);
       },
     },
@@ -86,18 +91,8 @@ describe("Integration tests", () => {
           "tw-procedure-return-stops-scripts.sb3",
           "tw-procedure-return-warp.sb3",
           "tw-gh-201-stop-script-does-not-reevaluate-arguments.sb3",
-        ].includes(uri),
-    )
-    // ignore tests that crash the runner, usually by having an infinite loop
-    // in the compiler; these should be unignored at some point
-    .filter(
-      (uri) =>
-        ![
-          "tw-comparison-matrix-inline.sb3",
-          "tw-comparison-matrix-runtime.sb3",
-          "tw-unsafe-equals.sb3",
+          "tw-procedure-return-non-existent.sb3",
           "tw-repeat-procedure-reporter-infinite-analyzer-loop.sb3",
-          "tw-gh-249-quicksort.sb3",
         ].includes(uri),
     );
   for (const uri of files) {
@@ -172,7 +167,8 @@ describe("Integration tests", () => {
       // todo: run wasm-opt if specified in flags?
 
       // Run the project and once all threads are complete check the results.
-      const runner = await instantiateProject({
+      const runner = new ProjectRunner();
+      await runner.init({
         wasm_bytes: project_wasm.wasm_bytes,
         target_names: project_wasm.target_names,
         project_json,
@@ -190,15 +186,16 @@ describe("Integration tests", () => {
             },
           },
         ),
-        onTimeout: () => {
-          throw new Error(`Timeout waiting for threads to complete: ${uri}`);
-        },
         importOverrides: {
           looks: {
             say_string: (string) => reportVmResult(string),
           },
         },
         makeRenderer: makeTestRenderer,
+      });
+
+      runner.addEventListener("timeout", () => {
+        throw new Error(`Timeout waiting for threads to complete: ${uri}`);
       });
 
       runner.flag_clicked();

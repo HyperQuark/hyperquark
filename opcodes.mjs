@@ -7,6 +7,11 @@ const opcodes = [
       .match(/BlockOpcode::[a-zA-Z_0-9]+? (?==>)/g)
       .map((op) => op.replace("BlockOpcode::", "").trim()),
   ),
+  "event_whenflagclicked",
+  "event_whenbroadcastreceived",
+  "event_whenthisspriteclicked",
+  "event_whenstageclicked",
+  "procedures_definition",
 ].sort();
 await writeFile(
   "/tmp/hq-build/js/opcodes.js",

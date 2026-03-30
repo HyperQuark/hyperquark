@@ -1,3 +1,9 @@
+pub mod answer;
+pub mod askandwait;
 pub mod dayssince2000;
+pub mod keypressed;
+pub mod mousedown;
+pub mod mousex;
+pub mod mousey;
 pub mod reset_timer;
 pub mod timer;

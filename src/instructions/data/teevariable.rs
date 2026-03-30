@@ -2,6 +2,7 @@
 /// (i.e. locals) then this can actually use the wasm tee instruction.
 use super::super::prelude::*;
 use crate::ir::RcVar;
+use crate::wasm::WasmProject;
 
 #[derive(Debug, Clone)]
 pub struct Fields {
@@ -32,15 +33,48 @@ pub fn wasm(
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
     let t1 = inputs[0];
-    if *local_read_write.try_borrow()? {
+    Ok(if let Some(monitor) = var.borrow().monitor().as_ref()
+        && *monitor.is_ever_visible.borrow()
+    {
+        let wasm_input_ty = WasmProject::ir_type_to_wasm(t1)?;
+        let local = func.local(wasm_input_ty)?;
+        let update_func = func.registries().external_functions().register(
+            (
+                "data",
+                match t1.base_type() {
+                    Some(IrType::Boolean) => "update_var_val_boolean",
+                    Some(IrType::String) => "update_var_val_string",
+                    Some(IrType::Int) => "update_var_val_int",
+                    Some(IrType::Float) => "update_var_val_float",
+                    _ => hq_bug!("bad input type for variable with monitor"),
+                }
+                .into(),
+            ),
+            (vec![wasm_input_ty, ValType::EXTERNREF], vec![]),
+        )?;
+        let variable_string = func
+            .registries()
+            .strings()
+            .register_default(monitor.id.clone())?;
+        wasm![
+            LocalTee(local),
+            GlobalGet(variable_string),
+            Call(update_func),
+            LocalGet(local),
+        ]
+    } else {
+        wasm![]
+    }
+    .into_iter()
+    .chain(if *local_read_write.try_borrow()? {
         let local_index: u32 = func.local_variable(&*var.try_borrow()?)?;
         if var.borrow().possible_types().is_base_type() {
-            Ok(wasm![LocalTee(local_index)])
+            wasm![LocalTee(local_index)]
         } else {
-            Ok(wasm![
+            wasm![
                 @boxed(t1),
                 LocalTee(local_index)
-            ])
+            ]
         }
     } else {
         let global_index: u32 = func
@@ -48,15 +82,16 @@ pub fn wasm(
             .variables()
             .register(&*var.try_borrow()?)?;
         if var.borrow().possible_types().is_base_type() {
-            Ok(wasm![#LazyGlobalSet(global_index), #LazyGlobalGet(global_index)])
+            wasm![#LazyGlobalSet(global_index), #LazyGlobalGet(global_index)]
         } else {
-            Ok(wasm![
+            wasm![
                 @boxed(t1),
                 #LazyGlobalSet(global_index),
                 #LazyGlobalGet(global_index)
-            ])
+            ]
         }
-    }
+    })
+    .collect())
 }
 
 pub fn acceptable_inputs(Fields { var, .. }: &Fields) -> HQResult<Rc<[IrType]>> {
@@ -107,7 +142,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
+                    None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -122,7 +159,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
+                    None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -137,7 +176,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
-                    crate::sb3::VarVal::String("".into()),
+                    &crate::sb3::VarVal::String("".into()),
+                    None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -152,7 +193,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Int,
-                    crate::sb3::VarVal::Int(1),
+                    &crate::sb3::VarVal::Int(1),
+                    None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -167,7 +210,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
+                    None,
+                    &flags()
                 ).unwrap()
             ),
         local_read_write: RefCell::new(true),
@@ -182,7 +227,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
+                    None,
+                    &flags()
                 ).unwrap()
             ),
         local_read_write: RefCell::new(true),
@@ -197,7 +244,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
-                    crate::sb3::VarVal::String("".into()),
+                    &crate::sb3::VarVal::String("".into()),
+                    None,
+                    &flags()
             ).unwrap()),
         local_read_write: RefCell::new(true),
     }
@@ -211,7 +260,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Int,
-                    crate::sb3::VarVal::Int(1),
+                    &crate::sb3::VarVal::Int(1),
+                    None,
+                    &flags()
             ).unwrap()),
         local_read_write: RefCell::new(true),
     }

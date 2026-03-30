@@ -134,6 +134,33 @@ impl Step {
     }
 
     #[must_use]
+    pub fn new_poll_waiting_event(context: StepContext, project: Weak<IrProject>) -> Self {
+        Self::new(
+            None,
+            context.clone(),
+            vec![
+                IrOpcode::hq_poll_waiting_event,
+                IrOpcode::control_if_else(ControlIfElseFields {
+                    branch_else: Rc::new(RefCell::new(Self::new(
+                        None,
+                        context.clone(),
+                        vec![],
+                        Weak::clone(&project),
+                        false,
+                    ))),
+                    branch_if: Rc::new(RefCell::new(Self::new_terminating(
+                        context,
+                        Weak::clone(&project),
+                        false,
+                    ))),
+                }),
+            ],
+            project,
+            true,
+        )
+    }
+
+    #[must_use]
     pub fn new_poll_timer(context: StepContext, project: Weak<IrProject>) -> Self {
         Self::new(
             None,
@@ -250,7 +277,7 @@ impl Step {
                 return true;
             }
             if opcode
-                .inline_steps()
+                .inline_steps(true)
                 .is_some_and(|steps| steps.iter().any(|step| RefCell::borrow(step).does_yield()))
             {
                 return true;

@@ -2,16 +2,18 @@ use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection,
-    DataSection, ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection,
-    GlobalSection, HeapType, ImportSection, Instruction, MemorySection, MemoryType, Module,
-    RefType, StartSection, TableSection, TypeSection, ValType,
+    DataSection, ElementSection, Elements, ExportKind, ExportSection, FieldType, Function,
+    FunctionSection, GlobalSection, HeapType, ImportSection, Instruction, MemorySection,
+    MemoryType, Module, RefType, StartSection, StorageType, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
 use crate::ir::{Event, IrProject, StepIndex, Type as IrType};
 use crate::prelude::*;
-use crate::wasm::registries::functions::static_functions::{SpawnNewThread, SpawnThreadInStack};
+use crate::wasm::registries::functions::static_functions::{
+    MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
+};
 use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
@@ -26,6 +28,7 @@ pub struct WasmProject {
     events: BTreeMap<Event, Vec<u32>>,
     registries: Rc<Registries>,
     target_names: Vec<Box<str>>,
+    costume_names: Rc<Vec<Vec<Box<str>>>>,
     environment: ExternalEnvironment,
 }
 
@@ -44,6 +47,7 @@ impl WasmProject {
             environment,
             registries: Rc::new(Registries::default()),
             target_names: vec![],
+            costume_names: Rc::new(vec![]),
         }
     }
 
@@ -153,10 +157,21 @@ impl WasmProject {
                 self.threads_table_index()?,
             ))?;
 
+        self.registries()
+            .static_functions()
+            .register_override::<MarkWaitingFlag, usize, _>(self.registries().types().struct_(
+                vec![FieldType {
+                    element_type: StorageType::I8,
+                    mutable: true,
+                }],
+            )?)?;
+
         self.registries().static_functions().clone().finish(
             &mut functions,
+            &mut exports,
             &mut codes,
             self.registries.types(),
+            self.imported_func_count()?,
         )?;
 
         for step_func in self.steps().try_borrow()?.iter().cloned() {
@@ -204,6 +219,61 @@ impl WasmProject {
         ));
 
         Rc::unwrap_or_clone(self.registries().types().clone()).finish(&mut types);
+
+        // TODO: make an elements registry to deal with this at the site of the block
+        for (table_index, table_name) in self
+            .registries()
+            .tables()
+            .registry()
+            .try_borrow()?
+            .keys()
+            .enumerate()
+        {
+            if table_name.starts_with("costume_names_") {
+                #[expect(
+                    clippy::unwrap_used,
+                    reason = "checked immediately before that this is a prefix of the table name"
+                )]
+                let target_index: u32 = table_name
+                    .strip_prefix("costume_names_")
+                    .unwrap()
+                    .parse()
+                    .map_err(|_| make_hq_bug!("couldn't parse target index from table name"))?;
+                let costume_names = self
+                    .costume_names
+                    .get(target_index as usize)
+                    .ok_or_else(|| make_hq_bug!("target index out of bounds for costume names"))?;
+                let name_globals = costume_names
+                    .iter()
+                    .map(|costume_name| {
+                        Ok(ConstExpr::global_get(
+                            u32::try_from(
+                                self.registries()
+                                    .strings()
+                                    .registry()
+                                    .try_borrow()?
+                                    .get_index_of(costume_name)
+                                    .ok_or_else(|| {
+                                        make_hq_bug!(
+                                            "couldn't find costume name string in strings registry"
+                                        )
+                                    })?,
+                            )
+                            .map_err(|_| make_hq_bug!("string index out of bounds"))?,
+                        ))
+                    })
+                    .collect::<HQResult<Box<[_]>>>()?;
+                elements.active(
+                    Some(
+                        table_index
+                            .try_into()
+                            .map_err(|_| make_hq_bug!("table index out of bounds"))?,
+                    ),
+                    &ConstExpr::i32_const(0),
+                    Elements::Expressions(RefType::EXTERNREF, Cow::Borrowed(&*name_globals)),
+                );
+            }
+        }
 
         self.registries()
             .tables()
@@ -360,14 +430,15 @@ impl WasmProject {
         )
     }
 
+    #[expect(clippy::needless_pass_by_value, reason = "annoying to borrow a box")]
     fn finish_event(
         &self,
-        export_name: &str,
+        export_name: Box<str>,
         indices: &[u32],
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
-    ) -> HQResult<()> {
+    ) -> HQResult<u32> {
         let mut func = Function::new(vec![]);
 
         let threads_count = self.threads_count_global()?;
@@ -432,12 +503,12 @@ impl WasmProject {
         funcs.function(self.registries().types().function(vec![], vec![])?);
         codes.function(&func);
         exports.export(
-            export_name,
+            &export_name,
             ExportKind::Func,
             self.imported_func_count()? + funcs.len() - 1,
         );
 
-        Ok(())
+        Ok(self.imported_func_count()? + funcs.len() - 1)
     }
 
     fn finish_events(
@@ -446,17 +517,98 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
     ) -> HQResult<()> {
-        for (event, indices) in &self.events {
-            self.finish_event(
-                match event {
-                    Event::FlagCLicked => "flag_clicked",
-                    Event::Broadcast(_) => continue, // broadcasts handled in the sender blocks
-                },
-                indices,
-                funcs,
-                codes,
-                exports,
-            )?;
+        let event_funcs = self
+            .events
+            .iter()
+            .map(|(event, indices)| {
+                Ok(Some((
+                    event,
+                    self.finish_event(
+                        match event {
+                            Event::FlagClicked => "flag_clicked".into(),
+                            Event::Broadcast(_) => return Ok(None), // broadcasts handled in the sender blocks
+                            Event::SpriteClicked(index) => {
+                                format!("spriteClicked{index}").into_boxed_str()
+                            }
+                        },
+                        indices,
+                        funcs,
+                        codes,
+                        exports,
+                    )?,
+                )))
+            })
+            .collect::<HQResult<Box<[_]>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<BTreeMap<_, _>>();
+        let sprite_clicked_indices: Box<[i32]> = self
+            .events
+            .keys()
+            .filter_map(|e| {
+                #[expect(clippy::redundant_else, reason = "false positive")]
+                if let Event::SpriteClicked(index) = e {
+                    Some(
+                        i32::try_from(*index)
+                            .map_err(|_| make_hq_bug!("target index out of bounds")),
+                    )
+                } else {
+                    None
+                }
+            })
+            .collect::<HQResult<_>>()?;
+        if !sprite_clicked_indices.is_empty() {
+            let mut sprite_clicked_func = Function::new([]);
+            let sprite_clicked_instrs: Vec<_> = sprite_clicked_indices
+                .iter()
+                .flat_map(|index| {
+                    wasm![
+                        LocalGet(0),
+                        I32Const(*index),
+                        I32Eq,
+                        If(WasmBlockType::Empty),
+                        Call(
+                            event_funcs[&Event::SpriteClicked(
+                                #[expect(
+                                    clippy::unwrap_used,
+                                    reason = "guaranteed to succeed because i32 was originally a \
+                                              u32"
+                                )]
+                                (*index).try_into().unwrap()
+                            )]
+                        ),
+                        Return,
+                        End,
+                    ]
+                })
+                .chain(wasm![End])
+                .collect();
+            for instruction in sprite_clicked_instrs {
+                for real_instruction in instruction.eval(
+                    &self.events,
+                    self.registries().types(),
+                    self.threads_count_global()?,
+                    self.spawn_new_thread_func()?,
+                    self.spawn_thread_in_stack_func()?,
+                    self.threads_table_index()?,
+                    self.imported_func_count()?,
+                    self.static_func_count()?,
+                    self.imported_global_count()?,
+                )? {
+                    sprite_clicked_func.instruction(&real_instruction);
+                }
+            }
+            funcs.function(
+                self.registries()
+                    .types()
+                    .function(vec![ValType::I32], vec![])?,
+            );
+            codes.function(&sprite_clicked_func);
+            exports.export(
+                "trigger_sprite_clicked",
+                ExportKind::Func,
+                self.imported_func_count()? + funcs.len() - 1,
+            );
         }
 
         Ok(())
@@ -586,6 +738,20 @@ impl WasmProject {
         let steps = Rc::new(RefCell::new(Vec::new()));
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
+        let costume_names = Rc::new(
+            ir_project
+                .targets()
+                .try_borrow()?
+                .values()
+                .map(|target| {
+                    target
+                        .costumes()
+                        .iter()
+                        .map(|costume| costume.name.clone())
+                        .collect()
+                })
+                .collect(),
+        );
         // StepFunc::compile_step(
         //     Rc::new(Step::new_empty(
         //         Rc::downgrade(ir_project),
@@ -606,7 +772,14 @@ impl WasmProject {
         // )?;
         // compile every step
         for (i, step) in ir_project.steps().try_borrow()?.iter().enumerate() {
-            StepFunc::compile_step(step, StepIndex(i), &steps, Rc::clone(&registries), flags)?;
+            StepFunc::compile_step(
+                step,
+                StepIndex(i),
+                &steps,
+                Rc::clone(&registries),
+                flags,
+                Rc::clone(&costume_names),
+            )?;
         }
         // add thread event handlers for them
         for thread in ir_project.threads().try_borrow()?.iter() {
@@ -622,6 +795,7 @@ impl WasmProject {
             registries,
             environment: ExternalEnvironment::WebBrowser,
             target_names: ir_project.targets().try_borrow()?.keys().cloned().collect(),
+            costume_names,
         })
     }
 }
@@ -660,6 +834,7 @@ mod tests {
             environment: ExternalEnvironment::WebBrowser,
             registries,
             target_names: vec![],
+            costume_names: Rc::new(vec![]),
         };
         let wasm_bytes = project.finish().unwrap().wasm_bytes;
         if let Err(err) = wasmparser::validate(&wasm_bytes) {
