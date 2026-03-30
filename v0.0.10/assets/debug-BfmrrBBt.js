@@ -1,0 +1,1 @@
+import{I as e}from"./runtime-core.esm-bundler-C83-6nwd.js";import{i as t}from"./preload-helper-LyoD0khc.js";var n=t(`debugMode`,()=>{let t=e(typeof new URLSearchParams(window.location.search).get(`debug`)==`string`),n=()=>{t.value=!t.value,!r&&t.value&&eruda.init()},r=!1;return t.value&&(eruda.init(),r=!0),{debug:t,toggleDebug:n}},{persist:!0});export{n as t};
