@@ -64,7 +64,7 @@ where
                         .chain(body.try_borrow()?.opcodes().clone())
                         .chain([IrOpcode::control_loop(ControlLoopFields {
                             first_condition: None,
-                            condition: condition.clone(),
+                            condition: Rc::clone(&condition),
                             body: Rc::clone(body),
                             flip_if,
                             pre_body: pre_body.clone(),
