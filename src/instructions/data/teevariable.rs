@@ -142,8 +142,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
                     None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -158,8 +159,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
                     None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -174,8 +176,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
-                    crate::sb3::VarVal::String("".into()),
+                    &crate::sb3::VarVal::String("".into()),
                     None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -190,8 +193,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Int,
-                    crate::sb3::VarVal::Int(1),
+                    &crate::sb3::VarVal::Int(1),
                     None,
+                    &flags()
                 ).unwrap())
             ,
         local_read_write: RefCell::new(false),
@@ -206,8 +210,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
                     None,
+                    &flags()
                 ).unwrap()
             ),
         local_read_write: RefCell::new(true),
@@ -222,8 +227,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
                     None,
+                    &flags()
                 ).unwrap()
             ),
         local_read_write: RefCell::new(true),
@@ -238,8 +244,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
-                    crate::sb3::VarVal::String("".into()),
+                    &crate::sb3::VarVal::String("".into()),
                     None,
+                    &flags()
             ).unwrap()),
         local_read_write: RefCell::new(true),
     }
@@ -253,8 +260,9 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Int,
-                    crate::sb3::VarVal::Int(1),
+                    &crate::sb3::VarVal::Int(1),
                     None,
+                    &flags()
             ).unwrap()),
         local_read_write: RefCell::new(true),
     }

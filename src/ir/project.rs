@@ -93,6 +93,7 @@ impl IrProject {
                 .find(|target| target.is_stage)
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
             &sb3.monitors,
+            flags
         )?;
 
         let global_lists = lists_from_target(
@@ -145,7 +146,7 @@ impl IrProject {
                 let variables = if target.is_stage {
                     BTreeMap::new()
                 } else {
-                    variables_from_target(target, &sb3.monitors)?
+                    variables_from_target(target, &sb3.monitors, flags)?
                 };
                 let lists = if target.is_stage {
                     BTreeMap::new()

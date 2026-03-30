@@ -76,11 +76,12 @@ crate::instructions_test!(
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
-                    crate::sb3::VarVal::Float(0.0),
+                    &crate::sb3::VarVal::Float(0.0),
                     Some(crate::ir::IrMonitor {
                         id: "".into(),
                         is_ever_visible: RefCell::new(true,)
                     }),
+                    &flags()
                 ).unwrap())
             ,
         visible: true

@@ -2,6 +2,7 @@ use wasm_encoder::ConstExpr;
 
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry};
+use crate::instructions::{BOXED_BOOL_PATTERN, BOXED_INT_PATTERN, BOXED_STRING_PATTERN};
 use crate::ir::{RcVar, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::VarVal;
@@ -57,17 +58,9 @@ impl VariableRegistry {
                         ConstExpr::f64_const((*f).into())
                     }
                     Some(IrType::Int) => match var.initial_value() {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "integer-ness already confirmed; `as` is saturating."
-                        )]
-                        VarVal::Float(f) => {
-                            hq_assert!(f % 1.0 == 0.0);
-                            ConstExpr::i32_const(*f as i32)
-                        }
                         VarVal::Int(i) => ConstExpr::i32_const(*i),
                         VarVal::Bool(b) => ConstExpr::i32_const((*b).into()),
-                        VarVal::String(_) => {
+                        VarVal::String(_) | VarVal::Float(_) => {
                             hq_bug!("VarVal type should be included in var's possible types")
                         }
                     },
@@ -87,14 +80,15 @@ impl VariableRegistry {
                         ConstExpr::global_get(string_idx)
                     }
                     _ => match var.initial_value() {
-                        VarVal::Int(i) => ConstExpr::i64_const((*i).into()),
-                        VarVal::Bool(b) => ConstExpr::i64_const((*b).into()),
+                        VarVal::Int(i) => ConstExpr::i64_const(i64::from(*i) & BOXED_INT_PATTERN),
+                        VarVal::Bool(b) => ConstExpr::i64_const(i64::from(*b) & BOXED_BOOL_PATTERN),
                         VarVal::Float(f) => {
                             ConstExpr::i64_const(i64::from_le_bytes(f.to_le_bytes()))
                         }
                         VarVal::String(s) => {
-                            let string_idx = self.tabled_strings().register_default(s.clone())?;
-                            ConstExpr::i64_const(string_idx)
+                            let string_idx: i32 =
+                                self.tabled_strings().register_default(s.clone())?;
+                            ConstExpr::i64_const(i64::from(string_idx) & BOXED_STRING_PATTERN)
                         }
                     },
                 },

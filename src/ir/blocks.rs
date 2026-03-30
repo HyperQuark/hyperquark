@@ -1003,12 +1003,13 @@ fn generate_list_index_op<B>(
     default_output: Option<&IrOpcode>,
     context: &StepContext,
     project: &Weak<IrProject>,
+    flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>>
 where
     B: Fn() -> IrOpcode,
 {
-    let text_var = RcVar::new(IrType::String, VarVal::String("".into()), None)?;
-    let int_var = RcVar::new(IrType::Int, VarVal::Int(0), None)?;
+    let text_var = RcVar::new(IrType::String, &VarVal::String("".into()), None, flags)?;
+    let int_var = RcVar::new(IrType::Int, &VarVal::Int(0), None, flags)?;
     let extra_var = RcVar::new_empty();
     let result_var = RcVar::new_empty();
 
@@ -1293,13 +1294,14 @@ fn generate_exhaustive_string_comparison<I, S, F>(
     fallback: Vec<IrOpcode>,
     context: &StepContext,
     project: &Weak<IrProject>,
+    flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>>
 where
     I: IntoIterator<Item = S>,
     S: Into<Box<str>> + Clone,
     F: Fn(Box<str>) -> IrOpcode,
 {
-    let var = RcVar::new(IrType::String, VarVal::String("".into()), None)?;
+    let var = RcVar::new(IrType::String, &VarVal::String("".into()), None, flags)?;
     Ok(vec![
         IrOpcode::hq_cast(HqCastFields(IrType::String)),
         IrOpcode::data_setvariableto(DataSetvariabletoFields {
@@ -1547,6 +1549,7 @@ fn from_normal_block(
                             vec![],
                             context,
                             project,
+                            flags,
                         )?,
                         BlockOpcode::event_broadcastandwait => {
                             let poll_step = context.project()?.new_owned_step(
@@ -1579,6 +1582,7 @@ fn from_normal_block(
                                 })],
                                 context,
                                 project,
+                                flags,
                             )?
                         }
                         BlockOpcode::sensing_askandwait => {
@@ -1979,13 +1983,15 @@ fn from_normal_block(
                             let item = RcVar::new_empty();
                             let ret = RcVar::new(
                                 IrType::IntPos.or(IrType::IntZero),
-                                VarVal::Int(0),
+                                &VarVal::Int(0),
                                 None,
+                                flags,
                             )?;
                             let i = RcVar::new(
                                 IrType::IntPos.or(IrType::IntZero),
-                                VarVal::Int(0),
+                                &VarVal::Int(0),
                                 None,
+                                flags,
                             )?;
                             let condition = Rc::new(RefCell::new(Step::new(
                                 None,
@@ -2110,11 +2116,13 @@ fn from_normal_block(
                             };
                             *list.is_used.try_borrow_mut()? = true;
                             let item = RcVar::new_empty();
-                            let ret = RcVar::new(IrType::Boolean, VarVal::Bool(false), None)?;
+                            let ret =
+                                RcVar::new(IrType::Boolean, &VarVal::Bool(false), None, flags)?;
                             let i = RcVar::new(
                                 IrType::IntPos.or(IrType::IntZero),
-                                VarVal::Int(0),
+                                &VarVal::Int(0),
                                 None,
+                                flags,
                             )?;
                             let condition = Rc::new(RefCell::new(Step::new(
                                 None,
@@ -2245,6 +2253,7 @@ fn from_normal_block(
                                 None,
                                 context,
                                 project,
+                                flags,
                             )?
                         }
                         BlockOpcode::data_deleteoflist => {
@@ -2293,6 +2302,7 @@ fn from_normal_block(
                                 None,
                                 context,
                                 project,
+                                flags,
                             )?
                         }
                         BlockOpcode::data_itemoflist => {
@@ -2340,6 +2350,7 @@ fn from_normal_block(
                                 Some(&IrOpcode::hq_text(HqTextFields("".into()))),
                                 context,
                                 project,
+                                flags,
                             )?
                         }
                         BlockOpcode::data_lengthoflist => {
@@ -2423,6 +2434,7 @@ fn from_normal_block(
                                 None,
                                 context,
                                 project,
+                                flags,
                             )?
                         }
                         BlockOpcode::data_listcontents => {
@@ -2584,7 +2596,8 @@ fn from_normal_block(
                             )?
                         }
                         BlockOpcode::control_repeat => {
-                            let variable = RcVar::new(IrType::Int, sb3::VarVal::Int(0), None)?;
+                            let variable =
+                                RcVar::new(IrType::Int, &sb3::VarVal::Int(0), None, flags)?;
                             let local = context.warp;
                             let condition_instructions = vec![
                                 IrOpcode::data_variable(DataVariableFields {
@@ -2659,7 +2672,8 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            let counter = RcVar::new(IrType::Int, sb3::VarVal::Int(0), None)?;
+                            let counter =
+                                RcVar::new(IrType::Int, &sb3::VarVal::Int(0), None, flags)?;
                             let local = context.warp;
                             let condition_instructions = vec![
                                 IrOpcode::data_variable(DataVariableFields {
@@ -3260,7 +3274,6 @@ fn from_special_block(
             }
             // string
             10 => 'textBlock: {
-                // we sadly can't proactively convert to a number because of lists :(
                 if flags.eager_number_parsing == Switch::On
                     && let Ok(float) = value.parse::<f64>()
                     && *float.to_string() == **value
