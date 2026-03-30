@@ -6,14 +6,14 @@ publish = false
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
-serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0.149", default-features = false, features = ["alloc"] }
 enum-field-getter = { path = "enum-field-getter" }
-wasm-encoder = "0.243.0"
-indexmap = { version = "2.11.4", default-features = false }
+wasm-encoder = "0.245.1"
+indexmap = { version = "2.13.0", default-features = false }
 hashers = "1.0.1"
-uuid = { version = "1.18.1", default-features = false, features = ["v4", "js"] }
-regex = "1.11.2"
-lazy-regex = "3.2.0"
+uuid = { version = "1.23.0", default-features = false, features = ["v4", "js"] }
+regex = "1.12.3"
+lazy-regex = "3.6.0"
 bitmask-enum = "2.2.5"
 itertools = { version = "0.14.0", default-features = false, features = ["use_alloc"] }
 wasm-bindgen = "0.2.103"
@@ -22,10 +22,8 @@ wasm-gen = { path = "wasm-gen", version = "0.2.0" }
 petgraph = { version = "0.8.1", default-features = false, features = ["stable_graph"] }
 
 [dev-dependencies]
-# wasmparser = "0.243.0"
-wasmparser = { git = "https://github.com/pufferfish101007/wasm-tools.git", rev = "92357c8" }
-wasmprinter = "0.243.0"
-#reqwest = { version = "0.11", features = ["blocking"] }
+wasmparser = { git = "https://github.com/pufferfish101007/wasm-tools.git", rev = "4e9ffc0" }
+wasmprinter = "0.245.1"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 # ezno-checker = { git = "https://github.com/kaleidawave/ezno.git", rev = "96d5058bdbb0cde924be008ca1e5a67fe39f46b9" }

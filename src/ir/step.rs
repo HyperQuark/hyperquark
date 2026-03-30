@@ -231,10 +231,6 @@ impl Step {
             .iter()
             .find_position(|step| RefCell::borrow(step).id == block_id)
         {
-            // crate::log(
-            //     format!("step from_block already exists! (id: {block_id:?}); returning early")
-            //         .as_str(),
-            // );
             return Ok(StepIndex(existing_step));
         }
         let step = Self::from_block(

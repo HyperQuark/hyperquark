@@ -13,9 +13,3 @@ pub use project::{FinishedWasm, WasmProject};
 pub use registries::{
     GlobalExportable, GlobalMutable, Registries, StepsTable, StringsTable, ThreadsTable,
 };
-
-/// the same as Into, but `const`.
-#[must_use]
-pub const fn f32_to_ieeef32(f: f32) -> wasm_encoder::Ieee32 {
-    unsafe { core::mem::transmute(u32::from_le_bytes(f.to_le_bytes())) }
-}

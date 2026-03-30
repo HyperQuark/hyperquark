@@ -208,7 +208,6 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(inputs: Rc<[IrType]>, &Fields(to): &Fields) -> HQResult<ReturnType> {
-    // crate::log!("{:?}", inputs[0]);
     Ok(Singleton(
         inputs[0]
             .base_types()

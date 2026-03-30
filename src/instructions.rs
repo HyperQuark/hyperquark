@@ -40,10 +40,8 @@ where
     use crate::ir::ReturnType;
     if inputs.is_empty() {
         let out = outputs_func(Rc::from([]))?;
-        // crate::log!("{out:?}");
         Ok(out)
     } else {
-        // crate::log!("{inputs:?}");
         if inputs.iter().any(crate::ir::Type::is_none) {
             hq_bug!("got none input type :scream:")
         }
@@ -56,7 +54,6 @@ where
                 tys.iter().map(move |ty| ty.and(input))
             })
             .collect::<Box<[_]>>();
-        // crate::log!("{mapped:?}");
         mapped
             .iter()
             .cloned()

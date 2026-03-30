@@ -10,7 +10,6 @@ export const unpackProject = (input) => {
   if (typeof input !== "string") {
     input = Buffer.from(input);
   }
-  console.log(input);
   return new Promise((resolve, reject) => {
     // The second argument of false below indicates to the validator that the
     // input should be parsed/validated as an entire project (and not a single sprite)
@@ -40,16 +39,11 @@ export const unpackProject = (input) => {
       return Promise.reject(error);
     })
     .then(async ([json, zip]) => {
-      console.log(Object.keys(json), json.projectVersion);
       if (json.projectVersion === 3) {
         return [json, zip];
       }
       if (json.projectVersion === 2) {
         const { default: ScratchVM } = await import("@scratch/scratch-vm");
-        // const scratchVm =
-        //   typeof window === "object"
-        //     ? await import("@scratch/scratch-vm/dist/web/scratch-vm.js")
-        //     : await import("@scratch/scratch-vm/dist/node/scratch-vm.js");
         const VM = new ScratchVM();
         await VM.deserializeProject(json, zip);
         VM.runtime.handleProjectLoaded();

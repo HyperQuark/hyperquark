@@ -90,7 +90,6 @@ macro_rules! instructions_test {
                         println!("skipping failed output_type");
                         continue;
                     };
-                    // let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])));
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
@@ -131,7 +130,6 @@ macro_rules! instructions_test {
                         continue;
                     };
                     println!("{output_type:?}");
-                    // let ir = Rc::new(IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])));
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];

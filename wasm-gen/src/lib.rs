@@ -290,14 +290,7 @@ pub fn wasm(input: TokenStream) -> TokenStream {
                 let __strings_table_index: u32 = func
                     .registries()
                     .tables()
-                    .register::<crate::wasm::StringsTable, _>(
-                    //     "strings".into(), crate::wasm::TableOptions {
-                    //     element_type: RefType::EXTERNREF,
-                    //     min: 0,
-                    //     max: None,
-                    //     init: None,
-                    // }
-                )?;
+                    .register::<crate::wasm::StringsTable, _>()?;
                 #(#conditions) else * else {
                     unreachable!()
                 }

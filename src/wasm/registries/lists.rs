@@ -101,7 +101,6 @@ impl ListRegistry {
         ];
 
         let array_global = self.globals().register(
-            // format!("__rcvar_{:p}", Rc::as_ptr(&var.0)).into(),
             format!("__rclist_list_{}", list.id()).into(),
             (
                 ValType::Ref(RefType {

@@ -47,7 +47,7 @@ jobs:
           VITE_HASH_HISTORY: true
         run: |
           chmod +x build.sh && ./build.sh -Wpz
-          npx vite build --base=/hyperquark/$BRANCH_NAME/
+          npm run build -- --base=/hyperquark/$BRANCH_NAME/
 
       - name: Move files to tmp
         run: mv ./playground/dist /tmp/hq-dist

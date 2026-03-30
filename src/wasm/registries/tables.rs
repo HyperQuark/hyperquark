@@ -38,10 +38,6 @@ impl TableRegistry {
             if let Some(export_key) = export_name {
                 exports.export(export_key, ExportKind::Table, tables.len());
             }
-            // let maybe_init = match &*key {
-            //     "threads" => Some(ConstExpr::ref_func(imports.len())),
-            //     _ => init,
-            // };
             if let Some(init) = maybe_init {
                 tables.table_with_init(
                     TableType {

@@ -121,17 +121,6 @@ impl WasmProject {
 
         start_func.instruction(&Instruction::End);
 
-        // self.registries().tables().register_override::<usize>(
-        //     "strings".into(),
-        //     TableOptions {
-        //         element_type: RefType::EXTERNREF,
-        //         min: 0,
-        //         // TODO: use js string imports for preknown strings
-        //         max: None,
-        //         init: None,
-        //     },
-        // )?;
-
         self.registries()
             .external_functions()
             .clone()
@@ -280,18 +269,7 @@ impl WasmProject {
             .clone()
             .finish(&mut tables, &mut exports);
 
-        // crate::log!(
-        //     "imported func count: {}, static func count: {}",
-        //     self.imported_func_count()?,
-        //     self.static_func_count()?
-        // );
-
         exports.export("memory", ExportKind::Memory, 0);
-        // exports.export(
-        //     "noop",
-        //     ExportKind::Func,
-        //     self.imported_func_count()? + self.static_func_count()?,
-        // );
 
         self.registries().globals().clone().finish(
             &mut globals,
@@ -752,25 +730,6 @@ impl WasmProject {
                 })
                 .collect(),
         );
-        // StepFunc::compile_step(
-        //     Rc::new(Step::new_empty(
-        //         Rc::downgrade(ir_project),
-        //         true,
-        //         Rc::new(IrTarget::new(
-        //             false,
-        //             BTreeMap::default(),
-        //             BTreeMap::default(),
-        //             Weak::new(),
-        //             RefCell::new(BTreeMap::default()),
-        //             0,
-        //             Box::new([]),
-        //         )),
-        //     )),
-        //     &steps,
-        //     Rc::clone(&registries),
-        //     flags,
-        // )?;
-        // compile every step
         for (i, step) in ir_project.steps().try_borrow()?.iter().enumerate() {
             StepFunc::compile_step(
                 step,
@@ -821,11 +780,6 @@ mod tests {
     #[test]
     fn empty_project_is_valid_wasm() {
         let registries = Rc::new(Registries::default());
-        // let project = Rc::new(IrProject::new(
-        //     BTreeMap::default(),
-        //     BTreeMap::default(),
-        //     Box::from([]),
-        // ));
         let steps = Rc::new(RefCell::new(Vec::new()));
         let project = WasmProject {
             flags: WasmFlags::new(all_wasm_features()),
