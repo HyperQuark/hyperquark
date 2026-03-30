@@ -1,4 +1,7 @@
-use crate::instructions::{ControlIfElseFields, DataLengthoflistFields, DataSetvariabletoFields, DataVariableFields, HqCastFields, HqIntegerFields, HqTextFields, IrOpcode};
+use crate::instructions::{
+    ControlIfElseFields, DataLengthoflistFields, DataSetvariabletoFields, DataVariableFields,
+    HqCastFields, HqIntegerFields, HqTextFields, IrOpcode,
+};
 use crate::ir::{IrProject, RcList, RcVar, Step, StepContext, Type as IrType};
 use crate::prelude::*;
 use crate::sb3::VarVal;

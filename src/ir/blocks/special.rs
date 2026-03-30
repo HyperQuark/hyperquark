@@ -4,7 +4,10 @@
 use lazy_regex::{Lazy, lazy_regex};
 use regex::Regex;
 
-use crate::instructions::{DataListcontentsFields, DataVariableFields, HqColorRgbFields, HqFloatFields, HqIntegerFields, HqTextFields, IrOpcode};
+use crate::instructions::{
+    DataListcontentsFields, DataVariableFields, HqColorRgbFields, HqFloatFields, HqIntegerFields,
+    HqTextFields, IrOpcode,
+};
 use crate::ir::StepContext;
 use crate::prelude::*;
 use crate::sb3::BlockArray;
