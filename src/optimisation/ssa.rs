@@ -266,29 +266,12 @@ impl VarGraph {
     where
         S: Deref<Target = RefCell<Step>>,
     {
-        // crate::log!(
-        //     "searched in graphs for step {}, got {}",
-        //     step.id(),
-        //     match graphs.get(step) {
-        //         Some(MaybeGraph::Started) => "Started",
-        //         Some(MaybeGraph::Inlined) => "Inlined",
-        //         Some(MaybeGraph::Finished(_)) => "Finished",
-        //         None => "None",
-        //     }
-        // );
         if let Some(MaybeGraph::Inlined | MaybeGraph::Finished(_)) =
             graphs.get(step.try_borrow()?.id())
         {
             // we've already visited this step.
-            // crate::log(format!("visited step {} but it is already visited", step.id()).as_str());
             return Ok(());
         }
-        // crate::log(format!("visited step {}, not yet visited", step.id()).as_str());
-        // crate::log!(
-        //     "currently visited/started steps: {:?}",
-        //     graphs.keys().map(|step| step.id()).collect::<Box<[_]>>()
-        // );
-        // crate::log!("hash of step: {:?}", graphs.);
 
         let maybe_proc_context = {
             let step_tmp = step.try_borrow()?;
@@ -302,7 +285,6 @@ impl VarGraph {
         let mut opcode_replacements: Vec<(usize, IrOpcode)> = vec![];
         let mut additional_opcodes: Vec<(usize, Vec<IrOpcode>)> = vec![];
         'opcode_loop: for (i, opcode) in step.try_borrow()?.opcodes().iter().enumerate() {
-            // crate::log!("opcode: {opcode:?}");
             // let's just assume that input types match up.
             #[expect(clippy::wildcard_enum_match_arm, reason = "too many variants to match")]
             match opcode {
@@ -311,7 +293,6 @@ impl VarGraph {
                     local_write: locality,
                     first_write,
                 }) => {
-                    // crate::log!("found a variable write operation, type stack: {type_stack:?}");
                     let already_local = *locality.try_borrow()?;
                     if already_local {
                         if var.try_borrow()?.possible_types().is_none() {
@@ -358,7 +339,6 @@ impl VarGraph {
                     var,
                     local_read_write: locality,
                 }) => {
-                    // crate::log("found a variable tee operation");
                     let already_local = *locality.try_borrow()?;
                     if !do_ssa || already_local {
                         self.add_node_at_end(Some(StackOperation::Push(VarTarget::Var(
@@ -382,12 +362,10 @@ impl VarGraph {
                     ))));
                 }
                 IrOpcode::data_variable(DataVariableFields { var, local_read }) => {
-                    // crate::log("found a variable read operation");
                     if *local_read.try_borrow()? {
                         self.add_node_at_end(Some(StackOperation::Push(VarTarget::Var(
                             var.try_borrow()?.clone(),
                         ))));
-                        // crate::log("variable is already local; skipping");
                         continue;
                     }
                     let gvar = &var.try_borrow()?.clone();
@@ -442,7 +420,6 @@ impl VarGraph {
                     branch_if,
                     branch_else,
                 }) => {
-                    // crate::log("found control_if_else");
                     // the top item on the stack should be consumed by control_if_else
                     self.add_node_at_end(Some(StackOperation::Drop));
                     let last_node = *self.exit_node().borrow();
@@ -796,13 +773,11 @@ impl VarGraph {
                     *self.exit_node().borrow_mut() = new_node;
                 }
                 IrOpcode::procedures_argument(ProceduresArgumentFields { arg_var, .. }) => {
-                    // crate::log("found proc argument.");
                     self.add_node_at_end(Some(StackOperation::Push(VarTarget::Var(
                         arg_var.clone(),
                     ))));
                 }
                 IrOpcode::procedures_call_warp(ProceduresCallWarpFields { proc }) => {
-                    // crate::log!("found proc call. type stack: {type_stack:?}");
                     let Some(warped_specific_proc) = &*proc.warped_specific_proc() else {
                         hq_bug!("tried to call_warp with no warped proc")
                     };
@@ -836,7 +811,6 @@ impl VarGraph {
                     proc,
                     next_step,
                 }) => {
-                    // crate::log!("found proc call. type stack: {type_stack:?}");
                     let Some(nonwarped_specific_proc) = &*proc.nonwarped_specific_proc() else {
                         hq_bug!("tried to call_nonwarp with no non-warped proc")
                     };
@@ -856,11 +830,9 @@ impl VarGraph {
                     next_steps.push(*next_step);
                     should_propagate_ssa = true;
                     break 'opcode_loop;
-                    // crate::log!("type stack after proc call: {type_stack:?}");
                 }
                 IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
                     YieldMode::Inline(step) => {
-                        // crate::log("found inline step to visit");
                         let step_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(step)));
                         graphs.insert(step_mut.try_borrow()?.id().into(), MaybeGraph::Started);
                         self.visit_step(
@@ -873,7 +845,6 @@ impl VarGraph {
                         graphs.insert(step_mut.try_borrow()?.id().into(), MaybeGraph::Inlined);
                     }
                     YieldMode::None | YieldMode::Return => {
-                        // crate::log("found a yield::none, breaking");
                         should_propagate_ssa = true;
                         step_ended_on_stop = true;
                         break 'opcode_loop;
@@ -898,14 +869,6 @@ impl VarGraph {
             && step.try_borrow()?.context().warp
             && let Some(proc_context) = maybe_proc_context.as_ref()
         {
-            // crate::log!(
-            //     "found spare items on type stack at end of step visit, in warped proc: \
-            //      {type_stack:?}"
-            // );
-            // crate::log!(
-            //     "return vars: {}",
-            //     proc_context.return_vars().try_borrow()?.len()
-            // );
             for ret_var in (*proc_context.ret_vars).borrow().iter().rev().cloned() {
                 let pop_node = self.add_node(Some(StackOperation::Pop(VarTarget::Var(ret_var))));
                 let last_node = *self.exit_node().borrow();
@@ -961,7 +924,6 @@ impl VarGraph {
                 self.add_edge(last_node, push_node, EdgeType::Forward);
                 self.add_edge(push_node, pop_node, EdgeType::Forward);
                 *self.exit_node().borrow_mut() = pop_node;
-                // crate::log("adding outer variable writes");
                 opcodes.extend([
                     IrOpcode::data_variable(DataVariableFields {
                         var: RefCell::new(ssa_var.clone()),
@@ -1116,7 +1078,6 @@ fn visit_step_recursively(
                 next_step.try_borrow()?.id().into(),
                 MaybeGraph::Finished(graph),
             );
-            // crate::log!("finished graph for step {}", next_step.id());
         }
     }
     Ok(())
@@ -1128,11 +1089,9 @@ fn visit_procedure(
     project: &Rc<IrProject>,
     do_ssa: bool,
 ) -> HQResult<()> {
-    // crate::log("visiting procedure");
     if let Some(warped_specific_proc) = &*proc.warped_specific_proc()
         && let PartialStep::Finished(step_index) = warped_specific_proc.first_step()?.clone()
     {
-        // crate::log!("visiting procedure's step: {}", step.id());
         let steps = project.steps().try_borrow()?;
         let step = steps
             .get(step_index.0)
@@ -1163,7 +1122,6 @@ fn visit_procedure(
     if let Some(nonwarped_specific_proc) = &*proc.nonwarped_specific_proc()
         && let PartialStep::Finished(step_index) = nonwarped_specific_proc.first_step()?.clone()
     {
-        // crate::log!("visiting procedure's step: {}", step.id());
         visit_step_recursively(step_index, project, graphs, &BTreeMap::new(), do_ssa)?;
     }
     Ok(())
@@ -1176,7 +1134,6 @@ fn split_variables_and_make_graphs(
     project: &Rc<IrProject>,
     do_ssa: bool,
 ) -> HQResult<BTreeMap<Box<str>, MaybeGraph>> {
-    // crate::log("splitting variables and making graphs");
     let mut graphs = BTreeMap::new();
     for (_, target) in project.targets().borrow().iter() {
         for (_, proc) in target.procedures()?.iter() {
@@ -1185,10 +1142,8 @@ fn split_variables_and_make_graphs(
     }
     for thread in project.threads().try_borrow()?.iter() {
         let step_index = thread.first_step();
-        // crate::log!("visiting (recursively) step from thread: {}", step.id());
         visit_step_recursively(step_index, project, &mut graphs, &BTreeMap::new(), do_ssa)?;
     }
-    // crate::log("finished splitting variables and making graphs");
     Ok(graphs)
 }
 
@@ -1198,14 +1153,10 @@ fn evaluate_type_stack(
     changed_vars: &mut BTreeSet<VarTarget>,
     type_convergence: VarTypeConvergence,
 ) -> HQResult<Rc<TypeStack>> {
-    // crate::log!("type stack: {type_stack:?}");
     Ok(match stack_op {
         StackOperation::Opcode(op) => {
             let mut local_stack = Rc::clone(type_stack);
             let inputs_len = op.acceptable_inputs()?.len();
-            // crate::log!("opcode: {op}");
-            // crate::log!("stack length: {}, inputs len: {}", stack.len(), inputs_len);
-            // crate::log!("stack: {:?}", stack);
             let inputs: Rc<[_]> = local_stack
                 .by_ref()
                 .take(inputs_len)
@@ -1322,7 +1273,6 @@ fn visit_graph(
         } else {
             Rc::clone(&type_stack)
         };
-        // crate::log!("edge: {edge:?}, node: {node:?}");
         let can_continue = if should_wait_for_all_incoming_edges {
             let joining_this = Rc::new(RefCell::new(0));
             for in_edge in inner_graph
@@ -1352,10 +1302,7 @@ fn visit_graph(
                 });
             }
         }
-        // crate::log!("dfs queue: {dfs_queue:?}");
-        // crate::log!("joining_edges: {joining_edges:?}");
     }
-    // crate::log("ok.");
     Ok(())
 }
 
@@ -1366,18 +1313,6 @@ where
     loop {
         let mut changed_vars: BTreeSet<VarTarget> = BTreeSet::new();
         for graph in graphs.clone() {
-            crate::log!("visiting graph for step {}", graph.1);
-            // use petgraph::dot::Dot;
-            // crate::log!(
-            //     "{:?}exit node: {:?}",
-            //     Dot::with_config(
-            //         &*graph.graph().borrow(),
-            //         &[
-            //         //DotConfig::NodeIndexLabel
-            //         ]
-            //     ),
-            //     *graph.exit_node().borrow()
-            // );
             visit_graph(graph.0, &mut changed_vars, type_convergence)?;
         }
         // this must eventually converge, because the sequence of types for each variable at each
@@ -1524,7 +1459,6 @@ pub fn optimise_variables(
     type_convergence: VarTypeConvergence,
     do_ssa: Switch,
 ) -> HQResult<SSAToken> {
-    // crate::log("carrying out variable optimisation");
     let induced_do_ssa = do_ssa == Switch::On && type_convergence != VarTypeConvergence::Any;
     let maybe_graphs = split_variables_and_make_graphs(project, induced_do_ssa)?;
     let graphs = maybe_graphs
@@ -1538,7 +1472,6 @@ pub fn optimise_variables(
         })
         .filter_map_ok(identity)
         .collect::<HQResult<BTreeMap<_, _>>>()?;
-    // crate::log!("graphs num: {}", graphs.len());
     iterate_graphs(
         &graphs.iter().map(|(s, g)| (*g, (*s).clone())),
         type_convergence,

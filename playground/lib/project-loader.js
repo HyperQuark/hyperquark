@@ -46,10 +46,6 @@ export const unpackProject = (input) => {
       }
       if (json.projectVersion === 2) {
         const { default: ScratchVM } = await import("@scratch/scratch-vm");
-        // const scratchVm =
-        //   typeof window === "object"
-        //     ? await import("@scratch/scratch-vm/dist/web/scratch-vm.js")
-        //     : await import("@scratch/scratch-vm/dist/node/scratch-vm.js");
         const VM = new ScratchVM();
         await VM.deserializeProject(json, zip);
         VM.runtime.handleProjectLoaded();

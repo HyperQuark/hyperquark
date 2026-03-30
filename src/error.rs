@@ -5,7 +5,7 @@ use wasm_bindgen::JsValue;
 
 pub type HQResult<T> = Result<T, HQError>;
 
-#[derive(Clone, Debug)] // todo: get rid of this once all expects are gone
+#[derive(Clone, Debug)]
 pub struct HQError {
     pub err_type: HQErrorType,
     pub msg: Box<str>,
@@ -13,7 +13,7 @@ pub struct HQError {
     pub line: u32,
     pub column: u32,
 }
-#[derive(Clone, Debug, PartialEq, Eq)] // todo: get rid of this once all expects are gone
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HQErrorType {
     MalformedProject,
     InternalError,

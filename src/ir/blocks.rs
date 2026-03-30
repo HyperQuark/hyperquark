@@ -59,7 +59,6 @@ pub fn insert_casts(
         let actual_inputs: Vec<_> = type_stack
             .splice((type_stack.len() - expected_inputs.len()).., [])
             .collect();
-        // crate::log!("{}; {:?}; {:?}", block, expected_inputs, actual_inputs);
         let mut dummy_actual_inputs: Vec<_> = actual_inputs.iter().map(|a| a.0).collect();
         for (j, (expected, actual)) in
             core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
@@ -356,14 +355,6 @@ pub fn inputs(
                         0,
                         Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
                     )
-                    // if name.starts_with("CONDITION") {
-                    //     &Input::NoShadow(
-                    //         0,
-                    //         Some(BlockArrayOrId::Array(BlockArray::NumberOrAngle(6, 0.0))),
-                    //     )
-                    // } else {
-                    //     hq_bad_proj!("missing input {}", name)
-                    // }
                 }
             };
             #[expect(
@@ -749,8 +740,6 @@ fn generate_loop(
             .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
-                // branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
-                // branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
             })])
             .collect())
     }
@@ -767,18 +756,6 @@ fn generate_if_else(
     should_break: &mut bool,
     flags: &WasmFlags,
 ) -> HQResult<Vec<IrOpcode>> {
-    // crate::log(
-    //     format!(
-    //         "generate_if_else (if block: {}) (else block?: {})",
-    //         if_block.1,
-    //         maybe_else_block.is_some()
-    //     )
-    //     .as_str(),
-    // );
-
-    // let if_step_yields = dummy_if_step.does_yield()?;
-    // let else_step_yields = dummy_else_step.does_yield()?;
-    // crate::log(format!("if yields: {if_step_yields}, else yields: {else_step_yields}").as_str());
     if !context.warp {
         let this_project = context.project()?;
         let dummy_project = Rc::new(IrProject::new(
@@ -843,7 +820,6 @@ fn generate_if_else(
                 reason = "map_or_else alternative is too complex"
             )]
             let (next_block, next_blocks) = if let Some(ref next_block) = block_info.next {
-                // crate::log("got next block from block_info.next");
                 (
                     Some(NextBlock::ID(next_block.clone())),
                     final_next_blocks.extend_with_inner(NextBlockInfo {
@@ -852,10 +828,8 @@ fn generate_if_else(
                     }),
                 )
             } else if let (Some(next_block_info), _) = final_next_blocks.clone().pop_inner() {
-                // crate::log("got next block from popping from final_next_blocks");
                 (Some(next_block_info.block), final_next_blocks.clone())
             } else {
-                // crate::log("no next block found");
                 (
                     None,
                     final_next_blocks.clone(), // preserve termination behaviour
@@ -872,7 +846,6 @@ fn generate_if_else(
                     false,
                     flags,
                 )?
-                // crate::log("recompiled if_step with correct next blocks");
             };
             let final_else_step = if let Some((else_block, else_block_id)) = maybe_else_block {
                 Step::from_block(
@@ -885,16 +858,12 @@ fn generate_if_else(
                     false,
                     flags,
                 )?
-                // crate::log("recompiled else step with correct next blocks");
             } else {
                 let opcode = match next_block {
                     Some(NextBlock::ID(id)) => {
                         let next_block = blocks
                             .get(&id)
                             .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                        // crate::log(
-                        //     format!("got NextBlock::Id({id:?}), creating step from_block").as_str(),
-                        // );
                         vec![IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Inline(Rc::new(RefCell::new(Step::from_block(
                                 next_block,
@@ -910,8 +879,6 @@ fn generate_if_else(
                     }
                     Some(NextBlock::Step(mut step)) => {
                         step.make_inlined();
-                        // crate::log(format!("got NextBlock::Step({:?})", rcstep.id()).as_str());
-
                         vec![IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Inline(Rc::new(RefCell::new(step))),
                         })]
@@ -931,14 +898,11 @@ fn generate_if_else(
                         })]
                     }
                     None => {
-                        // crate::log("no next block after if!");
                         if next_blocks.terminating() {
-                            // crate::log("terminating after if/else\n");
                             vec![IrOpcode::hq_yield(HqYieldFields {
                                 mode: YieldMode::None,
                             })]
                         } else {
-                            // crate::log("not terminating, at end of if/else");
                             vec![]
                         }
                     }
@@ -1694,7 +1658,6 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_setvariableto(DataSetvariabletoFields {
                                 var: RefCell::new(variable.var.clone()),
                                 local_write: RefCell::new(false),
@@ -1734,7 +1697,6 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![
                                 IrOpcode::data_variable(DataVariableFields {
                                     var: RefCell::new(variable.var.clone()),
@@ -1781,7 +1743,6 @@ fn from_normal_block(
                                 hq_bad_proj!("variable not found")
                             };
                             *variable.is_used.try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_variable(DataVariableFields {
                                 var: RefCell::new(variable.var.clone()),
                                 local_read: RefCell::new(false),
@@ -1826,7 +1787,6 @@ fn from_normal_block(
                                 );
                             };
                             *monitor.is_ever_visible.try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_visvariable(DataVisvariableFields {
                                 var: RefCell::new(variable.var.clone()),
                                 visible: true,
@@ -1869,7 +1829,6 @@ fn from_normal_block(
                                 variable.var.monitor().is_some(),
                                 "tried to change visibility of variable without monitor"
                             );
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_visvariable(DataVisvariableFields {
                                 var: RefCell::new(variable.var.clone()),
                                 visible: false,
@@ -1907,7 +1866,6 @@ fn from_normal_block(
                             };
                             *list.is_used.try_borrow_mut()? = true;
                             *list.list.length_mutable().try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_deletealloflist(DataDeletealloflistFields {
                                 list: list.list.clone(),
                             })]
@@ -1944,7 +1902,6 @@ fn from_normal_block(
                             };
                             *list.is_used.try_borrow_mut()? = true;
                             *list.list.length_mutable().try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_addtolist(DataAddtolistFields {
                                 list: list.list.clone(),
                             })]
@@ -2384,7 +2341,6 @@ fn from_normal_block(
                                 hq_bad_proj!("list not found")
                             };
                             *list.is_used.try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_lengthoflist(DataLengthoflistFields {
                                 list: list.list.clone(),
                             })]
@@ -2468,7 +2424,6 @@ fn from_normal_block(
                                 hq_bad_proj!("list not found")
                             };
                             *list.is_used.try_borrow_mut()? = true;
-                            // crate::log!("marked variable {:?} as used", id);
                             vec![IrOpcode::data_listcontents(DataListcontentsFields {
                                 list: list.list.clone(),
                             })]
@@ -3052,27 +3007,7 @@ fn from_normal_block(
             let next_block = blocks
                 .get(next_id)
                 .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-            // if opcodes
-            //     .last()
-            //     .is_some_and(super::super::instructions::IrOpcode::requests_screen_refresh)
-            //     && !context.warp
-            // {
-            //     opcodes.push(IrOpcode::hq_yield(HqYieldFields {
-            //         mode: YieldMode::Inline(Rc::downgrade(&Step::from_block(
-            //             next_block,
-            //             next_id.clone(),
-            //             blocks,
-            //             context,
-            //             project,
-            //             final_next_blocks.clone(),
-            //             true,
-            //             flags,
-            //         )?)),
-            //     }));
-            //     None
-            // } else {
             next_block.block_info()
-            // }
         } else if let (Some(popped_next), new_next_blocks_stack) =
             final_next_blocks.clone().pop_inner()
         {
@@ -3081,13 +3016,7 @@ fn from_normal_block(
                     let next_block = blocks
                         .get(&id)
                         .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
-                    if (
-                        popped_next.yield_first
-                        // || opcodes.last().is_some_and(
-                        //     super::super::instructions::IrOpcode::requests_screen_refresh,
-                        // )
-                    ) && !context.warp
-                    {
+                    if (popped_next.yield_first) && !context.warp {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Schedule(Step::from_block_non_inlined(
                                 next_block,
@@ -3106,13 +3035,7 @@ fn from_normal_block(
                     }
                 }
                 NextBlock::Step(mut step) => {
-                    if (
-                        popped_next.yield_first
-                        // || opcodes.last().is_some_and(
-                        //     super::super::instructions::IrOpcode::requests_screen_refresh,
-                        // )
-                    ) && !context.warp
-                    {
+                    if popped_next.yield_first && !context.warp {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Schedule(context.project()?.new_owned_step(step)?),
                         }));
@@ -3125,13 +3048,7 @@ fn from_normal_block(
                     None
                 }
                 NextBlock::StepIndex(step_index) => {
-                    if (
-                        popped_next.yield_first
-                        // || opcodes.last().is_some_and(
-                        //     super::super::instructions::IrOpcode::requests_screen_refresh,
-                        // )
-                    ) && !context.warp
-                    {
+                    if popped_next.yield_first && !context.warp {
                         opcodes.push(IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Schedule(step_index),
                         }));
@@ -3312,7 +3229,6 @@ fn from_special_block(
                         hq_bad_proj!("variable not found")
                     };
                     *variable.is_used.try_borrow_mut()? = true;
-                    // crate::log!("marked variable {:?} as used", id);
                     IrOpcode::data_variable(DataVariableFields {
                         var: RefCell::new(variable.var.clone()),
                         local_read: RefCell::new(false),
@@ -3335,7 +3251,6 @@ fn from_special_block(
                         hq_bad_proj!("list not found")
                     };
                     *list.is_used.try_borrow_mut()? = true;
-                    // crate::log!("marked variable {:?} as used", id);
                     IrOpcode::data_listcontents(DataListcontentsFields {
                         list: list.list.clone(),
                     })

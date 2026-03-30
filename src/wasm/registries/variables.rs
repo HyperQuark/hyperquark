@@ -46,7 +46,6 @@ impl VariableRegistry {
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         self.globals().register(
-            // format!("__rcvar_{:p}", Rc::as_ptr(&var.0)).into(),
             format!("__rcvar_{}", var.id()).into(),
             (
                 WasmProject::ir_type_to_wasm(*var.possible_types())?,

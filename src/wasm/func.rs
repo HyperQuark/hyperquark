@@ -190,11 +190,9 @@ impl Instruction {
                 )])
             }
             Self::LazyGlobalGet(idx) => {
-                // crate::log!("global get {idx}. imported globals: {imported_global_count}");
                 Box::from([WInstruction::GlobalGet(idx + imported_global_count)])
             }
             Self::LazyGlobalSet(idx) => {
-                // crate::log!("global get {idx}. imported globals: {imported_global_count}");
                 Box::from([WInstruction::GlobalSet(idx + imported_global_count)])
             }
             Self::StaticFunctionCall(idx) => {
@@ -310,19 +308,10 @@ impl StepFunc {
     }
 
     pub fn local_variable(&self, var: &RcVar) -> HQResult<u32> {
-        // crate::log!("accessing local variable for variable {}", var.id());
-        // crate::log!(
-        //     "existing local variables: {:?}",
-        //     self.local_variables.borrow()
-        // );
         Ok(
             match self.local_variables.try_borrow_mut()?.entry(var.clone()) {
-                btree_map::Entry::Occupied(entry) => {
-                    // crate::log("local already exists, returning that");
-                    *entry.get()
-                }
+                btree_map::Entry::Occupied(entry) => *entry.get(),
                 btree_map::Entry::Vacant(entry) => {
-                    // crate::log("making a new local for variable");
                     let index = self.local(WasmProject::ir_type_to_wasm(*var.possible_types())?)?;
                     entry.insert(index);
                     index

@@ -170,7 +170,6 @@ fn build_liveness_events<S>(
 where
     S: Deref<Target = RefCell<Step>>,
 {
-    // crate::log!("merging vars for step {}", step.try_borrow()?.id());
     for block in step.try_borrow()?.opcodes().iter().rev() {
         #[expect(
             clippy::wildcard_enum_match_arm,
@@ -460,18 +459,6 @@ pub fn merge_variables(proj: &Rc<IrProject>, _ssa_token: SSAToken) -> HQResult<(
         #[expect(clippy::mutable_key_type, reason = "hash depends only on immutable id")]
         let merged = build_merges_from_events(&events);
         merge_variables_in_step(step, &merged)?;
-        // crate::log!(
-        //     "merging {} variables into {}",
-        //     merged.len(),
-        //     merged.values().collect::<BTreeSet<_>>().len(),
-        // );
-        // crate::log!(
-        //     "{{\n{}\n}}",
-        //     merged
-        //         .iter()
-        //         .map(|(v1, v2)| format!("\t{v1} => {v2}"))
-        //         .join(",\n")
-        // );
     }
 
     Ok(())

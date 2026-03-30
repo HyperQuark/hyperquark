@@ -258,7 +258,6 @@ pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, _fields: &Fields) -> HQResult<ReturnType> {
-    // output type includes string as we return empty string for out-of-bounds
     Ok(Singleton(IrType::String))
 }
 

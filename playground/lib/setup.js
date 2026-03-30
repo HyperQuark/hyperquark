@@ -36,7 +36,6 @@ export async function setup(
     window.renderer = renderer;
   }
   renderer.setLayerGroupOrdering(["background", "video", "pen", "sprite"]);
-  //window.open(URL.createObjectURL(new Blob([wasm_bytes], { type: "octet/stream" })));
   const pen_skin = renderer.createSkin("pen", "pen")[0];
 
   const target_skins = project_json.targets.map((target, index) => {

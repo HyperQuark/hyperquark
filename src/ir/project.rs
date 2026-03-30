@@ -120,13 +120,10 @@ impl IrProject {
         let backdrops: Vec<_> = stage_target
             .costumes
             .iter()
-            .map(|costume| {
-                IrCostume {
-                    name: costume.name.clone(),
-                    data_format: costume.data_format,
-                    md5ext: costume.md5ext.clone(),
-                    //data: load_asset(costume.md5ext.as_str()),
-                }
+            .map(|costume| IrCostume {
+                name: costume.name.clone(),
+                data_format: costume.data_format,
+                md5ext: costume.md5ext.clone(),
             })
             .collect();
 
@@ -157,13 +154,10 @@ impl IrProject {
                 let costumes = target
                     .costumes
                     .iter()
-                    .map(|costume| {
-                        IrCostume {
-                            name: costume.name.clone(),
-                            data_format: costume.data_format,
-                            md5ext: costume.md5ext.clone(),
-                            //data: load_asset(costume.md5ext.as_str()),
-                        }
+                    .map(|costume| IrCostume {
+                        name: costume.name.clone(),
+                        data_format: costume.data_format,
+                        md5ext: costume.md5ext.clone(),
                     })
                     .collect();
                 let ir_target = Rc::new(Target::new(
@@ -203,7 +197,6 @@ impl IrProject {
             .iter()
             .cloned()
             .unzip();
-        // crate::log("all threads + targets created");
         let threads = threads_vec.into_iter().flatten().collect::<Box<[_]>>();
         *project
             .threads
@@ -214,7 +207,6 @@ impl IrProject {
             .try_borrow_mut()
             .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))? =
             targets.into_iter().collect();
-        // crate::log!("global_vars: {global_vars:?}");
         for target in project.targets().try_borrow()?.values() {
             fixup_proc_types(target)?;
         }

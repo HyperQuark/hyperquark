@@ -59,7 +59,6 @@ use wasm_bindgen::prelude::*;
 pub mod error;
 pub mod ir;
 pub mod optimisation;
-// pub mod ir_opt;
 pub mod sb3;
 pub mod wasm;
 #[macro_use]

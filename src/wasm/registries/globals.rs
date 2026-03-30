@@ -45,10 +45,6 @@ impl GlobalRegistry {
                     imported_global_count + globals.len(),
                 );
             }
-            // let actual_initial = match &*key {
-            //     "noop_func" => ConstExpr::ref_func(imported_function_count + static_function_count),
-            //     _ => suggested_initial,
-            // };
             globals.global(
                 GlobalType {
                     val_type: ty,

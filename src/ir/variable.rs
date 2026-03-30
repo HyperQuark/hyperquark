@@ -83,7 +83,6 @@ impl RcVar {
 impl PartialEq for RcVar {
     fn eq(&self, other: &Self) -> bool {
         self.0.id == other.0.id
-        // Rc::ptr_eq(self.0.get_ref(), other.0.get_ref())
     }
 }
 
@@ -98,13 +97,12 @@ impl PartialOrd for RcVar {
 impl Ord for RcVar {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.0.id.cmp(&other.0.id)
-        //Rc::as_ptr(&self.0).cmp(&Rc::as_ptr(&other.0))
     }
 }
 
 impl Hash for RcVar {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.id.hash(state); //core::ptr::hash(Rc::as_ptr(&self.0), state);
+        self.0.id.hash(state);
     }
 }
 
@@ -228,7 +226,6 @@ pub fn used_vars(vars: &TargetVars) -> Box<[RcVar]> {
 impl fmt::Display for RcVar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let possible_types = self.0.possible_types.borrow();
-        //let id = Rc::as_ptr(&self.0) as usize;
         let id = self.id();
         write!(
             f,
@@ -243,7 +240,6 @@ impl fmt::Display for RcVar {
 impl fmt::Display for RcList {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let possible_types = self.0.possible_types.borrow();
-        //let id = Rc::as_ptr(&self.0) as usize;
         let id = self.id();
         write!(
             f,
@@ -360,7 +356,6 @@ impl RcList {
 impl PartialEq for RcList {
     fn eq(&self, other: &Self) -> bool {
         self.0.id == other.0.id
-        // Rc::ptr_eq(self.0.get_ref(), other.0.get_ref())
     }
 }
 
@@ -375,12 +370,11 @@ impl PartialOrd for RcList {
 impl Ord for RcList {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.0.id.cmp(&other.0.id)
-        //Rc::as_ptr(&self.0).cmp(&Rc::as_ptr(&other.0))
     }
 }
 
 impl Hash for RcList {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.id.hash(state); //core::ptr::hash(Rc::as_ptr(&self.0), state);
+        self.0.id.hash(state);
     }
 }
