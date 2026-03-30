@@ -93,7 +93,7 @@ impl IrProject {
                 .find(|target| target.is_stage)
                 .ok_or_else(|| make_hq_bad_proj!("missing stage target"))?,
             &sb3.monitors,
-            flags
+            flags,
         )?;
 
         let global_lists = lists_from_target(

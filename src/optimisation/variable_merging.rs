@@ -407,7 +407,6 @@ where
     Ok(())
 }
 
-
 /// Replaces variable accesses in a step with a target merge
 #[expect(clippy::mutable_key_type, reason = "hash depends only on immutable id")]
 pub fn merge_variables_in_step<S>(step: S, merges: &BTreeMap<RcVar, RcVar>) -> HQResult<()>
