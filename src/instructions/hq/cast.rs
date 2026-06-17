@@ -302,8 +302,8 @@ pub fn const_fold(
     &Fields(to): &Fields,
 ) -> HQResult<ConstFold> {
     Ok(match &inputs[0] {
-        ConstFoldItem::Unknown { .. } | ConstFoldItem::Boxed(_, _) => NotFoldable,
-        ConstFoldItem::Basic(val) => {
+        ConstFoldItem::Unknown { .. } => NotFoldable,
+        ConstFoldItem::Basic(val) | ConstFoldItem::Boxed(val, _) => {
             ConstFold::Folded(Rc::from([ConstFoldItem::Basic(match val {
                 VarVal::String(string) => match best_cast_candidate(IrType::String, to)? {
                     IrType::Boolean => VarVal::Bool(

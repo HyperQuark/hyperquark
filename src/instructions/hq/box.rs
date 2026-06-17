@@ -28,8 +28,8 @@ pub fn wasm(
     ])
 }
 
-pub fn acceptable_inputs(_fields: &Fields) -> HQResult<Rc<[IrType]>> {
-    Ok(Rc::from([IrType::Any]))
+pub fn acceptable_inputs(Fields { output_ty }: &Fields) -> HQResult<Rc<[IrType]>> {
+    Ok(Rc::from([*output_ty]))
 }
 
 pub fn output_type(_inputs: Rc<[IrType]>, Fields { output_ty }: &Fields) -> HQResult<ReturnType> {
@@ -38,12 +38,19 @@ pub fn output_type(_inputs: Rc<[IrType]>, Fields { output_ty }: &Fields) -> HQRe
 
 pub const REQUESTS_SCREEN_REFRESH: bool = false;
 
-pub const fn const_fold(
-    _inputs: &[ConstFoldItem],
+pub fn const_fold(
+    inputs: &[ConstFoldItem],
     _state: &mut ConstFoldState,
-    _fields: &Fields,
+    Fields { output_ty }: &Fields,
 ) -> HQResult<ConstFold> {
-    Ok(NotFoldable)
+    Ok(match &inputs[0] {
+        ConstFoldItem::Basic(val) => {
+            ConstFold::Folded(Rc::from([ConstFoldItem::Boxed(val.clone(), *output_ty)]))
+        }
+        ConstFoldItem::Boxed(..) | ConstFoldItem::Stack(_) | ConstFoldItem::Unknown { .. } => {
+            ConstFold::NotFoldable
+        }
+    })
 }
 
 crate::instructions_test! {tests; hq_box; t @ super::Fields { output_ty: IrType::Any }}
