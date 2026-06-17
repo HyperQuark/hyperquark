@@ -23,7 +23,21 @@ addEventListener("message", ({ data }) => {
         const binaryen = imports.default;
         const binaryenModule = binaryen.readBinary(data.wasmBytes);
         console.log(binaryenModule.emitBinary().length);
-        binaryenModule.setFeatures(binaryen.Features.All);
+        binaryenModule.setFeatures(
+          // We can't set to Features.All because that enables custom descriptors which causes
+          // some passes to emit exact types, which are probably not actually available in the browser.
+          // TODO: base this on actual available features.
+          binaryen.Features.BulkMemory |
+            binaryen.Features.ExtendedConst |
+            binaryen.Features.GC |
+            binaryen.Features.Multivalue |
+            binaryen.Features.MutableGlobals |
+            binaryen.Features.ReferenceTypes |
+            binaryen.Features.SignExt |
+            binaryen.Features.NontrappingFPToInt |
+            binaryen.Features.Strings |
+            binaryen.Features.TailCall,
+        );
         binaryen.setOptimizeLevel(3);
         binaryen.setShrinkLevel(0);
         binaryenModule.runPasses(["generate-global-effects"]);
