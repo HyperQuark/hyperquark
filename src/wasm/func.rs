@@ -435,7 +435,7 @@ impl StepFunc {
                     .borrow()
                     .iter()
                     .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                    .collect::<HQResult<Box<[_]>>>()?;
+                    .collect::<Box<[_]>>();
                 arg_types
                     .iter()
                     .chain(&[ValType::I32, TypeRegistry::STRUCT_REF])
@@ -449,7 +449,7 @@ impl StepFunc {
                     .borrow()
                     .iter()
                     .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                    .collect::<HQResult<Box<[_]>>>()?
+                    .collect::<Box<[_]>>()
             } else {
                 Box::from([])
             };

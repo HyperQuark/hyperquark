@@ -93,10 +93,10 @@ macro_rules! instructions_test {
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let params = [Ok(ValType::I32), Ok($crate::wasm::registries::TypeRegistry::STRUCT_REF)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
+                    let params = [ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF].into_iter().chain([$($type_arg,)*].into_iter().map(WasmProject::ir_type_to_wasm)).collect::<Vec<_>>();
                     let result = match output_type {
-                        ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
-                        ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
+                        ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)],
+                        ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect(),
                         ReturnType::None => vec![],
                     };
                     let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
@@ -125,7 +125,10 @@ macro_rules! instructions_test {
             #[test]
             fn wasm_output_type_matches_wrapped_expected_output_type() -> HQResult<()> {
                 for ($($type_arg,)*) in types_iter(false) {
-                    let Ok(output_type) = $crate::instructions::boxed_output_type(|inputs| output_type(inputs, $(&$fields)?), Rc::from([$($type_arg,)*])) else {
+                    let Ok(output_type) = $crate::instructions::boxed_output_type(
+                        |inputs| output_type(inputs, $(&$fields)?),
+                        Rc::from([$($type_arg,)*]),
+                    ) else {
                         println!("skipping failed output_type");
                         continue;
                     };

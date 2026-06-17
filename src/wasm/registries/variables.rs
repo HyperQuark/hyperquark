@@ -48,7 +48,7 @@ impl VariableRegistry {
         self.globals().register(
             format!("__rcvar_{}", var.id()).into(),
             (
-                WasmProject::ir_type_to_wasm(*var.possible_types())?,
+                WasmProject::ir_type_to_wasm(*var.possible_types()),
                 match var.possible_types().base_type() {
                     Some(IrType::Float) => {
                         let VarVal::Float(f) = var.initial_value() else {

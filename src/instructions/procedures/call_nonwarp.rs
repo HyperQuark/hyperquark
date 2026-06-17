@@ -43,7 +43,7 @@ pub fn wasm(
                     mutable: false,
                     element_type: StorageType::Val(WasmProject::ir_type_to_wasm(
                         *var.possible_types(),
-                    )?),
+                    )),
                 })
             })
             .collect::<HQResult<Vec<_>>>()?,
@@ -60,7 +60,7 @@ pub fn wasm(
 
     let locals = inputs
         .iter()
-        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)?))
+        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)))
         .collect::<HQResult<Vec<_>>>()?;
 
     let mut wasm = locals

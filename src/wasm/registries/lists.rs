@@ -63,7 +63,7 @@ impl ListRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        let elem_type = WasmProject::ir_type_to_wasm(*list.possible_types())?;
+        let elem_type = WasmProject::ir_type_to_wasm(*list.possible_types());
         self.types().array(StorageType::Val(elem_type), true)
     }
 

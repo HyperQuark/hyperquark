@@ -32,7 +32,7 @@ pub fn wasm(
 
     let locals = inputs
         .iter()
-        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)?))
+        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)))
         .collect::<HQResult<Vec<_>>>()?;
 
     let mut wasm = locals
