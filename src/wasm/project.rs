@@ -732,6 +732,7 @@ impl WasmProject {
                 .collect(),
         );
         for (i, step) in ir_project.steps().try_borrow()?.iter().enumerate() {
+            crate::log!("compiling step {i}");
             StepFunc::compile_step(
                 step,
                 StepIndex(i),

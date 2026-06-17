@@ -6,7 +6,7 @@ use wasm_encoder::{
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry, TypeRegistry};
 use crate::instructions::{BOXED_BOOL_PATTERN, BOXED_INT_PATTERN, BOXED_STRING_PATTERN};
-use crate::ir::{RcList, IrType};
+use crate::ir::{IrType, RcList};
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::sb3::VarVal;

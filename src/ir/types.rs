@@ -160,7 +160,7 @@ impl fmt::Display for Type {
         write!(
             f,
             "{}",
-            match Self::flags().find(|(_, f)| f == self) {
+            match Self::flags().find(|(_, flag)| flag == self) {
                 Some((n, _)) => (*n).to_string(),
                 None => format!("{self:?}"),
             }
@@ -253,7 +253,9 @@ impl TypeStack {
     /// n elements on the stack, true otherwise.
     pub fn drop_mut(self: &mut Rc<Self>, n: usize) -> bool {
         let mut i = n;
-        while i > 0 && let Some(_) = self.pop_mut() {
+        while i > 0
+            && let Some(_) = self.pop_mut()
+        {
             i -= 1;
         }
         i == 0
@@ -261,14 +263,16 @@ impl TypeStack {
 
     /// Removes the top n elements and returns them in order of removal
     /// (i.e. in reverse order from how they were inserted).
-    /// 
+    ///
     /// If there are not n elements on the stack, this does not panic;
     /// it simply returns a shorter vec containing all of the elements
     /// on the stack.
     pub fn take_n(self: &mut Rc<Self>, n: usize) -> Vec<Type> {
         let mut ret = vec![];
         let mut i = n;
-        while i > 0 && let Some(el) = self.pop_mut() {
+        while i > 0
+            && let Some(el) = self.pop_mut()
+        {
             i -= 1;
             ret.push(el);
         }

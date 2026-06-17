@@ -319,7 +319,13 @@ impl StepFunc {
             match self.local_variables.try_borrow_mut()?.entry(var.clone()) {
                 btree_map::Entry::Occupied(entry) => *entry.get(),
                 btree_map::Entry::Vacant(entry) => {
-                    let index = self.local(WasmProject::ir_type_to_wasm(*var.possible_types())?)?;
+                    let index = self.local(WasmProject::ir_type_to_wasm(*var.possible_types()))?;
+                    // self.locals
+                    //     .try_borrow_mut()
+                    //     .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+                    //     .push(WasmProject::ir_type_to_wasm(*var.possible_types()));
+                    // let index = u32::try_from(self.locals.try_borrow()?.len() + self.params.len() - 1)
+                    //     .map_err(|_| make_hq_bug!("local index was out of bounds"))?;
                     entry.insert(index);
                     index
                 }

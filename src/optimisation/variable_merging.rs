@@ -180,62 +180,54 @@ where
                 var,
                 local_write,
                 first_write,
-            }) if *first_write.try_borrow()? => {
-                if *local_write.try_borrow()? {
-                    let real_var = var.try_borrow()?.clone();
-                    if let Some(reads) = last_action_reads.as_mut() {
-                        reads.remove(&real_var);
-                    }
-                    if let Some(writes) = loop_writes.as_deref_mut() {
-                        writes.insert(real_var.clone());
-                    }
-                    live_variables.remove(&real_var);
-                    first_write_kills.insert(real_var.clone());
-                    record_event(events, &real_var, LivenessEvent::FirstWriteDead);
+            }) if *first_write.try_borrow()? && *local_write.try_borrow()? => {
+                let real_var = var.try_borrow()?.clone();
+                if let Some(reads) = last_action_reads.as_mut() {
+                    reads.remove(&real_var);
                 }
+                if let Some(writes) = loop_writes.as_deref_mut() {
+                    writes.insert(real_var.clone());
+                }
+                live_variables.remove(&real_var);
+                first_write_kills.insert(real_var.clone());
+                record_event(events, &real_var, LivenessEvent::FirstWriteDead);
             }
             IrOpcode::data_variable(DataVariableFields {
                 var,
                 local_read: local,
-            }) => {
-                if *local.try_borrow()? {
-                    let real_var = var.try_borrow()?.clone();
-                    if let Some(reads) = last_action_reads.as_mut() {
-                        reads.insert(real_var.clone());
-                    }
-                    add_live_variable(live_variables, events, &real_var);
+            }) if *local.try_borrow()? => {
+                let real_var = var.try_borrow()?.clone();
+                if let Some(reads) = last_action_reads.as_mut() {
+                    reads.insert(real_var.clone());
                 }
+                add_live_variable(live_variables, events, &real_var);
             }
             IrOpcode::data_teevariable(DataTeevariableFields {
                 var,
                 local_read_write: local,
-            }) => {
-                if *local.try_borrow()? {
-                    let real_var = var.try_borrow()?.clone();
-                    if let Some(reads) = last_action_reads.as_mut() {
-                        reads.remove(&real_var);
-                    }
-                    if let Some(writes) = loop_writes.as_deref_mut() {
-                        writes.insert(real_var.clone());
-                    }
-                    add_live_variable(live_variables, events, &real_var);
+            }) if *local.try_borrow()? => {
+                let real_var = var.try_borrow()?.clone();
+                if let Some(reads) = last_action_reads.as_mut() {
+                    reads.remove(&real_var);
                 }
+                if let Some(writes) = loop_writes.as_deref_mut() {
+                    writes.insert(real_var.clone());
+                }
+                add_live_variable(live_variables, events, &real_var);
             }
             IrOpcode::data_setvariableto(DataSetvariabletoFields {
                 var,
                 local_write: local,
                 first_write,
-            }) if !*first_write.try_borrow()? => {
-                if *local.try_borrow()? {
-                    let real_var = var.try_borrow()?.clone();
-                    if let Some(reads) = last_action_reads.as_mut() {
-                        reads.remove(&real_var);
-                    }
-                    if let Some(writes) = loop_writes.as_deref_mut() {
-                        writes.insert(real_var.clone());
-                    }
-                    add_live_variable(live_variables, events, &real_var);
+            }) if !*first_write.try_borrow()? && *local.try_borrow()? => {
+                let real_var = var.try_borrow()?.clone();
+                if let Some(reads) = last_action_reads.as_mut() {
+                    reads.remove(&real_var);
                 }
+                if let Some(writes) = loop_writes.as_deref_mut() {
+                    writes.insert(real_var.clone());
+                }
+                add_live_variable(live_variables, events, &real_var);
             }
             IrOpcode::hq_yield(HqYieldFields {
                 mode: YieldMode::Inline(inline_step),

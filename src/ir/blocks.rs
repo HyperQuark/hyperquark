@@ -16,7 +16,7 @@ use proc_arg::{ProcArgType, procedure_argument};
 use special::from_special_block;
 
 use super::context::StepContext;
-use super::{IrProject, RcVar, Step, IrType};
+use super::{IrProject, IrType, RcVar, Step};
 use crate::instructions::{
     ControlLoopFields, ControlWaitFields, DataAddtolistFields, DataDeletealloflistFields,
     DataDeleteoflistFields, DataInsertatlistFields, DataItemoflistFields, DataLengthoflistFields,
@@ -57,14 +57,14 @@ pub fn from_block(
 }
 
 fn from_normal_block(
-    block_info: &BlockInfo,
+    init_block_info: &BlockInfo,
     blocks: &BlockMap,
     context: &StepContext,
     project: &Weak<IrProject>,
     final_next_blocks: NextBlocks,
     flags: &WasmFlags,
 ) -> HQResult<Box<[IrOpcode]>> {
-    let mut curr_block = Some(block_info);
+    let mut curr_block = Some(init_block_info);
     let mut final_next_blocks = final_next_blocks;
     let mut opcodes = vec![];
     let mut should_break = false;

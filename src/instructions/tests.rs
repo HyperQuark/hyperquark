@@ -72,10 +72,8 @@ macro_rules! instructions_test {
                     let wasm_result = wasm(&step_func, Rc::from([$($type_arg,)*]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result),
-                        (Err(HQError { err_type: e1, .. }), Err(HQError { err_type: e2, .. })) => {
-                            if e1 != e2 {
-                                panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result);
-                            }
+                        (Err(HQError { err_type: e1, .. }), Err(HQError { err_type: e2, .. })) if e1 != e2 => {
+                            panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($type_arg,)*), output_type_result, wasm_result);
                         }
                         _ => (),
                     }
@@ -188,7 +186,15 @@ macro_rules! instructions_test {
 
                     let wasm_bytes = proj.finish().unwrap().wasm_bytes;
 
-                    wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($type_arg,)*), err.message()))?;
+                    println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
+
+                    wasmparser::validate(&wasm_bytes).map_err(|err|
+                        make_hq_bug!(
+                            "invalid wasm module with types {:?}. Original error message: {}",
+                            ($($type_arg,)*),
+                            err.message()
+                        )
+                    )?;
                 }
                 Ok(())
             }

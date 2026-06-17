@@ -509,9 +509,13 @@ impl ForestBuilderState {
 
 /// If all of the leaves have the same exit stack, we can pre-emptively merge
 /// them together to avoid a huge blow up in the number of leaves.
-/// 
+///
 /// Precondition: $ #`leaves` = L(#`ancestor`) $
-fn collapse_same_typed_leaves(func: &StepFunc, ancestor: Rc<Fork>, leaves: &mut Leaves) -> HQResult<()> {
+fn collapse_same_typed_leaves(
+    func: &StepFunc,
+    ancestor: Rc<Fork>,
+    leaves: &mut Leaves,
+) -> HQResult<()> {
     if leaves
         .0
         .iter()

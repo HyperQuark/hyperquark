@@ -1,7 +1,7 @@
 use crate::instructions::{
     DataSetvariabletoFields, DataTeevariableFields, DataVariableFields, HqCastFields, IrOpcode,
 };
-use crate::ir::{ReturnType, IrType};
+use crate::ir::{IrType, ReturnType};
 use crate::prelude::*;
 
 pub fn insert_casts(
@@ -44,7 +44,7 @@ pub fn insert_casts(
             .collect();
         let mut dummy_actual_inputs: Vec<_> = actual_inputs.iter().map(|a| a.0).collect();
         for (j, (expected, actual)) in
-            core::iter::zip(expected_inputs.clone().into_iter(), actual_inputs).enumerate()
+            core::iter::zip(expected_inputs.clone(), actual_inputs).enumerate()
         {
             if !expected.is_none()
                 && !expected
@@ -71,7 +71,7 @@ pub fn insert_casts(
                         actual.1,
                         expected,
                         i,
-                        blocks.iter().map(|block| format!("{block}")).join(",\n"),
+                        blocks.iter().map(|b| format!("{b}")).join(",\n"),
                     )
                 }
                 casts.push((actual.1, expected));
