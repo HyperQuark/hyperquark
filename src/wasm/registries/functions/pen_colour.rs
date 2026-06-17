@@ -54,7 +54,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     }),
                     F32Const(2.55.into()),
                     F32Mul,
-                    I32TruncF32S,
+                    I32TruncSatF32S,
                     LocalSet(hsv2rgb_locals::HUE),
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     F32Load(MemArg {
@@ -64,7 +64,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     }),
                     F32Const(2.55.into()),
                     F32Mul,
-                    I32TruncF32S,
+                    I32TruncSatF32S,
                     LocalSet(hsv2rgb_locals::SAT), // saturation ∈ [0, 256)
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     F32Load(MemArg {
@@ -74,7 +74,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     }),
                     F32Const(2.55.into()),
                     F32Mul,
-                    I32TruncF32S,
+                    I32TruncSatF32S,
                     LocalSet(hsv2rgb_locals::VAL), // value ∈ [0, 256)
                     LocalGet(hsv2rgb_locals::MEM_POS),
                     F32Const(100.0.into()),
@@ -333,7 +333,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     }),
                     F32Const(255.0.into()),
                     F32Mul,
-                    I32TruncF32S,
+                    I32TruncSatF32S,
                     LocalSet(rgb2hsv_locals::R),
                     LocalGet(rgb2hsv_locals::MEM_POS),
                     F32Load(MemArg {
@@ -343,7 +343,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     }),
                     F32Const(255.0.into()),
                     F32Mul,
-                    I32TruncF32S,
+                    I32TruncSatF32S,
                     LocalSet(rgb2hsv_locals::G),
                     LocalGet(rgb2hsv_locals::MEM_POS),
                     F32Load(MemArg {
@@ -353,7 +353,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     }),
                     F32Const(255.0.into()),
                     F32Mul,
-                    I32TruncF32S,
+                    I32TruncSatF32S,
                     LocalSet(rgb2hsv_locals::B),
                     LocalGet(rgb2hsv_locals::MEM_POS),
                     LocalGet(rgb2hsv_locals::MEM_POS),
