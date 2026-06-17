@@ -32,6 +32,7 @@ pub fn wasm(
     };
     let array_type = func.registries().lists().array_type(&fields.list)?;
     let index_local = func.local(ValType::I32)?;
+    func.free_local(index_local)?;
     Ok(wasm![
         LocalSet(index_local),
         Block(WasmBlockType::Empty),

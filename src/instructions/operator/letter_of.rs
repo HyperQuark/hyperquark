@@ -16,6 +16,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     )?;
     let i32_local = func.local(ValType::I32)?;
     let ef_local = func.local(ValType::EXTERNREF)?;
+    func.free_local(i32_local)?;
+    func.free_local(ef_local)?;
     Ok(wasm![
         LocalSet(ef_local),
         LocalSet(i32_local),

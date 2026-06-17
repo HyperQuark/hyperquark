@@ -2,7 +2,8 @@ use super::super::prelude::*;
 use crate::wasm::WasmProject;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
-    let local = func.local(WasmProject::ir_type_to_wasm(inputs[0])?)?;
+    let local = func.local(WasmProject::ir_type_to_wasm(inputs[0]))?;
+    func.free_local(local)?;
     Ok(wasm![LocalTee(local), LocalGet(local),])
 }
 

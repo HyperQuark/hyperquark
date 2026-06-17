@@ -22,6 +22,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     };
 
     let local_index = func.local(ValType::I32)?;
+    func.free_local(local_index)?;
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
         wasm![
             LocalSet(local_index),

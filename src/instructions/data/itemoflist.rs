@@ -33,8 +33,9 @@ pub fn wasm(
     let string_type = IrType::String;
     let elem_type = *fields.list.possible_types();
     let should_box = !IrType::String.contains(elem_type);
-    let output_type = WasmProject::ir_type_to_wasm(elem_type.or(string_type))?;
+    let output_type = WasmProject::ir_type_to_wasm(elem_type.or(string_type));
     let i32_local = func.local(ValType::I32)?;
+    func.free_local(i32_local)?;
 
     Ok(wasm![
         LocalTee(i32_local),

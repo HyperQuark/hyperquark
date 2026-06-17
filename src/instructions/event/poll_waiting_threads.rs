@@ -26,10 +26,14 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
         nullable: false,
         heap_type: HeapType::Concrete(i32_array_type),
     }))?;
+    func.free_local(arr_local)?;
 
     let arr_len_local = func.local(ValType::I32)?;
     let i_local = func.local(ValType::I32)?;
     let wait_local = func.local(ValType::I32)?;
+    func.free_local(arr_len_local)?;
+    func.free_local(i_local)?;
+    func.free_local(wait_local)?;
 
     let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
 

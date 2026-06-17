@@ -16,11 +16,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         .registries()
         .static_functions()
         .register::<UpdatePenColorFromRGB, _>()?;
-    Ok(wasm![LocalSet(local_index), I32Const(0),]
+    let instrs = wasm![LocalSet(local_index), I32Const(0),]
         .into_iter()
         .chain(match t1 {
             IrType::ColorARGB => {
                 let temp_local = func.local(ValType::I32)?;
+                func.free_local(temp_local)?;
                 wasm![
                     LocalGet(local_index),
                     I32Const(24),
@@ -97,7 +98,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             ),
             #StaticFunctionCall(rgb2hsv_func),
         ])
-        .collect())
+        .collect();
+
+    func.free_local(local_index)?;
+
+    Ok(instrs)
 }
 
 pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {

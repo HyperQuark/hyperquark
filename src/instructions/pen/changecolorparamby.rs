@@ -17,6 +17,8 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
         .register::<UpdatePenColorFromHSV, _>()?;
     let param_local = func.local(ValType::EXTERNREF)?;
     let value_local = func.local(ValType::F32)?;
+    func.free_local(param_local)?;
+    func.free_local(value_local)?;
     Ok(
         wasm![F32DemoteF64, LocalSet(value_local), LocalTee(param_local),]
             .into_iter()

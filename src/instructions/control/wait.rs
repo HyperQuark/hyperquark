@@ -49,6 +49,8 @@ pub fn wasm(
         heap_type: HeapType::Concrete(struct_type),
     }))?;
 
+    func.free_local(struct_local)?;
+
     let timer_global_index = func.registries().globals().register(
         "sensing_timer".into(),
         (

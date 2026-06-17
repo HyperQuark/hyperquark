@@ -52,6 +52,7 @@ pub fn wasm(
         nullable: false,
         heap_type: HeapType::Concrete(arg_struct_type),
     }))?;
+    func.free_local(arg_struct_local)?;
 
     let spawn_thread_in_stack = func
         .registries()
@@ -86,6 +87,7 @@ pub fn wasm(
                 @boxed(input),
             ]
         });
+        func.free_local(local)?;
     }
 
     wasm.extend(wasm![

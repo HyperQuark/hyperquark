@@ -16,6 +16,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
         hq_bad_proj!("looks_setvisible called in stage")
     };
     let local_index = func.local(ValType::I32)?;
+    func.free_local(local_index)?;
     Ok(wasm![
         LocalSet(local_index),
         I32Const(0),

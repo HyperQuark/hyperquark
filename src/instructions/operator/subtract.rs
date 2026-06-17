@@ -9,35 +9,41 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             wasm![I32Sub]
         } else if IrType::Float.contains(t2) {
             let f64_local = func.local(ValType::F64)?;
-            wasm![
+            let w = wasm![
                 LocalSet(f64_local),
                 F64ConvertI32S,
                 LocalGet(f64_local),
                 @nanreduce(t2),
                 F64Sub,
-            ]
+            ];
+            func.free_local(f64_local)?;
+            w
         } else {
             hq_bug!("bad input")
         }
     } else if IrType::Float.contains(t1) {
         if IrType::Float.contains(t2) {
             let f64_local = func.local(ValType::F64)?;
-            wasm![
+            let w = wasm![
                 @nanreduce(t2),
                 LocalSet(f64_local),
                 @nanreduce(t1),
                 LocalGet(f64_local),
                 F64Sub
-            ]
+            ];
+            func.free_local(f64_local)?;
+            w
         } else if IrType::QuasiInt.contains(t2) {
             let i32_local = func.local(ValType::I32)?;
-            wasm![
+            let w = wasm![
                 LocalSet(i32_local),
                 @nanreduce(t1),
                 LocalGet(i32_local),
                 F64ConvertI32S,
                 F64Sub
-            ]
+            ];
+            func.free_local(i32_local)?;
+            w
         } else {
             hq_bug!("bad input")
         }

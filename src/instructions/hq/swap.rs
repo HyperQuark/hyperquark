@@ -3,8 +3,10 @@ use crate::wasm::WasmProject;
 
 pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     hq_assert!(inputs.len() == 2);
-    let local1 = func.local(WasmProject::ir_type_to_wasm(inputs[0])?)?;
-    let local2 = func.local(WasmProject::ir_type_to_wasm(inputs[1])?)?;
+    let local1 = func.local(WasmProject::ir_type_to_wasm(inputs[0]))?;
+    let local2 = func.local(WasmProject::ir_type_to_wasm(inputs[1]))?;
+    func.free_local(local1)?;
+    func.free_local(local2)?;
     Ok(wasm![
         LocalSet(local2),
         LocalSet(local1),

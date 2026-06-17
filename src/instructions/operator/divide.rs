@@ -5,13 +5,15 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     let t1 = inputs[0];
     let t2 = inputs[1];
     let f64_local = func.local(ValType::F64)?;
-    Ok(wasm![
+    let w = wasm![
         LocalSet(f64_local),
         @nanreduce(t1),
         LocalGet(f64_local),
         @nanreduce(t2),
         F64Div
-    ])
+    ];
+    func.free_local(f64_local)?;
+    Ok(w)
 }
 
 // TODO: is integer division acceptable if we can prove that it will give an integer result (or if it is floored?)

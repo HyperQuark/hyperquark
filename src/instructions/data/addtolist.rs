@@ -31,7 +31,8 @@ pub fn wasm(
     let (list_global, Some(length_global)) = func.registries().lists().register(list)? else {
         hq_bug!("tried to addtolist of a list with immutable length")
     };
-    let local = func.local(WasmProject::ir_type_to_wasm(*list.possible_types())?)?;
+    let local = func.local(WasmProject::ir_type_to_wasm(*list.possible_types()))?;
+    func.free_local(local)?;
     let array_type = func.registries().lists().array_type(list)?;
     Ok(if list.possible_types().is_base_type() {
         vec![]

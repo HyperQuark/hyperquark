@@ -58,6 +58,7 @@ pub fn wasm(
                 @boxed(input),
             ]
         });
+        func.free_local(local)?;
     }
 
     wasm.extend(wasm![

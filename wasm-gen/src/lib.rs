@@ -281,7 +281,9 @@ pub fn wasm(input: TokenStream) -> TokenStream {
             quote! {
                 if #(#checks)&&* {
                     #(let #local_names = func.local(wasm_encoder::ValType::#local_types)?;)*
-                    vec![#(crate::wasm::InternalInstruction::#instructions),*]
+                    let instrs = vec![#(crate::wasm::InternalInstruction::#instructions),*];
+                    #(func.free_local(#local_names)?;)*
+                    instrs
                 }
             }
         });

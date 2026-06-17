@@ -36,8 +36,9 @@ pub fn wasm(
     Ok(if let Some(monitor) = var.borrow().monitor().as_ref()
         && *monitor.is_ever_visible.borrow()
     {
-        let wasm_input_ty = WasmProject::ir_type_to_wasm(t1)?;
+        let wasm_input_ty = WasmProject::ir_type_to_wasm(t1);
         let local = func.local(wasm_input_ty)?;
+        func.free_local(local)?;
         let update_func = func.registries().external_functions().register(
             (
                 "data",

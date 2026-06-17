@@ -18,7 +18,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         ("motion", "pointindirection".into()),
         (vec![ValType::I32, ValType::F64], vec![]),
     )?;
-    Ok(wasm![
+    let w = wasm![
         @nanreduce(t1),
         LocalSet(local_idx),
         I32Const(0),
@@ -34,7 +34,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         I32Const(ir_target_index),
         LocalGet(local_idx),
         Call(imported_func),
-    ])
+    ];
+    func.free_local(local_idx)?;
+    Ok(w)
 }
 
 pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {

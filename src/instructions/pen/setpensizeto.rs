@@ -9,7 +9,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         hq_bad_proj!("looks_setsizeto called in stage")
     };
     let local_index = func.local(ValType::F64)?;
-    Ok(wasm![
+    let w = wasm![
         @nanreduce(t1),
         LocalSet(local_index),
         I32Const(0),
@@ -22,7 +22,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             align: 3,
             memory_index: 0,
         }),
-    ])
+    ];
+    func.free_local(local_index)?;
+    Ok(w)
 }
 
 pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {

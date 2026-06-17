@@ -35,8 +35,10 @@ pub fn wasm(
         hq_bug!("tried to insertatlist of a list with immutable length")
     };
     let array_type = func.registries().lists().array_type(&fields.list)?;
-    let index_local = func.local(WasmProject::ir_type_to_wasm(t1)?)?;
-    let val_local = func.local(WasmProject::ir_type_to_wasm(t2)?)?;
+    let index_local = func.local(WasmProject::ir_type_to_wasm(t1))?;
+    let val_local = func.local(WasmProject::ir_type_to_wasm(t2))?;
+    func.free_local(index_local)?;
+    func.free_local(val_local)?;
     Ok(wasm![
         LocalSet(val_local),
         LocalSet(index_local),

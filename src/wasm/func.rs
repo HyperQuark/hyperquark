@@ -8,8 +8,8 @@ use wasm_encoder::{
 use wasm_gen::wasm;
 
 use super::{Registries, WasmFlags, WasmProject};
-use crate::instructions::{IrOpcode, wrap_instruction};
-use crate::ir::{Event, PartialStep, Proc, RcVar, ReturnType, Step, StepIndex};
+use crate::instructions::{IrOpcode, wrap_instructions};
+use crate::ir::{Event, PartialStep, Proc, RcVar, Step, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::TypeRegistry;
 
@@ -217,6 +217,7 @@ pub enum StepTarget {
 #[derive(Clone)]
 pub struct StepFunc {
     locals: RefCell<Vec<ValType>>,
+    available_locals: RefCell<BTreeMap<ValType, BTreeSet<u32>>>,
     instructions: RefCell<Vec<Instruction>>,
     params: Box<[ValType]>,
     output: Box<[ValType]>,
@@ -246,6 +247,10 @@ impl StepFunc {
         &self.params
     }
 
+    pub fn output(&self) -> &[ValType] {
+        &self.output
+    }
+
     pub const fn target(&self) -> StepTarget {
         self.target
     }
@@ -269,6 +274,7 @@ impl StepFunc {
     ) -> Self {
         Self {
             locals: RefCell::new(vec![]),
+            available_locals: RefCell::new(BTreeMap::new()),
             instructions: RefCell::new(vec![]),
             params: Box::new([ValType::I32, TypeRegistry::STRUCT_REF]),
             output: Box::new([]),
@@ -295,6 +301,7 @@ impl StepFunc {
     ) -> Self {
         Self {
             locals: RefCell::new(vec![]),
+            available_locals: RefCell::new(BTreeMap::new()),
             instructions: RefCell::new(vec![]),
             params,
             output,
@@ -322,12 +329,43 @@ impl StepFunc {
 
     /// Registers a new local in this function, and returns its index
     pub fn local(&self, val_type: ValType) -> HQResult<u32> {
-        self.locals
-            .try_borrow_mut()
-            .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
-            .push(val_type);
-        u32::try_from(self.locals.try_borrow()?.len() + self.params.len() - 1)
-            .map_err(|_| make_hq_bug!("local index was out of bounds"))
+        if let Some(available_locals) = self.available_locals.try_borrow_mut()?.get_mut(&val_type)
+            && let Some(popped) = available_locals.pop_first()
+        {
+            Ok(popped)
+        } else {
+            self.locals
+                .try_borrow_mut()
+                .map_err(|_| make_hq_bug!("couldn't mutably borrow cell"))?
+                .push(val_type);
+            u32::try_from(self.locals.try_borrow()?.len() + self.params.len() - 1)
+                .map_err(|_| make_hq_bug!("local index was out of bounds"))
+        }
+    }
+
+    pub fn free_local(&self, index: u32) -> HQResult<()> {
+        hq_assert!(
+            (index as usize) < self.locals.try_borrow()?.len() + self.params.len(),
+            "Tried to free up out-of-bounds local"
+        );
+        hq_assert!(
+            (index as usize) >= self.params.len(),
+            "Tried to free a param"
+        );
+        let locals = self.locals.try_borrow()?;
+        #[expect(
+            clippy::unwrap_used,
+            reason = "already checked that index is in bounds"
+        )]
+        let val_type = locals.get(index as usize - self.params.len()).unwrap();
+
+        self.available_locals
+            .try_borrow_mut()?
+            .entry(*val_type)
+            .or_default()
+            .insert(index);
+
+        Ok(())
     }
 
     pub fn add_instructions(

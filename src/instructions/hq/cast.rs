@@ -116,6 +116,7 @@ pub fn wasm(
                     .strings()
                     .register_default("false".into())?;
                 let bool_local = func.local(ValType::I32)?;
+                func.free_local(bool_local)?;
                 wasm![
                     LocalSet(bool_local),
                     GlobalGet(true_string),
@@ -157,6 +158,7 @@ pub fn wasm(
                     ),
                 )?;
                 let string_local = func.local(ValType::EXTERNREF)?;
+                func.free_local(string_local)?;
                 let empty_string = func.registries().strings().register_default("".into())?;
                 let zero_string = func.registries().strings().register_default("0".into())?;
                 let false_string = func

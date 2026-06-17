@@ -13,6 +13,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         } else if IrType::Float.contains(t2) {
             let local1 = func.local(ValType::F64)?;
             let local2 = func.local(ValType::F64)?;
+            func.free_local(local1)?;
+            func.free_local(local2)?;
             wasm![
                 LocalSet(local2),
                 F64ConvertI32S,
@@ -45,6 +47,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 (vec![ValType::EXTERNREF], vec![ValType::F64]),
             )?;
             let float_local = func.local(ValType::F64)?;
+            func.free_local(float_local)?;
             wasm![
                 Call(string2float),
                 LocalSet(float_local),
@@ -59,6 +62,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         if IrType::Float.contains(t2) {
             let local1 = func.local(ValType::F64)?;
             let local2 = func.local(ValType::F64)?;
+            func.free_local(local1)?;
+            func.free_local(local2)?;
             wasm![
                 LocalSet(local2),
                 LocalTee(local1),
@@ -86,6 +91,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         } else if IrType::QuasiInt.contains(t2) {
             let local1 = func.local(ValType::F64)?;
             let local2 = func.local(ValType::F64)?;
+            func.free_local(local1)?;
+            func.free_local(local2)?;
             wasm![
                 F64ConvertI32S,
                 LocalSet(local2),
@@ -125,6 +132,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             )?;
             let string_local = func.local(ValType::EXTERNREF)?;
             let float_local = func.local(ValType::F64)?;
+            func.free_local(string_local)?;
+            func.free_local(float_local)?;
             let nan_string = func.registries().strings().register_default("nan".into())?;
             wasm![
                 LocalSet(string_local),
@@ -150,6 +159,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         } else if IrType::Float.contains(t2) {
             let local1 = func.local(ValType::F64)?;
             let local2 = func.local(ValType::F64)?;
+            func.free_local(local1)?;
+            func.free_local(local2)?;
             wasm![
                 LocalSet(local2),
                 F64ConvertI32S,
@@ -191,6 +202,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             let bool_local = func.local(ValType::I32)?;
             let string_local = func.local(ValType::EXTERNREF)?;
             let float_local = func.local(ValType::F64)?;
+            func.free_local(bool_local)?;
+            func.free_local(string_local)?;
+            func.free_local(float_local)?;
             let float_type = IrType::Float;
             let true_string = func
                 .registries()
@@ -231,6 +245,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 (vec![ValType::EXTERNREF], vec![ValType::F64]),
             )?;
             let int_local = func.local(ValType::I32)?;
+            func.free_local(int_local)?;
             wasm![
                 LocalSet(int_local),
                 Call(string2float),
@@ -253,6 +268,9 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             let bool_local = func.local(ValType::I32)?;
             let string_local = func.local(ValType::EXTERNREF)?;
             let float_local = func.local(ValType::F64)?;
+            func.free_local(bool_local)?;
+            func.free_local(string_local)?;
+            func.free_local(float_local)?;
             let float_type = IrType::Float;
             let true_string = func
                 .registries()
@@ -296,6 +314,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             )?;
             let string_local = func.local(ValType::EXTERNREF)?;
             let float_local = func.local(ValType::F64)?;
+            func.free_local(string_local)?;
+            func.free_local(float_local)?;
             let nan_string = func.registries().strings().register_default("nan".into())?;
             wasm![
                 LocalSet(float_local),
@@ -329,6 +349,10 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             let local2 = func.local(ValType::EXTERNREF)?;
             let local3 = func.local(ValType::F64)?;
             let local4 = func.local(ValType::F64)?;
+            func.free_local(local1)?;
+            func.free_local(local2)?;
+            func.free_local(local3)?;
+            func.free_local(local4)?;
             let float_type = IrType::Float;
             wasm![
                 LocalSet(local2),
