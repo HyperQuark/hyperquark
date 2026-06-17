@@ -192,9 +192,10 @@ impl IrOpcode {
     }
 }
 
-pub mod input_switcher;
+mod wrap_instructions;
+
 pub use hq::r#yield::YieldMode;
-pub use input_switcher::wrap_instruction;
+pub use wrap_instructions::wrap_instructions;
 
 /// Canonical NaN + bit 33, + string pointer in bits 1-32
 pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;

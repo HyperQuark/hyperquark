@@ -75,25 +75,6 @@ fn evaluate_type_stack(
     })
 }
 
-#[derive(Debug, Clone)]
-enum TypeStack {
-    Nil,
-    Cons(IrType, Rc<Self>),
-}
-
-impl Iterator for Rc<TypeStack> {
-    type Item = IrType;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let TypeStack::Cons(ty, tail) = &*self.clone() {
-            *self = Self::clone(tail);
-            Some(*ty)
-        } else {
-            None
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 struct DFSQueueItem {
     pub edge: EdgeIndex,

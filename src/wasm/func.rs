@@ -420,20 +420,8 @@ impl StepFunc {
         Ok(())
     }
 
-    fn compile_instructions(&self, opcodes: &Vec<IrOpcode>) -> HQResult<Vec<Instruction>> {
-        let mut instrs = vec![];
-        let mut type_stack = vec![];
-        for opcode in opcodes {
-            let inputs = type_stack
-                .splice((type_stack.len() - opcode.acceptable_inputs()?.len()).., [])
-                .collect();
-            instrs.append(&mut wrap_instruction(self, Rc::clone(&inputs), opcode)?);
-            match opcode.output_type(inputs)? {
-                ReturnType::Singleton(output) => type_stack.push(output),
-                ReturnType::MultiValue(outputs) => type_stack.extend(outputs.iter().copied()),
-                ReturnType::None => (),
-            }
-        }
+    fn compile_instructions(&self, opcodes: &[IrOpcode]) -> HQResult<Vec<Instruction>> {
+        let instrs = wrap_instructions(self, Rc::from(&[] as &[_]), opcodes)?;
         Ok(instrs)
     }
 

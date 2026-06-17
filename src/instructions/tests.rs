@@ -136,28 +136,51 @@ macro_rules! instructions_test {
                     let proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($type_arg,)*];
-                    let params = [Ok(ValType::I32), Ok($crate::wasm::registries::TypeRegistry::STRUCT_REF)].into_iter().chain([$($type_arg,)*].into_iter().map(|ty| WasmProject::ir_type_to_wasm(ty))).collect::<HQResult<Vec<_>>>()?;
-                    let result = match output_type {
-                        ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)?],
-                        ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect::<HQResult<_>>()?,
-                        ReturnType::None => vec![],
+                    let params = [ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF]
+                        .into_iter()
+                        .chain(
+                            [$($type_arg,)*]
+                                .into_iter()
+                                .map(WasmProject::ir_type_to_wasm)
+                        )
+                        .collect::<Vec<_>>();
+                    let result = vec![];
+                    let step_func = StepFunc::new_with_types(
+                        params.into(),
+                        result.into(),
+                        Rc::clone(&registries),
+                        flags(),
+                        StepTarget::Sprite(0),
+                        0,
+                        Rc::new(vec![])
+                    );
+                    let drops = match output_type {
+                        ReturnType::Singleton(_) => 1,
+                        ReturnType::MultiValue(outs) => outs.len(),
+                        ReturnType::None => 0,
                     };
-                    println!("{result:?}");
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
-                    let wasm = match $crate::instructions::wrap_instruction(&step_func, Rc::from([$($type_arg,)*]), &$crate::instructions::IrOpcode::$opcode$(($fields))?) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            println!("skipping failed wasm (message: {})", e.msg);
-                            continue;
-                        }
-                    };
-                    println!("{wasm:?}");
+                    let test_opcodes = [$crate::instructions::IrOpcode::$opcode$(($fields))?]
+                        .into_iter()
+                        .chain(core::iter::repeat_n($crate::instructions::IrOpcode::hq_drop, drops))
+                        .collect::<Vec<_>>();
+                    let wasm = $crate::instructions::wrap_instructions(
+                        &step_func,
+                        Rc::from([$($type_arg,)*]),
+                        &test_opcodes,
+                    )?;
+                    // println!("{wasm:?}");
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 2).try_into().unwrap()))])?
+                        step_func.add_instructions(
+                            [$crate::wasm::InternalInstruction::Immediate(
+                                wasm_encoder::Instruction::LocalGet(
+                                    (i + 2).try_into().unwrap()
+                                )
+                            )]
+                        )?
                     }
                     step_func.add_instructions(wasm)?;
 
-                    println!("{:?}", step_func.instructions().borrow());
+                    // println!("{:?}", step_func.instructions().borrow());
 
                     proj.steps()
                         .borrow_mut()

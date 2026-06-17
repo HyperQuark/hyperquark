@@ -222,3 +222,74 @@ pub fn var_val_type(var_val: &VarVal) -> HQResult<Type> {
         .output_type(Rc::from([]))?
         .singleton_or_else(|| make_hq_bug!("got non-singleton output type for const"))
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeStack {
+    Nil,
+    Cons(Type, Rc<Self>),
+}
+
+impl TypeStack {
+    #[must_use]
+    pub const fn is_nil(&self) -> bool {
+        matches!(self, Self::Nil)
+    }
+
+    pub fn push_mut(self: &mut Rc<Self>, ty: Type) {
+        *self = Rc::new(Self::Cons(ty, Rc::clone(self)));
+    }
+
+    pub fn pop_mut(self: &mut Rc<Self>) -> Option<Type> {
+        match &*Rc::clone(self) {
+            Self::Nil => None,
+            Self::Cons(head, tail) => {
+                *self = Rc::clone(tail);
+                Some(*head)
+            }
+        }
+    }
+
+    /// Drops the top n elements. Returns false if there were less than
+    /// n elements on the stack, true otherwise.
+    pub fn drop_mut(self: &mut Rc<Self>, n: usize) -> bool {
+        let mut i = n;
+        while i > 0 && let Some(_) = self.pop_mut() {
+            i -= 1;
+        }
+        i == 0
+    }
+
+    /// Removes the top n elements and returns them in order of removal
+    /// (i.e. in reverse order from how they were inserted).
+    /// 
+    /// If there are not n elements on the stack, this does not panic;
+    /// it simply returns a shorter vec containing all of the elements
+    /// on the stack.
+    pub fn take_n(self: &mut Rc<Self>, n: usize) -> Vec<Type> {
+        let mut ret = vec![];
+        let mut i = n;
+        while i > 0 && let Some(el) = self.pop_mut() {
+            i -= 1;
+            ret.push(el);
+        }
+        ret
+    }
+}
+
+impl Iterator for Rc<TypeStack> {
+    type Item = Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.pop_mut()
+    }
+}
+
+impl FromIterator<Type> for Rc<TypeStack> {
+    fn from_iter<T: IntoIterator<Item = Type>>(iter: T) -> Self {
+        let mut stack = Self::new(TypeStack::Nil);
+        for ty in iter {
+            stack.push_mut(ty);
+        }
+        stack
+    }
+}
