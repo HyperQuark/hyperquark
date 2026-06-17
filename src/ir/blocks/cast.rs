@@ -1,7 +1,7 @@
 use crate::instructions::{
     DataSetvariabletoFields, DataTeevariableFields, DataVariableFields, HqCastFields, IrOpcode,
 };
-use crate::ir::{ReturnType, Type as IrType};
+use crate::ir::{ReturnType, IrType};
 use crate::prelude::*;
 
 pub fn insert_casts(

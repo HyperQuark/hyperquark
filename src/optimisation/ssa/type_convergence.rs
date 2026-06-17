@@ -5,7 +5,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut};
 
 use super::var_graph::{EdgeType, StackOperation, VarGraph, VarTarget};
-use crate::ir::{ReturnType, Type as IrType};
+use crate::ir::{ReturnType, IrType, TypeStack};
 use crate::prelude::*;
 use crate::wasm::flags::VarTypeConvergence;
 

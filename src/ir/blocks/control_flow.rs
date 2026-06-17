@@ -3,7 +3,7 @@ use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataVariableFields,
     HqCastFields, HqTextFields, HqYieldFields, IrOpcode, YieldMode,
 };
-use crate::ir::{IrProject, RcVar, Step, StepContext, Target, Type as IrType};
+use crate::ir::{IrProject, RcVar, Step, StepContext, Target, IrType};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockInfo, Input, VarVal};
 use crate::wasm::WasmFlags;

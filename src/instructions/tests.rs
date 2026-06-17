@@ -28,7 +28,7 @@ macro_rules! instructions_test {
 
             use super::{wasm, output_type, acceptable_inputs};
             use $crate::prelude::*;
-            use $crate::ir::{Type as IrType, ReturnType};
+            use $crate::ir::{IrType, ReturnType};
             use wasm_encoder::ValType;
             use $crate::wasm::{StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
             #[expect(clippy::allow_attributes, reason = "might not always trigger")]

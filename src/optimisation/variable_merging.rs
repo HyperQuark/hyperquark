@@ -6,7 +6,7 @@ use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataTeevariableFields,
     DataVariableFields, HqYieldFields, IrOpcode, YieldMode,
 };
-use crate::ir::{IrProject, RcVar, Step, Type as IrType};
+use crate::ir::{IrProject, IrType, RcVar, Step};
 use crate::optimisation::SSAToken;
 use crate::prelude::*;
 

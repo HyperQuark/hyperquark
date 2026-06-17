@@ -16,7 +16,7 @@ use proc_arg::{ProcArgType, procedure_argument};
 use special::from_special_block;
 
 use super::context::StepContext;
-use super::{IrProject, RcVar, Step, Type as IrType};
+use super::{IrProject, RcVar, Step, IrType};
 use crate::instructions::{
     ControlLoopFields, ControlWaitFields, DataAddtolistFields, DataDeletealloflistFields,
     DataDeleteoflistFields, DataInsertatlistFields, DataItemoflistFields, DataLengthoflistFields,

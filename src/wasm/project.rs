@@ -9,7 +9,7 @@ use wasm_encoder::{
 use wasm_gen::wasm;
 
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
-use crate::ir::{Event, IrProject, StepIndex, Type as IrType};
+use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
     MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,

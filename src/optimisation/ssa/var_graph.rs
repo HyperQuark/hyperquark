@@ -10,7 +10,7 @@ use crate::instructions::{
     DataTeevariableFields, DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
-use crate::ir::{InlinedStep, ProcContext, RcList, RcVar, Step, StepIndex, Type as IrType};
+use crate::ir::{InlinedStep, ProcContext, RcList, RcVar, Step, StepIndex, IrType};
 use crate::prelude::*;
 
 #[derive(Clone, Debug)]

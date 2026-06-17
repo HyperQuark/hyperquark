@@ -3,7 +3,7 @@ use wasm_encoder::ConstExpr;
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry};
 use crate::instructions::{BOXED_BOOL_PATTERN, BOXED_INT_PATTERN, BOXED_STRING_PATTERN};
-use crate::ir::{RcVar, Type as IrType};
+use crate::ir::{RcVar, IrType};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 use crate::wasm::registries::{StringRegistry, TabledStringRegistry};
