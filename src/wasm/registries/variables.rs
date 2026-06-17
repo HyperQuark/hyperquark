@@ -79,15 +79,15 @@ impl VariableRegistry {
                         ConstExpr::global_get(string_idx)
                     }
                     _ => match var.initial_value() {
-                        VarVal::Int(i) => ConstExpr::i64_const(i64::from(*i) & BOXED_INT_PATTERN),
-                        VarVal::Bool(b) => ConstExpr::i64_const(i64::from(*b) & BOXED_BOOL_PATTERN),
+                        VarVal::Int(i) => ConstExpr::i64_const(i64::from(*i) | BOXED_INT_PATTERN),
+                        VarVal::Bool(b) => ConstExpr::i64_const(i64::from(*b) | BOXED_BOOL_PATTERN),
                         VarVal::Float(f) => {
                             ConstExpr::i64_const(i64::from_le_bytes(f.to_le_bytes()))
                         }
                         VarVal::String(s) => {
                             let string_idx: i32 =
                                 self.tabled_strings().register_default(s.clone())?;
-                            ConstExpr::i64_const(i64::from(string_idx) & BOXED_STRING_PATTERN)
+                            ConstExpr::i64_const(i64::from(string_idx) | BOXED_STRING_PATTERN)
                         }
                     },
                 },

@@ -285,12 +285,12 @@ impl ListRegistry {
                         .iter()
                         .map(|val| {
                             Ok(match val {
-                                VarVal::Int(i) => i64::from(*i) & BOXED_INT_PATTERN,
-                                VarVal::Bool(b) => i64::from(*b) & BOXED_BOOL_PATTERN,
+                                VarVal::Int(i) => i64::from(*i) | BOXED_INT_PATTERN,
+                                VarVal::Bool(b) => i64::from(*b) | BOXED_BOOL_PATTERN,
                                 VarVal::Float(f) => i64::from_le_bytes(f.to_le_bytes()),
                                 VarVal::String(s) => {
                                     self.tabled_strings().register_default::<i64>(s.clone())?
-                                        & BOXED_STRING_PATTERN
+                                        | BOXED_STRING_PATTERN
                                 }
                             }
                             .to_le_bytes())
