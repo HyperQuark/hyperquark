@@ -43,7 +43,7 @@ export const unpackProject = (input) => {
         return [json, zip];
       }
       if (json.projectVersion === 2) {
-        const { default: ScratchVM } = await import("@scratch/scratch-vm");
+        const { default: ScratchVM } = await import("scratch-vm");
         const VM = new ScratchVM();
         await VM.deserializeProject(json, zip);
         VM.runtime.handleProjectLoaded();
