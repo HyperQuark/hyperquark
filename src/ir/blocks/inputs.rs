@@ -142,7 +142,7 @@ pub fn inputs(
     Ok(input_names(block_info, context)?
         .into_iter()
         .map(|name| -> HQResult<Vec<IrOpcode>> {
-            let input = match block_info.inputs.get((*name).into()) {
+            let input = match block_info.inputs.get(&Box::from(&*name)) {
                 Some(noshadow @ Input::NoShadow(_, Some(_))) => noshadow,
                 Some(shadow @ Input::Shadow(_, Some(_), _)) => shadow,
                 None | Some(Input::NoShadow(_, None) | Input::Shadow(_, None, _)) => {

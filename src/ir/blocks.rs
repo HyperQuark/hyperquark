@@ -1607,7 +1607,7 @@ fn block_to_ir(
                     make_hq_bad_proj!("invalid project.json - missing field BACKDROP")
                 })?;
             let VarVal::String(backdrop_name) = val.clone().ok_or_else(|| {
-                make_hq_bad_proj!("invalid project.json - null backdrop name for BACKROP field")
+                make_hq_bad_proj!("invalid project.json - null backdrop name for BACKDROP field")
             })?
             else {
                 hq_bad_proj!("invalid project.json - BACKDROP field is not of type String");

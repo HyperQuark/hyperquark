@@ -499,7 +499,7 @@ impl TryFrom<&str> for Sb3Project {
                     err.column()
                 ),
                 Category::Data => hq_bad_proj!(
-                    "Invalid project.json at project.json:{}:{}. Actual errror: {}",
+                    "Invalid project.json at project.json:{}:{}. Actual error: {}",
                     err.line(),
                     err.column(),
                     err

@@ -160,7 +160,7 @@ pub fn generate_loop(
         }
         Ok(setup_instructions
             .into_iter()
-            .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
+            .chain(first_condition_instructions.unwrap_or(condition_instructions))
             .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),

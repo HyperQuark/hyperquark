@@ -197,7 +197,7 @@ fn split_variables_and_make_graphs(
 ) -> HQResult<BTreeMap<Box<str>, MaybeGraph>> {
     let mut graphs = BTreeMap::new();
     for (_, target) in project.targets().borrow().iter() {
-        for (_, proc) in target.procedures()?.iter() {
+        for proc in target.procedures()?.values() {
             visit_procedure(proc, &mut graphs, project, do_ssa)?;
         }
     }
