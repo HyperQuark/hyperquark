@@ -273,7 +273,11 @@ fn make_type_branches(
     for base_ty in base_tys.iter().skip(1).rev() {
         these_new_leaves.push_leaf(make_leaf(func, leaf, base_ty.and(input_ty), local)?);
     }
-    for (new_leaf, base_ty) in (&these_new_leaves).into_iter().zip(base_tys).skip(1).rev() {
+    for (new_leaf, base_ty) in (&these_new_leaves)
+        .into_iter()
+        .skip(1)
+        .zip(base_tys.iter().skip(1).rev())
+    {
         make_branch_fork(
             leaf,
             // precondition satisfied because `and` is nonincreasing
