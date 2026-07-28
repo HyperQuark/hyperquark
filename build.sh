@@ -128,6 +128,7 @@ if [[ "$RUSTDOC" == "1" ]]; then
   # cargo doc --workspace --exclude sb3
   RUSTDOCFLAGS="--html-in-header typst-header.html" cargo doc --no-deps --document-private-items
   rm -rf playground/public/docs/internal
+  mkdir -p playground/public/docs/internal
   cp -ra target/doc playground/public/docs/internal
 fi
 echo finished!
