@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["hsv2rgb_locals","rgb2hsv_locals"],"struct":["UpdatePenColorFromHSV","UpdatePenColorFromRGB"]};

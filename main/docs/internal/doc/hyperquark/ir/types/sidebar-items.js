@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReturnType","TypeStack"],"fn":["base_types","var_val_instruction","var_val_type"],"struct":["Type"]};

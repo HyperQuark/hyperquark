@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MarkWaitingFlag","SpawnNewThread","SpawnThreadInStack","UpdatePenColorFromHSV","UpdatePenColorFromRGB"],"type":["SpawnNewThreadOverride","SpawnThreadInStackOverride"]};

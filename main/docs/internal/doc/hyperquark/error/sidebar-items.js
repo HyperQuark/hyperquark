@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HQErrorType"],"macro":[["maybe_panic",1]],"struct":["HQError"],"type":["HQResult"]};

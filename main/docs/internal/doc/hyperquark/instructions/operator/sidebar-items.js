@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["abs","acos","add","and","asin","atan","ceiling","contains","cos","divide","equals","exp","floor","gt","join","length","letter_of","ln","log","lt","modulo","multiply","not","or","pow10","random","round","sin","sqrt","subtract","tan"]};

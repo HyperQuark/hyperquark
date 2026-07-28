@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["REQUESTS_SCREEN_REFRESH"],"fn":["acceptable_inputs","const_fold","output_type","wasm"]};

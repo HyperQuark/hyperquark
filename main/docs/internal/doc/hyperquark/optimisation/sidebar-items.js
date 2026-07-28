@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConstFold","ConstFoldItem"],"fn":["ir_optimise"],"mod":["const_folding","loop_unrolling","ssa","variable_merging"],"struct":["ConstFoldState","SSAToken"]};

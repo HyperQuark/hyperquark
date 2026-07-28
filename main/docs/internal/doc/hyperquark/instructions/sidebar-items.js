@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BOXED_BOOL_PATTERN","BOXED_COLOR_ARGB_PATTERN","BOXED_COLOR_RGB_PATTERN","BOXED_INT_PATTERN","BOXED_STRING_PATTERN"],"enum":["IrOpcode","YieldMode"],"fn":["boxed_output_type","wrap_instructions"],"mod":["control","data","event","fields","hq","looks","motion","operator","pen","prelude","procedures","sensing","tests","wrap_instructions"]};

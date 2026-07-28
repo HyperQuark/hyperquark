@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_proc_return_vars_before_return","fixup_proc_calls","fixup_proc_types"],"struct":["IrProject"]};

@@ -1,0 +1,161 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Module for generating WASM for a sequence of instructions."><title>hyperquark::instructions::wrap_instructions - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module wrap_instructions</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../../../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module wrap_<wbr>instructions</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In hyperquark::<wbr>instructions</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hyperquark</a>::<wbr><a href="../index.html">instructions</a></div><h1>Module <span>wrap_<wbr>instructions</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/hyperquark/instructions/wrap_instructions.rs.html#1-720">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Module for generating WASM for a sequence of instructions.</p>
+<p>Some definitions for formality:</p>
+<p>Define <code>{$#`is_root` : #`Fork` -&gt; #`bool`$}</code> to be
+<code>{$ #`is_root`;(f) = f.#`branch`.#`is_none`;(). $}</code></p>
+<p>Let <code>{$F$}</code> be the function mapping a <a href="struct.Fork.html" title="struct hyperquark::instructions::wrap_instructions::Fork"><code>Fork</code></a> to all <a href="struct.Fork.html" title="struct hyperquark::instructions::wrap_instructions::Fork"><code>Fork</code></a>s reachable from it,
+with <code>{$F(f)$}</code> a shorthand for <code>{$F(#`Some`;(f))$}</code>:</p>
+<div class="example-wrap"><pre class="language-typm-render"><code>  F(#`None`)    &amp;= {}\
+  F(#`Some`;(f)) &amp;= { f } union
+    F(#`Some`;(f.#`branch`?.#`b_if`)) union
+    F(f.#`branch`?.#`b_else`).</code></pre></div>
+<p>Let <code>{$L$}</code> be the function mapping a <a href="struct.Fork.html" title="struct hyperquark::instructions::wrap_instructions::Fork"><code>Fork</code></a> to its leaves:</p>
+<div class="example-wrap"><pre class="language-typm-render"><code>L(f) = { g in F(f) | #`is_root`;(g) }.</code></pre></div>
+<p>These definitions are used in pre-/post-conditions and invariants for
+functions and datatypes.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Branch.html" title="struct hyperquark::instructions::wrap_instructions::Branch">Branch</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>An if/else branch. Invariant <code>{$I_b$}</code> declared here.</dd><dt><a class="struct" href="struct.ForestBuilderState.html" title="struct hyperquark::instructions::wrap_instructions::ForestBuilderState">Forest<wbr>Builder<wbr>State</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>State during <a href="fn.build_forest.html" title="fn hyperquark::instructions::wrap_instructions::build_forest"><code>build_forest</code></a>. Invariants <code>{$I_f$}</code> and <code>{$I_f'$}</code> declared here.</dd><dt><a class="struct" href="struct.Fork.html" title="struct hyperquark::instructions::wrap_instructions::Fork">Fork</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>A block of instructions, possibly ending in a branch, along with information
+about the type stack at the beginning of the block, and just before the branch</dd><dt><a class="struct" href="struct.Leaves.html" title="struct hyperquark::instructions::wrap_instructions::Leaves">Leaves</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>A collection of forks that are leaves. Invariant <code>{$I_l$}</code> declared here.</dd><dt><a class="struct" href="struct.Roots.html" title="struct hyperquark::instructions::wrap_instructions::Roots">Roots</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Base, top-level branches across the whole function; i.e. branches that begin
+with an empty type stack. Invariants <code>{$I_r$}</code> and <code>{$I_r'$}</code> declared here.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.box_type_check.html" title="fn hyperquark::instructions::wrap_instructions::box_type_check">box_<wbr>type_<wbr>check</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Returns the list of instructions used to check if a boxed value is of the specified (base) type</dd><dt><a class="fn" href="fn.boxed_pattern.html" title="fn hyperquark::instructions::wrap_instructions::boxed_pattern">boxed_<wbr>pattern</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Returns the NaN-box bit pattern for the provided type (which must be basic)</dd><dt><a class="fn" href="fn.build_boxed_locals.html" title="fn hyperquark::instructions::wrap_instructions::build_boxed_locals">build_<wbr>boxed_<wbr>locals</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.build_forest.html" title="fn hyperquark::instructions::wrap_instructions::build_forest">build_<wbr>forest</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Builds a ‘forest’ (collection of trees, in this case ordered) representing
+the WASM for the specified opcodes, with the entry point having the specified
+type stack.</dd><dt><a class="fn" href="fn.collapse_same_typed_leaves.html" title="fn hyperquark::instructions::wrap_instructions::collapse_same_typed_leaves">collapse_<wbr>same_<wbr>typed_<wbr>leaves</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>If all of the leaves have the same exit stack, we can pre-emptively merge
+them together to avoid a huge blow up in the number of leaves.</dd><dt><a class="fn" href="fn.make_branch.html" title="fn hyperquark::instructions::wrap_instructions::make_branch">make_<wbr>branch</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Makes a new branch for type selection, using the <code>latest_fork</code> as the else
+branch, and a new leaf as the if branch. Adds the new leaf to <code>new_leaves</code>.</dd><dt><a class="fn" href="fn.make_branch_fork.html" title="fn hyperquark::instructions::wrap_instructions::make_branch_fork">make_<wbr>branch_<wbr>fork</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Precondition: <code>new_ty.is_base_type()</code>
+Postcondition: <code>latest_fork.is_some()</code></dd><dt><a class="fn" href="fn.make_leaf.html" title="fn hyperquark::instructions::wrap_instructions::make_leaf">make_<wbr>leaf</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.make_type_branches.html" title="fn hyperquark::instructions::wrap_instructions::make_type_branches">make_<wbr>type_<wbr>branches</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Postcondition: <code>new_leaves.is_some()</code></dd><dt><a class="fn" href="fn.request_screen_refresh.html" title="fn hyperquark::instructions::wrap_instructions::request_screen_refresh">request_<wbr>screen_<wbr>refresh</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.should_unbox.html" title="fn hyperquark::instructions::wrap_instructions::should_unbox">should_<wbr>unbox</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Should arguments to this opcode be unboxed?</dd><dt><a class="fn" href="fn.unbox_instructions.html" title="fn hyperquark::instructions::wrap_instructions::unbox_instructions">unbox_<wbr>instructions</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Returns the list of instructions used to unbox a boxed value of the provided (base) type</dd><dt><a class="fn" href="fn.wrap_instructions.html" title="fn hyperquark::instructions::wrap_instructions::wrap_instructions">wrap_<wbr>instructions</a></dt></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.BoxedLocals.html" title="type hyperquark::instructions::wrap_instructions::BoxedLocals">Boxed<wbr>Locals</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html>

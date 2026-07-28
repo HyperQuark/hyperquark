@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PartialStep"],"fn":["arg_vars_from_proccode","procs_from_target"],"static":["ARG_REGEX"],"struct":["Proc","SpecificProc"],"type":["ProcMap"]};

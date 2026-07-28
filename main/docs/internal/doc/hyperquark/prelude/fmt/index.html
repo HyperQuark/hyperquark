@@ -1,0 +1,148 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Utilities for formatting and printing strings."><title>hyperquark::prelude::fmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module fmt</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../../../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module fmt</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In hyperquark::<wbr>prelude</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hyperquark</a>::<wbr><a href="../index.html">prelude</a></div><h1>Module <span>fmt</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/lib.rs.html#330">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Utilities for formatting and printing strings.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Arguments.html" title="struct hyperquark::prelude::fmt::Arguments">Arguments</a></dt><dd>This structure represents a safely precompiled version of a format string
+and its arguments. This cannot be generated at runtime because it cannot
+safely be done, so no constructors are given and the fields are private
+to prevent modification.</dd><dt><a class="struct" href="struct.DebugList.html" title="struct hyperquark::prelude::fmt::DebugList">Debug<wbr>List</a></dt><dd>A struct to help with <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> implementations.</dd><dt><a class="struct" href="struct.DebugMap.html" title="struct hyperquark::prelude::fmt::DebugMap">Debug<wbr>Map</a></dt><dd>A struct to help with <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> implementations.</dd><dt><a class="struct" href="struct.DebugSet.html" title="struct hyperquark::prelude::fmt::DebugSet">Debug<wbr>Set</a></dt><dd>A struct to help with <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> implementations.</dd><dt><a class="struct" href="struct.DebugStruct.html" title="struct hyperquark::prelude::fmt::DebugStruct">Debug<wbr>Struct</a></dt><dd>A struct to help with <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> implementations.</dd><dt><a class="struct" href="struct.DebugTuple.html" title="struct hyperquark::prelude::fmt::DebugTuple">Debug<wbr>Tuple</a></dt><dd>A struct to help with <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> implementations.</dd><dt><a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a></dt><dd>The error type which is returned from formatting a message into a stream.</dd><dt><a class="struct" href="struct.Formatter.html" title="struct hyperquark::prelude::fmt::Formatter">Formatter</a></dt><dd>Configuration for formatting.</dd><dt><a class="struct" href="struct.FromFn.html" title="struct hyperquark::prelude::fmt::FromFn">FromFn</a></dt><dd>Implements <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> and <a href="trait.Display.html" title="trait hyperquark::prelude::fmt::Display"><code>fmt::Display</code></a> via the provided closure.</dd><dt><a class="struct" href="struct.NumBuffer.html" title="struct hyperquark::prelude::fmt::NumBuffer">NumBuffer</a></dt><dd>A buffer wrapper of which the internal size is based on the maximum
+number of digits the associated integer can have.</dd><dt><a class="struct" href="struct.FormattingOptions.html" title="struct hyperquark::prelude::fmt::FormattingOptions">Formatting<wbr>Options</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Options for formatting.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Alignment.html" title="enum hyperquark::prelude::fmt::Alignment">Alignment</a></dt><dd>Possible alignments returned by <code>Formatter::align</code></dd><dt><a class="enum" href="enum.DebugAsHex.html" title="enum hyperquark::prelude::fmt::DebugAsHex">Debug<wbr>AsHex</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Specifies whether the <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>Debug</code></a> trait should use lower-/upper-case
+hexadecimal or normal integers.</dd><dt><a class="enum" href="enum.Sign.html" title="enum hyperquark::prelude::fmt::Sign">Sign</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>The signedness of a <a href="struct.Formatter.html" title="struct hyperquark::prelude::fmt::Formatter"><code>Formatter</code></a> (or of a <a href="struct.FormattingOptions.html" title="struct hyperquark::prelude::fmt::FormattingOptions"><code>FormattingOptions</code></a>).</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Binary.html" title="trait hyperquark::prelude::fmt::Binary">Binary</a></dt><dd><code>b</code> formatting.</dd><dt><a class="trait" href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug">Debug</a></dt><dd><code>?</code> formatting.</dd><dt><a class="trait" href="trait.Display.html" title="trait hyperquark::prelude::fmt::Display">Display</a></dt><dd>Format trait for an empty format, <code>{}</code>.</dd><dt><a class="trait" href="trait.LowerExp.html" title="trait hyperquark::prelude::fmt::LowerExp">Lower<wbr>Exp</a></dt><dd><code>e</code> formatting.</dd><dt><a class="trait" href="trait.LowerHex.html" title="trait hyperquark::prelude::fmt::LowerHex">Lower<wbr>Hex</a></dt><dd><code>x</code> formatting.</dd><dt><a class="trait" href="trait.Octal.html" title="trait hyperquark::prelude::fmt::Octal">Octal</a></dt><dd><code>o</code> formatting.</dd><dt><a class="trait" href="trait.Pointer.html" title="trait hyperquark::prelude::fmt::Pointer">Pointer</a></dt><dd><code>p</code> formatting.</dd><dt><a class="trait" href="trait.UpperExp.html" title="trait hyperquark::prelude::fmt::UpperExp">Upper<wbr>Exp</a></dt><dd><code>E</code> formatting.</dd><dt><a class="trait" href="trait.UpperHex.html" title="trait hyperquark::prelude::fmt::UpperHex">Upper<wbr>Hex</a></dt><dd><code>X</code> formatting.</dd><dt><a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a></dt><dd>A trait for writing or formatting into Unicode-accepting buffers or streams.</dd><dt><a class="trait" href="trait.NumBufferTrait.html" title="trait hyperquark::prelude::fmt::NumBufferTrait">NumBuffer<wbr>Trait</a><wbr><span class="stab unstable" title="">Experimental</span></dt><dd>Trait used to describe the maximum number of digits in decimal base of the implemented integer.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.from_fn.html" title="fn hyperquark::prelude::fmt::from_fn">from_fn</a></dt><dd>Creates a type whose <a href="trait.Debug.html" title="trait hyperquark::prelude::fmt::Debug"><code>fmt::Debug</code></a> and <a href="trait.Display.html" title="trait hyperquark::prelude::fmt::Display"><code>fmt::Display</code></a> impls are
+forwarded to the provided closure.</dd><dt><a class="fn" href="fn.write.html" title="fn hyperquark::prelude::fmt::write">write</a></dt><dd>Takes an output stream and an <code>Arguments</code> struct that can be precompiled with
+the <code>format_args!</code> macro.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type hyperquark::prelude::fmt::Result">Result</a></dt><dd>The type returned by formatter methods.</dd></dl><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.Debug.html" title="derive hyperquark::prelude::fmt::Debug">Debug</a></dt><dd>Derive macro generating an impl of the trait <code>Debug</code>.</dd></dl></section></div></main></body></html>
