@@ -1223,44 +1223,77 @@ fn block_to_ir(
             )?
         }
         BlockOpcode::control_if_else => 'block: {
-            let BlockArrayOrId::Id(substack1_id) = match block_info.inputs.get("SUBSTACK") {
-                Some(input) => input,
-                None => break 'block vec![IrOpcode::hq_drop],
+            let substack1 = block_info
+                .inputs
+                .get("SUBSTACK")
+                .map(|input| -> HQResult<_> {
+                    Ok(input
+                        .get_1()
+                        .ok_or_else(|| make_hq_bug!("infallible enum variant tuple field get"))?
+                        .as_ref())
+                })
+                .transpose()?
+                .flatten()
+                .map(|input| {
+                    let BlockArrayOrId::Id(substack1_id) = input else {
+                        hq_bad_proj!("malformed SUBSTACK input")
+                    };
+                    let Some(substack1_block) = blocks.get(substack1_id) else {
+                        hq_bad_proj!("SUBSTACK block doesn't seem to exist")
+                    };
+
+                    Ok((substack1_block, substack1_id.clone())) // TODO let generate_if_else take &Box<str>, no clone
+                })
+                .transpose()?;
+
+            let substack2 = block_info
+                .inputs
+                .get("SUBSTACK2")
+                .map(|input| {
+                    let arr_or_id = input
+                        .get_1()
+                        .ok_or_else(|| make_hq_bug!(""))?
+                        .clone()
+                        .ok_or_else(|| make_hq_bug!(""))?;
+                    let BlockArrayOrId::Id(substack2_id) = arr_or_id else {
+                        hq_bad_proj!("malformed SUBSTACK2 input")
+                    };
+                    let Some(substack2_block) = blocks.get(&substack2_id) else {
+                        hq_bad_proj!("SUBSTACK2 block doesn't seem to exist")
+                    };
+
+                    Ok((substack2_block, substack2_id))
+                })
+                .transpose()?;
+
+            if let Some(substack1) = substack1 {
+                generate_if_else(
+                    substack1,
+                    substack2,
+                    block_info,
+                    final_next_blocks,
+                    blocks,
+                    context,
+                    should_break,
+                    flags,
+                )?
+            } else if let Some(substack2) = substack2 {
+                vec![IrOpcode::operator_not]
+                    .into_iter()
+                    .chain(generate_if_else(
+                        substack2,
+                        None,
+                        block_info,
+                        final_next_blocks,
+                        blocks,
+                        context,
+                        should_break,
+                        flags,
+                    )?)
+                    .collect()
+            } else {
+                break 'block vec![IrOpcode::hq_drop];
             }
-            .get_1()
-            .ok_or_else(|| make_hq_bug!(""))?
-            .clone()
-            .ok_or_else(|| make_hq_bug!(""))?
-            else {
-                hq_bad_proj!("malformed SUBSTACK input")
-            };
-            let Some(substack1_block) = blocks.get(&substack1_id) else {
-                hq_bad_proj!("SUBSTACK block doesn't seem to exist")
-            };
-            let BlockArrayOrId::Id(substack2_id) = match block_info.inputs.get("SUBSTACK2") {
-                Some(input) => input,
-                None => break 'block vec![IrOpcode::hq_drop],
-            }
-            .get_1()
-            .ok_or_else(|| make_hq_bug!(""))?
-            .clone()
-            .ok_or_else(|| make_hq_bug!(""))?
-            else {
-                hq_bad_proj!("malformed SUBSTACK2 input")
-            };
-            let Some(substack2_block) = blocks.get(&substack2_id) else {
-                hq_bad_proj!("SUBSTACK2 block doesn't seem to exist")
-            };
-            generate_if_else(
-                (substack1_block, substack1_id),
-                Some((substack2_block, substack2_id)),
-                block_info,
-                final_next_blocks,
-                blocks,
-                context,
-                should_break,
-                flags,
-            )?
         }
         BlockOpcode::control_forever => {
             let condition_instructions = vec![IrOpcode::hq_boolean(HqBooleanFields(true))];
