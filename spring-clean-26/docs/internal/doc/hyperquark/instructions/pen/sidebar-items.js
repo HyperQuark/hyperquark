@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["changecolorparamby","clear","pendown","penup","setpencolorparamto","setpencolortocolor","setpensizeto"]};

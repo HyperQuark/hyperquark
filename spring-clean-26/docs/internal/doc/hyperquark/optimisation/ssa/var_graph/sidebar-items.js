@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EdgeType","MaybeGraph","StackOperation","VarTarget"],"struct":["BaseVarGraph","VarGraph","VariableMaps"],"type":["NodeWeight"]};

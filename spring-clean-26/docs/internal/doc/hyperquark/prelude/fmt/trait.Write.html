@@ -1,0 +1,207 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait for writing or formatting into Unicode-accepting buffers or streams."><title>Write in hyperquark::prelude::fmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Write</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../../../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Write</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.write_str" title="write_str">write_str</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.write_char" title="write_char">write_char</a></li><li><a href="#method.write_fmt" title="write_fmt">write_fmt</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In hyperquark::<wbr>prelude::<wbr>fmt</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hyperquark</a>::<wbr><a href="../index.html">prelude</a>::<wbr><a href="index.html">fmt</a></div><h1>Trait <span class="trait">Write</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/fmt/mod.rs.html#123">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Write {
+    // Required method
+    fn <a href="#tymethod.write_str" class="fn">write_str</a>(&amp;mut self, s: &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.write_char" class="fn">write_char</a>(&amp;mut self, c: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.char.html">char</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_fmt" class="fn">write_fmt</a>(&amp;mut self, args: <a class="struct" href="struct.Arguments.html" title="struct hyperquark::prelude::fmt::Arguments">Arguments</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a>&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait for writing or formatting into Unicode-accepting buffers or streams.</p>
+<p>This trait only accepts UTF-8–encoded data and is not <a href="../../std/io/trait.Write.html#tymethod.flush">flushable</a>. If you only
+want to accept Unicode and you don’t need flushing, you should implement this trait;
+otherwise you should implement <a href="../../std/io/trait.Write.html"><code>std::io::Write</code></a>.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.write_str" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/fmt/mod.rs.html#156">Source</a></span><h4 class="code-header">fn <a href="#tymethod.write_str" class="fn">write_str</a>(&amp;mut self, s: &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a string slice into this writer, returning whether the write
+succeeded.</p>
+<p>This method can only succeed if the entire string slice was successfully
+written, and this method will not return until all data has been
+written or an error occurs.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This function will return an instance of <a href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error"><code>std::fmt::Error</code></a> on error.</p>
+<p>The purpose of that error is to abort the formatting operation when the underlying
+destination encounters some error preventing it from accepting more text;
+in particular, it does not communicate any information about <em>what</em> error occurred.
+It should generally be propagated rather than handled, at least when implementing
+formatting traits.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::{Error, Write};
+
+<span class="kw">fn </span>writer&lt;W: Write&gt;(f: <span class="kw-2">&amp;mut </span>W, s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    f.write_str(s)
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+writer(<span class="kw-2">&amp;mut </span>buf, <span class="string">"hola"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf, <span class="string">"hola"</span>);</code></pre></div></div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.write_char" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.1.0">1.1.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/fmt/mod.rs.html#185">Source</a></span><h4 class="code-header">fn <a href="#method.write_char" class="fn">write_char</a>(&amp;mut self, c: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.char.html">char</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a <a href="https://doc.rust-lang.org/nightly/std/primitive.char.html" title="primitive char"><code>char</code></a> into this writer, returning whether the write succeeded.</p>
+<p>A single <a href="https://doc.rust-lang.org/nightly/std/primitive.char.html" title="primitive char"><code>char</code></a> may be encoded as more than one byte.
+This method can only succeed if the entire byte sequence was successfully
+written, and this method will not return until all data has been
+written or an error occurs.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This function will return an instance of <a href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error"><code>Error</code></a> on error.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::{Error, Write};
+
+<span class="kw">fn </span>writer&lt;W: Write&gt;(f: <span class="kw-2">&amp;mut </span>W, c: char) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    f.write_char(c)
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+writer(<span class="kw-2">&amp;mut </span>buf, <span class="string">'a'</span>)<span class="question-mark">?</span>;
+writer(<span class="kw-2">&amp;mut </span>buf, <span class="string">'b'</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf, <span class="string">"ab"</span>);</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.write_fmt" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/fmt/mod.rs.html#214">Source</a></span><h4 class="code-header">fn <a href="#method.write_fmt" class="fn">write_fmt</a>(&amp;mut self, args: <a class="struct" href="struct.Arguments.html" title="struct hyperquark::prelude::fmt::Arguments">Arguments</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Glue for usage of the <a href="https://doc.rust-lang.org/nightly/core/macro.write.html" title="macro core::write"><code>write!</code></a> macro with implementors of this trait.</p>
+<p>This method should generally not be invoked manually, but rather through
+the <a href="https://doc.rust-lang.org/nightly/core/macro.write.html" title="macro core::write"><code>write!</code></a> macro itself.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This function will return an instance of <a href="struct.Error.html" title="struct hyperquark::prelude::fmt::Error"><code>Error</code></a> on error. Please see
+<a href="trait.Write.html#tymethod.write_str" title="method hyperquark::prelude::fmt::Write::write_str">write_str</a> for details.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::{Error, Write};
+
+<span class="kw">fn </span>writer&lt;W: Write&gt;(f: <span class="kw-2">&amp;mut </span>W, s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{s}"</span>))
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+writer(<span class="kw-2">&amp;mut </span>buf, <span class="string">"world"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf, <span class="string">"world"</span>);</code></pre></div></div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait <b>is</b> <a href="https://doc.rust-lang.org/nightly/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><section id="impl-Write-for-Formatter%3C'_%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.2.0">1.2.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/fmt/mod.rs.html#2841">Source</a></span><a href="#impl-Write-for-Formatter%3C'_%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a> for <a class="struct" href="struct.Formatter.html" title="struct hyperquark::prelude::fmt::Formatter">Formatter</a>&lt;'_&gt;</h3></section><section id="impl-Write-for-OsString" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/std/ffi/os_str.rs.html#810">Source</a></span><a href="#impl-Write-for-OsString" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a> for <a class="struct" href="https://doc.rust-lang.org/nightly/std/ffi/os_str/struct.OsString.html" title="struct std::ffi::os_str::OsString">OsString</a></h3></section><section id="impl-Write-for-String" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/alloc/string.rs.html#3351">Source</a></span><a href="#impl-Write-for-String" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a> for <a class="struct" href="../struct.String.html" title="struct hyperquark::prelude::String">String</a></h3><span class="item-info"><div class="stab portability">Available on <strong>non-<code>no_global_oom_handling</code></strong> only.</div></span></section><section id="impl-Write-for-Either%3CL,+R%3E" class="impl"><a class="src rightside" href="https://docs.rs/either/1/src/either/lib.rs.html#1655-1658">Source</a><a href="#impl-Write-for-Either%3CL,+R%3E" class="anchor">§</a><h3 class="code-header">impl&lt;L, R&gt; <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a> for <a class="enum" href="https://docs.rs/either/1/either/enum.Either.html" title="enum either::Either">Either</a>&lt;L, R&gt;<div class="where">where
+    L: <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a>,
+    R: <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a>,</div></h3></section><section id="impl-Write-for-%26mut+W" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.4.0">1.4.0</span> · <a class="src" href="https://doc.rust-lang.org/nightly/src/core/fmt/mod.rs.html#248">Source</a></span><a href="#impl-Write-for-%26mut+W" class="anchor">§</a><h3 class="code-header">impl&lt;W&gt; <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a> for <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.reference.html">&amp;mut W</a><div class="where">where
+    W: <a class="trait" href="trait.Write.html" title="trait hyperquark::prelude::fmt::Write">Write</a> + ?<a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></div><script src="../../../trait.impl/core/fmt/trait.Write.js" data-ignore-extern-crates="std,core,alloc,either" async></script></section></div></main></body></html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Carry out SSA (static single assignment) transformation on the project, and fix up some variable shennanigans."><title>hyperquark::optimisation::ssa - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module ssa</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../../../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module ssa</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#rough-description-of-algorithm" title="Rough description of algorithm">Rough description of algorithm</a></li></ul><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In hyperquark::<wbr>optimisation</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hyperquark</a>::<wbr><a href="../index.html">optimisation</a></div><h1>Module <span>ssa</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/hyperquark/optimisation/ssa.rs.html#1-267">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Carry out SSA (static single assignment) transformation on the project, and fix up
+some variable shennanigans.</p>
+<p>The goals are:</p>
+<ul>
+<li>Split variables so they are only ever written to once, and are read from the most recent
+instance of the variable</li>
+<li>Change variable reads inside procedures to argument access, if that variable hasn’t been
+written to inside that procedure yet</li>
+<li>Assign the narrowest type possible to each variable</li>
+<li>Reinsert casts to account for newly assigned variable types.</li>
+<li>Box procedure returns if needed</li>
+</ul>
+<p>This will create a lot of unnecessary variables; this is ok, as wasm-opt does local merging
+and should remove unnecessary tees etc. But this might be an area in which performance could
+be improved, if we can reduce the number of variables we need to track on our end, which
+will also improve wasm-opt’s runtime.</p>
+<h3 id="rough-description-of-algorithm"><a class="doc-anchor" href="#rough-description-of-algorithm">§</a>Rough description of algorithm</h3>
+<p>This does not correspond exactly to the implementation, but hopefully explains the intent.</p>
+<div class="example-wrap"><pre class="language-pseudocode"><code>function split_to_SSA (step, ssa_map = {}, mut additional_opcodes):
+  for each opcode in step:
+    if opcode is a variable read and is not already local:
+      if opcode not in ssa_map:
+        if step context is in procedure:
+          replace opcode with the appropriate argument access
+      else:
+        replace opcode with local variable read to corresponding variable in ssa_map
+    if opcode is a variable write/tee to var and is not already local:
+      new_var := new variable
+      ssa_map[var] = new_var
+      replace opcode with local variable write/tee to new_var
+    if opcode yields inline to other_steps (e.g. by yield_inline, loop or if/else):
+      if opcode is loop:
+        for each globally accessible variable:
+          write to a new SSA with the current value of the variable
+          # the needless SSAs here will be removed by wasm-opt.
+          # TODO: can we keep track of which variables are accessed from inside each step, to simplify this step?
+      lower_ssa_maps := []
+      for each lower_step in other_steps:
+        append (split_to_SSA(other step, ssa_map, additional_opcodes)) to lower_ssa_maps
+      consolidate lower_ssa_maps into lower_ssa_map of variable : [variable]
+      for each (global, locals) in lower_ssa_map:
+        if locals.length == 1:
+          ssa_map[global] := locals[0]
+        else:
+          new_var := new variable
+          for each i, lower_step in enumerate(other_steps):
+            append (local variable write to new_var from locals[i])
+                to additional_opcodes[lower_step]
+          ssa_map[global] = new_var
+    if opcode yields non-inline to other_step:
+      split_to_SSA(other_step, {}, additional_steps)
+  if (step is not inlined and step context is not in procedure) or (last opcode was a non-inline yield):
+    for (global, local) in ssa_map:
+      append (local variable read of local) to additional_opcodes[step]
+      append (global variable write of global) to additional_opcodes[step]
+    return {}
+  if step context is in procedure:
+    return {}
+  return ssa_map
+
+additional_opcodes = {}
+
+for step in top level steps:
+  split_to_SSA (step, {}, additional_opcodes)
+
+for (step, extra_opcodes) in additional_opcodes:
+  concat extra_opcodes to step.opcodes</code></pre></div>
+<p>Alongside this SSA splitting, we also need to construct a graph to reason about what types
+might be on the stack at any one point. This is simpler so won’t be explained here.</p>
+<p>A note on naming: I call this SSA, but it is not strictly true. In SSA, each variable is assigned to
+exactly once, and at a dominance frontier, SSAs from preceding blocks are merged into one using a ‘phi node’
+or ‘phi function’, which picks the correct variable to read based on which branch was just taken. Carrying
+around additional information about which block was just taken isn’t something that I want to do, so our
+‘phi function’ actually inserts the relevant assignment into the preceding blocks directly. This does mean
+that some variables can be written to from different blocks, especially where loops are concerned (as the
+output SSA needs to be written to both before the loop and at the end of each iteration). This isn’t actually
+a problem for us, as we’re not using SSA to carry out liveness analysis - we use it to minimise casts and
+maximise the type information known at compile time.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="box_proc_returns/index.html" title="mod hyperquark::optimisation::ssa::box_proc_returns">box_<wbr>proc_<wbr>returns</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="type_convergence/index.html" title="mod hyperquark::optimisation::ssa::type_convergence">type_<wbr>convergence</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="var_graph/index.html" title="mod hyperquark::optimisation::ssa::var_graph">var_<wbr>graph</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.SSAToken.html" title="struct hyperquark::optimisation::ssa::SSAToken">SSAToken</a></dt><dd>A token type that cannot be instantiated from anywhere else (since the field is private)</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.optimise_variables.html" title="fn hyperquark::optimisation::ssa::optimise_variables">optimise_<wbr>variables</a></dt><dt><a class="fn" href="fn.split_variables_and_make_graphs.html" title="fn hyperquark::optimisation::ssa::split_variables_and_make_graphs">split_<wbr>variables_<wbr>and_<wbr>make_<wbr>graphs</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Splits variables at every write site, and ensures that outer/global variables are then written
+to at the end of a step. This also constructs variable type graphs for each step which can then
+be analyzed to determine the best types for variables.</dd><dt><a class="fn" href="fn.visit_procedure.html" title="fn hyperquark::optimisation::ssa::visit_procedure">visit_<wbr>procedure</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.visit_step_recursively.html" title="fn hyperquark::optimisation::ssa::visit_step_recursively">visit_<wbr>step_<wbr>recursively</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html>

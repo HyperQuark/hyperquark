@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ListType","Switch","VarTypeConvergence","WasmFeature","WasmStringType"],"fn":["all_wasm_features","wasm_feature_detect_name"],"macro":[["stringmap",1],["ty_str",1]],"struct":["FlagInfo","WasmFlags"]};

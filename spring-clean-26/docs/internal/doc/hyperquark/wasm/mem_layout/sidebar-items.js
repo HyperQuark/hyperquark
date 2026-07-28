@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":[["size_from_type",1]],"mod":["sprite","stage"]};

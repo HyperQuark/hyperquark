@@ -1,0 +1,181 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/instructions/motion/yposition.rs`."><title>yposition.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">hyperquark/instructions/motion/</div>yposition.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>mem_layout::{sprite <span class="kw">as </span>sprite_layout, stage <span class="kw">as </span>stage_layout};
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>wasm_encoder::MemArg;
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::prelude::<span class="kw-2">*</span>;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span><span class="kw">crate</span>::wasm::{StepTarget, mem_layout};
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">pub fn </span>wasm(func: <span class="kw-2">&amp;</span>StepFunc, _inputs: Rc&lt;[IrType]&gt;) -&gt; HQResult&lt;Vec&lt;InternalInstruction&gt;&gt; {
+<a href=#8 id=8 data-nosnippet>8</a>    <span class="kw">let </span>StepTarget::Sprite(wasm_target_index) = func.target() <span class="kw">else </span>{
+<a href=#9 id=9 data-nosnippet>9</a>        <span class="macro">hq_bad_proj!</span>(<span class="string">"motion_yposition called in stage"</span>)
+<a href=#10 id=10 data-nosnippet>10</a>    };
+<a href=#11 id=11 data-nosnippet>11</a>    <span class="prelude-val">Ok</span>(<span class="macro">wasm!</span>[
+<a href=#12 id=12 data-nosnippet>12</a>        I32Const(<span class="number">0</span>),
+<a href=#13 id=13 data-nosnippet>13</a>        F64Load(MemArg {
+<a href=#14 id=14 data-nosnippet>14</a>            offset: (stage_layout::BLOCK_SIZE
+<a href=#15 id=15 data-nosnippet>15</a>                + wasm_target_index * sprite_layout::BLOCK_SIZE
+<a href=#16 id=16 data-nosnippet>16</a>                + sprite_layout::Y)
+<a href=#17 id=17 data-nosnippet>17</a>                .into(),
+<a href=#18 id=18 data-nosnippet>18</a>            align: <span class="number">3</span>,
+<a href=#19 id=19 data-nosnippet>19</a>            memory_index: <span class="number">0
+<a href=#20 id=20 data-nosnippet>20</a>        </span>}),
+<a href=#21 id=21 data-nosnippet>21</a>    ])
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">pub fn </span>acceptable_inputs() -&gt; HQResult&lt;Rc&lt;[IrType]&gt;&gt; {
+<a href=#25 id=25 data-nosnippet>25</a>    <span class="prelude-val">Ok</span>(Rc::from([]))
+<a href=#26 id=26 data-nosnippet>26</a>}
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">pub fn </span>output_type(_inputs: Rc&lt;[IrType]&gt;) -&gt; HQResult&lt;ReturnType&gt; {
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="prelude-val">Ok</span>(ReturnType::Singleton(IrType::FloatReal))
+<a href=#30 id=30 data-nosnippet>30</a>}
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub const </span>REQUESTS_SCREEN_REFRESH: bool = <span class="bool-val">false</span>;
+<a href=#33 id=33 data-nosnippet>33</a>
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">pub const fn </span>const_fold(
+<a href=#35 id=35 data-nosnippet>35</a>    _inputs: <span class="kw-2">&amp;</span>[ConstFoldItem],
+<a href=#36 id=36 data-nosnippet>36</a>    _state: <span class="kw-2">&amp;mut </span>ConstFoldState,
+<a href=#37 id=37 data-nosnippet>37</a>) -&gt; HQResult&lt;ConstFold&gt; {
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="prelude-val">Ok</span>(NotFoldable)
+<a href=#39 id=39 data-nosnippet>39</a>}
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="macro">crate::instructions_test!</span> {tests; motion_yposition; }
+</code></pre></div></section></main></body></html>

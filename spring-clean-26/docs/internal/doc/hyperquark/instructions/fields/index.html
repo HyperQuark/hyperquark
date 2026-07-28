@@ -1,0 +1,140 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `fields` mod in crate `hyperquark`."><title>hyperquark::instructions::fields - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module fields</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../../../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module fields</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In hyperquark::<wbr>instructions</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hyperquark</a>::<wbr><a href="../index.html">instructions</a></div><h1>Module <span>fields</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/hyperquark/home/runner/work/hyperquark/hyperquark/target/debug/build/hyperquark-ba7a59ca9d5277ab/out/ir-opcodes.rs.html#653">Source</a> </span></div><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ControlIfElseFields.html" title="struct hyperquark::instructions::fields::ControlIfElseFields">Control<wbr>IfElse<wbr>Fields</a></dt><dt><a class="struct" href="struct.ControlLoopFields.html" title="struct hyperquark::instructions::fields::ControlLoopFields">Control<wbr>Loop<wbr>Fields</a></dt><dt><a class="struct" href="struct.ControlWaitFields.html" title="struct hyperquark::instructions::fields::ControlWaitFields">Control<wbr>Wait<wbr>Fields</a></dt><dt><a class="struct" href="struct.DataAddtolistFields.html" title="struct hyperquark::instructions::fields::DataAddtolistFields">Data<wbr>Addtolist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataDeletealloflistFields.html" title="struct hyperquark::instructions::fields::DataDeletealloflistFields">Data<wbr>Deletealloflist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataDeleteoflistFields.html" title="struct hyperquark::instructions::fields::DataDeleteoflistFields">Data<wbr>Deleteoflist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataInsertatlistFields.html" title="struct hyperquark::instructions::fields::DataInsertatlistFields">Data<wbr>Insertatlist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataItemoflistFields.html" title="struct hyperquark::instructions::fields::DataItemoflistFields">Data<wbr>Itemoflist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataLengthoflistFields.html" title="struct hyperquark::instructions::fields::DataLengthoflistFields">Data<wbr>Lengthoflist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataListcontentsFields.html" title="struct hyperquark::instructions::fields::DataListcontentsFields">Data<wbr>Listcontents<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataReplaceitemoflistFields.html" title="struct hyperquark::instructions::fields::DataReplaceitemoflistFields">Data<wbr>Replaceitemoflist<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataSetvariabletoFields.html" title="struct hyperquark::instructions::fields::DataSetvariabletoFields">Data<wbr>Setvariableto<wbr>Fields</a></dt><dd>we need these fields to be mutable for optimisations to be feasible</dd><dt><a class="struct" href="struct.DataTeevariableFields.html" title="struct hyperquark::instructions::fields::DataTeevariableFields">Data<wbr>Teevariable<wbr>Fields</a></dt><dt><a class="struct" href="struct.DataVariableFields.html" title="struct hyperquark::instructions::fields::DataVariableFields">Data<wbr>Variable<wbr>Fields</a></dt><dt><a class="struct" href="struct.DataVisvariableFields.html" title="struct hyperquark::instructions::fields::DataVisvariableFields">Data<wbr>Visvariable<wbr>Fields</a></dt><dt><a class="struct" href="struct.EventBroadcastAndWaitFields.html" title="struct hyperquark::instructions::fields::EventBroadcastAndWaitFields">Event<wbr>Broadcast<wbr>AndWait<wbr>Fields</a></dt><dt><a class="struct" href="struct.EventBroadcastFields.html" title="struct hyperquark::instructions::fields::EventBroadcastFields">Event<wbr>Broadcast<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqBooleanFields.html" title="struct hyperquark::instructions::fields::HqBooleanFields">HqBoolean<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqBoxFields.html" title="struct hyperquark::instructions::fields::HqBoxFields">HqBox<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqCastFields.html" title="struct hyperquark::instructions::fields::HqCastFields">HqCast<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqColorRgbFields.html" title="struct hyperquark::instructions::fields::HqColorRgbFields">HqColor<wbr>RgbFields</a></dt><dt><a class="struct" href="struct.HqFloatFields.html" title="struct hyperquark::instructions::fields::HqFloatFields">HqFloat<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqIntegerFields.html" title="struct hyperquark::instructions::fields::HqIntegerFields">HqInteger<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqTextFields.html" title="struct hyperquark::instructions::fields::HqTextFields">HqText<wbr>Fields</a></dt><dt><a class="struct" href="struct.HqYieldFields.html" title="struct hyperquark::instructions::fields::HqYieldFields">HqYield<wbr>Fields</a></dt><dt><a class="struct" href="struct.LooksSayFields.html" title="struct hyperquark::instructions::fields::LooksSayFields">Looks<wbr>SayFields</a></dt><dt><a class="struct" href="struct.LooksThinkFields.html" title="struct hyperquark::instructions::fields::LooksThinkFields">Looks<wbr>Think<wbr>Fields</a></dt><dt><a class="struct" href="struct.ProceduresArgumentFields.html" title="struct hyperquark::instructions::fields::ProceduresArgumentFields">Procedures<wbr>Argument<wbr>Fields</a></dt><dt><a class="struct" href="struct.ProceduresCallNonwarpFields.html" title="struct hyperquark::instructions::fields::ProceduresCallNonwarpFields">Procedures<wbr>Call<wbr>Nonwarp<wbr>Fields</a></dt><dt><a class="struct" href="struct.ProceduresCallWarpFields.html" title="struct hyperquark::instructions::fields::ProceduresCallWarpFields">Procedures<wbr>Call<wbr>Warp<wbr>Fields</a></dt><dt><a class="struct" href="struct.SensingAskandwaitFields.html" title="struct hyperquark::instructions::fields::SensingAskandwaitFields">Sensing<wbr>Askandwait<wbr>Fields</a></dt></dl></section></div></main></body></html>

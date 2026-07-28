@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MapRegistry","NamedRegistry","SetRegistry"],"trait":["NamedRegistrar","NamedRegistryItem","NamedRegistryItemOverride","Registry","RegistryDefault","RegistryType","TryNamedRegistryItemOverride"]};

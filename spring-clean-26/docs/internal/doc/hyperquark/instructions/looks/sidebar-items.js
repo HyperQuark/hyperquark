@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["backdropnumber","costumename","costumenumber","say","setsizeto","setvisible","size","switchbackdropto","switchcostumeto","think"]};

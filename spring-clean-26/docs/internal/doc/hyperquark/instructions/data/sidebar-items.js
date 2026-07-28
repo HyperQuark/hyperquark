@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["addtolist","deletealloflist","deleteoflist","insertatlist","itemoflist","lengthoflist","listcontents","replaceitemoflist","setvariableto","teevariable","variable","visvariable"]};
