@@ -125,21 +125,21 @@ pub enum IrOpcode {{
 
 impl IrOpcode {{
     /// maps an opcode to its acceptable input types
-    pub fn acceptable_inputs(&self) -> HQResult<Rc<[crate::ir::Type]>> {{
+    pub fn acceptable_inputs(&self) -> HQResult<Rc<[crate::ir::IrType]>> {{
         match self {{
             {}
         }}
     }}
 
     /// maps an opcode to its WASM instructions
-    pub fn wasm(&self, step_func: &crate::wasm::StepFunc, inputs: Rc<[crate::ir::Type]>) -> HQResult<Vec<crate::wasm::InternalInstruction>> {{
+    pub fn wasm(&self, step_func: &crate::wasm::StepFunc, inputs: Rc<[crate::ir::IrType]>) -> HQResult<Vec<crate::wasm::InternalInstruction>> {{
         match self {{
             {}
         }}
     }}
     
     /// maps an opcode to its output type
-    fn base_output_type(&self, inputs: Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType> {{
+    fn base_output_type(&self, inputs: Rc<[crate::ir::IrType]>) -> HQResult<crate::ir::ReturnType> {{
         match self {{
             {}
         }}
@@ -154,9 +154,9 @@ impl IrOpcode {{
 
     pub fn output_type(
         &self,
-        inputs: Rc<[crate::ir::Type]>,
+        inputs: Rc<[crate::ir::IrType]>,
     ) -> HQResult<crate::ir::ReturnType> {{
-        if inputs.iter().any(crate::ir::Type::is_none) {{
+        if inputs.iter().any(crate::ir::IrType::is_none) {{
             hq_bug!("got none input type :scream: \n at opcode {{:}}", self)
         }}
         if let Self::procedures_call_warp(_) = self {{

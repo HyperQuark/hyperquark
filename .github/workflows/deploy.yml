@@ -46,7 +46,7 @@ jobs:
         env:
           VITE_HASH_HISTORY: true
         run: |
-          chmod +x build.sh && ./build.sh -Wpz
+          chmod +x build.sh && ./build.sh -WpzD
           npm run build -- --base=/hyperquark/$BRANCH_NAME/
 
       - name: Move files to tmp

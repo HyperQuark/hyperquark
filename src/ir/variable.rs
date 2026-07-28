@@ -3,8 +3,7 @@ use core::hash::{Hash, Hasher};
 
 use uuid::Uuid;
 
-use super::Type;
-use crate::ir::types::{Type as IrType, var_val_type};
+use crate::ir::{IrType, var_val_type};
 use crate::prelude::*;
 use crate::sb3::{Monitor as Sb3Monitor, Target as Sb3Target, VarVal};
 use crate::wasm::WasmFlags;
@@ -12,7 +11,7 @@ use crate::wasm::flags::Switch;
 
 #[derive(Debug)]
 struct Variable {
-    possible_types: RefCell<Type>,
+    possible_types: RefCell<IrType>,
     initial_value: VarVal,
     id: String,
     monitor: Option<IrMonitor>,
@@ -29,7 +28,7 @@ pub struct IrMonitor {
 
 impl RcVar {
     pub fn new(
-        ty: Type,
+        ty: IrType,
         initial_value: &VarVal,
         monitor: Option<IrMonitor>,
         flags: &WasmFlags,
@@ -47,20 +46,20 @@ impl RcVar {
     #[must_use]
     pub fn new_empty() -> Self {
         Self(Rc::new(Variable {
-            possible_types: RefCell::new(Type::none()),
+            possible_types: RefCell::new(IrType::none()),
             initial_value: VarVal::Bool(false), // arbitrary value
             id: Uuid::new_v4().to_string(),
             monitor: None,
         }))
     }
 
-    pub fn add_type(&self, ty: Type) {
+    pub fn add_type(&self, ty: IrType) {
         let current = *self.0.possible_types.borrow();
         *self.0.possible_types.borrow_mut() = current.or(ty);
     }
 
     #[must_use]
-    pub fn possible_types(&self) -> Ref<'_, Type> {
+    pub fn possible_types(&self) -> Ref<'_, IrType> {
         self.0.possible_types.borrow()
     }
 
@@ -193,15 +192,7 @@ pub fn lists_from_target(target: &Sb3Target, flags: &WasmFlags) -> HQResult<Targ
             Ok((
                 id.clone(),
                 Rc::new(TargetList {
-                    list: RcList::new(
-                        list_info
-                            .1
-                            .iter()
-                            .map(var_val_type)
-                            .try_fold(IrType::none(), |a, b| -> HQResult<_> { Ok(a.or(b?)) })?,
-                        list_info.1.clone(),
-                        flags,
-                    )?,
+                    list: RcList::new(list_info.1.clone(), flags)?,
                     is_used: RefCell::new(false),
                 }),
             ))
@@ -289,7 +280,7 @@ fn maybe_eagerly_parse_var_val(var_val: &VarVal, flags: &WasmFlags) -> VarVal {
 
 #[derive(Debug)]
 struct List {
-    possible_types: RefCell<Type>,
+    possible_types: RefCell<IrType>,
     length_mutable: RefCell<bool>,
     initial_value: Vec<VarVal>,
     id: String,
@@ -299,7 +290,7 @@ struct List {
 pub struct RcList(Rc<List>);
 
 impl RcList {
-    pub fn new(ty: Type, initial_value: Vec<VarVal>, flags: &WasmFlags) -> HQResult<Self> {
+    pub fn new(initial_value: Vec<VarVal>, flags: &WasmFlags) -> HQResult<Self> {
         let init: Vec<_> = initial_value
             .into_iter()
             .map(|val| {
@@ -307,7 +298,12 @@ impl RcList {
                 if flags.integers == Switch::Off
                     && let VarVal::Int(i) = parsed_val
                 {
-                    VarVal::String(i.to_string().into_boxed_str())
+                    if (f64::from(i)).to_string() == i.to_string() {
+                        // TODO: is this redundant? Are there any ints that have a different string representation than the float?
+                        VarVal::Float(f64::from(i))
+                    } else {
+                        VarVal::String(i.to_string().into_boxed_str())
+                    }
                 } else {
                     parsed_val
                 }
@@ -315,11 +311,10 @@ impl RcList {
             .collect();
         Ok(Self(Rc::new(List {
             possible_types: RefCell::new(
-                ty.or(init
-                    .iter()
-                    .try_fold(Type::none(), |t: Type, v| -> HQResult<_> {
+                init.iter()
+                    .try_fold(IrType::none(), |t: IrType, v| -> HQResult<_> {
                         Ok(t.or(var_val_type(v)?))
-                    })?),
+                    })?,
             ),
             length_mutable: RefCell::new(false),
             initial_value: init,
@@ -327,13 +322,13 @@ impl RcList {
         })))
     }
 
-    pub fn add_type(&self, ty: Type) {
+    pub fn add_type(&self, ty: IrType) {
         let current = *self.0.possible_types.borrow();
         *self.0.possible_types.borrow_mut() = current.or(ty);
     }
 
     #[must_use]
-    pub fn possible_types(&self) -> Ref<'_, Type> {
+    pub fn possible_types(&self) -> Ref<'_, IrType> {
         self.0.possible_types.borrow()
     }
 

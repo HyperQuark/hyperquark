@@ -1,15 +1,18 @@
 /target/
 /Cargo.lock
-/bad.wasm
-/bad.mjs
-/bad.wat
-/wabt*
+/node_modules/
+/playground/dist/
+
+# compiler artifacts
 /js/compiler
 /js/no-compiler
 /js/imports.ts
 /js/opcodes.js
-/node_modules/
-/playground/dist/
+
+# produced by rustdoc
+/playground/public/docs/internal
+
 /.vite/
 /.vscode/
+
 rustc-ice*

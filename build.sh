@@ -10,6 +10,7 @@ err()
   echo Exiting early since previous build step failed!;
   exit 1;
 }
+
 usage()
 {
   echo "Usage: $0 [options]"
@@ -17,13 +18,13 @@ usage()
   echo "  -h -?  show this help screen"
   echo "  -d     build for development"
   echo "  -p     build for production"
-  echo "  -V     build the website with vite"
   echo "  -W     build wasm"
   echo "  -o     do not run wasm-opt"
   echo "  -s     run wasm-opt with -Os"
   echo "  -z     run wasm-opt with -Oz"
   echo "  -v     verbose output"
-  echo "  -D     enable DWARF debuggin and panicking"
+  echo "  -P     enable DWARF debugging and panicking"
+  echo "  -D     also build rustdocs"
   exit 1
 }
 
@@ -40,51 +41,47 @@ set_variable()
   fi
 }
 
-unset VITE WASM PROD;
+unset VITE WASM PROD RUSTDOC;
 QUIET=1;
-while getopts 'dpVWoszvhD' c
+while getopts 'dpWoszvhPD' c
 do
   case $c in
     d) set_variable PROD 0 ;;
     p) set_variable PROD 1 ;;
-    V) set_variable VITE 1 ;;
     W) set_variable WASM 1 ;;
     o) set_variable WOPT 0 ;;
     s) set_variable WOPT 1 ;;
     z) set_variable WOPT 2 ;;
-    D) set_variable DWARF 1 ;;
+    P) set_variable DWARF 1 ;;
+    D) set_variable RUSTDOC 1;;
     v) unset QUIET ;;
     h|?) usage ;;
   esac
 done
 
 [ -z $WASM ] && set_variable WASM 0;
-[ -z $VITE ] && set_variable VITE 0;
 
-[ -z $PROD ] && usage;
+if [ $WASM = "1" ]; then
+  [ -z $PROD ] && usage;
+  if [ -z DWARF ]; then
+    set_variable DWARF 0;
+  fi
+fi
 
 if [ -z $WOPT ]; then
-  if [ $PROD = "1" ]; then
+  if [[ "$PROD" = "1" ]]; then
     set_variable WOPT 2;
   else
     set_variable WOPT 0;
   fi
 fi
 
-if [ -z DWARF ]; then
-  if [ $PROD = "0" ]; then
-    set_variable DWARF 1;
-  else 
-    set_variable DWARF 0;
-  fi
-fi
+[[ "$WASM" == "0" && "$WOPT" == "0" && "$RUSTDOC" != "1" ]] && echo "exiting (nothing to build)" && exit 0
 
-[ $VITE = "0" ] && [ $WASM = "0" ] && [ $WOPT = "0" ] && echo "exiting (nothing to build)" && exit 0
-
-if [ $WASM = "1" ]; then
+if [[ "$WASM" == "1" ]]; then
   mkdir -p /tmp/hq-build/js/compiler;
   mkdir -p /tmp/hq-build/js/no-compiler;
-  if [ $PROD = "1" ]; then
+  if [[ "$PROD" == "1" ]]; then
     echo "building hyperquark (compiler) for production..."
     cargo build --target=wasm32-unknown-unknown --release ${QUIET:+--quiet} ${DWARF:+--features="compiler panic"}
     echo running wasm-bindgen...
@@ -106,23 +103,32 @@ if [ $WASM = "1" ]; then
   mv $(cargo outdir --no-names --quiet)/imports.ts /tmp/hq-build/js/imports.ts
   node opcodes.mjs
 fi
-if [ $WOPT = "1" ]; then
+
+if [[ "$WOPT" == "1" ]]; then
   echo running wasm-opt -Os...
   wasm-opt -Os -g /tmp/hq-build/js/compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/compiler/hyperquark_bg.wasm
   wasm-opt -Os -g /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm
 fi
-if [ $WOPT = "2" ]; then
+if [[ "$WOPT" == "2" ]]; then
   echo running wasm-opt -Oz...
   wasm-opt -Oz -g /tmp/hq-build/js/compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/compiler/hyperquark_bg.wasm
   wasm-opt -Oz -g /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm -o /tmp/hq-build/js/no-compiler/hyperquark_bg.wasm
 fi
-mkdir -p /tmp/hq-build/js-new
-cp -a js/* /tmp/hq-build/js-new/
-cp -a /tmp/hq-build/js/* /tmp/hq-build/js-new/
-rm -rf js
-mv -fT /tmp/hq-build/js-new js
-if [ $VITE = "1" ]; then
-  echo running npm build...
-  npm run build
+
+if [[ "$WASM" == "1" ]] || [[ "$WOPT" == "1" ]] || [[ "$WOPT" == "2" ]]; then
+  mkdir -p /tmp/hq-build/js-new
+  cp -a js/* /tmp/hq-build/js-new/
+  cp -a /tmp/hq-build/js/* /tmp/hq-build/js-new/
+  rm -rf js
+  mv -fT /tmp/hq-build/js-new js
+fi
+
+if [[ "$RUSTDOC" == "1" ]]; then
+  echo building rust docs
+  # cargo doc --workspace --exclude sb3
+  RUSTDOCFLAGS="--html-in-header typst-header.html" cargo doc --no-deps --document-private-items
+  rm -rf playground/public/docs/internal
+  mkdir -p playground/public/docs/internal
+  cp -ra target/doc playground/public/docs/internal
 fi
 echo finished!

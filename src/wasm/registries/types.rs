@@ -107,7 +107,7 @@ impl TypeRegistry {
                         mutable: false,
                         element_type: StorageType::Val(WasmProject::ir_type_to_wasm(
                             *var.possible_types(),
-                        )?),
+                        )),
                     })
                 })
                 .collect::<HQResult<Vec<_>>>()?,

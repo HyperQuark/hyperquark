@@ -1,11 +1,11 @@
 #![feature(stmt_expr_attributes)] // used in error.rs for panic mode
-#![feature(if_let_guard)]
 #![feature(associated_type_defaults)] // used in registry.rs for default key type for NamedRegistry
-#![feature(box_patterns)]
+#![feature(box_patterns)] // used in ir/blocks/special.rs to match Box<[_]> as array
 #![feature(iterator_try_reduce)] // used in instructions/input_switcher.rs for building return type
 #![feature(try_find)] // used in ir/proc.rs for finding prototype/def blocks
-#![doc(html_logo_url = "https://hyperquark.github.io/hyperquark/logo.png")]
-#![doc(html_favicon_url = "https://hyperquark.github.io/hyperquark/favicon.ico")]
+#![feature(arbitrary_self_types)] // used in ir/types.rs to take `&mut Rc<Self>` as self type for `TypeStack`
+#![doc(html_logo_url = "https://hyperquark.edgecompute.app/logo.png")]
+#![doc(html_favicon_url = "https://hyperquark.edgecompute.app/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]
 #![allow(
     clippy::non_std_lazy_statics,
@@ -42,7 +42,7 @@
     clippy::panic,
     clippy::rc_buffer,
     clippy::redundant_type_annotations,
-    clippy::shadow_reuse,
+    clippy::shadow_unrelated,
     clippy::std_instead_of_alloc,
     clippy::std_instead_of_core,
     clippy::unwrap_used,
@@ -145,8 +145,9 @@ pub fn sb3_to_wasm(proj: &str, flags: wasm::WasmFlags) -> HQResult<wasm::Finishe
     }
     let ssa_token = optimisation::ir_optimise(&ir_proj, &flags)?;
     if flags.print_ir == Switch::On {
-        crate::log("ir (after optimisation):");
+        crate::log("ir (after optimisationnnn):");
         crate::log(format!("{ir_proj}").as_str());
     }
+    crate::log("optimisation done");
     wasm::WasmProject::from_ir(&ir_proj, ssa_token, flags)?.finish()
 }

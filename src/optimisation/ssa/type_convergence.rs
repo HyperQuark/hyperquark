@@ -5,7 +5,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::{Incoming as EdgeIn, Outgoing as EdgeOut};
 
 use super::var_graph::{EdgeType, StackOperation, VarGraph, VarTarget};
-use crate::ir::{ReturnType, Type as IrType};
+use crate::ir::{IrType, ReturnType, TypeStack};
 use crate::prelude::*;
 use crate::wasm::flags::VarTypeConvergence;
 
@@ -73,25 +73,6 @@ fn evaluate_type_stack(
             Rc::clone(tail)
         }
     })
-}
-
-#[derive(Debug, Clone)]
-enum TypeStack {
-    Nil,
-    Cons(IrType, Rc<Self>),
-}
-
-impl Iterator for Rc<TypeStack> {
-    type Item = IrType;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let TypeStack::Cons(ty, tail) = &*self.clone() {
-            *self = Self::clone(tail);
-            Some(*ty)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Clone, Debug)]

@@ -12,6 +12,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             wasm![]
         } else {
             let local_index = func.local(ValType::I32)?;
+            func.free_local(local_index)?;
             wasm![
                 LocalTee(local_index),
                 LocalGet(local_index),

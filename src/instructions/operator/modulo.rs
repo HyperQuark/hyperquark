@@ -12,6 +12,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         if IrType::QuasiInt.contains(t2) {
             let modulus_local = func.local(ValType::I32)?;
             let result_local = func.local(ValType::I32)?;
+            func.free_local(modulus_local)?;
+            func.free_local(result_local)?;
             if t2.maybe_zero() {
                 let if_block_type = func
                     .registries()
@@ -60,7 +62,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             let modulus_local = func.local(ValType::F64)?;
             let n_local = func.local(ValType::F64)?;
             let div_local = func.local(ValType::F64)?;
-            wasm![
+            let w = wasm![
                 @nanreduce(t2),
                 LocalSet(modulus_local),
                 F64ConvertI32S,
@@ -80,7 +82,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
                 F64Lt,
                 Select,
                 F64Add,
-            ]
+            ];
+            func.free_local(modulus_local)?;
+            func.free_local(n_local)?;
+            func.free_local(div_local)?;
+            w
         } else {
             hq_bug!("bad input")
         }
@@ -88,7 +94,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         let modulus_local = func.local(ValType::F64)?;
         let n_local = func.local(ValType::F64)?;
         let div_local = func.local(ValType::F64)?;
-        if IrType::Float.contains(t2) {
+        let w = if IrType::Float.contains(t2) {
             wasm![
                 @nanreduce(t2),
                 LocalSet(modulus_local),
@@ -134,7 +140,11 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             ]
         } else {
             hq_bug!("bad input")
-        }
+        };
+        func.free_local(modulus_local)?;
+        func.free_local(n_local)?;
+        func.free_local(div_local)?;
+        w
     } else {
         hq_bug!("bad input")
     })

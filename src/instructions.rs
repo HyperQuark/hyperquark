@@ -11,7 +11,7 @@
     reason = "there are so many `Rc<T>`s here which I don't want to change"
 )]
 
-use crate::ir::{Step, StepIndex};
+use crate::ir::{IrType, ReturnType, Step, StepIndex, base_types};
 pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
 use crate::prelude::*;
 
@@ -32,20 +32,19 @@ mod tests;
 fn boxed_output_type<F>(
     // we provide a function so this can be used by tests without access to the whole IrOpcode enum stuff
     outputs_func: F,
-    inputs: Rc<[crate::ir::Type]>,
-) -> HQResult<crate::ir::ReturnType>
+    inputs: Rc<[IrType]>,
+) -> HQResult<ReturnType>
 where
-    F: Fn(Rc<[crate::ir::Type]>) -> HQResult<crate::ir::ReturnType>,
+    F: Fn(Rc<[IrType]>) -> HQResult<ReturnType>,
 {
-    use crate::ir::ReturnType;
     if inputs.is_empty() {
         let out = outputs_func(Rc::from([]))?;
         Ok(out)
     } else {
-        if inputs.iter().any(crate::ir::Type::is_none) {
+        if inputs.iter().any(IrType::is_none) {
             hq_bug!("got none input type :scream:")
         }
-        let bases = crate::ir::base_types(&inputs)?;
+        let bases = base_types(&inputs)?;
         let mapped = bases
             .iter()
             .enumerate()
@@ -193,9 +192,10 @@ impl IrOpcode {
     }
 }
 
-pub mod input_switcher;
+mod wrap_instructions;
+
 pub use hq::r#yield::YieldMode;
-pub use input_switcher::wrap_instruction;
+pub use wrap_instructions::wrap_instructions;
 
 /// Canonical NaN + bit 33, + string pointer in bits 1-32
 pub const BOXED_STRING_PATTERN: i64 = 0x7FF8_0001 << 32;
@@ -217,7 +217,7 @@ mod prelude {
         BOXED_BOOL_PATTERN, BOXED_COLOR_ARGB_PATTERN, BOXED_COLOR_RGB_PATTERN, BOXED_INT_PATTERN,
         BOXED_STRING_PATTERN,
     };
-    pub use crate::ir::{ReturnType, Type as IrType};
+    pub use crate::ir::{IrType, ReturnType};
     pub use crate::optimisation::{ConstFold, ConstFoldItem, ConstFoldState};
     pub use crate::prelude::*;
     pub use crate::sb3::VarVal;

@@ -14,7 +14,7 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
         .registries()
         .external_functions()
         .register(("operator", "random".into()), (vec![], vec![ValType::F64]))?;
-    Ok(if IrType::QuasiInt.contains(t1) {
+    let w = if IrType::QuasiInt.contains(t1) {
         if IrType::QuasiInt.contains(t2) {
             wasm![
                 F64ConvertI32S,
@@ -144,7 +144,12 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     } else {
         wasm![]
     })
-    .collect())
+    .collect();
+    func.free_local(from_local)?;
+    func.free_local(to_local)?;
+    func.free_local(low_local)?;
+    func.free_local(high_local)?;
+    Ok(w)
 }
 
 pub fn acceptable_inputs() -> HQResult<Rc<[IrType]>> {

@@ -4,7 +4,7 @@ use super::SSAToken;
 use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, HqBoxFields, HqYieldFields, IrOpcode, YieldMode,
 };
-use crate::ir::{IrProject, ReturnType, Step, Type as IrType, var_val_instruction, var_val_type};
+use crate::ir::{IrProject, IrType, ReturnType, Step, var_val_instruction, var_val_type};
 use crate::prelude::*;
 use crate::sb3::VarVal;
 

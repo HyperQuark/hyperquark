@@ -185,7 +185,7 @@ impl Proc {
                 Some((
                     parent_id.clone(),
                     blocks.get(parent_id).ok_or_else(|| {
-                        make_hq_bad_proj!("non-existant parent id on prototype block")
+                        make_hq_bad_proj!("non-existent parent id on prototype block")
                     })?,
                 ))
             } else {
@@ -211,7 +211,7 @@ impl Proc {
                             hq_bad_proj!("unexpected array-like input for custom_block input");
                         };
                         let Some(this_proc_prototype) = blocks.get(custom_block_id) else {
-                            hq_bad_proj!("non-existant block id specified for custom_block input");
+                            hq_bad_proj!("non-existent block id specified for custom_block input");
                         };
                         Ok(this_proc_prototype == prototype)
                     })?

@@ -42,6 +42,7 @@ pub fn wasm(
         nullable: false,
         heap_type: HeapType::Concrete(i32_array_type),
     }))?;
+    func.free_local(arr_local)?;
 
     Ok(wasm![
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),

@@ -80,6 +80,9 @@ pub fn wasm(
             }))?;
             let i32_local = func.local(ValType::I32)?;
             let step_func_ty = func.registries().types().step_func_type()?;
+            func.free_local(thread_struct_local)?;
+            func.free_local(stack_struct_local)?;
+            func.free_local(i32_local)?;
 
             wasm![
                 LocalGet(0),
@@ -148,6 +151,7 @@ pub fn wasm(
                 nullable: false,
                 heap_type: HeapType::Concrete(thread_struct_ty),
             }))?;
+            func.free_local(local)?;
             let stack_array_ty = func.registries().types().stack_array_type()?;
             let stack_struct_ty = func.registries().types().stack_struct_type()?;
 

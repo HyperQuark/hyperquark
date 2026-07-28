@@ -82,7 +82,7 @@
 //! that some variables can be written to from different blocks, especially where loops are concerned (as the
 //! output SSA needs to be written to both before the loop and at the end of each iteration). This isn't actually
 //! a problem for us, as we're not using SSA to carry out liveness analysis - we use it to minimise casts and
-//! maximimise the type information known at compile time.
+//! maximise the type information known at compile time.
 
 #![expect(
     clippy::mutable_key_type,
@@ -197,7 +197,7 @@ fn split_variables_and_make_graphs(
 ) -> HQResult<BTreeMap<Box<str>, MaybeGraph>> {
     let mut graphs = BTreeMap::new();
     for (_, target) in project.targets().borrow().iter() {
-        for (_, proc) in target.procedures()?.iter() {
+        for proc in target.procedures()?.values() {
             visit_procedure(proc, &mut graphs, project, do_ssa)?;
         }
     }

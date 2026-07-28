@@ -33,8 +33,9 @@ pub fn wasm(
     let string_type = IrType::String;
     let elem_type = *fields.list.possible_types();
     let should_box = !IrType::String.contains(elem_type);
-    let output_type = WasmProject::ir_type_to_wasm(elem_type.or(string_type))?;
+    let output_type = WasmProject::ir_type_to_wasm(elem_type.or(string_type));
     let i32_local = func.local(ValType::I32)?;
+    func.free_local(i32_local)?;
 
     Ok(wasm![
         LocalTee(i32_local),
@@ -116,11 +117,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Int,
                 vec![],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Int);
             list
         },
     };
@@ -132,11 +133,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Float,
                 vec![],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Float);
             list
         },
     }
@@ -147,11 +148,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::String,
                 vec![crate::sb3::VarVal::String("hi".into())],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::String);
             list
         },
     }
@@ -162,11 +163,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Any,
                 vec![],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Any);
             list
         },
     }
@@ -176,11 +177,14 @@ crate::instructions_test!(
     int_static;
     data_itemoflist;
     t @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Int,
-            vec![],
-            &flags()
-        ).unwrap()
+        list: {
+            let list = crate::ir::RcList::new(
+                vec![],
+                &flags()
+            ).unwrap();
+            list.add_type(IrType::Int);
+            list
+        }
     };
     { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
 );
@@ -189,11 +193,14 @@ crate::instructions_test!(
     float_static;
     data_itemoflist;
     t @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Float,
-            vec![],
-            &flags()
-        ).unwrap()
+        list: {
+            let list = crate::ir::RcList::new(
+                vec![],
+                &flags()
+            ).unwrap();
+            list.add_type(IrType::Float);
+            list
+        }
     }
 );
 
@@ -201,11 +208,14 @@ crate::instructions_test!(
     string_static;
     data_itemoflist;
     t @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::String,
-            vec![],
-            &flags()
-        ).unwrap()
+        list: {
+            let list = crate::ir::RcList::new(
+                vec![],
+                &flags()
+            ).unwrap();
+            list.add_type(IrType::String);
+            list
+        }
     }
 );
 
@@ -213,10 +223,13 @@ crate::instructions_test!(
     any_static;
     data_itemoflist;
     t @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Any,
-            vec![],
-            &flags()
-        ).unwrap()
+        list: {
+            let list = crate::ir::RcList::new(
+                vec![],
+                &flags()
+            ).unwrap();
+            list.add_type(IrType::Any);
+            list
+        }
     }
 );

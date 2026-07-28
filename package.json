@@ -1,6 +1,6 @@
 {
   "name": "hyperquark",
-  "version": "0.0.9",
+  "version": "0.0.11",
   "private": true,
   "scripts": {
     "watch": "vite build --watch & vite preview &",
@@ -11,23 +11,23 @@
     "format:write": "prettier -w ."
   },
   "dependencies": {
-    "@scratch/scratch-vm": "^12.3.0",
-    "binaryen": "github:pufferfish101007/binaryen.js#non-nullable-table",
+    "scratch-vm": "=4.8.115",
+    "binaryen": "130.0.0",
     "pinia": "3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
     "scratch-parser": "5.1.1",
     "scratch-render": "github:hyperquark/scratch-render#develop",
     "scratch-sb1-converter": "1.0.324",
-    "vue": "3.5.31",
-    "vue-router": "5.0.4",
+    "vue": "3.5.38",
+    "vue-router": "5.1.0",
     "wasm-feature-detect": "1.8.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "6.0.5",
-    "prettier": "^3.8.1",
-    "vite": "8.0.3",
-    "vite-plugin-node-polyfills": "0.26.0",
+    "@vitejs/plugin-vue": "6.0.7",
+    "prettier": "^3.8.4",
+    "vite": "=8.0.16",
+    "vite-plugin-node-polyfills": "=0.26.0",
     "vite-plugin-wasm": "3.6.0",
-    "vitest": "^4.1.2"
+    "vitest": "=4.1.9"
   }
 }

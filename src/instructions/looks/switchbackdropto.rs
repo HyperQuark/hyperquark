@@ -1,4 +1,4 @@
-use wasm_encoder::MemArg;
+use wasm_encoder::{BlockType, MemArg};
 
 use super::super::prelude::*;
 use crate::wasm::mem_layout;
@@ -11,9 +11,24 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
     let offset = mem_layout::stage::COSTUME;
 
     let local_index = func.local(ValType::I32)?;
+    func.free_local(local_index)?;
     Ok(if IrType::QuasiInt.contains(inputs[0]) {
         wasm![
-            LocalSet(local_index),
+            I32Const(1),
+            I32Sub,
+            LocalTee(local_index),
+            I32Const(0),
+            I32GeS,
+            LocalGet(local_index),
+            I32Const(
+                func.costume_names()
+                    .len()
+                    .try_into()
+                    .map_err(|_| make_hq_bug!("costumes num out of bounds"))?
+            ),
+            I32LtS,
+            I32And,
+            If(BlockType::Empty),
             I32Const(0),
             LocalGet(local_index),
             I32Store(MemArg {
@@ -23,6 +38,8 @@ pub fn wasm(func: &StepFunc, inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstr
             }),
             LocalGet(local_index),
             Call(func_index),
+            // TODO: if out of range, try parsing as string
+            End,
         ]
     } else {
         hq_todo!("non-integer input types for looks_switchbackdropto")

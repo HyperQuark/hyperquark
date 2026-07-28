@@ -41,6 +41,7 @@ pub fn wasm(
         heap_type: HeapType::Concrete(i8_struct_type),
     });
     let struct_local = func.local(struct_valtype)?;
+    func.free_local(struct_local)?;
 
     let spawn_thread_func = func
         .registries()

@@ -43,7 +43,7 @@ pub fn wasm(
                     mutable: false,
                     element_type: StorageType::Val(WasmProject::ir_type_to_wasm(
                         *var.possible_types(),
-                    )?),
+                    )),
                 })
             })
             .collect::<HQResult<Vec<_>>>()?,
@@ -52,6 +52,7 @@ pub fn wasm(
         nullable: false,
         heap_type: HeapType::Concrete(arg_struct_type),
     }))?;
+    func.free_local(arg_struct_local)?;
 
     let spawn_thread_in_stack = func
         .registries()
@@ -60,7 +61,7 @@ pub fn wasm(
 
     let locals = inputs
         .iter()
-        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)?))
+        .map(|ty| func.local(WasmProject::ir_type_to_wasm(*ty)))
         .collect::<HQResult<Vec<_>>>()?;
 
     let mut wasm = locals
@@ -86,6 +87,7 @@ pub fn wasm(
                 @boxed(input),
             ]
         });
+        func.free_local(local)?;
     }
 
     wasm.extend(wasm![

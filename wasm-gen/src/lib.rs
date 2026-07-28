@@ -126,8 +126,8 @@ pub fn wasm(input: TokenStream) -> TokenStream {
         let conditions = (0..(1 << (nan_checks.len() + 3 * boxed_checks.len()))).map(|mask| {
             let checks = nan_checks.iter().enumerate().map(|(i, ident)| {
                 let ident = format_ident!("{ident}");
-                let nan_check = quote! { #ident.contains(crate::ir::Type::FloatNan) };
-                let not_nan_check = quote! { !#ident.contains(crate::ir::Type::FloatNan) };
+                let nan_check = quote! { #ident.contains(crate::ir::IrType::FloatNan) };
+                let not_nan_check = quote! { !#ident.contains(crate::ir::IrType::FloatNan) };
                 if (mask & (1 << i)) == 0 {
                     nan_check
                 } else {
@@ -136,12 +136,12 @@ pub fn wasm(input: TokenStream) -> TokenStream {
             }).chain(boxed_checks.iter().enumerate().map(|(i, ident)| (i * 3 + nan_checks.len(), ident)).filter_map(|(i,ident)| {
                 let ident = format_ident!("{ident}");
                 let boxed_check = quote! { !#ident.is_base_type() };
-                let string_check = quote! { #ident.base_type() == Some(crate::ir::Type::String) };
-                let float_check = quote! { #ident.base_type() == Some(crate::ir::Type::Float) };
-                let int_check = quote! { #ident.base_type() == Some(crate::ir::Type::Int) };
-                let bool_check = quote! { #ident.base_type() == Some(crate::ir::Type::Boolean) };
-                let color_rgb_check = quote! { #ident.base_type() == Some(crate::ir::Type::ColorRGB) };
-                let color_argb_check = quote! { #ident.base_type() == Some(crate::ir::Type::ColorARGB) };
+                let string_check = quote! { #ident.base_type() == Some(crate::ir::IrType::String) };
+                let float_check = quote! { #ident.base_type() == Some(crate::ir::IrType::Float) };
+                let int_check = quote! { #ident.base_type() == Some(crate::ir::IrType::Int) };
+                let bool_check = quote! { #ident.base_type() == Some(crate::ir::IrType::Boolean) };
+                let color_rgb_check = quote! { #ident.base_type() == Some(crate::ir::IrType::ColorRGB) };
+                let color_argb_check = quote! { #ident.base_type() == Some(crate::ir::IrType::ColorARGB) };
                 Some(if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 0 {
                     boxed_check
                 } else if (mask & ((1 << i) + (1 << (i + 1)) + (1 << (i + 2)))) == 1 << i {
@@ -281,7 +281,9 @@ pub fn wasm(input: TokenStream) -> TokenStream {
             quote! {
                 if #(#checks)&&* {
                     #(let #local_names = func.local(wasm_encoder::ValType::#local_types)?;)*
-                    vec![#(crate::wasm::InternalInstruction::#instructions),*]
+                    let instrs = vec![#(crate::wasm::InternalInstruction::#instructions),*];
+                    #(func.free_local(#local_names)?;)*
+                    instrs
                 }
             }
         });

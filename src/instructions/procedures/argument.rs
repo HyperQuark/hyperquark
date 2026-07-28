@@ -40,7 +40,7 @@ pub fn wasm(
     #[expect(clippy::redundant_else, reason = "false positive")]
     if *in_warped {
         hq_assert!(
-            WasmProject::ir_type_to_wasm(*arg_var.possible_types())?
+            WasmProject::ir_type_to_wasm(*arg_var.possible_types())
                 == *func.params().get(*index).ok_or_else(|| make_hq_bug!(
                     "proc argument index was out of bounds for func params"
                 ))?,
@@ -81,7 +81,7 @@ pub fn wasm(
             hq_bug!("struct type was not a struct type")
         };
         hq_assert!(
-            WasmProject::ir_type_to_wasm(*arg_var.possible_types())?
+            WasmProject::ir_type_to_wasm(*arg_var.possible_types())
                 == struct_type_fields
                     .get(*index)
                     .ok_or_else(|| make_hq_bug!("proc arg index out of bounds in struct fields"))?

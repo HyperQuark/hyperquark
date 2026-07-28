@@ -3,7 +3,7 @@ use crate::instructions::{
     ControlIfElseFields, ControlLoopFields, DataSetvariabletoFields, DataVariableFields,
     HqCastFields, HqTextFields, HqYieldFields, IrOpcode, YieldMode,
 };
-use crate::ir::{IrProject, RcVar, Step, StepContext, Target, Type as IrType};
+use crate::ir::{IrProject, IrType, RcVar, Step, StepContext, Target};
 use crate::prelude::*;
 use crate::sb3::{Block, BlockArrayOrId, BlockInfo, Input, VarVal};
 use crate::wasm::WasmFlags;
@@ -160,7 +160,7 @@ pub fn generate_loop(
         }
         Ok(setup_instructions
             .into_iter()
-            .chain(first_condition_instructions.map_or(condition_instructions, |instrs| instrs))
+            .chain(first_condition_instructions.unwrap_or(condition_instructions))
             .chain(vec![IrOpcode::control_if_else(ControlIfElseFields {
                 branch_if: Rc::clone(if flip_if { &next_step } else { &substack_step }),
                 branch_else: Rc::clone(if flip_if { &substack_step } else { &next_step }),
@@ -285,12 +285,12 @@ pub fn generate_if_else(
             } else {
                 let opcode = match next_block {
                     Some(NextBlock::ID(id)) => {
-                        let next_block = blocks
+                        let id_next_block = blocks
                             .get(&id)
                             .ok_or_else(|| make_hq_bad_proj!("missing next block"))?;
                         vec![IrOpcode::hq_yield(HqYieldFields {
                             mode: YieldMode::Inline(Rc::new(RefCell::new(Step::from_block(
-                                next_block,
+                                id_next_block,
                                 id.clone(),
                                 blocks,
                                 context,

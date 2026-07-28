@@ -9,7 +9,7 @@ use wasm_encoder::{
 use wasm_gen::wasm;
 
 use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
-use crate::ir::{Event, IrProject, StepIndex, Type as IrType};
+use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
     MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
@@ -66,10 +66,11 @@ impl WasmProject {
         &self.steps
     }
 
-    /// maps a broad IR type to a WASM type
-    pub fn ir_type_to_wasm(ir_type: IrType) -> HQResult<ValType> {
+    /// maps a broad IR type to a WASM type2
+    #[must_use]
+    pub fn ir_type_to_wasm(ir_type: IrType) -> ValType {
         let base = ir_type.base_type();
-        Ok(match base {
+        match base {
             Some(IrType::Float) => ValType::F64,
             Some(IrType::Int | IrType::Boolean | IrType::ColorARGB | IrType::ColorRGB) => {
                 ValType::I32
@@ -77,7 +78,7 @@ impl WasmProject {
             Some(IrType::String) => ValType::EXTERNREF,
             None => ValType::I64, // NaN boxed value... let's worry about colors later
             Some(_) => unreachable!(),
-        })
+        }
     }
 
     pub fn finish(self) -> HQResult<FinishedWasm> {
@@ -731,6 +732,7 @@ impl WasmProject {
                 .collect(),
         );
         for (i, step) in ir_project.steps().try_borrow()?.iter().enumerate() {
+            crate::log!("compiling step {i}");
             StepFunc::compile_step(
                 step,
                 StepIndex(i),

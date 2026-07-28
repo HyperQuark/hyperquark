@@ -6,7 +6,7 @@ use wasm_encoder::{
 use super::super::WasmProject;
 use super::{GlobalExportable, GlobalMutable, GlobalRegistry, TypeRegistry};
 use crate::instructions::{BOXED_BOOL_PATTERN, BOXED_INT_PATTERN, BOXED_STRING_PATTERN};
-use crate::ir::{RcList, Type as IrType};
+use crate::ir::{IrType, RcList};
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::sb3::VarVal;
@@ -63,7 +63,7 @@ impl ListRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        let elem_type = WasmProject::ir_type_to_wasm(*list.possible_types())?;
+        let elem_type = WasmProject::ir_type_to_wasm(*list.possible_types());
         self.types().array(StorageType::Val(elem_type), true)
     }
 
@@ -285,12 +285,12 @@ impl ListRegistry {
                         .iter()
                         .map(|val| {
                             Ok(match val {
-                                VarVal::Int(i) => i64::from(*i) & BOXED_INT_PATTERN,
-                                VarVal::Bool(b) => i64::from(*b) & BOXED_BOOL_PATTERN,
+                                VarVal::Int(i) => i64::from(*i) | BOXED_INT_PATTERN,
+                                VarVal::Bool(b) => i64::from(*b) | BOXED_BOOL_PATTERN,
                                 VarVal::Float(f) => i64::from_le_bytes(f.to_le_bytes()),
                                 VarVal::String(s) => {
                                     self.tabled_strings().register_default::<i64>(s.clone())?
-                                        & BOXED_STRING_PATTERN
+                                        | BOXED_STRING_PATTERN
                                 }
                             }
                             .to_le_bytes())

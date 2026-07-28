@@ -10,7 +10,7 @@ use crate::instructions::{
     DataTeevariableFields, DataVariableFields, HqYieldFields, IrOpcode, ProceduresArgumentFields,
     ProceduresCallNonwarpFields, ProceduresCallWarpFields, YieldMode,
 };
-use crate::ir::{InlinedStep, ProcContext, RcList, RcVar, Step, StepIndex, Type as IrType};
+use crate::ir::{InlinedStep, IrType, ProcContext, RcList, RcVar, Step, StepIndex};
 use crate::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -464,8 +464,8 @@ impl VarGraph {
                     break 'opcode_loop;
                 }
                 IrOpcode::hq_yield(HqYieldFields { mode }) => match mode {
-                    YieldMode::Inline(step) => {
-                        let step_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(step)));
+                    YieldMode::Inline(inline_step) => {
+                        let step_mut = Rc::new(Rc::unwrap_or_clone(Rc::clone(inline_step)));
                         graphs.insert(step_mut.try_borrow()?.id().into(), MaybeGraph::Started);
                         self.visit_step(
                             Rc::clone(&step_mut),
@@ -524,8 +524,8 @@ impl VarGraph {
             }
 
             // insert additional opcodes
-            for (index, additional_opcodes) in additional_opcodes.into_iter().rev() {
-                opcodes.splice(index..index, additional_opcodes);
+            for (index, these_additional_opcodes) in additional_opcodes.into_iter().rev() {
+                opcodes.splice(index..index, these_additional_opcodes);
             }
         }
 
@@ -664,11 +664,11 @@ impl VarGraph {
                 first_condition_mut.try_borrow()?.id().into(),
                 MaybeGraph::Inlined,
             );
-            let drop_node = self.add_node(Some(StackOperation::Drop)); // we consume the top item on the type stack as an i32.eqz
-            let end_node = *self.exit_node().borrow();
-            self.add_edge(end_node, drop_node, EdgeType::Forward);
-            *self.exit_node().borrow_mut() = drop_node;
-            let first_cond_exit = drop_node;
+            let fst_drop_node = self.add_node(Some(StackOperation::Drop)); // we consume the top item on the type stack as an i32.eqz
+            let fst_end_node = *self.exit_node().borrow();
+            self.add_edge(fst_end_node, fst_drop_node, EdgeType::Forward);
+            *self.exit_node().borrow_mut() = fst_drop_node;
+            let first_cond_exit = fst_drop_node;
 
             let header_node = self.add_node(None);
             self.add_edge(first_cond_exit, header_node, EdgeType::Forward);
