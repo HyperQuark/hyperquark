@@ -12,13 +12,8 @@ const fs = require("node:fs");
 import path from "node:path";
 
 import { describe, test } from "vitest";
-
-import { imports as baseImports } from "../../js/imports.ts";
-import { unpackProject } from "../../playground/lib/project-loader.js";
-import { ProjectRunner } from "../../playground/lib/project-runner.js";
-import { sb3_to_wasm, WasmFlags } from "../../js/compiler/hyperquark.js";
-import { WasmStringType } from "../../js/no-compiler/hyperquark";
-import { defaultSettings } from "../../playground/lib/settings.js";
+import { makeTestRunner } from "./test-run-project.mjs";
+import { unpackProject } from "../../playground/lib/project-loader";
 
 /**
  * @fileoverview Transform each sb2 in test/fixtures/execute into a test.
@@ -39,42 +34,6 @@ const executeDir = path.resolve(__dirname, "../fixtures/execute");
 
 // Find files which end in ".sb", ".sb2", or ".sb3"
 const fileFilter = /\.sb[23]?$/i;
-
-const makeTestDrawable = () => ({
-  updateVisible() {},
-  updatePosition() {},
-  updateDirection() {},
-  updateScale() {},
-});
-
-const makeTestSkin = () => ({
-  setSVG() {},
-});
-
-const makeTestRenderer = () =>
-  new Proxy(
-    {
-      draw() {},
-      updateTextSkin() {},
-      setLayerGroupOrdering() {},
-      getDrawable: () => makeTestDrawable(),
-      getSkin: () => makeTestSkin(),
-      penClear() {},
-      penLine() {},
-      penPoint() {},
-      createDrawable: () => 0,
-      createPenSkin: () => 0,
-      createSVGSkin: () => 0,
-      createTextSkin: () => 0,
-      updateDrawableSkinId() {},
-    },
-    {
-      set(t, p, v) {
-        if (p === "getDrawable" || p === "getSkin") return true;
-        return Reflect.set(t, p, v);
-      },
-    },
-  );
 
 describe("Integration tests", () => {
   const files = fs
@@ -141,17 +100,15 @@ describe("Integration tests", () => {
       );
 
       const [project_json, _] = await unpackProject(projectBuffer);
-      // console.log(JSON.stringify(project_json, null, 2));
-      console.log("loaded project");
-      await new Promise((resolve) => setTimeout(resolve, 10));
 
-      let project_wasm;
+      let runner;
 
       try {
-        project_wasm = sb3_to_wasm(
-          JSON.stringify(project_json, null, 2),
-          WasmFlags.from_js(defaultSettings.to_js()),
-        );
+        runner = await makeTestRunner(project_json, {
+          looks: {
+            say_string: (string) => reportVmResult(string),
+          },
+        });
       } catch (e) {
         if (/todo/.test(e.toString())) {
           skip(e);
@@ -159,40 +116,6 @@ describe("Integration tests", () => {
           throw e;
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      console.log("compiled project");
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      // todo: run wasm-opt if specified in flags?
-
-      // Run the project and once all threads are complete check the results.
-      const runner = new ProjectRunner();
-      await runner.init({
-        wasm_bytes: project_wasm.wasm_bytes,
-        target_names: project_wasm.target_names,
-        project_json,
-        strings: project_wasm.strings,
-        settings: defaultSettings,
-        timeout: 5000,
-        assets: new Proxy(
-          {},
-          {
-            get() {
-              return {
-                dataFormat: "svg",
-                data: "",
-              };
-            },
-          },
-        ),
-        importOverrides: {
-          looks: {
-            say_string: (string) => reportVmResult(string),
-          },
-        },
-        makeRenderer: makeTestRenderer,
-      });
 
       runner.addEventListener("timeout", () => {
         throw new Error(`Timeout waiting for threads to complete: ${uri}`);

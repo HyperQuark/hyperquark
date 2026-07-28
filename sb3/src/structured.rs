@@ -1,4 +1,16 @@
+mod arbitrary;
+mod mutate;
+
+use arbitrary::{Arbitrary, ArbitraryWithContext, TargetContext, Unstructured, arbitrary_context};
+#[cfg(feature = "fuzz")]
+use libafl::inputs::{HasTargetBytes, Input};
+#[cfg(feature = "fuzz")]
+use libafl_bolts::HasLen;
+use mutatis::Mutate;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "fuzz")]
+use crate::raw::Sb3Project;
 use crate::raw::{Comment, Costume, Meta, Monitor, Sound, VarVal, VariableInfo};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,63 +174,66 @@ pub struct BroadcastId(pub usize);
 pub struct ProcedureId(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum VariableRef {
     Global(GlobalVariableId),
     Local(LocalVariableId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum ListRef {
     Global(GlobalListId),
     Local(LocalListId),
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Variable {
     pub scratch_id: Box<str>,
     pub info: VariableInfo,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct List {
     pub scratch_id: Box<str>,
     pub name: Box<str>,
     pub value: Vec<VarVal>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Broadcast {
     pub scratch_id: Box<str>,
     pub name: Box<str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Procedure {
     pub proccode: Box<str>,
     pub arguments: Vec<ProcedureArgument>,
     pub warp: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ProcedureArgument {
     pub name: Box<str>,
     pub kind: ProcedureArgumentKind,
     pub default: ProcedureArgumentDefault,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Mutate, Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ProcedureArgumentKind {
     StringOrNumber,
     Boolean,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ProcedureArgumentDefault {
     String(Box<str>),
     Boolean(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[arbitrary_context]
 pub struct ProcedureArgumentRef {
     pub procedure: ProcedureId,
     // TODO: make this an arena ID, and make ProcedureContext
@@ -385,6 +400,7 @@ pub struct StructuredTarget {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub struct Script {
     pub hat: Option<Hat>,
     pub position: Option<ScriptPosition>,
@@ -393,24 +409,28 @@ pub struct Script {
     pub top_reporter: Option<Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary, Deserialize, Serialize)]
+#[arbitrary_context]
 pub struct ScriptPosition {
     pub x: i32,
     pub y: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum Hat {
     WhenFlagClicked,
     WhenBroadcastReceived {
         broadcast: BroadcastId,
     },
+    #[arbitrary(skip)]
     ProcedureDefinition {
         procedure: ProcedureId,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum Statement {
     SetVariable {
         variable: VariableRef,
@@ -581,12 +601,14 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum ProcedureInput {
     Value(Option<Value>),
     Predicate(Option<Predicate>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum StopOption {
     All,
     ThisScript,
@@ -594,6 +616,7 @@ pub enum StopOption {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum Value {
     Variable(VariableRef),
     ListContents(ListRef),
@@ -647,6 +670,7 @@ pub enum Value {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum Predicate {
     LessThan(Option<Box<Value>>, Option<Box<Value>>),
     Equals(Option<Box<Value>>, Option<Box<Value>>),
@@ -671,14 +695,16 @@ pub enum Predicate {
     KeyPressed(Option<Box<Value>>),
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum Literal {
     Number(f64),
     String(Box<str>),
     Color(Box<str>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Arbitrary, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[arbitrary_context]
 pub enum MathOperator {
     Abs,
     Floor,
@@ -695,3 +721,34 @@ pub enum MathOperator {
     Exp,
     Pow10,
 }
+
+#[cfg(feature = "fuzz")]
+impl HasLen for StructuredProject {
+    fn len(&self) -> usize {
+        let sb3: Sb3Project = self.clone().try_into().unwrap();
+        serde_json::to_vec(&sb3).unwrap().len()
+    }
+}
+
+#[cfg(feature = "fuzz")]
+impl HasTargetBytes for StructuredProject {
+    fn target_bytes(&'_ self) -> libafl_bolts::ownedref::OwnedSlice<'_, u8> {
+        serde_json::to_vec(&Sb3Project::try_from(self.clone()).unwrap())
+            .unwrap()
+            .into()
+    }
+}
+
+#[cfg(feature = "fuzz")]
+impl core::hash::Hash for StructuredProject {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(
+            serde_json::to_vec(&Sb3Project::try_from(self.clone()).unwrap())
+                .unwrap()
+                .as_slice(),
+        )
+    }
+}
+
+#[cfg(feature = "fuzz")]
+impl Input for StructuredProject {}
