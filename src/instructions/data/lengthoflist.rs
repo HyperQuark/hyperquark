@@ -68,11 +68,11 @@ crate::instructions_test!(
     @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Any,
                 vec![crate::sb3::VarVal::Float(3.0)],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Any);
             list
         },
     }
@@ -82,10 +82,13 @@ crate::instructions_test!(
     _static;
     data_lengthoflist;
     @ super::Fields {
-        list: crate::ir::RcList::new(
-            IrType::Any,
-            vec![crate::sb3::VarVal::Float(3.0)],
-            &flags()
-        ).unwrap(),
+        list: {
+            let list = crate::ir::RcList::new(
+                vec![],
+                &flags()
+            ).unwrap();
+            list.add_type(IrType::Any);
+            list
+        }
     }
 );

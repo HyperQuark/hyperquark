@@ -192,15 +192,7 @@ pub fn lists_from_target(target: &Sb3Target, flags: &WasmFlags) -> HQResult<Targ
             Ok((
                 id.clone(),
                 Rc::new(TargetList {
-                    list: RcList::new(
-                        list_info
-                            .1
-                            .iter()
-                            .map(var_val_type)
-                            .try_fold(IrType::none(), |a, b| -> HQResult<_> { Ok(a.or(b?)) })?,
-                        list_info.1.clone(),
-                        flags,
-                    )?,
+                    list: RcList::new(list_info.1.clone(), flags)?,
                     is_used: RefCell::new(false),
                 }),
             ))
@@ -298,7 +290,7 @@ struct List {
 pub struct RcList(Rc<List>);
 
 impl RcList {
-    pub fn new(ty: IrType, initial_value: Vec<VarVal>, flags: &WasmFlags) -> HQResult<Self> {
+    pub fn new(initial_value: Vec<VarVal>, flags: &WasmFlags) -> HQResult<Self> {
         let init: Vec<_> = initial_value
             .into_iter()
             .map(|val| {
@@ -306,7 +298,12 @@ impl RcList {
                 if flags.integers == Switch::Off
                     && let VarVal::Int(i) = parsed_val
                 {
-                    VarVal::String(i.to_string().into_boxed_str())
+                    if (f64::from(i)).to_string() == i.to_string() {
+                        // TODO: is this redundant? Are there any ints that have a different string representation than the float?
+                        VarVal::Float(f64::from(i))
+                    } else {
+                        VarVal::String(i.to_string().into_boxed_str())
+                    }
                 } else {
                     parsed_val
                 }
@@ -314,11 +311,10 @@ impl RcList {
             .collect();
         Ok(Self(Rc::new(List {
             possible_types: RefCell::new(
-                ty.or(init
-                    .iter()
+                init.iter()
                     .try_fold(IrType::none(), |t: IrType, v| -> HQResult<_> {
                         Ok(t.or(var_val_type(v)?))
-                    })?),
+                    })?,
             ),
             length_mutable: RefCell::new(false),
             initial_value: init,

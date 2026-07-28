@@ -89,11 +89,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Int,
                 vec![],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Int);
             list
         },
     };
@@ -105,11 +105,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Float,
                 vec![],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Float);
             list
         },
     }
@@ -120,11 +120,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::String,
                 vec![crate::sb3::VarVal::String("hi".into())],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::String);
             list
         },
     }
@@ -135,11 +135,11 @@ crate::instructions_test!(
     t @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Any,
                 vec![],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Any);
             list
         },
     }

@@ -54,11 +54,11 @@ crate::instructions_test!(
     @ super::Fields {
         list: {
             let list = crate::ir::RcList::new(
-                IrType::Any,
                 vec![crate::sb3::VarVal::Float(3.0)],
                 &flags()
             ).unwrap();
             *list.length_mutable().borrow_mut() = true;
+            list.add_type(IrType::Any);
             list
         },
     }
