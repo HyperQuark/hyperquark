@@ -54,6 +54,8 @@ addEventListener("message", ({ data }) => {
           [wasmBytes.buffer],
         );
         console.log("finished optimising");
+      }).catch(e => {
+        throw e;
       });
     }
   }
