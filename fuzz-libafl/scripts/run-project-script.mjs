@@ -2,6 +2,7 @@
 
 import { run } from "../../playground/dist/run-project.mjs";
 import { argv } from "node:process";
+import { readFile } from "node:fs/promises";
 
 console.log(argv);
 
@@ -35,4 +36,4 @@ while (i < argv.length) {
 
 console.log(opts)
 
-await run(JSON.parse(argv[3]), opts);
+await run(JSON.parse(await readFile(argv[3]), "utf-8"), opts);

@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -99,17 +101,42 @@ fn project_json(project: &sb3::structured::StructuredProject) -> Option<String> 
     serde_json::to_string(&raw).ok()
 }
 
-fn capture_baseline(
-    command: &[String],
+fn write_temp_project_json(
     project: &sb3::structured::StructuredProject,
-) -> Result<CommandOutcome, Box<dyn std::error::Error>> {
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let Some(json) = project_json(project) else {
         return Err("failed to serialize baseline project".into());
     };
 
+    let mut path = std::env::temp_dir();
+    path.push(format!(
+        "hyperquark-reduce-project-{}-{}.json",
+        std::process::id(),
+        current_nanos()
+    ));
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
+    file.write_all(json.as_bytes())?;
+
+    Ok(path)
+}
+
+fn capture_baseline(
+    command: &[String],
+    project: &sb3::structured::StructuredProject,
+) -> Result<CommandOutcome, Box<dyn std::error::Error>> {
+    let temp_path = write_temp_project_json(project)?;
+    // let Some(json) = project_json(project) else {
+    //     return Err("failed to serialize baseline project".into());
+    // };
+
     let mut child = Command::new(&command[0]);
     child.args(&command[1..]);
-    child.arg(&json);
+    child.arg(dbg!(&temp_path));
+    // child.arg(&json);
 
     println!("{command:?}");
 
@@ -231,7 +258,12 @@ impl ScratchCommandExecutor {
         let ex = CommandExecutor::builder()
             .program(command.first().unwrap())
             .args(command.iter().dropping(1).collect::<Box<[_]>>())
-            .arg_input_arg()
+            .arg_input_file(format!(
+                "{}/hyperquark-reduce-project-{}-{}.json",
+                std::env::temp_dir().display(),
+                std::process::id(),
+                current_nanos()
+            ))
             .stdout_observer(cmd_observer.stdout().clone())
             .stderr_observer(cmd_observer.stderr().clone())
             .build(observers)
