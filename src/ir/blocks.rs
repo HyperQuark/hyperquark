@@ -1708,7 +1708,7 @@ fn block_to_ir(
                 .position(|costume| costume.name == name)
                 .ok_or_else(|| make_hq_bad_proj!("missing costume with name {}", name))?;
             vec![IrOpcode::hq_integer(HqIntegerFields(
-                index
+                (index + 1)
                     .try_into()
                     .map_err(|_| make_hq_bug!("costume index out of bounds"))?,
             ))]
