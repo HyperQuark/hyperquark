@@ -717,6 +717,7 @@ impl WasmProject {
         let steps = Rc::new(RefCell::new(Vec::new()));
         let registries = Rc::new(Registries::default());
         let mut events: BTreeMap<Event, Vec<u32>> = BTreeMap::default();
+        events.insert(Event::FlagClicked, vec![]); // make sure that `flag_clicked` will be defined
         let costume_names = Rc::new(
             ir_project
                 .targets()
