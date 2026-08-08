@@ -463,15 +463,11 @@ impl StepFunc {
         let target_index = step.try_borrow()?.context().target().index();
         let step_func = if let Some(ref proc_context) = step.try_borrow()?.context().proc_context {
             let params = if step.try_borrow()?.context().warp {
-                let arg_types = (*proc_context.arg_vars)
+                (*proc_context.arg_vars)
                     .borrow()
                     .iter()
                     .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                    .collect::<Box<[_]>>();
-                arg_types
-                    .iter()
-                    .chain(&[ValType::I32, TypeRegistry::STRUCT_REF])
-                    .copied()
+                    .chain([ValType::I32, TypeRegistry::STRUCT_REF])
                     .collect()
             } else {
                 Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
