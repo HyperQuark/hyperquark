@@ -525,7 +525,6 @@ impl WasmProject {
             .events
             .keys()
             .filter_map(|e| {
-                #[expect(clippy::redundant_else, reason = "false positive")]
                 if let Event::SpriteClicked(index) = e {
                     Some(
                         i32::try_from(*index)

@@ -37,7 +37,6 @@ pub fn wasm(
         arg_vars,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    #[expect(clippy::redundant_else, reason = "false positive")]
     if *in_warped {
         hq_assert!(
             WasmProject::ir_type_to_wasm(*arg_var.possible_types())
