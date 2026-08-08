@@ -34,6 +34,11 @@ impl SpecificProc {
         Ok(self.first_step.try_borrow()?)
     }
 
+    #[cfg(test)]
+    pub fn first_step_mut(&self) -> RefMut<'_, PartialStep> {
+        self.first_step.borrow_mut()
+    }
+
     #[must_use]
     pub fn arg_vars(&self) -> Rc<RefCell<Vec<RcVar>>> {
         Rc::clone(&self.arg_vars)
@@ -74,8 +79,18 @@ impl Proc {
         self.warped_specific_proc.borrow()
     }
 
+    #[cfg(test)]
+    pub fn warped_specific_proc_mut(&self) -> RefMut<'_, Option<SpecificProc>> {
+        self.warped_specific_proc.borrow_mut()
+    }
+
     pub fn nonwarped_specific_proc(&self) -> Ref<'_, Option<SpecificProc>> {
         self.nonwarped_specific_proc.borrow()
+    }
+
+    #[cfg(test)]
+    pub fn nonwarped_specific_proc_mut(&self) -> RefMut<'_, Option<SpecificProc>> {
+        self.nonwarped_specific_proc.borrow_mut()
     }
 
     pub fn proccode(&self) -> &str {
@@ -247,20 +262,44 @@ impl Proc {
         };
         let arg_ids = Self::string_vec_mutation(mutations, "argumentids")?;
         let arg_names = Self::string_vec_mutation(mutations, "argumentnames")?;
-        Ok(Rc::new(Self {
-            proccode: proccode.as_str().into(),
-            warped_specific_proc: RefCell::new(None),
-            nonwarped_specific_proc: RefCell::new(None),
+        Ok(Rc::new(Self::new(
+            proccode.as_str().into(),
+            RefCell::new(None),
+            RefCell::new(None),
             first_step_id,
             debug,
             arg_ids,
             arg_names,
             target,
-            always_warped: warp,
-        }))
+            warp,
+        )))
     }
 
-    fn new_specific_proc(&self) -> SpecificProc {
+    pub const fn new(
+        proccode: Box<str>,
+        warped_specific_proc: RefCell<Option<SpecificProc>>,
+        nonwarped_specific_proc: RefCell<Option<SpecificProc>>,
+        first_step_id: Option<Box<str>>,
+        debug: bool,
+        arg_ids: Box<[Box<str>]>,
+        arg_names: Box<[Box<str>]>,
+        target: Rc<IrTarget>,
+        always_warped: bool,
+    ) -> Self {
+        Self {
+            warped_specific_proc,
+            nonwarped_specific_proc,
+            first_step_id,
+            proccode,
+            debug,
+            arg_ids,
+            arg_names,
+            target,
+            always_warped,
+        }
+    }
+
+    pub fn new_specific_proc(&self) -> SpecificProc {
         SpecificProc {
             first_step: RefCell::new(PartialStep::None),
             arg_vars: arg_vars_from_proccode(&self.proccode),

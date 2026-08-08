@@ -1,6 +1,7 @@
 use wasm_encoder::{FieldType, HeapType, Instruction as WInstruction, StorageType};
 
 use super::super::prelude::*;
+use crate::instructions_test;
 use crate::ir::{Proc, StepIndex};
 use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
 use crate::wasm::{StepFunc, WasmProject};
@@ -133,3 +134,85 @@ pub const fn const_fold(
 ) -> HQResult<ConstFold> {
     Ok(NotFoldable)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(2);
+        assert!(serde_json::from_str::<serde_json::Value>(format!("{fields}").as_str()).is_ok());
+    }
+
+    pub fn test_project_setup(wasm_proj: &WasmProject, flags: crate::wasm::WasmFlags) {
+        let proc_step_func = StepFunc::new_with_types(
+            Box::from([
+                ValType::I32,
+                crate::wasm::registries::TypeRegistry::STRUCT_REF,
+            ]),
+            vec![].into(),
+            Rc::clone(&wasm_proj.registries()),
+            flags,
+            crate::wasm::StepTarget::Sprite(0),
+            0,
+            Rc::new(vec![]),
+        );
+        wasm_proj.steps().borrow_mut().push(proc_step_func);
+    }
+
+    pub fn make_fields(num_inputs: usize) -> super::Fields {
+        super::Fields {
+            proc: {
+                use crate::ir::{PartialStep, StepIndex, Target};
+
+                let target = Rc::new(Target::new(
+                    false,
+                    BTreeMap::default(),
+                    BTreeMap::default(),
+                    Weak::new(),
+                    RefCell::new(BTreeMap::default()),
+                    0,
+                    Box::new([]),
+                ));
+                let proc = Rc::new(super::Proc::new(
+                    format!("foo {}", core::iter::repeat_n("%s", num_inputs).join(" ")).into(),
+                    RefCell::new(None),
+                    RefCell::new(None),
+                    None,
+                    false,
+                    Box::new([]),
+                    Box::new([]),
+                    Rc::clone(&target),
+                    false,
+                ));
+                let specific_proc = proc.new_specific_proc();
+                *specific_proc.first_step_mut() = PartialStep::Finished(StepIndex(0));
+                *proc.nonwarped_specific_proc_mut() = Some(specific_proc);
+                proc
+            },
+            next_step: super::StepIndex(0),
+        }
+    }
+}
+
+instructions_test!(
+    mod test_nullary for procedures_call_nonwarp {
+        fields = super::test::make_fields(0);
+        setup = super::test::test_project_setup;
+    }
+);
+
+instructions_test!(
+    mod test_unary for procedures_call_nonwarp(t) {
+        fields = super::test::make_fields(1);
+        setup = super::test::test_project_setup;
+    }
+);
+
+instructions_test!(
+    mod test_ternary for procedures_call_nonwarp(t1, t2, t3) {
+        fields = super::test::make_fields(3);
+        setup = super::test::test_project_setup;
+    }
+);

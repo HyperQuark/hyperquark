@@ -1,6 +1,7 @@
 use wasm_encoder::Instruction as WInstruction;
 
 use super::super::prelude::*;
+use crate::instructions_test;
 use crate::ir::Proc;
 use crate::wasm::{StepFunc, WasmProject};
 
@@ -105,3 +106,113 @@ pub const fn const_fold(
 ) -> HQResult<ConstFold> {
     Ok(NotFoldable)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(&[IrType::Any]);
+        assert!(serde_json::from_str::<serde_json::Value>(format!("{fields}").as_str()).is_ok());
+    }
+
+    pub fn test_project_setup(
+        wasm_proj: &WasmProject,
+        flags: crate::wasm::WasmFlags,
+        inputs: &[IrType],
+    ) {
+        let proc_step_func = StepFunc::new_with_types(
+            inputs
+                .iter()
+                .map(|ty| WasmProject::ir_type_to_wasm(*ty))
+                .chain([
+                    ValType::I32,
+                    crate::wasm::registries::TypeRegistry::STRUCT_REF,
+                ])
+                .collect(),
+            vec![].into(),
+            Rc::clone(&wasm_proj.registries()),
+            flags,
+            crate::wasm::StepTarget::Sprite(0),
+            0,
+            Rc::new(vec![]),
+        );
+        wasm_proj.steps().borrow_mut().push(proc_step_func);
+    }
+
+    pub fn make_fields(inputs: &[IrType]) -> super::Fields {
+        super::Fields {
+            proc: {
+                use crate::ir::{PartialStep, StepIndex, Target};
+
+                let target = Rc::new(Target::new(
+                    false,
+                    BTreeMap::default(),
+                    BTreeMap::default(),
+                    Weak::new(),
+                    RefCell::new(BTreeMap::default()),
+                    0,
+                    Box::new([]),
+                ));
+                let proc = Rc::new(super::Proc::new(
+                    format!("foo {}", core::iter::repeat_n("%s", inputs.len()).join(" ")).into(),
+                    RefCell::new(None),
+                    RefCell::new(None),
+                    None,
+                    false,
+                    Box::new([]),
+                    Box::new([]),
+                    Rc::clone(&target),
+                    false,
+                ));
+                let specific_proc = proc.new_specific_proc();
+                *specific_proc.first_step_mut() = PartialStep::Finished(StepIndex(0));
+                *proc.warped_specific_proc_mut() = Some(specific_proc);
+                proc
+            },
+        }
+    }
+}
+
+instructions_test!(
+    mod test_nullary for procedures_call_warp {
+        fields = super::test::make_fields(&[]);
+        setup = |proj, flags| super::test::test_project_setup(proj, flags, &[]);
+    }
+);
+
+instructions_test!(
+    mod test_unary_string for procedures_call_warp(t) {
+        fields = super::test::make_fields(&[IrType::String]);
+        setup = |proj, flags| super::test::test_project_setup(proj, flags, &[IrType::String]);
+    }
+);
+
+instructions_test!(
+    mod test_unary_int for procedures_call_warp(t) {
+        fields = super::test::make_fields(&[IrType::Int]);
+        setup = |proj, flags| super::test::test_project_setup(proj, flags, &[IrType::Int]);
+    }
+);
+
+instructions_test!(
+    mod test_unary_float for procedures_call_warp(t) {
+        fields = super::test::make_fields(&[IrType::Float]);
+        setup = |proj, flags| super::test::test_project_setup(proj, flags, &[IrType::Float]);
+    }
+);
+
+instructions_test!(
+    mod test_unary_bool for procedures_call_warp(t) {
+        fields = super::test::make_fields(&[IrType::Boolean]);
+        setup = |proj, flags| super::test::test_project_setup(proj, flags, &[IrType::Boolean]);
+    }
+);
+
+instructions_test!(
+    mod test_unary_any for procedures_call_warp(t) {
+        fields = super::test::make_fields(&[IrType::Any]);
+        setup = |proj, flags| super::test::test_project_setup(proj, flags, &[IrType::Any]);
+    }
+);
