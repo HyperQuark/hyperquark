@@ -25,4 +25,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; pen_clear; ; }
+crate::instructions_test! (
+mod tests for pen_clear {
+}
+);

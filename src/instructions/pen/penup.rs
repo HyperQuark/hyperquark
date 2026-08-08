@@ -37,4 +37,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; pen_penup; ; }
+crate::instructions_test! (
+mod tests for pen_penup {
+}
+);

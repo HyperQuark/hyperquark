@@ -60,4 +60,8 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! {tests; hq_text; @ super::Fields("hello, world!".into())}
+crate::instructions_test! (
+mod tests for hq_text {
+    fields = super::Fields("hello, world!".into());
+}
+);

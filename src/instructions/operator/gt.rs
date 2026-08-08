@@ -326,4 +326,7 @@ pub fn const_fold(inputs: &[ConstFoldItem], _state: &mut ConstFoldState) -> HQRe
     )
 }
 
-crate::instructions_test! {tests; operator_lt; t1, t2 ;}
+crate::instructions_test! (
+mod tests for operator_lt(t1,t2) {
+}
+);

@@ -52,4 +52,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; looks_setvisible; t ; }
+crate::instructions_test! (
+mod tests for looks_setvisible(t) {
+}
+);

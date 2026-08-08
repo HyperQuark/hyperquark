@@ -58,4 +58,8 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! {tests; hq_float; @ super::Fields(0.0)}
+crate::instructions_test! (
+mod tests for hq_float {
+    fields = super::Fields(0.0);
+}
+);

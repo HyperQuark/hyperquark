@@ -193,14 +193,21 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {none; hq_yield; @ super::Fields { mode: super::YieldMode::None }}
+crate::instructions_test! (
+mod none for hq_yield {
+    fields = super::Fields { mode: super::YieldMode::None };
+}
+);
 
-crate::instructions_test! {ret; hq_yield; @ super::Fields { mode: super::YieldMode::Return }}
+crate::instructions_test! (
+mod ret for hq_yield {
+    fields = super::Fields { mode: super::YieldMode::Return };
+}
+);
 
-// crate::instructions_test! {
-//     schedule;
-//     hq_yield;
-//     @ super::Fields {
+// crate::instructions_test! (
+// mod     schedule for     hq_yield {
+// fields = super::Fields {
 //         mode: super::YieldMode::Schedule(
 //             crate::rc::Rc::downgrade(&crate::ir::Step::new_empty(
 //                 &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
@@ -219,4 +226,6 @@ crate::instructions_test! {ret; hq_yield; @ super::Fields { mode: super::YieldMo
 //             ).unwrap())
 //         )
 //     }
+//;
 // }
+// );

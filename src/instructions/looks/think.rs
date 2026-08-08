@@ -96,5 +96,13 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests_debug; looks_think; t @ super::Fields { debug: true, target_idx: 0 }}
-crate::instructions_test! {tests_non_debug; looks_think; t @ super::Fields { debug: false, target_idx: 0, }}
+crate::instructions_test! (
+mod tests_debug for looks_think(t) {
+    fields = super::Fields { debug: true, target_idx: 0 };
+}
+);
+crate::instructions_test! (
+mod tests_non_debug for looks_think(t) {
+    fields = super::Fields { debug: false, target_idx: 0, };
+}
+);

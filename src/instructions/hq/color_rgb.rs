@@ -54,4 +54,8 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; hq_color_rgb; @ super::Fields { r: 134, g: 56, b: 109 }}
+crate::instructions_test! (
+mod tests for hq_color_rgb {
+    fields = super::Fields { r: 134, g: 56, b: 109 };
+}
+);

@@ -70,9 +70,8 @@ pub const fn const_fold(
 }
 
 crate::instructions_test!(
-    test;
-    data_visvariable;
-    @ super::Fields {
+mod test for data_visvariable {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
@@ -85,5 +84,6 @@ crate::instructions_test!(
                 ).unwrap())
             ,
         visible: true
-    }
+    };
+}
 );

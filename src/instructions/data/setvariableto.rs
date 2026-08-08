@@ -137,9 +137,8 @@ pub fn const_fold(
 }
 
 crate::instructions_test!(
-    any_global;
-    data_setvariableto;
-    t @ super::Fields {
+mod any_global for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
@@ -148,13 +147,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(false), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    float_global;
-    data_setvariableto;
-    t @ super::Fields {
+mod float_global for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
@@ -163,13 +162,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(false), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    string_global;
-    data_setvariableto;
-    t @ super::Fields {
+mod string_global for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
@@ -178,13 +177,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(false), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    int_global;
-    data_setvariableto;
-    t @ super::Fields {
+mod int_global for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Int,
@@ -193,13 +192,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(false), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    any_local;
-    data_setvariableto;
-    t @ super::Fields {
+mod any_local for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Any,
@@ -208,13 +207,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(true), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    float_local;
-    data_setvariableto;
-    t @ super::Fields {
+mod float_local for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Float,
@@ -223,13 +222,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(true), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    string_local;
-    data_setvariableto;
-    t @ super::Fields {
+mod string_local for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::String,
@@ -238,13 +237,13 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(true), first_write: RefCell::new(false)
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    int_local;
-    data_setvariableto;
-    t @ super::Fields {
+mod int_local for data_setvariableto(t) {
+    fields = super::Fields {
         var: RefCell::new(
                 crate::ir::RcVar::new(
                     IrType::Int,
@@ -253,5 +252,6 @@ crate::instructions_test!(
                     &flags()
             ).unwrap()),
         local_write: RefCell::new(true), first_write: RefCell::new(false)
-    }
+    };
+}
 );

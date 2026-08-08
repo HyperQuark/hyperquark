@@ -49,9 +49,8 @@ pub const fn const_fold(
 }
 
 crate::instructions_test!(
-    test;
-    data_deletealloflist;
-    @ super::Fields {
+mod test for data_deletealloflist {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![crate::sb3::VarVal::Float(3.0)],
@@ -61,5 +60,6 @@ crate::instructions_test!(
             list.add_type(IrType::Any);
             list
         },
-    }
+    };
+}
 );

@@ -90,4 +90,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_multiply; t1, t2 ;}
+crate::instructions_test! (
+mod tests for operator_multiply(t1,t2) {
+}
+);

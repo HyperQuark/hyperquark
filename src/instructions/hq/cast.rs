@@ -346,7 +346,23 @@ pub fn const_fold(
     })
 }
 
-crate::instructions_test! {float; hq_cast; t @ super::Fields(IrType::Float)}
-crate::instructions_test! {string; hq_cast; t @ super::Fields(IrType::String)}
-crate::instructions_test! {int; hq_cast; t @ super::Fields(IrType::Int)}
-crate::instructions_test! {boolean; hq_cast; t @ super::Fields(IrType::Boolean)}
+crate::instructions_test! (
+mod float for hq_cast(t) {
+    fields = super::Fields(IrType::Float);
+}
+);
+crate::instructions_test! (
+mod string for hq_cast(t) {
+    fields = super::Fields(IrType::String);
+}
+);
+crate::instructions_test! (
+mod int for hq_cast(t) {
+    fields = super::Fields(IrType::Int);
+}
+);
+crate::instructions_test! (
+mod boolean for hq_cast(t) {
+    fields = super::Fields(IrType::Boolean);
+}
+);

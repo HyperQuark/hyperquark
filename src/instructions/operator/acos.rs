@@ -34,4 +34,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_acos; t }
+crate::instructions_test! (
+mod tests for operator_acos(t) {
+}
+);

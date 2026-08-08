@@ -44,4 +44,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; pen_setpensizeto; t ; }
+crate::instructions_test! (
+mod tests for pen_setpensizeto(t) {
+}
+);

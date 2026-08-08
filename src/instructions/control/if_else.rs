@@ -85,4 +85,8 @@ pub fn const_fold(
     }
 }
 
-// crate::instructions_test! {none; hq__if; @ super::Fields(None)}
+// crate::instructions_test! (
+// mod none for hq__if {
+//     fields = super::Fields(None);
+// }
+// );
