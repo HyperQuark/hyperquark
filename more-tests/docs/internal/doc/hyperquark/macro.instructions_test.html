@@ -137,7 +137,7 @@
   });
 </script>
 
-</head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">instructions_test</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">hyperquark</a></div><h1>Macro <span class="macro">instructions_<wbr>test</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/hyperquark/instructions/tests.rs.html#19-303">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! instructions_test {
+</head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">instructions_test</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../hyperquark/index.html"><img src="https://hyperquark.edgecompute.app/logo.png" alt="logo"></a><h2><a href="../hyperquark/index.html">hyperquark</a><span class="version">0.0.11</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">hyperquark</a></div><h1>Macro <span class="macro">instructions_<wbr>test</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/hyperquark/instructions/tests.rs.html#19-307">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! instructions_test {
     {
         mod $module:ident for $opcode:ident$(($($type_arg:ident $(,)?)*))? {
             $(fields = $fields:expr;)?
@@ -146,7 +146,7 @@
         }
     } =&gt; { ... };
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates unit tests for instructions files.</p>
-<p>For a block peppa_pig which takes 0 inputs,</p>
+<p>For a block <code>peppa_pig</code> which takes 0 inputs,</p>
 
 <div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">instructions_test!</span>(<span class="kw">mod </span>test <span class="kw">for </span>peppa_pig {});</code></pre></div>
 <p>Example:
