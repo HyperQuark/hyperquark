@@ -32,4 +32,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; hq_swap; t1, t2}
+crate::instructions_test! (
+mod tests for hq_swap(t1,t2) {
+}
+);

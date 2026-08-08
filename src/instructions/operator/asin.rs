@@ -34,4 +34,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_asin; t }
+crate::instructions_test! (
+mod tests for operator_asin(t) {
+}
+);

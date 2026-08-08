@@ -24,4 +24,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; hq_dup; t}
+crate::instructions_test! (
+mod tests for hq_dup(t) {
+}
+);

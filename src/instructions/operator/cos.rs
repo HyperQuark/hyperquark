@@ -41,4 +41,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_cos; t }
+crate::instructions_test! (
+mod tests for operator_cos(t) {
+}
+);

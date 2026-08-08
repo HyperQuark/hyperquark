@@ -63,9 +63,8 @@ pub const fn const_fold(
 }
 
 crate::instructions_test!(
-    _mut;
-    data_lengthoflist;
-    @ super::Fields {
+mod _mut for data_lengthoflist {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![crate::sb3::VarVal::Float(3.0)],
@@ -75,13 +74,13 @@ crate::instructions_test!(
             list.add_type(IrType::Any);
             list
         },
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    _static;
-    data_lengthoflist;
-    @ super::Fields {
+mod _static for data_lengthoflist {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -90,5 +89,6 @@ crate::instructions_test!(
             list.add_type(IrType::Any);
             list
         }
-    }
+    };
+}
 );

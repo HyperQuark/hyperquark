@@ -93,7 +93,11 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-// crate::instructions_test! { tests; sensing_askandwait; t @ super::Fields {
+// crate::instructions_test! (
+// mod tests for sensing_askandwait {
+//     fields = super::Fields {
 //     poll_step: super::StepIndex(0),
 //     next_step: super::StepIndex(0),
-// }}
+// };
+// }
+// );

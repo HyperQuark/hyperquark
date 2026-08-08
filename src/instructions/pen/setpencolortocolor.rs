@@ -122,4 +122,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; pen_setpencolortocolor; t ; }
+crate::instructions_test! (
+mod tests for pen_setpencolortocolor(t) {
+}
+);

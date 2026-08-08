@@ -53,4 +53,8 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! {tests; hq_integer; @ super::Fields(0)}
+crate::instructions_test! (
+mod tests for hq_integer {
+    fields = super::Fields(0);
+}
+);

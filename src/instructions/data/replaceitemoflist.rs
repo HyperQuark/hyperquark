@@ -95,9 +95,8 @@ pub const fn const_fold(
 }
 
 crate::instructions_test!(
-    int_mut;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod int_mut for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -108,12 +107,12 @@ crate::instructions_test!(
             list
         },
     };
-    { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
+    flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
+}
 );
 crate::instructions_test!(
-    float_mut;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod float_mut for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -123,12 +122,12 @@ crate::instructions_test!(
             list.add_type(IrType::Float);
             list
         },
-    }
+    };
+}
 );
 crate::instructions_test!(
-    string_mut;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod string_mut for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![crate::sb3::VarVal::String("hi".into())],
@@ -138,12 +137,12 @@ crate::instructions_test!(
             list.add_type(IrType::String);
             list
         },
-    }
+    };
+}
 );
 crate::instructions_test!(
-    any_mut;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod any_mut for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -153,13 +152,13 @@ crate::instructions_test!(
             list.add_type(IrType::Any);
             list
         },
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    int_static;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod int_static for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -169,13 +168,13 @@ crate::instructions_test!(
             list
         }
     };
-    { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags }
+    flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
+}
 );
 
 crate::instructions_test!(
-    float_static;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod float_static for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -184,13 +183,13 @@ crate::instructions_test!(
             list.add_type(IrType::Float);
             list
         }
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    string_static;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod string_static for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -199,13 +198,13 @@ crate::instructions_test!(
             list.add_type(IrType::String);
             list
         }
-    }
+    };
+}
 );
 
 crate::instructions_test!(
-    any_static;
-    data_replaceitemoflist;
-    t1, t2 @ super::Fields {
+mod any_static for data_replaceitemoflist(t1, t2) {
+    fields = super::Fields {
         list: {
             let list = crate::ir::RcList::new(
                 vec![],
@@ -214,5 +213,6 @@ crate::instructions_test!(
             list.add_type(IrType::Any);
             list
         }
-    }
+    };
+}
 );

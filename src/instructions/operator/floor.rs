@@ -61,4 +61,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_floor; t }
+crate::instructions_test! (
+mod tests for operator_floor(t) {
+}
+);

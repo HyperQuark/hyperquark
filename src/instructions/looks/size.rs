@@ -37,4 +37,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; looks_size; ; }
+crate::instructions_test! (
+mod tests for looks_size {
+}
+);

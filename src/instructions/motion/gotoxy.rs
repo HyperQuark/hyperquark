@@ -161,4 +161,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; motion_gotoxy; t1, t2 ; }
+crate::instructions_test! (
+mod tests for motion_gotoxy(t1,t2) {
+}
+);

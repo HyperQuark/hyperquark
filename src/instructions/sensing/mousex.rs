@@ -35,4 +35,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; sensing_mousex; ;}
+crate::instructions_test! (
+mod tests for sensing_mousex {
+}
+);

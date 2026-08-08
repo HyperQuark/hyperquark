@@ -53,4 +53,8 @@ pub fn const_fold(
     })
 }
 
-crate::instructions_test! {tests; hq_box; t @ super::Fields { output_ty: IrType::Any }}
+crate::instructions_test! (
+mod tests for hq_box(t) {
+    fields = super::Fields { output_ty: IrType::Any };
+}
+);

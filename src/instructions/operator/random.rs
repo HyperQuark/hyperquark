@@ -193,4 +193,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_random; t1, t2 ;}
+crate::instructions_test! (
+mod tests for operator_random(t1,t2) {
+}
+);

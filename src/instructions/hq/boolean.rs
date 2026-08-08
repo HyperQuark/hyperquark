@@ -52,5 +52,13 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! {tests_false; hq_boolean; @ super::Fields(false)}
-crate::instructions_test! {tests_true; hq_boolean; @ super::Fields(true)}
+crate::instructions_test! (
+mod tests_false for hq_boolean {
+    fields = super::Fields(false);
+}
+);
+crate::instructions_test! (
+mod tests_true for hq_boolean {
+    fields = super::Fields(true);
+}
+);

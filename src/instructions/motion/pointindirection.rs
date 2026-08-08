@@ -56,4 +56,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; motion_pointindirection; t }
+crate::instructions_test! (
+mod tests for motion_pointindirection(t) {
+}
+);

@@ -38,4 +38,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_pow10; t }
+crate::instructions_test! (
+mod tests for operator_pow10(t) {
+}
+);

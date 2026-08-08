@@ -32,4 +32,7 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! {tests; operator_sqrt; t }
+crate::instructions_test! (
+mod tests for operator_sqrt(t) {
+}
+);
