@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["box_type_check","boxed_pattern","build_boxed_locals","build_forest","collapse_same_typed_leaves","make_branch","make_branch_fork","make_leaf","make_type_branches","request_screen_refresh","should_unbox","unbox_instructions","wrap_instructions"],"struct":["Branch","ForestBuilderState","Fork","Leaves","Roots"],"type":["BoxedLocals"]};

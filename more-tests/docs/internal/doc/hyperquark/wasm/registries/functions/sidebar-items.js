@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["mark_waiting_flag","pen_colour","spawn_threads","static_functions"],"struct":["MaybeStaticFunction","StaticFunction","StaticFunctionRegistrar"],"type":["ExternalFunctionRegistry","StaticFunctionRegistry"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LivenessEvent"],"fn":["add_live_variable","build_liveness_events","build_merges_from_events","merge_variables","merge_variables_in_step","record_event","record_event_at"],"struct":["LiveRangeEvent","LivenessRange"]};

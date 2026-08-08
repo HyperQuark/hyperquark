@@ -1,0 +1,656 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/sb3.rs`."><title>sb3.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+
+<style>
+  .block-markup {
+    display: flex;
+    justify-content: center;
+  }
+
+  .block-markup > svg {
+    flex: 1;
+  }
+</style>
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@v0.7.0-rc2/dist/esm/contrib/all-in-one-lite.bundle.js"
+  id="typst"
+></script>
+<script>
+  document.getElementById("typst").addEventListener("load", function () {
+    $typst.setCompilerInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@v0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm",
+    });
+    $typst.setRendererInitOptions({
+      getModule: () =>
+        "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@v0.7.0-rc2/pkg/typst_ts_renderer_bg.wasm",
+    });
+    const getFontSize = (el) => {
+      return parseFloat(
+        window.getComputedStyle(el).getPropertyValue("font-size"),
+      );
+    };
+    const rootFontSize = getFontSize(document.body);
+    const getTextColor = (el) =>
+      nameToTypstRgba(window.getComputedStyle(el).getPropertyValue("color"));
+    const rootTextColor = getTextColor(document.body);
+
+    function nameToTypstRgba(name) {
+      var canvas = document.createElement("canvas");
+      var context = canvas.getContext("2d");
+      context.fillStyle = name;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+      const aRatio = Math.min(a / 255, 1);
+      return `color.rgb(${r}, ${g}, ${b}, ${aRatio} * 100%)`;
+    }
+
+    function renderMarkup(
+      content,
+      isBlock,
+      fontSize = rootFontSize,
+      textColor = rootTextColor,
+    ) {
+      const y = isBlock ? "0.5em" : "0pt";
+      let mainContent = `#set page(height: auto, width: auto, margin: (y: ${y}, rest: 0pt)); #set text(size: ${fontSize}pt, fill: ${textColor}); #show math.equation: box;\n${content}`;
+      return $typst.svg({ mainContent }).then(
+        (svg) => svg,
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
+
+    function createElem(content, isBlock) {
+      const dom_parser = new DOMParser();
+      const toInsert = isBlock
+        ? `<p class="block-markup">${content}</p>`
+        : `<span class="inline-markup">${content}</span>`;
+      const svg_document = dom_parser.parseFromString(toInsert, "text/html");
+      return svg_document.querySelector(
+        isBlock ? "p.block-markup" : "span.inline-markup",
+      );
+    }
+
+    document.querySelectorAll("p").forEach((p) => {
+      if (!(p.textContent.startsWith("$ ") && p.textContent.endsWith(" $"))) {
+        return;
+      }
+      renderMarkup(p.textContent, true).then((svg) => {
+        p.style.display = "none";
+        p.style.marginTop = "-40px";
+
+        p.parentNode.insertBefore(createElem(svg, true), p.nextSibling);
+      });
+    });
+    document
+      .querySelectorAll(
+        "p code, dd code, h2 code, h3 code, h4 code, h5 code, h6 code",
+      )
+      .forEach((p) => {
+        if (!(p.textContent.startsWith("{") && p.textContent.endsWith("}"))) {
+          return;
+        }
+        renderMarkup(
+          p.textContent.slice(1, -1),
+          false,
+          getFontSize(p),
+          getTextColor(p),
+        ).then((svg) => {
+          p.style.display = "none";
+          p.style.marginTop = "-40px";
+
+          p.parentNode.insertBefore(createElem(svg, false), p.nextSibling);
+        });
+      });
+    function skipExampleWrap(node, pre) {
+      const parent = pre.parentNode;
+      if (!parent) return;
+      if (parent.classList.contains("example-wrap")) {
+        return skipExampleWrap(node, parent);
+      }
+      parent.insertBefore(node, pre.nextSibling);
+      pre.style.display = "none";
+    }
+    document
+      .querySelectorAll('pre[class="language-typm-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(`$ ${content} $`, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+    document
+      .querySelectorAll('pre[class="language-typ-render"]')
+      .forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (code) {
+          const content = code.textContent;
+          renderMarkup(content, true).then((svg) => {
+            skipExampleWrap(createElem(svg, true), pre);
+          });
+        }
+      });
+  });
+</script>
+
+</head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">hyperquark/</div>sb3.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! 1-1 representation of `project.json` or `sprite.json` files
+<a href=#2 id=2 data-nosnippet>2</a>//! in the `sb3` format.
+<a href=#3 id=3 data-nosnippet>3</a>//!
+<a href=#4 id=4 data-nosnippet>4</a>//! `sb` or `sb2` files must be converted first;
+<a href=#5 id=5 data-nosnippet>5</a>//! `sb3` files must be unzipped first. See &lt;https://en.scratch-wiki.info/wiki/Scratch_File_Format&gt;
+<a href=#6 id=6 data-nosnippet>6</a>//! for a loose informal specification.
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use </span>enum_field_getter::EnumFieldGetter;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>serde_json::Value;
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// A scratch project
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#16 id=16 data-nosnippet>16</a></span><span class="kw">pub struct </span>Sb3Project {
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">pub </span>targets: Vec&lt;Target&gt;,
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="attr">#[serde(default)]
+<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="kw">pub </span>monitors: Vec&lt;Monitor&gt;,
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">pub </span>extensions: Vec&lt;Box&lt;str&gt;&gt;,
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">pub </span>meta: Meta,
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// A comment, possibly attached to a block
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#26 id=26 data-nosnippet>26</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">pub struct </span>Comment {
+<a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">pub </span>block_id: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">pub </span>x: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">pub </span>y: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">pub </span>width: f64,
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">pub </span>height: f64,
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">pub </span>minimized: bool,
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">pub </span>text: Box&lt;str&gt;,
+<a href=#35 id=35 data-nosnippet>35</a>}
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="doccomment">/// A possible block opcode.
+<a href=#38 id=38 data-nosnippet>38</a>///
+<a href=#39 id=39 data-nosnippet>39</a>/// Encompasses the default block pallette, the pen extension,
+<a href=#40 id=40 data-nosnippet>40</a>/// and a few hidden but non-obsolete blocks. A block being listed here does not imply that
+<a href=#41 id=41 data-nosnippet>41</a>/// it is supported by `HyperQuark`.
+<a href=#42 id=42 data-nosnippet>42</a></span><span class="attr">#[expect(non_camel_case_types, reason = <span class="string">"opcodes are snake_case"</span>)]
+<a href=#43 id=43 data-nosnippet>43</a>#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+<a href=#44 id=44 data-nosnippet>44</a></span><span class="kw">pub enum </span>BlockOpcode {
+<a href=#45 id=45 data-nosnippet>45</a>    control_repeat,
+<a href=#46 id=46 data-nosnippet>46</a>    control_repeat_until,
+<a href=#47 id=47 data-nosnippet>47</a>    control_while,
+<a href=#48 id=48 data-nosnippet>48</a>    control_for_each,
+<a href=#49 id=49 data-nosnippet>49</a>    control_forever,
+<a href=#50 id=50 data-nosnippet>50</a>    control_wait,
+<a href=#51 id=51 data-nosnippet>51</a>    control_wait_until,
+<a href=#52 id=52 data-nosnippet>52</a>    control_if,
+<a href=#53 id=53 data-nosnippet>53</a>    control_if_else,
+<a href=#54 id=54 data-nosnippet>54</a>    control_stop,
+<a href=#55 id=55 data-nosnippet>55</a>    control_create_clone_of,
+<a href=#56 id=56 data-nosnippet>56</a>    control_delete_this_clone,
+<a href=#57 id=57 data-nosnippet>57</a>    control_get_counter,
+<a href=#58 id=58 data-nosnippet>58</a>    control_incr_counter,
+<a href=#59 id=59 data-nosnippet>59</a>    control_clear_counter,
+<a href=#60 id=60 data-nosnippet>60</a>    control_all_at_once,
+<a href=#61 id=61 data-nosnippet>61</a>    control_start_as_clone,
+<a href=#62 id=62 data-nosnippet>62</a>    control_create_clone_of_menu,
+<a href=#63 id=63 data-nosnippet>63</a>    data_variable,
+<a href=#64 id=64 data-nosnippet>64</a>    data_setvariableto,
+<a href=#65 id=65 data-nosnippet>65</a>    data_changevariableby,
+<a href=#66 id=66 data-nosnippet>66</a>    data_hidevariable,
+<a href=#67 id=67 data-nosnippet>67</a>    data_showvariable,
+<a href=#68 id=68 data-nosnippet>68</a>    data_listcontents,
+<a href=#69 id=69 data-nosnippet>69</a>    data_addtolist,
+<a href=#70 id=70 data-nosnippet>70</a>    data_deleteoflist,
+<a href=#71 id=71 data-nosnippet>71</a>    data_deletealloflist,
+<a href=#72 id=72 data-nosnippet>72</a>    data_insertatlist,
+<a href=#73 id=73 data-nosnippet>73</a>    data_replaceitemoflist,
+<a href=#74 id=74 data-nosnippet>74</a>    data_itemoflist,
+<a href=#75 id=75 data-nosnippet>75</a>    data_itemnumoflist,
+<a href=#76 id=76 data-nosnippet>76</a>    data_lengthoflist,
+<a href=#77 id=77 data-nosnippet>77</a>    data_listcontainsitem,
+<a href=#78 id=78 data-nosnippet>78</a>    data_hidelist,
+<a href=#79 id=79 data-nosnippet>79</a>    data_showlist,
+<a href=#80 id=80 data-nosnippet>80</a>    event_broadcast,
+<a href=#81 id=81 data-nosnippet>81</a>    event_broadcast_menu,
+<a href=#82 id=82 data-nosnippet>82</a>    event_broadcastandwait,
+<a href=#83 id=83 data-nosnippet>83</a>    event_whenflagclicked,
+<a href=#84 id=84 data-nosnippet>84</a>    event_whenkeypressed,
+<a href=#85 id=85 data-nosnippet>85</a>    event_whenthisspriteclicked,
+<a href=#86 id=86 data-nosnippet>86</a>    event_whentouchingobject,
+<a href=#87 id=87 data-nosnippet>87</a>    event_whenstageclicked,
+<a href=#88 id=88 data-nosnippet>88</a>    event_whenbackdropswitchesto,
+<a href=#89 id=89 data-nosnippet>89</a>    event_whengreaterthan,
+<a href=#90 id=90 data-nosnippet>90</a>    event_whenbroadcastreceived,
+<a href=#91 id=91 data-nosnippet>91</a>    looks_say,
+<a href=#92 id=92 data-nosnippet>92</a>    looks_sayforsecs,
+<a href=#93 id=93 data-nosnippet>93</a>    looks_think,
+<a href=#94 id=94 data-nosnippet>94</a>    looks_thinkforsecs,
+<a href=#95 id=95 data-nosnippet>95</a>    looks_show,
+<a href=#96 id=96 data-nosnippet>96</a>    looks_hide,
+<a href=#97 id=97 data-nosnippet>97</a>    looks_hideallsprites,
+<a href=#98 id=98 data-nosnippet>98</a>    looks_switchcostumeto,
+<a href=#99 id=99 data-nosnippet>99</a>    looks_switchbackdropto,
+<a href=#100 id=100 data-nosnippet>100</a>    looks_switchbackdroptoandwait,
+<a href=#101 id=101 data-nosnippet>101</a>    looks_nextcostume,
+<a href=#102 id=102 data-nosnippet>102</a>    looks_nextbackdrop,
+<a href=#103 id=103 data-nosnippet>103</a>    looks_changeeffectby,
+<a href=#104 id=104 data-nosnippet>104</a>    looks_seteffectto,
+<a href=#105 id=105 data-nosnippet>105</a>    looks_cleargraphiceffects,
+<a href=#106 id=106 data-nosnippet>106</a>    looks_changesizeby,
+<a href=#107 id=107 data-nosnippet>107</a>    looks_setsizeto,
+<a href=#108 id=108 data-nosnippet>108</a>    looks_changestretchby,
+<a href=#109 id=109 data-nosnippet>109</a>    looks_setstretchto,
+<a href=#110 id=110 data-nosnippet>110</a>    looks_gotofrontback,
+<a href=#111 id=111 data-nosnippet>111</a>    looks_goforwardbackwardlayers,
+<a href=#112 id=112 data-nosnippet>112</a>    looks_size,
+<a href=#113 id=113 data-nosnippet>113</a>    looks_costumenumbername,
+<a href=#114 id=114 data-nosnippet>114</a>    looks_backdropnumbername,
+<a href=#115 id=115 data-nosnippet>115</a>    looks_costume,
+<a href=#116 id=116 data-nosnippet>116</a>    looks_backdrops,
+<a href=#117 id=117 data-nosnippet>117</a>    motion_movesteps,
+<a href=#118 id=118 data-nosnippet>118</a>    motion_gotoxy,
+<a href=#119 id=119 data-nosnippet>119</a>    motion_goto,
+<a href=#120 id=120 data-nosnippet>120</a>    motion_goto_menu,
+<a href=#121 id=121 data-nosnippet>121</a>    motion_turnright,
+<a href=#122 id=122 data-nosnippet>122</a>    motion_turnleft,
+<a href=#123 id=123 data-nosnippet>123</a>    motion_pointindirection,
+<a href=#124 id=124 data-nosnippet>124</a>    motion_pointtowards,
+<a href=#125 id=125 data-nosnippet>125</a>    motion_glidesecstoxy,
+<a href=#126 id=126 data-nosnippet>126</a>    motion_glideto,
+<a href=#127 id=127 data-nosnippet>127</a>    motion_ifonedgebounce,
+<a href=#128 id=128 data-nosnippet>128</a>    motion_setrotationstyle,
+<a href=#129 id=129 data-nosnippet>129</a>    motion_changexby,
+<a href=#130 id=130 data-nosnippet>130</a>    motion_setx,
+<a href=#131 id=131 data-nosnippet>131</a>    motion_changeyby,
+<a href=#132 id=132 data-nosnippet>132</a>    motion_sety,
+<a href=#133 id=133 data-nosnippet>133</a>    motion_xposition,
+<a href=#134 id=134 data-nosnippet>134</a>    motion_yposition,
+<a href=#135 id=135 data-nosnippet>135</a>    motion_direction,
+<a href=#136 id=136 data-nosnippet>136</a>    motion_scroll_right,
+<a href=#137 id=137 data-nosnippet>137</a>    motion_scroll_up,
+<a href=#138 id=138 data-nosnippet>138</a>    motion_align_scene,
+<a href=#139 id=139 data-nosnippet>139</a>    motion_xscroll,
+<a href=#140 id=140 data-nosnippet>140</a>    motion_yscroll,
+<a href=#141 id=141 data-nosnippet>141</a>    motion_pointtowards_menu,
+<a href=#142 id=142 data-nosnippet>142</a>    operator_add,
+<a href=#143 id=143 data-nosnippet>143</a>    operator_subtract,
+<a href=#144 id=144 data-nosnippet>144</a>    operator_multiply,
+<a href=#145 id=145 data-nosnippet>145</a>    operator_divide,
+<a href=#146 id=146 data-nosnippet>146</a>    operator_lt,
+<a href=#147 id=147 data-nosnippet>147</a>    operator_equals,
+<a href=#148 id=148 data-nosnippet>148</a>    operator_gt,
+<a href=#149 id=149 data-nosnippet>149</a>    operator_and,
+<a href=#150 id=150 data-nosnippet>150</a>    operator_or,
+<a href=#151 id=151 data-nosnippet>151</a>    operator_not,
+<a href=#152 id=152 data-nosnippet>152</a>    operator_random,
+<a href=#153 id=153 data-nosnippet>153</a>    operator_join,
+<a href=#154 id=154 data-nosnippet>154</a>    operator_letter_of,
+<a href=#155 id=155 data-nosnippet>155</a>    operator_length,
+<a href=#156 id=156 data-nosnippet>156</a>    operator_contains,
+<a href=#157 id=157 data-nosnippet>157</a>    operator_mod,
+<a href=#158 id=158 data-nosnippet>158</a>    operator_round,
+<a href=#159 id=159 data-nosnippet>159</a>    operator_mathop,
+<a href=#160 id=160 data-nosnippet>160</a>    pen_clear,
+<a href=#161 id=161 data-nosnippet>161</a>    pen_stamp,
+<a href=#162 id=162 data-nosnippet>162</a>    pen_penDown,
+<a href=#163 id=163 data-nosnippet>163</a>    pen_penUp,
+<a href=#164 id=164 data-nosnippet>164</a>    pen_setPenColorToColor,
+<a href=#165 id=165 data-nosnippet>165</a>    pen_changePenColorParamBy,
+<a href=#166 id=166 data-nosnippet>166</a>    pen_setPenColorParamTo,
+<a href=#167 id=167 data-nosnippet>167</a>    pen_changePenSizeBy,
+<a href=#168 id=168 data-nosnippet>168</a>    pen_setPenSizeTo,
+<a href=#169 id=169 data-nosnippet>169</a>    pen_setPenShadeToNumber,
+<a href=#170 id=170 data-nosnippet>170</a>    pen_changePenShadeBy,
+<a href=#171 id=171 data-nosnippet>171</a>    pen_setPenHueToNumber,
+<a href=#172 id=172 data-nosnippet>172</a>    pen_changePenHueBy,
+<a href=#173 id=173 data-nosnippet>173</a>    pen_menu_colorParam,
+<a href=#174 id=174 data-nosnippet>174</a>    procedures_definition,
+<a href=#175 id=175 data-nosnippet>175</a>    procedures_call,
+<a href=#176 id=176 data-nosnippet>176</a>    procedures_prototype,
+<a href=#177 id=177 data-nosnippet>177</a>    argument_reporter_string_number,
+<a href=#178 id=178 data-nosnippet>178</a>    argument_reporter_boolean,
+<a href=#179 id=179 data-nosnippet>179</a>    sensing_touchingobject,
+<a href=#180 id=180 data-nosnippet>180</a>    sensing_touchingcolor,
+<a href=#181 id=181 data-nosnippet>181</a>    sensing_coloristouchingcolor,
+<a href=#182 id=182 data-nosnippet>182</a>    sensing_distanceto,
+<a href=#183 id=183 data-nosnippet>183</a>    sensing_distancetomenu,
+<a href=#184 id=184 data-nosnippet>184</a>    sensing_timer,
+<a href=#185 id=185 data-nosnippet>185</a>    sensing_resettimer,
+<a href=#186 id=186 data-nosnippet>186</a>    sensing_of,
+<a href=#187 id=187 data-nosnippet>187</a>    sensing_mousex,
+<a href=#188 id=188 data-nosnippet>188</a>    sensing_mousey,
+<a href=#189 id=189 data-nosnippet>189</a>    sensing_setdragmode,
+<a href=#190 id=190 data-nosnippet>190</a>    sensing_mousedown,
+<a href=#191 id=191 data-nosnippet>191</a>    sensing_keypressed,
+<a href=#192 id=192 data-nosnippet>192</a>    sensing_current,
+<a href=#193 id=193 data-nosnippet>193</a>    sensing_dayssince2000,
+<a href=#194 id=194 data-nosnippet>194</a>    sensing_loudness,
+<a href=#195 id=195 data-nosnippet>195</a>    sensing_loud,
+<a href=#196 id=196 data-nosnippet>196</a>    sensing_askandwait,
+<a href=#197 id=197 data-nosnippet>197</a>    sensing_answer,
+<a href=#198 id=198 data-nosnippet>198</a>    sensing_username,
+<a href=#199 id=199 data-nosnippet>199</a>    sensing_userid,
+<a href=#200 id=200 data-nosnippet>200</a>    sensing_touchingobjectmenu,
+<a href=#201 id=201 data-nosnippet>201</a>    sensing_keyoptions,
+<a href=#202 id=202 data-nosnippet>202</a>    sensing_of_object_menu,
+<a href=#203 id=203 data-nosnippet>203</a>    sound_play,
+<a href=#204 id=204 data-nosnippet>204</a>    sound_playuntildone,
+<a href=#205 id=205 data-nosnippet>205</a>    sound_stopallsounds,
+<a href=#206 id=206 data-nosnippet>206</a>    sound_seteffectto,
+<a href=#207 id=207 data-nosnippet>207</a>    sound_changeeffectby,
+<a href=#208 id=208 data-nosnippet>208</a>    sound_cleareffects,
+<a href=#209 id=209 data-nosnippet>209</a>    sound_sounds_menu,
+<a href=#210 id=210 data-nosnippet>210</a>    sound_beats_menu,
+<a href=#211 id=211 data-nosnippet>211</a>    sound_effects_menu,
+<a href=#212 id=212 data-nosnippet>212</a>    sound_setvolumeto,
+<a href=#213 id=213 data-nosnippet>213</a>    sound_changevolumeby,
+<a href=#214 id=214 data-nosnippet>214</a>    sound_volume,
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="comment">// #[serde(other)]
+<a href=#216 id=216 data-nosnippet>216</a>    // other,
+<a href=#217 id=217 data-nosnippet>217</a></span>}
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a><span class="doccomment">/// A scratch block - either special or not
+<a href=#220 id=220 data-nosnippet>220</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter, PartialEq)]
+<a href=#221 id=221 data-nosnippet>221</a>#[serde(untagged)]
+<a href=#222 id=222 data-nosnippet>222</a></span><span class="kw">pub enum </span>Block {
+<a href=#223 id=223 data-nosnippet>223</a>    Normal {
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="comment">// potentially might not be top level
+<a href=#225 id=225 data-nosnippet>225</a>        </span><span class="attr">#[serde(default)]
+<a href=#226 id=226 data-nosnippet>226</a>        </span>x: i32,
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="attr">#[serde(default)]
+<a href=#228 id=228 data-nosnippet>228</a>        </span>y: i32,
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="attr">#[serde(flatten)]
+<a href=#230 id=230 data-nosnippet>230</a>        </span>block_info: BlockInfo,
+<a href=#231 id=231 data-nosnippet>231</a>    },
+<a href=#232 id=232 data-nosnippet>232</a>    Special(BlockArray),
+<a href=#233 id=233 data-nosnippet>233</a>}
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a><span class="doccomment">/// A special representation of a scratch block.
+<a href=#236 id=236 data-nosnippet>236</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+<a href=#237 id=237 data-nosnippet>237</a>#[serde(untagged)]
+<a href=#238 id=238 data-nosnippet>238</a></span><span class="kw">pub enum </span>BlockArray {
+<a href=#239 id=239 data-nosnippet>239</a>    NumberOrAngle(u32, f64),
+<a href=#240 id=240 data-nosnippet>240</a>    ColorOrString(u32, Box&lt;str&gt;),
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="doccomment">/// This might also represent a variable or list if the block is not top-level, in theory
+<a href=#242 id=242 data-nosnippet>242</a>    </span>Broadcast(u32, Box&lt;str&gt;, Box&lt;str&gt;),
+<a href=#243 id=243 data-nosnippet>243</a>    VariableOrList(u32, Box&lt;str&gt;, Box&lt;str&gt;, f64, f64),
+<a href=#244 id=244 data-nosnippet>244</a>}
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a><span class="doccomment">/// Either a block array or a block id
+<a href=#247 id=247 data-nosnippet>247</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+<a href=#248 id=248 data-nosnippet>248</a>#[serde(untagged)]
+<a href=#249 id=249 data-nosnippet>249</a></span><span class="kw">pub enum </span>BlockArrayOrId {
+<a href=#250 id=250 data-nosnippet>250</a>    Id(Box&lt;str&gt;),
+<a href=#251 id=251 data-nosnippet>251</a>    Array(BlockArray),
+<a href=#252 id=252 data-nosnippet>252</a>}
+<a href=#253 id=253 data-nosnippet>253</a>
+<a href=#254 id=254 data-nosnippet>254</a><span class="doccomment">/// Possible inputs (round or predicate) in a block
+<a href=#255 id=255 data-nosnippet>255</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter, PartialEq)]
+<a href=#256 id=256 data-nosnippet>256</a>#[serde(untagged)]
+<a href=#257 id=257 data-nosnippet>257</a></span><span class="kw">pub enum </span>Input {
+<a href=#258 id=258 data-nosnippet>258</a>    Shadow(u32, <span class="prelude-ty">Option</span>&lt;BlockArrayOrId&gt;, <span class="prelude-ty">Option</span>&lt;BlockArrayOrId&gt;),
+<a href=#259 id=259 data-nosnippet>259</a>    NoShadow(u32, <span class="prelude-ty">Option</span>&lt;BlockArrayOrId&gt;),
+<a href=#260 id=260 data-nosnippet>260</a>}
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a><span class="doccomment">/// Possible fields (rectangular) in a block
+<a href=#263 id=263 data-nosnippet>263</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter, PartialEq)]
+<a href=#264 id=264 data-nosnippet>264</a>#[serde(untagged)]
+<a href=#265 id=265 data-nosnippet>265</a></span><span class="kw">pub enum </span>Field {
+<a href=#266 id=266 data-nosnippet>266</a>    Value((<span class="prelude-ty">Option</span>&lt;VarVal&gt;,)),
+<a href=#267 id=267 data-nosnippet>267</a>    ValueId(<span class="prelude-ty">Option</span>&lt;VarVal&gt;, <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;),
+<a href=#268 id=268 data-nosnippet>268</a>}
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a><span class="kw">impl </span>Field {
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="comment">// this isn't auto implemented by EnumFieldGetter because Field::Value is actually a tuple
+<a href=#272 id=272 data-nosnippet>272</a>    // in a tuple, so that serde correctly parses a single-item array
+<a href=#273 id=273 data-nosnippet>273</a>    </span><span class="attr">#[must_use]
+<a href=#274 id=274 data-nosnippet>274</a>    </span><span class="kw">pub const fn </span>get_0(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>VarVal&gt; {
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#276 id=276 data-nosnippet>276</a>            <span class="self">Self</span>::ValueId(val, <span class="kw">_</span>) | <span class="self">Self</span>::Value((val,)) =&gt; val.as_ref(),
+<a href=#277 id=277 data-nosnippet>277</a>        }
+<a href=#278 id=278 data-nosnippet>278</a>    }
+<a href=#279 id=279 data-nosnippet>279</a>}
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a><span class="doccomment">/// Represents a mutation on a block. See &lt;https://en.scratch-wiki.info/wiki/Scratch_File_Format#Mutations&gt;
+<a href=#282 id=282 data-nosnippet>282</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+<a href=#283 id=283 data-nosnippet>283</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#284 id=284 data-nosnippet>284</a></span><span class="kw">pub struct </span>Mutation {
+<a href=#285 id=285 data-nosnippet>285</a>    <span class="doccomment">/// ignored - should always be "mutation"
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">pub </span>tag_name: Box&lt;str&gt;,
+<a href=#287 id=287 data-nosnippet>287</a>    <span class="doccomment">/// ignored - should always be []
+<a href=#288 id=288 data-nosnippet>288</a>    </span><span class="attr">#[serde(default)]
+<a href=#289 id=289 data-nosnippet>289</a>    </span><span class="kw">pub </span>children: Vec&lt;()&gt;,
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="attr">#[serde(flatten)]
+<a href=#291 id=291 data-nosnippet>291</a>    </span><span class="kw">pub </span>mutations: BTreeMap&lt;Box&lt;str&gt;, Value&gt;,
+<a href=#292 id=292 data-nosnippet>292</a>}
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a><span class="kw">impl </span>Default <span class="kw">for </span>Mutation {
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="self">Self </span>{
+<a href=#297 id=297 data-nosnippet>297</a>            tag_name: <span class="string">"mutation"</span>.into(),
+<a href=#298 id=298 data-nosnippet>298</a>            children: <span class="macro">vec!</span>[],
+<a href=#299 id=299 data-nosnippet>299</a>            mutations: BTreeMap::new(),
+<a href=#300 id=300 data-nosnippet>300</a>        }
+<a href=#301 id=301 data-nosnippet>301</a>    }
+<a href=#302 id=302 data-nosnippet>302</a>}
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a><span class="doccomment">/// Represents a non-special block
+<a href=#305 id=305 data-nosnippet>305</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+<a href=#306 id=306 data-nosnippet>306</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#307 id=307 data-nosnippet>307</a></span><span class="kw">pub struct </span>BlockInfo {
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">pub </span>opcode: BlockOpcode,
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">pub </span>next: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">pub </span>parent: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="kw">pub </span>inputs: BTreeMap&lt;Box&lt;str&gt;, Input&gt;,
+<a href=#312 id=312 data-nosnippet>312</a>    <span class="kw">pub </span>fields: BTreeMap&lt;Box&lt;str&gt;, Field&gt;,
+<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">pub </span>shadow: bool,
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">pub </span>top_level: bool,
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="attr">#[serde(default)]
+<a href=#316 id=316 data-nosnippet>316</a>    </span><span class="kw">pub </span>mutation: Mutation,
+<a href=#317 id=317 data-nosnippet>317</a>}
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a><span class="doccomment">/// the data format of a costume
+<a href=#320 id=320 data-nosnippet>320</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+<a href=#321 id=321 data-nosnippet>321</a>#[expect(non_camel_case_types, reason = <span class="string">"lowercase in project.json"</span>)]
+<a href=#322 id=322 data-nosnippet>322</a></span><span class="kw">pub enum </span>CostumeDataFormat {
+<a href=#323 id=323 data-nosnippet>323</a>    png,
+<a href=#324 id=324 data-nosnippet>324</a>    svg,
+<a href=#325 id=325 data-nosnippet>325</a>    jpeg,
+<a href=#326 id=326 data-nosnippet>326</a>    jpg,
+<a href=#327 id=327 data-nosnippet>327</a>    bmp,
+<a href=#328 id=328 data-nosnippet>328</a>    gif,
+<a href=#329 id=329 data-nosnippet>329</a>}
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a><span class="doccomment">/// A costume
+<a href=#332 id=332 data-nosnippet>332</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#333 id=333 data-nosnippet>333</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#334 id=334 data-nosnippet>334</a></span><span class="kw">pub struct </span>Costume {
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">pub </span>asset_id: Box&lt;str&gt;,
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">pub </span>name: Box&lt;str&gt;,
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">pub </span>md5ext: Box&lt;str&gt;,
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">pub </span>data_format: CostumeDataFormat,
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="attr">#[serde(default)]
+<a href=#340 id=340 data-nosnippet>340</a>    </span><span class="kw">pub </span>bitmap_resolution: f64,
+<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">pub </span>rotation_center_x: f64,
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">pub </span>rotation_center_y: f64,
+<a href=#343 id=343 data-nosnippet>343</a>}
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a><span class="doccomment">/// A sound
+<a href=#346 id=346 data-nosnippet>346</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#347 id=347 data-nosnippet>347</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#348 id=348 data-nosnippet>348</a></span><span class="kw">pub struct </span>Sound {
+<a href=#349 id=349 data-nosnippet>349</a>    <span class="kw">pub </span>asset_id: Box&lt;str&gt;,
+<a href=#350 id=350 data-nosnippet>350</a>    <span class="kw">pub </span>name: Box&lt;str&gt;,
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">pub </span>md5ext: Box&lt;str&gt;,
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">pub </span>data_format: Box&lt;str&gt;, <span class="comment">// TODO: enumerate
+<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">pub </span>rate: f64,
+<a href=#354 id=354 data-nosnippet>354</a>    <span class="kw">pub </span>sample_count: f64,
+<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">pub </span>format: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;, <span class="comment">// this seems to be present sometimes, as an empty string
+<a href=#356 id=356 data-nosnippet>356</a></span>}
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a><span class="doccomment">/// The (default) value of a variable
+<a href=#359 id=359 data-nosnippet>359</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+<a href=#360 id=360 data-nosnippet>360</a>#[serde(untagged)]
+<a href=#361 id=361 data-nosnippet>361</a></span><span class="kw">pub enum </span>VarVal {
+<a href=#362 id=362 data-nosnippet>362</a>    Int(i32),
+<a href=#363 id=363 data-nosnippet>363</a>    Float(f64),
+<a href=#364 id=364 data-nosnippet>364</a>    Bool(bool),
+<a href=#365 id=365 data-nosnippet>365</a>    String(Box&lt;str&gt;),
+<a href=#366 id=366 data-nosnippet>366</a>}
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a><span class="doccomment">/// Represents a variable
+<a href=#369 id=369 data-nosnippet>369</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, EnumFieldGetter)]
+<a href=#370 id=370 data-nosnippet>370</a>#[serde(untagged)]
+<a href=#371 id=371 data-nosnippet>371</a></span><span class="kw">pub enum </span>VariableInfo {
+<a href=#372 id=372 data-nosnippet>372</a>    CloudVar(Box&lt;str&gt;, VarVal, bool),
+<a href=#373 id=373 data-nosnippet>373</a>    LocalVar(Box&lt;str&gt;, VarVal),
+<a href=#374 id=374 data-nosnippet>374</a>}
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a><span class="kw">pub type </span>BlockMap = BTreeMap&lt;Box&lt;str&gt;, Block&gt;;
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a><span class="doccomment">/// A target (sprite or stage)
+<a href=#379 id=379 data-nosnippet>379</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#380 id=380 data-nosnippet>380</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#381 id=381 data-nosnippet>381</a></span><span class="kw">pub struct </span>Target {
+<a href=#382 id=382 data-nosnippet>382</a>    <span class="kw">pub </span>is_stage: bool,
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="kw">pub </span>name: Box&lt;str&gt;,
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">pub </span>variables: BTreeMap&lt;Box&lt;str&gt;, VariableInfo&gt;,
+<a href=#385 id=385 data-nosnippet>385</a>    <span class="kw">pub </span>lists: BTreeMap&lt;Box&lt;str&gt;, (Box&lt;str&gt;, Vec&lt;VarVal&gt;)&gt;,
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="attr">#[serde(default)]
+<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">pub </span>broadcasts: BTreeMap&lt;Box&lt;str&gt;, Box&lt;str&gt;&gt;,
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">pub </span>blocks: BlockMap,
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">pub </span>comments: BTreeMap&lt;Box&lt;str&gt;, Comment&gt;,
+<a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">pub </span>current_costume: u32,
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">pub </span>costumes: Vec&lt;Costume&gt;,
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">pub </span>sounds: Vec&lt;Sound&gt;,
+<a href=#393 id=393 data-nosnippet>393</a>    <span class="attr">#[serde(default)]
+<a href=#394 id=394 data-nosnippet>394</a>    </span><span class="kw">pub </span>layer_order: i32,
+<a href=#395 id=395 data-nosnippet>395</a>    <span class="attr">#[serde(default)]
+<a href=#396 id=396 data-nosnippet>396</a>    </span><span class="kw">pub </span>volume: f64,
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="attr">#[serde(default)]
+<a href=#398 id=398 data-nosnippet>398</a>    </span><span class="kw">pub </span>tempo: f64,
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="attr">#[serde(default)]
+<a href=#400 id=400 data-nosnippet>400</a>    </span><span class="kw">pub </span>video_state: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#401 id=401 data-nosnippet>401</a>    <span class="attr">#[serde(default)]
+<a href=#402 id=402 data-nosnippet>402</a>    </span><span class="kw">pub </span>video_transparency: f64,
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="attr">#[serde(default)]
+<a href=#404 id=404 data-nosnippet>404</a>    </span><span class="kw">pub </span>text_to_speech_language: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="attr">#[serde(default)]
+<a href=#406 id=406 data-nosnippet>406</a>    </span><span class="kw">pub </span>visible: bool,
+<a href=#407 id=407 data-nosnippet>407</a>    <span class="attr">#[serde(default)]
+<a href=#408 id=408 data-nosnippet>408</a>    </span><span class="kw">pub </span>x: f64,
+<a href=#409 id=409 data-nosnippet>409</a>    <span class="attr">#[serde(default)]
+<a href=#410 id=410 data-nosnippet>410</a>    </span><span class="kw">pub </span>y: f64,
+<a href=#411 id=411 data-nosnippet>411</a>    <span class="attr">#[serde(default)]
+<a href=#412 id=412 data-nosnippet>412</a>    </span><span class="kw">pub </span>size: f64,
+<a href=#413 id=413 data-nosnippet>413</a>    <span class="attr">#[serde(default)]
+<a href=#414 id=414 data-nosnippet>414</a>    </span><span class="kw">pub </span>direction: f64,
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="attr">#[serde(default)]
+<a href=#416 id=416 data-nosnippet>416</a>    </span><span class="kw">pub </span>draggable: bool,
+<a href=#417 id=417 data-nosnippet>417</a>    <span class="attr">#[serde(default)]
+<a href=#418 id=418 data-nosnippet>418</a>    </span><span class="kw">pub </span>rotation_style: Box&lt;str&gt;,
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="attr">#[serde(flatten)]
+<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">pub </span>unknown: BTreeMap&lt;Box&lt;str&gt;, Value&gt;,
+<a href=#421 id=421 data-nosnippet>421</a>}
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a><span class="doccomment">/// The value of a list monitor
+<a href=#424 id=424 data-nosnippet>424</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#425 id=425 data-nosnippet>425</a>#[serde(untagged)]
+<a href=#426 id=426 data-nosnippet>426</a></span><span class="kw">pub enum </span>ListMonitorValue {
+<a href=#427 id=427 data-nosnippet>427</a>    List(Vec&lt;VarVal&gt;),
+<a href=#428 id=428 data-nosnippet>428</a>    String(Box&lt;str&gt;),
+<a href=#429 id=429 data-nosnippet>429</a>    Number(f64),
+<a href=#430 id=430 data-nosnippet>430</a>}
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a><span class="doccomment">/// A monitor
+<a href=#433 id=433 data-nosnippet>433</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, EnumFieldGetter)]
+<a href=#434 id=434 data-nosnippet>434</a>#[serde(untagged)]
+<a href=#435 id=435 data-nosnippet>435</a></span><span class="kw">pub enum </span>Monitor {
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="attr">#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#437 id=437 data-nosnippet>437</a>    </span>ListMonitor {
+<a href=#438 id=438 data-nosnippet>438</a>        id: Box&lt;str&gt;,
+<a href=#439 id=439 data-nosnippet>439</a>        <span class="doccomment">/// The name of the monitor's mode: "default", "large", "slider", or "list" - should be "list"
+<a href=#440 id=440 data-nosnippet>440</a>        </span>mode: Box&lt;str&gt;,
+<a href=#441 id=441 data-nosnippet>441</a>        opcode: Box&lt;str&gt;,
+<a href=#442 id=442 data-nosnippet>442</a>        params: BTreeMap&lt;Box&lt;str&gt;, Box&lt;str&gt;&gt;,
+<a href=#443 id=443 data-nosnippet>443</a>        sprite_name: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#444 id=444 data-nosnippet>444</a>        width: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#445 id=445 data-nosnippet>445</a>        height: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#446 id=446 data-nosnippet>446</a>        x: f64,
+<a href=#447 id=447 data-nosnippet>447</a>        y: f64,
+<a href=#448 id=448 data-nosnippet>448</a>        visible: bool,
+<a href=#449 id=449 data-nosnippet>449</a>        value: ListMonitorValue,
+<a href=#450 id=450 data-nosnippet>450</a>    },
+<a href=#451 id=451 data-nosnippet>451</a>    <span class="attr">#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#452 id=452 data-nosnippet>452</a>    </span>VarMonitor {
+<a href=#453 id=453 data-nosnippet>453</a>        id: Box&lt;str&gt;,
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="doccomment">/// The name of the monitor's mode: "default", "large", "slider", or "list".
+<a href=#455 id=455 data-nosnippet>455</a>        </span>mode: Box&lt;str&gt;,
+<a href=#456 id=456 data-nosnippet>456</a>        opcode: Box&lt;str&gt;,
+<a href=#457 id=457 data-nosnippet>457</a>        params: BTreeMap&lt;Box&lt;str&gt;, Box&lt;str&gt;&gt;,
+<a href=#458 id=458 data-nosnippet>458</a>        sprite_name: <span class="prelude-ty">Option</span>&lt;Box&lt;str&gt;&gt;,
+<a href=#459 id=459 data-nosnippet>459</a>        value: VarVal,
+<a href=#460 id=460 data-nosnippet>460</a>        width: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#461 id=461 data-nosnippet>461</a>        height: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#462 id=462 data-nosnippet>462</a>        x: f64,
+<a href=#463 id=463 data-nosnippet>463</a>        y: f64,
+<a href=#464 id=464 data-nosnippet>464</a>        visible: bool,
+<a href=#465 id=465 data-nosnippet>465</a>        slider_min: f64,
+<a href=#466 id=466 data-nosnippet>466</a>        slider_max: f64,
+<a href=#467 id=467 data-nosnippet>467</a>        is_discrete: bool,
+<a href=#468 id=468 data-nosnippet>468</a>    },
+<a href=#469 id=469 data-nosnippet>469</a>}
+<a href=#470 id=470 data-nosnippet>470</a>
+<a href=#471 id=471 data-nosnippet>471</a><span class="doccomment">/// metadata about a scratch project - only included here for completeness
+<a href=#472 id=472 data-nosnippet>472</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+<a href=#473 id=473 data-nosnippet>473</a></span><span class="kw">pub struct </span>Meta {
+<a href=#474 id=474 data-nosnippet>474</a>    <span class="kw">pub </span>semver: Box&lt;str&gt;,
+<a href=#475 id=475 data-nosnippet>475</a>    <span class="kw">pub </span>vm: Box&lt;str&gt;,
+<a href=#476 id=476 data-nosnippet>476</a>    <span class="kw">pub </span>agent: Box&lt;str&gt;,
+<a href=#477 id=477 data-nosnippet>477</a>}
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a><span class="kw">impl </span>TryFrom&lt;String&gt; <span class="kw">for </span>Sb3Project {
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="kw">type </span>Error = HQError;
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">fn </span>try_from(string: String) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+<a href=#483 id=483 data-nosnippet>483</a>        (<span class="kw-2">&amp;</span>string[..]).try_into()
+<a href=#484 id=484 data-nosnippet>484</a>    }
+<a href=#485 id=485 data-nosnippet>485</a>}
+<a href=#486 id=486 data-nosnippet>486</a>
+<a href=#487 id=487 data-nosnippet>487</a><span class="kw">impl </span>TryFrom&lt;<span class="kw-2">&amp;</span>str&gt; <span class="kw">for </span>Sb3Project {
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="kw">type </span>Error = HQError;
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a>    <span class="kw">fn </span>try_from(string: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">use </span>serde_json::error::Category;
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">let </span>sb3: <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, serde_json::Error&gt; = serde_json::from_str(string);
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="kw">match </span>sb3 {
+<a href=#494 id=494 data-nosnippet>494</a>            <span class="prelude-val">Ok</span>(proj) =&gt; <span class="prelude-val">Ok</span>(proj),
+<a href=#495 id=495 data-nosnippet>495</a>            <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">match </span>err.classify() {
+<a href=#496 id=496 data-nosnippet>496</a>                Category::Syntax =&gt; <span class="macro">hq_bad_proj!</span>(
+<a href=#497 id=497 data-nosnippet>497</a>                    <span class="string">"Invalid JSON syntax at project.json:{}:{}"</span>,
+<a href=#498 id=498 data-nosnippet>498</a>                    err.line(),
+<a href=#499 id=499 data-nosnippet>499</a>                    err.column()
+<a href=#500 id=500 data-nosnippet>500</a>                ),
+<a href=#501 id=501 data-nosnippet>501</a>                Category::Data =&gt; <span class="macro">hq_bad_proj!</span>(
+<a href=#502 id=502 data-nosnippet>502</a>                    <span class="string">"Invalid project.json at project.json:{}:{}. Actual error: {}"</span>,
+<a href=#503 id=503 data-nosnippet>503</a>                    err.line(),
+<a href=#504 id=504 data-nosnippet>504</a>                    err.column(),
+<a href=#505 id=505 data-nosnippet>505</a>                    err
+<a href=#506 id=506 data-nosnippet>506</a>                ),
+<a href=#507 id=507 data-nosnippet>507</a>                Category::Eof =&gt; <span class="macro">hq_bad_proj!</span>(
+<a href=#508 id=508 data-nosnippet>508</a>                    <span class="string">"Unexpected end of file at project.json:{}:{}"</span>,
+<a href=#509 id=509 data-nosnippet>509</a>                    err.line(),
+<a href=#510 id=510 data-nosnippet>510</a>                    err.column()
+<a href=#511 id=511 data-nosnippet>511</a>                ),
+<a href=#512 id=512 data-nosnippet>512</a>                Category::Io =&gt; <span class="macro">hq_bug!</span>(<span class="string">"Failed to deserialize json due to IO error"</span>),
+<a href=#513 id=513 data-nosnippet>513</a>            },
+<a href=#514 id=514 data-nosnippet>514</a>        }
+<a href=#515 id=515 data-nosnippet>515</a>    }
+<a href=#516 id=516 data-nosnippet>516</a>}
+</code></pre></div></section></main></body></html>

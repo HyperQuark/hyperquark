@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Cow"],"mod":["fmt"],"struct":["BTreeMap","BTreeSet","Box","PhantomPinned","Pin","RefCell","String","Vec"],"trait":["Borrow","Itertools","ToString"],"type":["IndexMap","IndexSet"]};

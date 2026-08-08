@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["direction","gotoxy","pointindirection","setx","sety","xposition","yposition"]};
