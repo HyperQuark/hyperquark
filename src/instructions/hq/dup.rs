@@ -25,6 +25,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for hq_dup(t) {
-}
+    mod tests for hq_dup(t) {}
 );

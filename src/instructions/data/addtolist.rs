@@ -77,66 +77,47 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
+#[cfg(test)]
+mod test {
+    pub use super::super::listcontents::test_utils::*;
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+    use crate::wasm::WasmFlags;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(true, IrType::Any, flags_with_integers());
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(mutable: bool, ty: IrType, flags: WasmFlags) -> Fields {
+        Fields {
+            list: make_list(mutable, ty, flags),
+        }
+    }
+}
+
 crate::instructions_test!(
 
-    mod int for data_addtolist(t) {
-        fields = super::Fields {
-            list: {
-                let list = crate::ir::RcList::new(
-                    vec![],
-                    &flags()
-                ).unwrap();
-                *list.length_mutable().borrow_mut() = true;
-                list.add_type(IrType::Int);
-                list
-            },
-        };
-        flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
+    mod test_int for data_addtolist(t) {
+        fields = super::test::make_fields(true, IrType::Int, flags());
+        flags = super::test::flags_with_integers();
     }
 
 );
 crate::instructions_test!(
-mod float for data_addtolist(t) {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Float);
-            list
-        },
-    };
-}
+    mod test_float for data_addtolist(t) {
+        fields = super::test::make_fields(true, IrType::Float, flags());
+    }
+);
+
+crate::instructions_test!(
+    mod test_string for data_addtolist(t) {
+        fields = super::test::make_fields(true, IrType::String, flags());
+    }
 );
 crate::instructions_test!(
-mod string for data_addtolist(t) {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![crate::sb3::VarVal::String("hi".into())],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::String);
-            list
-        },
-    };
-}
-);
-crate::instructions_test!(
-mod any for data_addtolist(t) {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Any);
-            list
-        },
-    };
-}
+    mod test_any for data_addtolist(t) {
+        fields = super::test::make_fields(true, IrType::String, flags());
+    }
 );

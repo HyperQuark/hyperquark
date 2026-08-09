@@ -136,122 +136,78 @@ pub fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test!(
-mod any_global for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Any,
-                    &crate::sb3::VarVal::Float(0.0),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(false), first_write: RefCell::new(false)
-    };
+#[cfg(test)]
+mod test {
+    use super::super::variable::test_util::*;
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+    use crate::wasm::WasmFlags;
+    use crate::wasm::flags::unit_test_wasm_features;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(
+            IrType::Any,
+            crate::sb3::VarVal::Float(0.0),
+            true,
+            WasmFlags::new(unit_test_wasm_features()),
+        );
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(ty: IrType, initial: VarVal, local_write: bool, flags: WasmFlags) -> Fields {
+        Fields {
+            var: make_var(ty, initial, None, flags),
+            local_write: RefCell::new(local_write),
+            first_write: RefCell::new(false),
+        }
+    }
 }
+
+crate::instructions_test!(
+    mod test_any_global for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::Any, crate::sb3::VarVal::Float(0.0), false, flags());
+    }
 );
 
 crate::instructions_test!(
-mod float_global for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Float,
-                    &crate::sb3::VarVal::Float(0.0),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(false), first_write: RefCell::new(false)
-    };
-}
+    mod test_float_global for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::Float, crate::sb3::VarVal::Float(0.0), false, flags());
+    }
 );
 
 crate::instructions_test!(
-mod string_global for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::String,
-                    &crate::sb3::VarVal::String("".into()),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(false), first_write: RefCell::new(false)
-    };
-}
+    mod test_string_global for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::String, crate::sb3::VarVal::String("".into()), false, flags());
+    }
 );
 
 crate::instructions_test!(
-mod int_global for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Int,
-                    &crate::sb3::VarVal::Int(1),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(false), first_write: RefCell::new(false)
-    };
-}
+    mod test_int_global for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::Int, crate::sb3::VarVal::Int(0), false, flags());
+    }
 );
 
 crate::instructions_test!(
-mod any_local for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Any,
-                    &crate::sb3::VarVal::Float(0.0),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(true), first_write: RefCell::new(false)
-    };
-}
+    mod test_any_local for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::Any, crate::sb3::VarVal::Float(0.0), true, flags());
+    }
 );
 
 crate::instructions_test!(
-mod float_local for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Float,
-                    &crate::sb3::VarVal::Float(0.0),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(true), first_write: RefCell::new(false)
-    };
-}
+    mod test_float_local for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::Float, crate::sb3::VarVal::Float(0.0), true, flags());
+    }
 );
 
 crate::instructions_test!(
-mod string_local for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::String,
-                    &crate::sb3::VarVal::String("".into()),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(true), first_write: RefCell::new(false)
-    };
-}
+    mod test_string_local for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::String, crate::sb3::VarVal::String("".into()), true, flags());
+    }
 );
 
 crate::instructions_test!(
-mod int_local for data_setvariableto(t) {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Int,
-                    &crate::sb3::VarVal::Int(1),
-                    None,
-                    &flags()
-            ).unwrap()),
-        local_write: RefCell::new(true), first_write: RefCell::new(false)
-    };
-}
+    mod test_int_local for data_setvariableto(t) {
+        fields = super::test::make_fields(IrType::Int, crate::sb3::VarVal::Int(0), true, flags());
+    }
 );

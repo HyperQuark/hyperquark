@@ -1,3 +1,5 @@
+//! This block must be called from within a thread spawned by `control_wait`, or it will trap.
+
 use wasm_encoder::{FieldType, HeapType, StorageType};
 
 use super::super::prelude::*;

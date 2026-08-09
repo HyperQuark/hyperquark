@@ -52,13 +52,25 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! (
-mod tests_false for hq_boolean {
-    fields = super::Fields(false);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        assert_valid_json(format!("{}", Fields(true)));
+    }
 }
+
+crate::instructions_test! (
+    mod tests_false for hq_boolean {
+        fields = super::Fields(false);
+    }
 );
+
 crate::instructions_test! (
-mod tests_true for hq_boolean {
-    fields = super::Fields(true);
-}
+    mod tests_true for hq_boolean {
+        fields = super::Fields(true);
+    }
 );

@@ -85,8 +85,28 @@ pub fn const_fold(
     }
 }
 
-// crate::instructions_test! (
-// mod none for hq__if {
-//     fields = super::Fields(None);
-// }
-// );
+#[cfg(test)]
+mod test {
+    use super::*;
+    use super::super::super::tests::*;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields();
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields() -> Fields {
+        let target = make_target();
+        Fields {
+            branch_if: make_step(&target),
+            branch_else: make_step(&target),
+        }
+    }
+}
+
+crate::instructions_test! (
+mod test2 for control_if_else(t) {
+    fields = super::test::make_fields();
+}
+);

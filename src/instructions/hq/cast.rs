@@ -346,23 +346,37 @@ pub fn const_fold(
     })
 }
 
-crate::instructions_test! (
-mod float for hq_cast(t) {
-    fields = super::Fields(IrType::Float);
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        assert_valid_json(format!("{}", Fields(IrType::Float)));
+    }
 }
+
+crate::instructions_test! (
+    mod test_float for hq_cast(t) {
+        fields = super::Fields(IrType::Float);
+    }
 );
+
 crate::instructions_test! (
-mod string for hq_cast(t) {
-    fields = super::Fields(IrType::String);
-}
+    mod test_string for hq_cast(t) {
+        fields = super::Fields(IrType::String);
+    }
 );
+
 crate::instructions_test! (
-mod int for hq_cast(t) {
-    fields = super::Fields(IrType::Int);
-}
+    mod test_int for hq_cast(t) {
+        fields = super::Fields(IrType::Int);
+    }
 );
+
 crate::instructions_test! (
-mod boolean for hq_cast(t) {
-    fields = super::Fields(IrType::Boolean);
-}
+    mod test_boolean for hq_cast(t) {
+        fields = super::Fields(IrType::Boolean);
+    }
 );

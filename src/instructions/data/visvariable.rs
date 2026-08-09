@@ -69,21 +69,38 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test!(
-mod test for data_visvariable {
-    fields = super::Fields {
-        var: RefCell::new(
-                crate::ir::RcVar::new(
-                    IrType::Any,
-                    &crate::sb3::VarVal::Float(0.0),
-                    Some(crate::ir::IrMonitor {
-                        id: "".into(),
-                        is_ever_visible: RefCell::new(true,)
-                    }),
-                    &flags()
-                ).unwrap())
-            ,
-        visible: true
-    };
+#[cfg(test)]
+mod test {
+    use super::super::variable::test_util::*;
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+    use crate::wasm::WasmFlags;
+    use crate::wasm::flags::unit_test_wasm_features;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(WasmFlags::new(unit_test_wasm_features()));
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(flags: WasmFlags) -> Fields {
+        Fields {
+            var: make_var(
+                IrType::Any,
+                crate::sb3::VarVal::Float(0.0),
+                Some(crate::ir::IrMonitor {
+                    id: "".into(),
+                    is_ever_visible: RefCell::new(true),
+                }),
+                flags,
+            ),
+            visible: true,
+        }
+    }
 }
+
+crate::instructions_test!(
+    mod test2 for data_visvariable {
+        fields = super::test::make_fields(flags());
+    }
 );
