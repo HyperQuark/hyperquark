@@ -62,33 +62,34 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test!(
-mod _mut for data_lengthoflist {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![crate::sb3::VarVal::Float(3.0)],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Any);
-            list
-        },
-    };
+#[cfg(test)]
+mod test {
+    pub use super::super::listcontents::test_utils::*;
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+    use crate::wasm::WasmFlags;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(true, flags_with_integers());
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(mutable: bool, flags: WasmFlags) -> Fields {
+        Fields {
+            list: make_list(mutable, IrType::Any, flags),
+        }
+    }
 }
+
+crate::instructions_test!(
+    mod test_mut for data_lengthoflist {
+        fields = super::test::make_fields(true, flags());
+    }
 );
 
 crate::instructions_test!(
-mod _static for data_lengthoflist {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            list.add_type(IrType::Any);
-            list
-        }
-    };
-}
+    mod test_static for data_lengthoflist {
+        fields = super::test::make_fields(false, flags());
+    }
 );

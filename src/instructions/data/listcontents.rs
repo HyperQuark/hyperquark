@@ -282,157 +282,105 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test!(
-mod int_mut for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Int);
-            list
-        },
-    };
-    flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
+#[cfg(test)]
+pub mod test_utils {
+    use super::*;
+    use crate::wasm::{WasmFlags, flags::{Switch, unit_test_wasm_features}};
+
+    pub fn make_list(mutable: bool, ty: IrType, flags: WasmFlags) -> RcList {
+        let list = crate::ir::RcList::new(vec![], &flags).unwrap();
+        *list.length_mutable().borrow_mut() = mutable;
+        list.add_type(ty);
+        list
+    }
+
+    pub fn flags_with_integers() -> WasmFlags {
+        let mut flags = WasmFlags::new(unit_test_wasm_features());
+        flags.integers = Switch::On;
+        flags
+    }
 }
-);
-crate::instructions_test!(
-mod bool_mut for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Boolean);
-            list
-        },
-    };
-    flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    pub use test_utils::*;
+    use crate::instructions::tests::assert_valid_json;
+    use crate::wasm::WasmFlags;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(true, IrType::Any, super::test::flags_with_integers());
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(mutable: bool, ty: IrType, flags: WasmFlags) -> Fields {
+        Fields {
+            list: make_list(mutable, ty, flags),
+        }
+    }
 }
-);
+
 crate::instructions_test!(
-mod float_mut for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Float);
-            list
-        },
-    };
-}
-);
-crate::instructions_test!(
-mod string_mut for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![crate::sb3::VarVal::String("hi".into())],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::String);
-            list
-        },
-    };
-}
-);
-crate::instructions_test!(
-mod any_mut for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Any);
-            list
-        },
-    };
-}
+    mod test_int_mut for data_listcontents {
+        fields = super::test::make_fields(true, IrType::Int, flags());
+        flags = super::test::flags_with_integers();
+    }
 );
 
 crate::instructions_test!(
-mod int_static for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            list.add_type(IrType::Int);
-            list
-        }
-    };
-    flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
-}
+    mod test_bool_mut for data_listcontents {
+        fields = super::test::make_fields(true, IrType::Boolean, flags());
+        flags = super::test::flags_with_integers();
+    }
 );
 
 crate::instructions_test!(
-mod bool_static for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            list.add_type(IrType::Boolean);
-            list
-        }
-    };
-    flags = { let mut flags = WasmFlags::new(unit_test_wasm_features()); flags.integers = Switch::On; flags };
-}
+    mod test_float_mut for data_listcontents {
+        fields = super::test::make_fields(true, IrType::Float, flags());
+    }
 );
 
 crate::instructions_test!(
-mod float_static for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            list.add_type(IrType::Float);
-            list
-        }
-    };
-}
+    mod test_string_mut for data_listcontents {
+        fields = super::test::make_fields(true, IrType::String, flags());
+    }
 );
 
 crate::instructions_test!(
-mod string_static for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            list.add_type(IrType::String);
-            list
-        }
-    };
-}
+    mod test_any_mut for data_listcontents {
+        fields = super::test::make_fields(true, IrType::Any, flags());
+    }
 );
 
 crate::instructions_test!(
-mod any_static for data_listcontents {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![],
-                &flags()
-            ).unwrap();
-            list.add_type(IrType::Any);
-            list
-        }
-    };
-}
+    mod test_int_static for data_listcontents {
+        fields = super::test::make_fields(false, IrType::Int, flags());
+        flags = super::test::flags_with_integers();
+    }
+);
+
+crate::instructions_test!(
+    mod test_bool_static for data_listcontents {
+        fields = super::test::make_fields(false, IrType::Boolean, flags());
+        flags = super::test::flags_with_integers();
+    }
+);
+
+crate::instructions_test!(
+    mod test_float_static for data_listcontents {
+        fields = super::test::make_fields(false, IrType::Float, flags());
+    }
+);
+
+crate::instructions_test!(
+    mod test_string_static for data_listcontents {
+        fields = super::test::make_fields(false, IrType::String, flags());
+    }
+);
+
+crate::instructions_test!(
+    mod test_any_static for data_listcontents {
+        fields = super::test::make_fields(false, IrType::Any, flags());
+    }
 );

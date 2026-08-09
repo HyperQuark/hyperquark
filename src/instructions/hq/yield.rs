@@ -1,6 +1,7 @@
 use wasm_encoder::{BlockType, ConstExpr, HeapType};
 
 use super::super::prelude::*;
+use crate::instructions_test;
 use crate::ir::{Step, StepIndex};
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
 
@@ -193,39 +194,67 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! (
-mod none for hq_yield {
-    fields = super::Fields { mode: super::YieldMode::None };
+#[cfg(test)]
+mod test {
+    use super::super::super::tests::*;
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let target = make_target();
+        for mode in [
+            YieldMode::None,
+            YieldMode::Return,
+            make_schedule(),
+            YieldMode::Inline(Rc::new(RefCell::new(Step::new_empty(
+                Weak::new(),
+                false,
+                target,
+            )))),
+        ] {
+            assert_valid_json(format!("{}", Fields { mode }));
+        }
+    }
+
+    pub fn make_schedule() -> YieldMode {
+        YieldMode::Schedule(StepIndex(0))
+    }
+
+    pub fn make_inline() -> YieldMode {
+        let target = make_target();
+        YieldMode::Inline(Rc::new(RefCell::new(Step::new_empty(
+            Weak::new(),
+            false,
+            target,
+        ))))
+    }
 }
+
+instructions_test! (
+    mod test_none for hq_yield {
+        fields = super::Fields { mode: super::YieldMode::None };
+    }
 );
 
-crate::instructions_test! (
-mod ret for hq_yield {
-    fields = super::Fields { mode: super::YieldMode::Return };
-}
+instructions_test! (
+    mod test_return for hq_yield {
+        fields = super::Fields { mode: super::YieldMode::Return };
+    }
 );
 
-// crate::instructions_test! (
-// mod     schedule for     hq_yield {
-// fields = super::Fields {
-//         mode: super::YieldMode::Schedule(
-//             crate::rc::Rc::downgrade(&crate::ir::Step::new_empty(
-//                 &crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
-//                 true,
-//                 Rc::new(
-//                     crate::ir::Target::new(
-//                         false,
-//                         BTreeMap::default(),
-//                         BTreeMap::default(),
-//                         crate::rc::Rc::downgrade(&Rc::new(crate::ir::IrProject::new(BTreeMap::default(), BTreeMap::default(), Box::from([])))),
-//                         RefCell::default(),
-//                         0,
-//                         Box::from([])
-//                     )
-//                 )
-//             ).unwrap())
-//         )
-//     }
-//;
-// }
-// );
+instructions_test! (
+    mod test_schedule for hq_yield {
+        fields = super::Fields {
+            mode: super::test::make_schedule()
+        };
+    }
+);
+
+instructions_test!(
+    mod test_inline for hq_yield {
+        fields = super::Fields {
+            mode: super::test::make_inline()
+        };
+    }
+);

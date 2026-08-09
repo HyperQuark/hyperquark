@@ -104,7 +104,12 @@ macro_rules! instructions_test {
                     };
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($($type_arg,)*)?];
-                    let params = [ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF].into_iter().chain([$($($type_arg,)*)?].into_iter().map(WasmProject::ir_type_to_wasm)).collect::<Vec<_>>();
+                    let params = types
+                        .into_iter()
+                        .copied()
+                        .map(WasmProject::ir_type_to_wasm)
+                        .chain([ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF])
+                        .collect::<Vec<_>>();
                     let result = match output_type {
                         ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)],
                         ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect(),
@@ -116,7 +121,7 @@ macro_rules! instructions_test {
                         continue;
                     };
                     for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet((i + 2).try_into().unwrap()))])?
+                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet(i.try_into().unwrap()))])?
                     }
                     step_func.add_instructions(wasm)?;
 
@@ -149,13 +154,11 @@ macro_rules! instructions_test {
                     println!("{output_type:?}");
                     let registries = proj.registries();
                     let types: &[IrType] = &[$($($type_arg,)*)?];
-                    let params = [ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF]
+                    let params = types
                         .into_iter()
-                        .chain(
-                            [$($($type_arg,)*)?]
-                                .into_iter()
-                                .map(WasmProject::ir_type_to_wasm)
-                        )
+                        .copied()
+                        .map(WasmProject::ir_type_to_wasm)
+                        .chain([ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF])
                         .collect::<Vec<_>>();
                     let result = vec![];
                     let step_func = StepFunc::new_with_types(
@@ -186,7 +189,7 @@ macro_rules! instructions_test {
                         step_func.add_instructions(
                             [$crate::wasm::InternalInstruction::Immediate(
                                 wasm_encoder::Instruction::LocalGet(
-                                    (i + 2).try_into().unwrap()
+                                    i.try_into().unwrap()
                                 )
                             )]
                         )?
@@ -303,5 +306,48 @@ macro_rules! instructions_test {
             //     }
             // }
         }
+    }
+}
+
+
+#[cfg(test)]
+pub use test_util::*;
+
+#[cfg(test)]
+mod test_util {
+    use crate::ir::{Step, StepContext, Target};
+    use crate::prelude::*;
+
+    pub fn make_target() -> Rc<Target> {
+        Rc::new(Target::new(
+            false,
+            BTreeMap::default(),
+            BTreeMap::default(),
+            Weak::new(),
+            RefCell::default(),
+            0,
+            Box::default(),
+        ))
+    }
+
+    pub fn make_context(target: &Rc<Target>) -> StepContext {
+        StepContext {
+            target: Rc::clone(target),
+            warp: false,
+            proc_context: None,
+            debug: false,
+        }
+    }
+
+    pub fn make_step(target: &Rc<Target>) -> Rc<RefCell<Step>> {
+        Rc::new(RefCell::new(Step::new_empty(
+            Weak::new(),
+            false,
+            Rc::clone(target),
+        )))
+    }
+
+    pub fn assert_valid_json<S: core::ops::Deref<Target = str>>(test: S) {
+        assert!(serde_json::from_str::<serde_json::Value>(&test).is_ok());
     }
 }

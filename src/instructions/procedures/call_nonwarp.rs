@@ -137,12 +137,14 @@ pub const fn const_fold(
 
 #[cfg(test)]
 mod test {
+    use super::super::super::tests::*;
     use super::*;
+    use crate::ir::{PartialStep, StepIndex};
 
     #[test]
     fn fields_display_is_valid_json() {
         let fields = make_fields(2);
-        assert!(serde_json::from_str::<serde_json::Value>(format!("{fields}").as_str()).is_ok());
+        assert_valid_json(format!("{fields}"));
     }
 
     pub fn test_project_setup(wasm_proj: &WasmProject, flags: crate::wasm::WasmFlags) {
@@ -164,17 +166,7 @@ mod test {
     pub fn make_fields(num_inputs: usize) -> super::Fields {
         super::Fields {
             proc: {
-                use crate::ir::{PartialStep, StepIndex, Target};
-
-                let target = Rc::new(Target::new(
-                    false,
-                    BTreeMap::default(),
-                    BTreeMap::default(),
-                    Weak::new(),
-                    RefCell::new(BTreeMap::default()),
-                    0,
-                    Box::new([]),
-                ));
+                let target = make_target();
                 let proc = Rc::new(super::Proc::new(
                     format!("foo {}", core::iter::repeat_n("%s", num_inputs).join(" ")).into(),
                     RefCell::new(None),

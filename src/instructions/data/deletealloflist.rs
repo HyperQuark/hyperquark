@@ -48,18 +48,34 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test!(
-mod test for data_deletealloflist {
-    fields = super::Fields {
-        list: {
-            let list = crate::ir::RcList::new(
-                vec![crate::sb3::VarVal::Float(3.0)],
-                &flags()
-            ).unwrap();
-            *list.length_mutable().borrow_mut() = true;
-            list.add_type(IrType::Any);
-            list
-        },
-    };
+#[cfg(test)]
+mod test {
+    pub use super::super::listcontents::test_utils::*;
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+    use crate::wasm::WasmFlags;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(flags_with_integers());
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(flags: WasmFlags) -> Fields {
+        Fields {
+            list: {
+                let list =
+                    crate::ir::RcList::new(vec![crate::sb3::VarVal::Float(3.0)], &flags).unwrap();
+                *list.length_mutable().borrow_mut() = true;
+                list.add_type(IrType::Any);
+                list
+            },
+        }
+    }
 }
+
+crate::instructions_test!(
+    mod test2 for data_deletealloflist {
+        fields = super::test::make_fields(flags());
+    }
 );

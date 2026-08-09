@@ -60,8 +60,19 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! (
-mod tests for hq_text {
-    fields = super::Fields("hello, world!".into());
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        assert_valid_json(format!("{}", Fields("".into())));
+    }
 }
+
+crate::instructions_test! (
+    mod tests for hq_text {
+        fields = super::Fields("hello, world!".into());
+    }
 );

@@ -19,6 +19,5 @@ pub fn const_fold(_inputs: &[ConstFoldItem], _state: &mut ConstFoldState) -> HQR
 }
 
 crate::instructions_test! (
-mod tests for hq_drop(t) {
-}
+    mod tests for hq_drop(t) {}
 );

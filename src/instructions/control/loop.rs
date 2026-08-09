@@ -20,6 +20,9 @@ impl fmt::Display for Fields {
         if let Some(ref step) = self.first_condition {
             write!(f, r#""first_condition": {},"#, RefCell::borrow(step))?;
         }
+        if let Some(ref step) = self.pre_body {
+            write!(f, r#""pre_body": {},"#, RefCell::borrow(step))?;
+        }
         write!(
             f,
             r#"
@@ -92,3 +95,102 @@ pub const fn const_fold(
 ) -> HQResult<ConstFold> {
     Ok(NotFoldable)
 }
+
+#[cfg(test)]
+mod test {
+    use super::super::super::tests::*;
+    use super::*;
+    use crate::ir::StepContext;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        for ((fc, pb), fi) in [true, false]
+            .into_iter()
+            .cartesian_product([true, false])
+            .cartesian_product([true, false])
+        {
+            let fields = make_fields(fc, pb, fi);
+            assert_valid_json(format!("{fields}"));
+        }
+    }
+
+    fn make_condition_step(context: &StepContext) -> Rc<RefCell<Step>> {
+        Rc::new(RefCell::new(Step::new(
+            None,
+            context.clone(),
+            vec![crate::instructions::IrOpcode::hq_boolean(
+                crate::instructions::HqBooleanFields(true),
+            )],
+            Weak::new(),
+            false,
+        )))
+    }
+
+    pub fn make_fields(first_condition: bool, pre_body: bool, flip_if: bool) -> Fields {
+        let target = make_target();
+        let context = make_context(&target);
+        Fields {
+            first_condition: if first_condition {
+                None
+            } else {
+                Some(make_condition_step(&context))
+            },
+            condition: make_condition_step(&context),
+            pre_body: if pre_body {
+                None
+            } else {
+                Some(make_step(&target))
+            },
+            body: make_step(&target),
+            flip_if,
+        }
+    }
+}
+
+crate::instructions_test! (
+mod test_fc_pb_fi for control_loop {
+    fields = super::test::make_fields(true, true, true);
+}
+);
+
+crate::instructions_test! (
+mod test_fc_pb for control_loop {
+    fields = super::test::make_fields(true, true, false);
+}
+);
+
+crate::instructions_test! (
+mod test_fc_fi for control_loop {
+    fields = super::test::make_fields(true, false, true);
+}
+);
+
+crate::instructions_test! (
+mod test_fc for control_loop {
+    fields = super::test::make_fields(true, false, false);
+}
+);
+
+crate::instructions_test! (
+mod test_pb_fi for control_loop {
+    fields = super::test::make_fields(false, true, true);
+}
+);
+
+crate::instructions_test! (
+mod test_pb for control_loop {
+    fields = super::test::make_fields(false, true, false);
+}
+);
+
+crate::instructions_test! (
+mod test_fi for control_loop {
+    fields = super::test::make_fields(false, false, true);
+}
+);
+
+crate::instructions_test! (
+mod test_defaults for control_loop {
+    fields = super::test::make_fields(false, false, false);
+}
+);

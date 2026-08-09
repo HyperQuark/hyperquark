@@ -58,8 +58,19 @@ pub fn const_fold(
     )])))
 }
 
-crate::instructions_test! (
-mod tests for hq_float {
-    fields = super::Fields(0.0);
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        assert_valid_json(format!("{}", Fields(0.0)));
+    }
 }
+
+crate::instructions_test! (
+    mod tests for hq_float {
+        fields = super::Fields(0.0);
+    }
 );

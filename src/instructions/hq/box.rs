@@ -53,8 +53,21 @@ pub fn const_fold(
     })
 }
 
-crate::instructions_test! (
-mod tests for hq_box(t) {
-    fields = super::Fields { output_ty: IrType::Any };
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        assert_valid_json(format!("{}", Fields {
+            output_ty: IrType::Any,
+        }));
+    }
 }
+
+crate::instructions_test! (
+    mod tests for hq_box(t) {
+        fields = super::Fields { output_ty: IrType::Any };
+    }
 );
