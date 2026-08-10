@@ -35,6 +35,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for operator_atan(t) {
-}
+    mod tests for operator_atan(t) {}
 );

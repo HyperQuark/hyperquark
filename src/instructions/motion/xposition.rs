@@ -39,6 +39,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for motion_xposition {
-}
+    mod tests for motion_xposition {}
 );

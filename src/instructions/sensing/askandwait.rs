@@ -93,11 +93,42 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-// crate::instructions_test! (
-// mod tests for sensing_askandwait {
-//     fields = super::Fields {
-//     poll_step: super::StepIndex(0),
-//     next_step: super::StepIndex(0),
-// };
-// }
-// );
+#[cfg(test)]
+mod test {
+    use super::super::super::tests::*;
+    use super::*;
+    use crate::wasm::{StepTarget, WasmFlags, WasmProject, registries::TypeRegistry};
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields();
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields() -> Fields {
+        Fields {
+            poll_step: StepIndex(0),
+            next_step: StepIndex(0),
+        }
+    }
+
+    pub fn setup_project(wasm_proj: &WasmProject, flags: WasmFlags) {
+        let step_func = StepFunc::new_with_types(
+            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
+            Box::from([]),
+            wasm_proj.registries(),
+            flags,
+            StepTarget::Sprite(0),
+            0,
+            Rc::new(vec![]),
+        );
+        wasm_proj.steps().borrow_mut().push(step_func);
+    }
+}
+
+crate::instructions_test! (
+    mod tests for sensing_askandwait(t) {
+        fields = super::test::make_fields();
+        setup = super::test::setup_project;
+    }
+);

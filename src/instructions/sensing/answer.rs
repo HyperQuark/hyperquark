@@ -37,6 +37,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for sensing_answer {
-}
+    mod tests for sensing_answer {}
 );

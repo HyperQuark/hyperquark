@@ -26,6 +26,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for sensing_keypressed(t) {
-}
+    mod tests for sensing_keypressed(t) {}
 );

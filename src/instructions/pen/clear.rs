@@ -26,6 +26,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for pen_clear {
-}
+    mod tests for pen_clear {}
 );

@@ -96,13 +96,30 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-crate::instructions_test! (
-mod tests_debug for looks_say(t) {
-    fields = super::Fields { debug: true, target_idx: 0 };
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::instructions::tests::assert_valid_json;
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        assert_valid_json(format!(
+            "{}",
+            Fields {
+                debug: false,
+                target_idx: 0
+            }
+        ));
+    }
 }
+
+crate::instructions_test! (
+    mod tests_debug for looks_say(t) {
+        fields = super::Fields { debug: true, target_idx: 0 };
+    }
 );
 crate::instructions_test! (
-mod tests_non_debug for looks_say(t) {
-    fields = super::Fields { debug: false, target_idx: 0, };
-}
+    mod tests_non_debug for looks_say(t) {
+        fields = super::Fields { debug: false, target_idx: 0, };
+    }
 );

@@ -33,6 +33,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for operator_sqrt(t) {
-}
+    mod tests for operator_sqrt(t) {}
 );

@@ -40,6 +40,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for looks_costumenumber {
-}
+    mod tests for looks_costumenumber {}
 );

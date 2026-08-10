@@ -162,6 +162,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for motion_gotoxy(t1,t2) {
-}
+    mod tests for motion_gotoxy(t1,t2) {}
 );

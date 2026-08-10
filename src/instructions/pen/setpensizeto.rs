@@ -45,6 +45,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for pen_setpensizeto(t) {
-}
+    mod tests for pen_setpensizeto(t) {}
 );

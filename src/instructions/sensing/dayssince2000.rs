@@ -27,6 +27,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for sensing_dayssince2000 {
-}
+    mod tests for sensing_dayssince2000 {}
 );

@@ -96,6 +96,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for pen_pendown {
-}
+    mod tests for pen_pendown {}
 );
