@@ -76,11 +76,11 @@ macro_rules! instructions_test {
                 for ($($($type_arg,)*)?) in types_iter(true) {
                     #[allow(unused_mut, reason = "may not be unused")]
                     #[allow(unused, reason = "might not be unused")]
-                    let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
+                    let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser, vec![vec!["".into()]]);
                     $($setup(&mut proj, flags());)?
                     let output_type_result = output_type(Rc::from([$($($type_arg,)*)?]), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
-                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
+                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::clone(proj.costume_names()));
                     let wasm_result = wasm(&step_func, Rc::from([$($($type_arg,)*)?]), $(&$fields)?);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($($type_arg,)*)?), output_type_result, wasm_result),
@@ -96,7 +96,7 @@ macro_rules! instructions_test {
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 for ($($($type_arg,)*)?) in types_iter(true) {
                     #[allow(unused_mut, reason = "may not be unused")]
-                    let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
+                    let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser, vec![vec!["".into()]]);
                     $($setup(&mut proj, flags());)?
                     let Ok(output_type) = output_type(Rc::from([$($($type_arg,)*)?]), $(&$fields)?) else {
                         println!("skipping failed output_type");
@@ -115,7 +115,7 @@ macro_rules! instructions_test {
                         ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect(),
                         ReturnType::None => vec![],
                     };
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::new(vec![]));
+                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::clone(proj.costume_names()));
                     let Ok(wasm) = wasm(&step_func, Rc::from([$($($type_arg,)*)?]), $(&$fields)?) else {
                         println!("skipping failed wasm");
                         continue;
@@ -142,7 +142,7 @@ macro_rules! instructions_test {
             fn wasm_output_type_matches_wrapped_expected_output_type() -> HQResult<()> {
                 for ($($($type_arg,)*)?) in types_iter(false) {
                     #[allow(unused_mut, reason = "may not be unused")]
-                    let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser);
+                    let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser, vec![vec!["".into()]]);
                     $($setup(&mut proj, flags());)?
                     let Ok(output_type) = $crate::instructions::boxed_output_type(
                         |inputs| output_type(inputs, $(&$fields)?),
@@ -168,7 +168,7 @@ macro_rules! instructions_test {
                         flags(),
                         StepTarget::Sprite(0),
                         0,
-                        Rc::new(vec![])
+                        Rc::clone(proj.costume_names())
                     );
                     let drops = match output_type {
                         ReturnType::Singleton(_) => 1,

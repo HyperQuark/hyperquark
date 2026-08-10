@@ -120,6 +120,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests_colour for pen_setpencolorparamto(t1,t2) {
-}
+    mod tests_colour for pen_setpencolorparamto(t1,t2) {}
 );

@@ -41,6 +41,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for operator_log(t) {
-}
+    mod tests for operator_log(t) {}
 );

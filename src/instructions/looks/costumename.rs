@@ -64,7 +64,6 @@ pub const fn const_fold(
     Ok(NotFoldable)
 }
 
-// crate::instructions_test! (
-// mod tests for looks_costumename {
-// }
-// );
+crate::instructions_test! (
+    mod tests for looks_costumename {}
+);

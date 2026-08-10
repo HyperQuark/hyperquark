@@ -22,6 +22,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for operator_and(t1,t2) {
-}
+    mod tests for operator_and(t1,t2) {}
 );

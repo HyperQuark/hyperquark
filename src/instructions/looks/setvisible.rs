@@ -53,6 +53,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for looks_setvisible(t) {
-}
+    mod tests for looks_setvisible(t) {}
 );

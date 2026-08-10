@@ -38,6 +38,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for looks_size {
-}
+    mod tests for looks_size {}
 );

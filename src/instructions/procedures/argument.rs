@@ -117,3 +117,26 @@ pub const fn const_fold(
 ) -> HQResult<ConstFold> {
     Ok(NotFoldable)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use super::super::super::tests::*;
+    use crate::wasm::{WasmFlags, flags::unit_test_wasm_features};
+
+    #[test]
+    fn fields_display_is_valid_json() {
+        let fields = make_fields(true, WasmFlags::new(unit_test_wasm_features()));
+        assert_valid_json(format!("{fields}"));
+    }
+
+    pub fn make_fields(in_warped: bool, flags: WasmFlags) -> Fields {
+        let var = RcVar::new(IrType::Any, &VarVal::Float(0.0), None, &flags).unwrap();
+        Fields {
+            index: 0,
+            arg_var: var.clone(),
+            in_warped,
+            arg_vars: Rc::new(RefCell::new(vec![var])),
+        }
+    }
+}

@@ -39,7 +39,7 @@ impl WasmProject {
     )]
     #[allow(dead_code, reason = "not dead in test mode")]
     #[must_use]
-    pub fn new(flags: WasmFlags, environment: ExternalEnvironment) -> Self {
+    pub fn new(flags: WasmFlags, environment: ExternalEnvironment, costume_names: Vec<Vec<Box<str>>>) -> Self {
         Self {
             flags,
             steps: Rc::new(RefCell::new(Vec::new())),
@@ -47,13 +47,18 @@ impl WasmProject {
             environment,
             registries: Rc::new(Registries::default()),
             target_names: vec![],
-            costume_names: Rc::new(vec![]),
+            costume_names: Rc::new(costume_names),
         }
     }
 
     #[must_use]
     pub fn registries(&self) -> Rc<Registries> {
         Rc::clone(&self.registries)
+    }
+
+    #[must_use]
+    pub const fn costume_names(&self) -> &Rc<Vec<Vec<Box<str>>>> {
+        &self.costume_names
     }
 
     #[must_use]

@@ -56,6 +56,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for looks_setsizeto(t) {
-}
+    mod tests for looks_setsizeto(t) {}
 );

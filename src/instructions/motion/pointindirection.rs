@@ -57,6 +57,5 @@ pub const fn const_fold(
 }
 
 crate::instructions_test! (
-mod tests for motion_pointindirection(t) {
-}
+    mod tests for motion_pointindirection(t) {}
 );
