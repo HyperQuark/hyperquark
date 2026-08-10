@@ -28,11 +28,11 @@ macro_rules! instructions_test {
         mod $module {
             #![expect(clippy::allow_attributes, reason = "might not always trigger")]
 
-            use super::{wasm, output_type, acceptable_inputs};
+            use super::{output_type, acceptable_inputs};
             use $crate::prelude::*;
-            use $crate::ir::{IrType, ReturnType};
-            use wasm_encoder::ValType;
-            use $crate::wasm::{StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment};
+            use $crate::ir::IrType;
+            use $crate::instructions::IrOpcode;
+            use $crate::wasm::{StepFunc, Registries, WasmProject, WasmFlags, StepTarget, ExternalEnvironment, InternalInstruction};
             #[allow(unused, reason = "it might not be unused")]
             use $crate::wasm::flags::{Switch, unit_test_wasm_features};
 
@@ -74,14 +74,15 @@ macro_rules! instructions_test {
             #[test]
             fn output_type_fails_when_wasm_fails() {
                 for ($($($type_arg,)*)?) in types_iter(true) {
+                    let types = &[$($($type_arg,)*)?];
                     #[allow(unused_mut, reason = "may not be unused")]
                     #[allow(unused, reason = "might not be unused")]
                     let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser, vec![vec!["".into()]]);
                     $($setup(&mut proj, flags());)?
-                    let output_type_result = output_type(Rc::from([$($($type_arg,)*)?]), $(&$fields)?);
+                    let output_type_result = output_type(types.clone().into(), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
                     let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::clone(proj.costume_names()));
-                    let wasm_result = wasm(&step_func, Rc::from([$($($type_arg,)*)?]), $(&$fields)?);
+                    let wasm_result = wasm(&step_func, types);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($($type_arg,)*)?), output_type_result, wasm_result),
                         (Err(HQError { err_type: e1, .. }), Err(HQError { err_type: e2, .. })) if e1 != e2 => {
@@ -92,127 +93,40 @@ macro_rules! instructions_test {
                 }
             }
 
+            fn wasm(step_func: &StepFunc, types: &[IrType]) -> HQResult<Vec<InternalInstruction>> {
+                super::wasm(step_func, types.clone().into(), $(&$fields)?)
+            }
+
+
             #[test]
             fn wasm_output_type_matches_expected_output_type() -> HQResult<()> {
                 for ($($($type_arg,)*)?) in types_iter(true) {
+                    let types: &[IrType] = &[$($($type_arg,)*)?];
                     #[allow(unused_mut, reason = "may not be unused")]
                     let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser, vec![vec!["".into()]]);
                     $($setup(&mut proj, flags());)?
-                    let Ok(output_type) = output_type(Rc::from([$($($type_arg,)*)?]), $(&$fields)?) else {
-                        println!("skipping failed output_type");
-                        continue;
-                    };
-                    let registries = proj.registries();
-                    let types: &[IrType] = &[$($($type_arg,)*)?];
-                    let params = types
-                        .into_iter()
-                        .copied()
-                        .map(WasmProject::ir_type_to_wasm)
-                        .chain([ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF])
-                        .collect::<Vec<_>>();
-                    let result = match output_type {
-                        ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)],
-                        ReturnType::MultiValue(outputs) => outputs.iter().copied().map(WasmProject::ir_type_to_wasm).collect(),
-                        ReturnType::None => vec![],
-                    };
-                    let step_func = StepFunc::new_with_types(params.into(), result.into(), Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::clone(proj.costume_names()));
-                    let Ok(wasm) = wasm(&step_func, Rc::from([$($($type_arg,)*)?]), $(&$fields)?) else {
-                        println!("skipping failed wasm");
-                        continue;
-                    };
-                    for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions([$crate::wasm::InternalInstruction::Immediate(wasm_encoder::Instruction::LocalGet(i.try_into().unwrap()))])?
-                    }
-                    step_func.add_instructions(wasm)?;
-
-                    proj.steps()
-                        .borrow_mut()
-                        .push(step_func);
-
-                    let wasm_bytes = proj.finish().unwrap().wasm_bytes;
-
-                    println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
-
-                    wasmparser::validate(&wasm_bytes).map_err(|err| make_hq_bug!("invalid wasm module with types {:?}. Original error message: {}", ($($($type_arg,)*)?), err.message()))?;
+                    let output_type2 = || output_type(Rc::from([$($($type_arg,)*)?]), $(&$fields)?);
+                    $crate::instructions::tests::wasm_output_type_matches_expected_output_type(proj, types, output_type2, wasm, flags())?;
                 }
                 Ok(())
+            }
+
+            fn wrap_instructions(step_func: &StepFunc, types: &[IrType], opcodes: Vec<IrOpcode>) -> HQResult<Vec<InternalInstruction>> {
+                $crate::instructions::wrap_instructions(step_func, types.clone().into(), &opcodes)
             }
 
             #[test]
             fn wasm_output_type_matches_wrapped_expected_output_type() -> HQResult<()> {
                 for ($($($type_arg,)*)?) in types_iter(false) {
+                    let types: &[IrType] = &[$($($type_arg,)*)?];
                     #[allow(unused_mut, reason = "may not be unused")]
                     let mut proj = WasmProject::new(flags(), ExternalEnvironment::WebBrowser, vec![vec!["".into()]]);
                     $($setup(&mut proj, flags());)?
-                    let Ok(output_type) = $crate::instructions::boxed_output_type(
+                    let output_type2 = || $crate::instructions::boxed_output_type(
                         |inputs| output_type(inputs, $(&$fields)?),
-                        Rc::from([$($($type_arg,)*)?]),
-                    ) else {
-                        println!("skipping failed output_type");
-                        continue;
-                    };
-                    println!("{output_type:?}");
-                    let registries = proj.registries();
-                    let types: &[IrType] = &[$($($type_arg,)*)?];
-                    let params = types
-                        .into_iter()
-                        .copied()
-                        .map(WasmProject::ir_type_to_wasm)
-                        .chain([ValType::I32, $crate::wasm::registries::TypeRegistry::STRUCT_REF])
-                        .collect::<Vec<_>>();
-                    let result = vec![];
-                    let step_func = StepFunc::new_with_types(
-                        params.into(),
-                        result.into(),
-                        Rc::clone(&registries),
-                        flags(),
-                        StepTarget::Sprite(0),
-                        0,
-                        Rc::clone(proj.costume_names())
+                        types.clone().into(),
                     );
-                    let drops = match output_type {
-                        ReturnType::Singleton(_) => 1,
-                        ReturnType::MultiValue(outs) => outs.len(),
-                        ReturnType::None => 0,
-                    };
-                    let test_opcodes = [$crate::instructions::IrOpcode::$opcode$(($fields))?]
-                        .into_iter()
-                        .chain(core::iter::repeat_n($crate::instructions::IrOpcode::hq_drop, drops))
-                        .collect::<Vec<_>>();
-                    let wasm = $crate::instructions::wrap_instructions(
-                        &step_func,
-                        Rc::from([$($($type_arg,)*)?]),
-                        &test_opcodes,
-                    )?;
-                    // println!("{wasm:?}");
-                    for (i, _) in types.iter().enumerate() {
-                        step_func.add_instructions(
-                            [$crate::wasm::InternalInstruction::Immediate(
-                                wasm_encoder::Instruction::LocalGet(
-                                    i.try_into().unwrap()
-                                )
-                            )]
-                        )?
-                    }
-                    step_func.add_instructions(wasm)?;
-
-                    // println!("{:?}", step_func.instructions().borrow());
-
-                    proj.steps()
-                        .borrow_mut()
-                        .push(step_func);
-
-                    let wasm_bytes = proj.finish().unwrap().wasm_bytes;
-
-                    println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
-
-                    wasmparser::validate(&wasm_bytes).map_err(|err|
-                        make_hq_bug!(
-                            "invalid wasm module with types {:?}. Original error message: {}",
-                            ($($($type_arg,)*)?),
-                            err.message()
-                        )
-                    )?;
+                    $crate::instructions::tests::wasm_output_type_matches_wrapped_expected_output_type(proj, types, output_type2, wrap_instructions, flags(), IrOpcode::$opcode$(($fields))?)?;
                 }
                 Ok(())
             }
@@ -309,14 +223,18 @@ macro_rules! instructions_test {
     }
 }
 
-
 #[cfg(test)]
 pub use test_util::*;
 
 #[cfg(test)]
 mod test_util {
-    use crate::ir::{Step, StepContext, Target};
+    use wasm_encoder::ValType;
+
+    use crate::instructions::IrOpcode;
+    use crate::ir::{IrType, ReturnType, Step, StepContext, Target};
     use crate::prelude::*;
+    use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::{InternalInstruction, StepFunc, StepTarget, WasmFlags, WasmProject};
 
     pub fn make_target() -> Rc<Target> {
         Rc::new(Target::new(
@@ -349,5 +267,143 @@ mod test_util {
 
     pub fn assert_valid_json<S: core::ops::Deref<Target = str>>(test: S) {
         assert!(serde_json::from_str::<serde_json::Value>(&test).is_ok());
+    }
+
+    pub fn wasm_output_type_matches_expected_output_type<OT, W>(
+        proj: WasmProject,
+        types: &[IrType],
+        output_type: OT,
+        wasm: W,
+        flags: WasmFlags,
+    ) -> HQResult<()>
+    where
+        OT: FnOnce() -> HQResult<ReturnType>,
+        W: FnOnce(&StepFunc, &[IrType]) -> HQResult<Vec<InternalInstruction>>,
+    {
+        let Ok(output_type) = output_type() else {
+            println!("skipping failed output_type");
+            return Ok(());
+        };
+        let registries = proj.registries();
+        let params = types
+            .iter()
+            .copied()
+            .map(WasmProject::ir_type_to_wasm)
+            .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+            .collect::<Vec<_>>();
+        let result = match output_type {
+            ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)],
+            ReturnType::MultiValue(outputs) => outputs
+                .iter()
+                .copied()
+                .map(WasmProject::ir_type_to_wasm)
+                .collect(),
+            ReturnType::None => vec![],
+        };
+        let step_func = StepFunc::new_with_types(
+            params.into(),
+            result.into(),
+            Rc::clone(&registries),
+            flags,
+            StepTarget::Sprite(0),
+            0,
+            Rc::clone(proj.costume_names()),
+        );
+        let Ok(wasm) = wasm(&step_func, types) else {
+            println!("skipping failed wasm");
+            return Ok(());
+        };
+        for (i, _) in types.iter().enumerate() {
+            step_func.add_instructions([crate::wasm::InternalInstruction::Immediate(
+                wasm_encoder::Instruction::LocalGet(i.try_into().unwrap()),
+            )])?;
+        }
+        step_func.add_instructions(wasm)?;
+
+        proj.steps().borrow_mut().push(step_func);
+
+        let wasm_bytes = proj.finish().unwrap().wasm_bytes;
+
+        println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
+
+        wasmparser::validate(&wasm_bytes).map_err(|err| {
+            make_hq_bug!(
+                "invalid wasm module with types {:?}. Original error message: {}",
+                types,
+                err.message()
+            )
+        })?;
+
+        Ok(())
+    }
+
+    pub fn wasm_output_type_matches_wrapped_expected_output_type<OT, W>(
+        proj: WasmProject,
+        types: &[IrType],
+        output_type: OT,
+        wasm: W,
+        flags: WasmFlags,
+        opcode: IrOpcode,
+    ) -> HQResult<()>
+    where
+        OT: FnOnce() -> HQResult<ReturnType>,
+        W: FnOnce(&StepFunc, &[IrType], Vec<IrOpcode>) -> HQResult<Vec<InternalInstruction>>,
+    {
+        let Ok(output_type) = output_type() else {
+            println!("skipping failed output_type");
+            return Ok(());
+        };
+        println!("{output_type:?}");
+        let registries = proj.registries();
+        let params = types
+            .iter()
+            .copied()
+            .map(WasmProject::ir_type_to_wasm)
+            .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+            .collect::<Vec<_>>();
+        let result = vec![];
+        let step_func = StepFunc::new_with_types(
+            params.into(),
+            result.into(),
+            Rc::clone(&registries),
+            flags,
+            StepTarget::Sprite(0),
+            0,
+            Rc::clone(proj.costume_names()),
+        );
+        let drops = match output_type {
+            ReturnType::Singleton(_) => 1,
+            ReturnType::MultiValue(outs) => outs.len(),
+            ReturnType::None => 0,
+        };
+        let test_opcodes = core::iter::once(opcode)
+            .chain(core::iter::repeat_n(IrOpcode::hq_drop, drops))
+            .collect::<Vec<_>>();
+        let wasm = wasm(&step_func, types, test_opcodes)?;
+        // println!("{wasm:?}");
+        for (i, _) in types.iter().enumerate() {
+            step_func.add_instructions([InternalInstruction::Immediate(
+                wasm_encoder::Instruction::LocalGet(i.try_into().unwrap()),
+            )])?;
+        }
+        step_func.add_instructions(wasm)?;
+
+        // println!("{:?}", step_func.instructions().borrow());
+
+        proj.steps().borrow_mut().push(step_func);
+
+        let wasm_bytes = proj.finish().unwrap().wasm_bytes;
+
+        println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
+
+        wasmparser::validate(&wasm_bytes).map_err(|err| {
+            make_hq_bug!(
+                "invalid wasm module with types {:?}. Original error message: {}",
+                types,
+                err.message()
+            )
+        })?;
+
+        Ok(())
     }
 }
