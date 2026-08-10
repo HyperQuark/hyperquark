@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/instructions/looks/say.rs`."><title>say.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/instructions/looks/say.rs`."><title>say.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-650bd49d.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0-nightly (84b36a78a 2026-08-06)" data-channel="nightly" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-d4bd101e.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
 
 <style>
   .block-markup {
@@ -235,6 +235,31 @@
 <a href=#96 id=96 data-nosnippet>96</a>    <span class="prelude-val">Ok</span>(NotFoldable)
 <a href=#97 id=97 data-nosnippet>97</a>}
 <a href=#98 id=98 data-nosnippet>98</a>
-<a href=#99 id=99 data-nosnippet>99</a><span class="macro">crate::instructions_test!</span> {tests_debug; looks_say; t @ <span class="kw">super</span>::Fields { debug: <span class="bool-val">true</span>, target_idx: <span class="number">0 </span>}}
-<a href=#100 id=100 data-nosnippet>100</a><span class="macro">crate::instructions_test!</span> {tests_non_debug; looks_say; t @ <span class="kw">super</span>::Fields { debug: <span class="bool-val">false</span>, target_idx: <span class="number">0</span>, }}
+<a href=#99 id=99 data-nosnippet>99</a><span class="attr">#[cfg(test)]
+<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">mod </span>test {
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">use </span><span class="kw">crate</span>::instructions::tests::assert_valid_json;
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="attr">#[test]
+<a href=#105 id=105 data-nosnippet>105</a>    </span><span class="kw">fn </span>fields_display_is_valid_json() {
+<a href=#106 id=106 data-nosnippet>106</a>        assert_valid_json(<span class="macro">format!</span>(
+<a href=#107 id=107 data-nosnippet>107</a>            <span class="string">"{}"</span>,
+<a href=#108 id=108 data-nosnippet>108</a>            Fields {
+<a href=#109 id=109 data-nosnippet>109</a>                debug: <span class="bool-val">false</span>,
+<a href=#110 id=110 data-nosnippet>110</a>                target_idx: <span class="number">0
+<a href=#111 id=111 data-nosnippet>111</a>            </span>}
+<a href=#112 id=112 data-nosnippet>112</a>        ));
+<a href=#113 id=113 data-nosnippet>113</a>    }
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="macro">crate::instructions_test!</span> (
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">mod </span>tests_debug <span class="kw">for </span>looks_say(t) {
+<a href=#118 id=118 data-nosnippet>118</a>        fields = <span class="kw">super</span>::Fields { debug: <span class="bool-val">true</span>, target_idx: <span class="number">0 </span>};
+<a href=#119 id=119 data-nosnippet>119</a>    }
+<a href=#120 id=120 data-nosnippet>120</a>);
+<a href=#121 id=121 data-nosnippet>121</a><span class="macro">crate::instructions_test!</span> (
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">mod </span>tests_non_debug <span class="kw">for </span>looks_say(t) {
+<a href=#123 id=123 data-nosnippet>123</a>        fields = <span class="kw">super</span>::Fields { debug: <span class="bool-val">false</span>, target_idx: <span class="number">0</span>, };
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>);
 </code></pre></div></section></main></body></html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/instructions/hq/cast.rs`."><title>cast.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/instructions/hq/cast.rs`."><title>cast.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-650bd49d.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0-nightly (84b36a78a 2026-08-06)" data-channel="nightly" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-d4bd101e.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
 
 <style>
   .block-markup {
@@ -485,8 +485,38 @@
 <a href=#346 id=346 data-nosnippet>346</a>    })
 <a href=#347 id=347 data-nosnippet>347</a>}
 <a href=#348 id=348 data-nosnippet>348</a>
-<a href=#349 id=349 data-nosnippet>349</a><span class="macro">crate::instructions_test!</span> {float; hq_cast; t @ <span class="kw">super</span>::Fields(IrType::Float)}
-<a href=#350 id=350 data-nosnippet>350</a><span class="macro">crate::instructions_test!</span> {string; hq_cast; t @ <span class="kw">super</span>::Fields(IrType::String)}
-<a href=#351 id=351 data-nosnippet>351</a><span class="macro">crate::instructions_test!</span> {int; hq_cast; t @ <span class="kw">super</span>::Fields(IrType::Int)}
-<a href=#352 id=352 data-nosnippet>352</a><span class="macro">crate::instructions_test!</span> {boolean; hq_cast; t @ <span class="kw">super</span>::Fields(IrType::Boolean)}
+<a href=#349 id=349 data-nosnippet>349</a><span class="attr">#[cfg(test)]
+<a href=#350 id=350 data-nosnippet>350</a></span><span class="kw">mod </span>test {
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">use </span><span class="kw">crate</span>::instructions::tests::assert_valid_json;
+<a href=#353 id=353 data-nosnippet>353</a>
+<a href=#354 id=354 data-nosnippet>354</a>    <span class="attr">#[test]
+<a href=#355 id=355 data-nosnippet>355</a>    </span><span class="kw">fn </span>fields_display_is_valid_json() {
+<a href=#356 id=356 data-nosnippet>356</a>        assert_valid_json(<span class="macro">format!</span>(<span class="string">"{}"</span>, Fields(IrType::Float)));
+<a href=#357 id=357 data-nosnippet>357</a>    }
+<a href=#358 id=358 data-nosnippet>358</a>}
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a><span class="macro">crate::instructions_test!</span> (
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="kw">mod </span>test_float <span class="kw">for </span>hq_cast(t) {
+<a href=#362 id=362 data-nosnippet>362</a>        fields = <span class="kw">super</span>::Fields(IrType::Float);
+<a href=#363 id=363 data-nosnippet>363</a>    }
+<a href=#364 id=364 data-nosnippet>364</a>);
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a><span class="macro">crate::instructions_test!</span> (
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">mod </span>test_string <span class="kw">for </span>hq_cast(t) {
+<a href=#368 id=368 data-nosnippet>368</a>        fields = <span class="kw">super</span>::Fields(IrType::String);
+<a href=#369 id=369 data-nosnippet>369</a>    }
+<a href=#370 id=370 data-nosnippet>370</a>);
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a><span class="macro">crate::instructions_test!</span> (
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="kw">mod </span>test_int <span class="kw">for </span>hq_cast(t) {
+<a href=#374 id=374 data-nosnippet>374</a>        fields = <span class="kw">super</span>::Fields(IrType::Int);
+<a href=#375 id=375 data-nosnippet>375</a>    }
+<a href=#376 id=376 data-nosnippet>376</a>);
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a><span class="macro">crate::instructions_test!</span> (
+<a href=#379 id=379 data-nosnippet>379</a>    <span class="kw">mod </span>test_boolean <span class="kw">for </span>hq_cast(t) {
+<a href=#380 id=380 data-nosnippet>380</a>        fields = <span class="kw">super</span>::Fields(IrType::Boolean);
+<a href=#381 id=381 data-nosnippet>381</a>    }
+<a href=#382 id=382 data-nosnippet>382</a>);
 </code></pre></div></section></main></body></html>

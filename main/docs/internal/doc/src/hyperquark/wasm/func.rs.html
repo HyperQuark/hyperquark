@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/wasm/func.rs`."><title>func.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0-nightly (8b6558a02 2026-06-20)" data-channel="nightly" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/wasm/func.rs`."><title>func.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-650bd49d.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyperquark" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0-nightly (84b36a78a 2026-08-06)" data-channel="nightly" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-d4bd101e.css"></noscript><link rel="icon" href="https://hyperquark.edgecompute.app/favicon.ico"><!-- For use with rustdoc. See https://docs.rs/rustdoc-typst-demo/latest/rustdoc_typst_demo/ -->
 
 <style>
   .block-markup {
@@ -602,76 +602,72 @@
 <a href=#463 id=463 data-nosnippet>463</a>        <span class="kw">let </span>target_index = step.try_borrow()<span class="question-mark">?</span>.context().target().index();
 <a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">let </span>step_func = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>proc_context) = step.try_borrow()<span class="question-mark">?</span>.context().proc_context {
 <a href=#465 id=465 data-nosnippet>465</a>            <span class="kw">let </span>params = <span class="kw">if </span>step.try_borrow()<span class="question-mark">?</span>.context().warp {
-<a href=#466 id=466 data-nosnippet>466</a>                <span class="kw">let </span>arg_types = (<span class="kw-2">*</span>proc_context.arg_vars)
+<a href=#466 id=466 data-nosnippet>466</a>                (<span class="kw-2">*</span>proc_context.arg_vars)
 <a href=#467 id=467 data-nosnippet>467</a>                    .borrow()
 <a href=#468 id=468 data-nosnippet>468</a>                    .iter()
 <a href=#469 id=469 data-nosnippet>469</a>                    .map(|var| WasmProject::ir_type_to_wasm(<span class="kw-2">*</span>var.possible_types()))
-<a href=#470 id=470 data-nosnippet>470</a>                    .collect::&lt;Box&lt;[<span class="kw">_</span>]&gt;&gt;();
-<a href=#471 id=471 data-nosnippet>471</a>                arg_types
-<a href=#472 id=472 data-nosnippet>472</a>                    .iter()
-<a href=#473 id=473 data-nosnippet>473</a>                    .chain(<span class="kw-2">&amp;</span>[ValType::I32, TypeRegistry::STRUCT_REF])
-<a href=#474 id=474 data-nosnippet>474</a>                    .copied()
-<a href=#475 id=475 data-nosnippet>475</a>                    .collect()
-<a href=#476 id=476 data-nosnippet>476</a>            } <span class="kw">else </span>{
-<a href=#477 id=477 data-nosnippet>477</a>                Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
-<a href=#478 id=478 data-nosnippet>478</a>            };
-<a href=#479 id=479 data-nosnippet>479</a>            <span class="kw">let </span>outputs = <span class="kw">if </span>step.try_borrow()<span class="question-mark">?</span>.context().warp {
-<a href=#480 id=480 data-nosnippet>480</a>                (<span class="kw-2">*</span>proc_context.ret_vars)
-<a href=#481 id=481 data-nosnippet>481</a>                    .borrow()
-<a href=#482 id=482 data-nosnippet>482</a>                    .iter()
-<a href=#483 id=483 data-nosnippet>483</a>                    .map(|var| WasmProject::ir_type_to_wasm(<span class="kw-2">*</span>var.possible_types()))
-<a href=#484 id=484 data-nosnippet>484</a>                    .collect::&lt;Box&lt;[<span class="kw">_</span>]&gt;&gt;()
-<a href=#485 id=485 data-nosnippet>485</a>            } <span class="kw">else </span>{
-<a href=#486 id=486 data-nosnippet>486</a>                Box::from([])
-<a href=#487 id=487 data-nosnippet>487</a>            };
-<a href=#488 id=488 data-nosnippet>488</a>            <span class="self">Self</span>::new_with_types(
-<a href=#489 id=489 data-nosnippet>489</a>                params,
-<a href=#490 id=490 data-nosnippet>490</a>                outputs,
-<a href=#491 id=491 data-nosnippet>491</a>                registries,
-<a href=#492 id=492 data-nosnippet>492</a>                flags,
-<a href=#493 id=493 data-nosnippet>493</a>                target,
-<a href=#494 id=494 data-nosnippet>494</a>                target_index,
-<a href=#495 id=495 data-nosnippet>495</a>                costume_names,
-<a href=#496 id=496 data-nosnippet>496</a>            )
-<a href=#497 id=497 data-nosnippet>497</a>        } <span class="kw">else </span>{
-<a href=#498 id=498 data-nosnippet>498</a>            <span class="self">Self</span>::new(registries, flags, target, target_index, costume_names)
-<a href=#499 id=499 data-nosnippet>499</a>        };
-<a href=#500 id=500 data-nosnippet>500</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>proc_context) = step.try_borrow()<span class="question-mark">?</span>.context().proc_context
-<a href=#501 id=501 data-nosnippet>501</a>            &amp;&amp; !step.try_borrow()<span class="question-mark">?</span>.context().warp
-<a href=#502 id=502 data-nosnippet>502</a>        {
-<a href=#503 id=503 data-nosnippet>503</a>            <span class="kw">let </span>arg_struct_type = step_func
-<a href=#504 id=504 data-nosnippet>504</a>                .registries()
-<a href=#505 id=505 data-nosnippet>505</a>                .types()
-<a href=#506 id=506 data-nosnippet>506</a>                .proc_arg_struct_type(<span class="kw-2">&amp;</span>(<span class="kw-2">*</span>proc_context.arg_vars).borrow())<span class="question-mark">?</span>;
-<a href=#507 id=507 data-nosnippet>507</a>            <span class="kw">let </span>struct_local = step_func.local(ValType::Ref(RefType {
-<a href=#508 id=508 data-nosnippet>508</a>                nullable: <span class="bool-val">false</span>,
-<a href=#509 id=509 data-nosnippet>509</a>                heap_type: HeapType::Concrete(arg_struct_type),
-<a href=#510 id=510 data-nosnippet>510</a>            }))<span class="question-mark">?</span>;
-<a href=#511 id=511 data-nosnippet>511</a>            <span class="macro">hq_assert_eq!</span>(struct_local, <span class="number">2</span>);
-<a href=#512 id=512 data-nosnippet>512</a>            step_func.add_instructions(<span class="macro">wasm!</span>[
-<a href=#513 id=513 data-nosnippet>513</a>                LocalGet(<span class="number">1</span>),
-<a href=#514 id=514 data-nosnippet>514</a>                RefCastNonNull(HeapType::Concrete(arg_struct_type)),
-<a href=#515 id=515 data-nosnippet>515</a>                LocalSet(<span class="number">2</span>),
-<a href=#516 id=516 data-nosnippet>516</a>            ])<span class="question-mark">?</span>;
-<a href=#517 id=517 data-nosnippet>517</a>        }
-<a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span>instrs = <span class="self">Self</span>::compile_instructions(<span class="kw-2">&amp;</span>step_func, step.try_borrow()<span class="question-mark">?</span>.opcodes())<span class="question-mark">?</span>;
-<a href=#519 id=519 data-nosnippet>519</a>        step_func.add_instructions(instrs)<span class="question-mark">?</span>;
-<a href=#520 id=520 data-nosnippet>520</a>        steps
-<a href=#521 id=521 data-nosnippet>521</a>            .try_borrow_mut()
-<a href=#522 id=522 data-nosnippet>522</a>            .map_err(|<span class="kw">_</span>| <span class="macro">make_hq_bug!</span>(<span class="string">"couldn't mutably borrow cell"</span>))<span class="question-mark">?
-<a href=#523 id=523 data-nosnippet>523</a>            </span>.push(step_func.clone());
-<a href=#524 id=524 data-nosnippet>524</a>        <span class="prelude-val">Ok</span>(step_func)
-<a href=#525 id=525 data-nosnippet>525</a>    }
-<a href=#526 id=526 data-nosnippet>526</a>
-<a href=#527 id=527 data-nosnippet>527</a>    <span class="kw">pub fn </span>compile_inner_step&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, step: S) -&gt; HQResult&lt;Vec&lt;Instruction&gt;&gt;
-<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">where
-<a href=#529 id=529 data-nosnippet>529</a>        </span>S: Deref&lt;Target = RefCell&lt;Step&gt;&gt;,
-<a href=#530 id=530 data-nosnippet>530</a>    {
-<a href=#531 id=531 data-nosnippet>531</a>        <span class="macro">hq_assert!</span>(
-<a href=#532 id=532 data-nosnippet>532</a>            !step.try_borrow()<span class="question-mark">?</span>.used_non_inline(),
-<a href=#533 id=533 data-nosnippet>533</a>            <span class="string">"inner step should NOT be marked as used non-inline"
-<a href=#534 id=534 data-nosnippet>534</a>        </span>);
-<a href=#535 id=535 data-nosnippet>535</a>        <span class="self">Self</span>::compile_instructions(<span class="self">self</span>, step.try_borrow()<span class="question-mark">?</span>.opcodes())
-<a href=#536 id=536 data-nosnippet>536</a>    }
-<a href=#537 id=537 data-nosnippet>537</a>}
+<a href=#470 id=470 data-nosnippet>470</a>                    .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+<a href=#471 id=471 data-nosnippet>471</a>                    .collect()
+<a href=#472 id=472 data-nosnippet>472</a>            } <span class="kw">else </span>{
+<a href=#473 id=473 data-nosnippet>473</a>                Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
+<a href=#474 id=474 data-nosnippet>474</a>            };
+<a href=#475 id=475 data-nosnippet>475</a>            <span class="kw">let </span>outputs = <span class="kw">if </span>step.try_borrow()<span class="question-mark">?</span>.context().warp {
+<a href=#476 id=476 data-nosnippet>476</a>                (<span class="kw-2">*</span>proc_context.ret_vars)
+<a href=#477 id=477 data-nosnippet>477</a>                    .borrow()
+<a href=#478 id=478 data-nosnippet>478</a>                    .iter()
+<a href=#479 id=479 data-nosnippet>479</a>                    .map(|var| WasmProject::ir_type_to_wasm(<span class="kw-2">*</span>var.possible_types()))
+<a href=#480 id=480 data-nosnippet>480</a>                    .collect::&lt;Box&lt;[<span class="kw">_</span>]&gt;&gt;()
+<a href=#481 id=481 data-nosnippet>481</a>            } <span class="kw">else </span>{
+<a href=#482 id=482 data-nosnippet>482</a>                Box::from([])
+<a href=#483 id=483 data-nosnippet>483</a>            };
+<a href=#484 id=484 data-nosnippet>484</a>            <span class="self">Self</span>::new_with_types(
+<a href=#485 id=485 data-nosnippet>485</a>                params,
+<a href=#486 id=486 data-nosnippet>486</a>                outputs,
+<a href=#487 id=487 data-nosnippet>487</a>                registries,
+<a href=#488 id=488 data-nosnippet>488</a>                flags,
+<a href=#489 id=489 data-nosnippet>489</a>                target,
+<a href=#490 id=490 data-nosnippet>490</a>                target_index,
+<a href=#491 id=491 data-nosnippet>491</a>                costume_names,
+<a href=#492 id=492 data-nosnippet>492</a>            )
+<a href=#493 id=493 data-nosnippet>493</a>        } <span class="kw">else </span>{
+<a href=#494 id=494 data-nosnippet>494</a>            <span class="self">Self</span>::new(registries, flags, target, target_index, costume_names)
+<a href=#495 id=495 data-nosnippet>495</a>        };
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>proc_context) = step.try_borrow()<span class="question-mark">?</span>.context().proc_context
+<a href=#497 id=497 data-nosnippet>497</a>            &amp;&amp; !step.try_borrow()<span class="question-mark">?</span>.context().warp
+<a href=#498 id=498 data-nosnippet>498</a>        {
+<a href=#499 id=499 data-nosnippet>499</a>            <span class="kw">let </span>arg_struct_type = step_func
+<a href=#500 id=500 data-nosnippet>500</a>                .registries()
+<a href=#501 id=501 data-nosnippet>501</a>                .types()
+<a href=#502 id=502 data-nosnippet>502</a>                .proc_arg_struct_type(<span class="kw-2">&amp;</span>(<span class="kw-2">*</span>proc_context.arg_vars).borrow())<span class="question-mark">?</span>;
+<a href=#503 id=503 data-nosnippet>503</a>            <span class="kw">let </span>struct_local = step_func.local(ValType::Ref(RefType {
+<a href=#504 id=504 data-nosnippet>504</a>                nullable: <span class="bool-val">false</span>,
+<a href=#505 id=505 data-nosnippet>505</a>                heap_type: HeapType::Concrete(arg_struct_type),
+<a href=#506 id=506 data-nosnippet>506</a>            }))<span class="question-mark">?</span>;
+<a href=#507 id=507 data-nosnippet>507</a>            <span class="macro">hq_assert_eq!</span>(struct_local, <span class="number">2</span>);
+<a href=#508 id=508 data-nosnippet>508</a>            step_func.add_instructions(<span class="macro">wasm!</span>[
+<a href=#509 id=509 data-nosnippet>509</a>                LocalGet(<span class="number">1</span>),
+<a href=#510 id=510 data-nosnippet>510</a>                RefCastNonNull(HeapType::Concrete(arg_struct_type)),
+<a href=#511 id=511 data-nosnippet>511</a>                LocalSet(<span class="number">2</span>),
+<a href=#512 id=512 data-nosnippet>512</a>            ])<span class="question-mark">?</span>;
+<a href=#513 id=513 data-nosnippet>513</a>        }
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="kw">let </span>instrs = <span class="self">Self</span>::compile_instructions(<span class="kw-2">&amp;</span>step_func, step.try_borrow()<span class="question-mark">?</span>.opcodes())<span class="question-mark">?</span>;
+<a href=#515 id=515 data-nosnippet>515</a>        step_func.add_instructions(instrs)<span class="question-mark">?</span>;
+<a href=#516 id=516 data-nosnippet>516</a>        steps
+<a href=#517 id=517 data-nosnippet>517</a>            .try_borrow_mut()
+<a href=#518 id=518 data-nosnippet>518</a>            .map_err(|<span class="kw">_</span>| <span class="macro">make_hq_bug!</span>(<span class="string">"couldn't mutably borrow cell"</span>))<span class="question-mark">?
+<a href=#519 id=519 data-nosnippet>519</a>            </span>.push(step_func.clone());
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="prelude-val">Ok</span>(step_func)
+<a href=#521 id=521 data-nosnippet>521</a>    }
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a>    <span class="kw">pub fn </span>compile_inner_step&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, step: S) -&gt; HQResult&lt;Vec&lt;Instruction&gt;&gt;
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">where
+<a href=#525 id=525 data-nosnippet>525</a>        </span>S: Deref&lt;Target = RefCell&lt;Step&gt;&gt;,
+<a href=#526 id=526 data-nosnippet>526</a>    {
+<a href=#527 id=527 data-nosnippet>527</a>        <span class="macro">hq_assert!</span>(
+<a href=#528 id=528 data-nosnippet>528</a>            !step.try_borrow()<span class="question-mark">?</span>.used_non_inline(),
+<a href=#529 id=529 data-nosnippet>529</a>            <span class="string">"inner step should NOT be marked as used non-inline"
+<a href=#530 id=530 data-nosnippet>530</a>        </span>);
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="self">Self</span>::compile_instructions(<span class="self">self</span>, step.try_borrow()<span class="question-mark">?</span>.opcodes())
+<a href=#532 id=532 data-nosnippet>532</a>    }
+<a href=#533 id=533 data-nosnippet>533</a>}
 </code></pre></div></section></main></body></html>
