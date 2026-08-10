@@ -154,7 +154,12 @@ mod test {
         assert_valid_json(format!("{fields}"));
     }
 
-    pub fn make_fields(ty: IrType, initial: VarVal, local_read_write: bool, flags: WasmFlags) -> Fields {
+    pub fn make_fields(
+        ty: IrType,
+        initial: VarVal,
+        local_read_write: bool,
+        flags: WasmFlags,
+    ) -> Fields {
         Fields {
             var: make_var(ty, initial, None, flags),
             local_read_write: RefCell::new(local_read_write),

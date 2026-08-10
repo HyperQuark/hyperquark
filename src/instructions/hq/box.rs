@@ -60,9 +60,12 @@ mod test {
 
     #[test]
     fn fields_display_is_valid_json() {
-        assert_valid_json(format!("{}", Fields {
-            output_ty: IrType::Any,
-        }));
+        assert_valid_json(format!(
+            "{}",
+            Fields {
+                output_ty: IrType::Any,
+            }
+        ));
     }
 }
 

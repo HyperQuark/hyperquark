@@ -120,9 +120,10 @@ pub const fn const_fold(
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::super::super::tests::*;
-    use crate::wasm::{WasmFlags, flags::unit_test_wasm_features};
+    use super::*;
+    use crate::wasm::WasmFlags;
+    use crate::wasm::flags::unit_test_wasm_features;
 
     #[test]
     fn fields_display_is_valid_json() {

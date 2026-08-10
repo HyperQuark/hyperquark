@@ -1,7 +1,8 @@
 use wasm_encoder::{ConstExpr, HeapType};
 
 use super::super::prelude::*;
-use crate::{instructions_test, wasm::{GlobalExportable, GlobalMutable, ThreadsTable}};
+use crate::instructions_test;
+use crate::wasm::{GlobalExportable, GlobalMutable, ThreadsTable};
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let threads_count = func.registries().globals().register(
