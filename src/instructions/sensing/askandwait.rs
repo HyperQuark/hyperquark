@@ -97,7 +97,8 @@ pub const fn const_fold(
 mod test {
     use super::super::super::tests::*;
     use super::*;
-    use crate::wasm::{StepTarget, WasmFlags, WasmProject, registries::TypeRegistry};
+    use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::{StepTarget, WasmFlags, WasmProject};
 
     #[test]
     fn fields_display_is_valid_json() {

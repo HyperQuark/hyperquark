@@ -285,7 +285,8 @@ pub const fn const_fold(
 #[cfg(test)]
 pub mod test_utils {
     use super::*;
-    use crate::wasm::{WasmFlags, flags::{Switch, unit_test_wasm_features}};
+    use crate::wasm::WasmFlags;
+    use crate::wasm::flags::{Switch, unit_test_wasm_features};
 
     pub fn make_list(mutable: bool, ty: IrType, flags: WasmFlags) -> RcList {
         let list = crate::ir::RcList::new(vec![], &flags).unwrap();
@@ -303,8 +304,9 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     pub use test_utils::*;
+
+    use super::*;
     use crate::instructions::tests::assert_valid_json;
     use crate::wasm::WasmFlags;
 

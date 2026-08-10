@@ -39,7 +39,11 @@ impl WasmProject {
     )]
     #[allow(dead_code, reason = "not dead in test mode")]
     #[must_use]
-    pub fn new(flags: WasmFlags, environment: ExternalEnvironment, costume_names: Vec<Vec<Box<str>>>) -> Self {
+    pub fn new(
+        flags: WasmFlags,
+        environment: ExternalEnvironment,
+        costume_names: Vec<Vec<Box<str>>>,
+    ) -> Self {
         Self {
             flags,
             steps: Rc::new(RefCell::new(Vec::new())),

@@ -87,8 +87,8 @@ pub fn const_fold(
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::super::super::tests::*;
+    use super::*;
 
     #[test]
     fn fields_display_is_valid_json() {

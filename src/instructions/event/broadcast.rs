@@ -1,5 +1,6 @@
 use super::super::prelude::*;
-use crate::{instructions_test, wasm::StepFunc};
+use crate::instructions_test;
+use crate::wasm::StepFunc;
 
 #[derive(Clone, Debug)]
 pub struct Fields(pub Box<str>);

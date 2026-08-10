@@ -103,7 +103,13 @@ mod test {
 
     #[test]
     fn fields_display_is_valid_json() {
-        assert_valid_json(format!("{}", Fields { debug: false, target_idx: 0 }));
+        assert_valid_json(format!(
+            "{}",
+            Fields {
+                debug: false,
+                target_idx: 0
+            }
+        ));
     }
 }
 
