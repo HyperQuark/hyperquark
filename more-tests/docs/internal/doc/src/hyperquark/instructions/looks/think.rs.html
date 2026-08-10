@@ -242,18 +242,24 @@
 <a href=#103 id=103 data-nosnippet>103</a>
 <a href=#104 id=104 data-nosnippet>104</a>    <span class="attr">#[test]
 <a href=#105 id=105 data-nosnippet>105</a>    </span><span class="kw">fn </span>fields_display_is_valid_json() {
-<a href=#106 id=106 data-nosnippet>106</a>        assert_valid_json(<span class="macro">format!</span>(<span class="string">"{}"</span>, Fields { debug: <span class="bool-val">false</span>, target_idx: <span class="number">0 </span>}));
-<a href=#107 id=107 data-nosnippet>107</a>    }
-<a href=#108 id=108 data-nosnippet>108</a>}
-<a href=#109 id=109 data-nosnippet>109</a>
-<a href=#110 id=110 data-nosnippet>110</a><span class="macro">crate::instructions_test!</span> (
-<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">mod </span>tests_debug <span class="kw">for </span>looks_think(t) {
-<a href=#112 id=112 data-nosnippet>112</a>        fields = <span class="kw">super</span>::Fields { debug: <span class="bool-val">true</span>, target_idx: <span class="number">0 </span>};
+<a href=#106 id=106 data-nosnippet>106</a>        assert_valid_json(<span class="macro">format!</span>(
+<a href=#107 id=107 data-nosnippet>107</a>            <span class="string">"{}"</span>,
+<a href=#108 id=108 data-nosnippet>108</a>            Fields {
+<a href=#109 id=109 data-nosnippet>109</a>                debug: <span class="bool-val">false</span>,
+<a href=#110 id=110 data-nosnippet>110</a>                target_idx: <span class="number">0
+<a href=#111 id=111 data-nosnippet>111</a>            </span>}
+<a href=#112 id=112 data-nosnippet>112</a>        ));
 <a href=#113 id=113 data-nosnippet>113</a>    }
-<a href=#114 id=114 data-nosnippet>114</a>);
-<a href=#115 id=115 data-nosnippet>115</a><span class="macro">crate::instructions_test!</span> (
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">mod </span>tests_non_debug <span class="kw">for </span>looks_think(t) {
-<a href=#117 id=117 data-nosnippet>117</a>        fields = <span class="kw">super</span>::Fields { debug: <span class="bool-val">false</span>, target_idx: <span class="number">0</span>, };
-<a href=#118 id=118 data-nosnippet>118</a>    }
-<a href=#119 id=119 data-nosnippet>119</a>);
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="macro">crate::instructions_test!</span> (
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">mod </span>tests_debug <span class="kw">for </span>looks_think(t) {
+<a href=#118 id=118 data-nosnippet>118</a>        fields = <span class="kw">super</span>::Fields { debug: <span class="bool-val">true</span>, target_idx: <span class="number">0 </span>};
+<a href=#119 id=119 data-nosnippet>119</a>    }
+<a href=#120 id=120 data-nosnippet>120</a>);
+<a href=#121 id=121 data-nosnippet>121</a><span class="macro">crate::instructions_test!</span> (
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">mod </span>tests_non_debug <span class="kw">for </span>looks_think(t) {
+<a href=#123 id=123 data-nosnippet>123</a>        fields = <span class="kw">super</span>::Fields { debug: <span class="bool-val">false</span>, target_idx: <span class="number">0</span>, };
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>);
 </code></pre></div></section></main></body></html>

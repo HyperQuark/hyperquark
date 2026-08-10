@@ -236,39 +236,40 @@
 <a href=#97 id=97 data-nosnippet>97</a></span><span class="kw">mod </span>test {
 <a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::<span class="kw">super</span>::tests::<span class="kw-2">*</span>;
 <a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">use </span><span class="kw">crate</span>::wasm::{StepTarget, WasmFlags, WasmProject, registries::TypeRegistry};
-<a href=#101 id=101 data-nosnippet>101</a>
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="attr">#[test]
-<a href=#103 id=103 data-nosnippet>103</a>    </span><span class="kw">fn </span>fields_display_is_valid_json() {
-<a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">let </span>fields = make_fields();
-<a href=#105 id=105 data-nosnippet>105</a>        assert_valid_json(<span class="macro">format!</span>(<span class="string">"{fields}"</span>));
-<a href=#106 id=106 data-nosnippet>106</a>    }
-<a href=#107 id=107 data-nosnippet>107</a>
-<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">pub fn </span>make_fields() -&gt; Fields {
-<a href=#109 id=109 data-nosnippet>109</a>        Fields {
-<a href=#110 id=110 data-nosnippet>110</a>            poll_step: StepIndex(<span class="number">0</span>),
-<a href=#111 id=111 data-nosnippet>111</a>            next_step: StepIndex(<span class="number">0</span>),
-<a href=#112 id=112 data-nosnippet>112</a>        }
-<a href=#113 id=113 data-nosnippet>113</a>    }
-<a href=#114 id=114 data-nosnippet>114</a>
-<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">pub fn </span>setup_project(wasm_proj: <span class="kw-2">&amp;</span>WasmProject, flags: WasmFlags) {
-<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>step_func = StepFunc::new_with_types(
-<a href=#117 id=117 data-nosnippet>117</a>            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
-<a href=#118 id=118 data-nosnippet>118</a>            Box::from([]),
-<a href=#119 id=119 data-nosnippet>119</a>            wasm_proj.registries(),
-<a href=#120 id=120 data-nosnippet>120</a>            flags,
-<a href=#121 id=121 data-nosnippet>121</a>            StepTarget::Sprite(<span class="number">0</span>),
-<a href=#122 id=122 data-nosnippet>122</a>            <span class="number">0</span>,
-<a href=#123 id=123 data-nosnippet>123</a>            Rc::new(<span class="macro">vec!</span>[]),
-<a href=#124 id=124 data-nosnippet>124</a>        );
-<a href=#125 id=125 data-nosnippet>125</a>        wasm_proj.steps().borrow_mut().push(step_func);
-<a href=#126 id=126 data-nosnippet>126</a>    }
-<a href=#127 id=127 data-nosnippet>127</a>}
-<a href=#128 id=128 data-nosnippet>128</a>
-<a href=#129 id=129 data-nosnippet>129</a><span class="macro">crate::instructions_test!</span> (
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">mod </span>tests <span class="kw">for </span>sensing_askandwait(t) {
-<a href=#131 id=131 data-nosnippet>131</a>        fields = <span class="kw">super</span>::test::make_fields();
-<a href=#132 id=132 data-nosnippet>132</a>        setup = <span class="kw">super</span>::test::setup_project;
-<a href=#133 id=133 data-nosnippet>133</a>    }
-<a href=#134 id=134 data-nosnippet>134</a>);
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">use </span><span class="kw">crate</span>::wasm::registries::TypeRegistry;
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">use </span><span class="kw">crate</span>::wasm::{StepTarget, WasmFlags, WasmProject};
+<a href=#102 id=102 data-nosnippet>102</a>
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="attr">#[test]
+<a href=#104 id=104 data-nosnippet>104</a>    </span><span class="kw">fn </span>fields_display_is_valid_json() {
+<a href=#105 id=105 data-nosnippet>105</a>        <span class="kw">let </span>fields = make_fields();
+<a href=#106 id=106 data-nosnippet>106</a>        assert_valid_json(<span class="macro">format!</span>(<span class="string">"{fields}"</span>));
+<a href=#107 id=107 data-nosnippet>107</a>    }
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">pub fn </span>make_fields() -&gt; Fields {
+<a href=#110 id=110 data-nosnippet>110</a>        Fields {
+<a href=#111 id=111 data-nosnippet>111</a>            poll_step: StepIndex(<span class="number">0</span>),
+<a href=#112 id=112 data-nosnippet>112</a>            next_step: StepIndex(<span class="number">0</span>),
+<a href=#113 id=113 data-nosnippet>113</a>        }
+<a href=#114 id=114 data-nosnippet>114</a>    }
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">pub fn </span>setup_project(wasm_proj: <span class="kw-2">&amp;</span>WasmProject, flags: WasmFlags) {
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">let </span>step_func = StepFunc::new_with_types(
+<a href=#118 id=118 data-nosnippet>118</a>            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
+<a href=#119 id=119 data-nosnippet>119</a>            Box::from([]),
+<a href=#120 id=120 data-nosnippet>120</a>            wasm_proj.registries(),
+<a href=#121 id=121 data-nosnippet>121</a>            flags,
+<a href=#122 id=122 data-nosnippet>122</a>            StepTarget::Sprite(<span class="number">0</span>),
+<a href=#123 id=123 data-nosnippet>123</a>            <span class="number">0</span>,
+<a href=#124 id=124 data-nosnippet>124</a>            Rc::new(<span class="macro">vec!</span>[]),
+<a href=#125 id=125 data-nosnippet>125</a>        );
+<a href=#126 id=126 data-nosnippet>126</a>        wasm_proj.steps().borrow_mut().push(step_func);
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>}
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a><span class="macro">crate::instructions_test!</span> (
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">mod </span>tests <span class="kw">for </span>sensing_askandwait(t) {
+<a href=#132 id=132 data-nosnippet>132</a>        fields = <span class="kw">super</span>::test::make_fields();
+<a href=#133 id=133 data-nosnippet>133</a>        setup = <span class="kw">super</span>::test::setup_project;
+<a href=#134 id=134 data-nosnippet>134</a>    }
+<a href=#135 id=135 data-nosnippet>135</a>);
 </code></pre></div></section></main></body></html>

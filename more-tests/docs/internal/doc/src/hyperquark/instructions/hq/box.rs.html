@@ -199,15 +199,18 @@
 <a href=#60 id=60 data-nosnippet>60</a>
 <a href=#61 id=61 data-nosnippet>61</a>    <span class="attr">#[test]
 <a href=#62 id=62 data-nosnippet>62</a>    </span><span class="kw">fn </span>fields_display_is_valid_json() {
-<a href=#63 id=63 data-nosnippet>63</a>        assert_valid_json(<span class="macro">format!</span>(<span class="string">"{}"</span>, Fields {
-<a href=#64 id=64 data-nosnippet>64</a>            output_ty: IrType::Any,
-<a href=#65 id=65 data-nosnippet>65</a>        }));
-<a href=#66 id=66 data-nosnippet>66</a>    }
-<a href=#67 id=67 data-nosnippet>67</a>}
-<a href=#68 id=68 data-nosnippet>68</a>
-<a href=#69 id=69 data-nosnippet>69</a><span class="macro">crate::instructions_test!</span> (
-<a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">mod </span>tests <span class="kw">for </span>hq_box(t) {
-<a href=#71 id=71 data-nosnippet>71</a>        fields = <span class="kw">super</span>::Fields { output_ty: IrType::Any };
-<a href=#72 id=72 data-nosnippet>72</a>    }
-<a href=#73 id=73 data-nosnippet>73</a>);
+<a href=#63 id=63 data-nosnippet>63</a>        assert_valid_json(<span class="macro">format!</span>(
+<a href=#64 id=64 data-nosnippet>64</a>            <span class="string">"{}"</span>,
+<a href=#65 id=65 data-nosnippet>65</a>            Fields {
+<a href=#66 id=66 data-nosnippet>66</a>                output_ty: IrType::Any,
+<a href=#67 id=67 data-nosnippet>67</a>            }
+<a href=#68 id=68 data-nosnippet>68</a>        ));
+<a href=#69 id=69 data-nosnippet>69</a>    }
+<a href=#70 id=70 data-nosnippet>70</a>}
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a><span class="macro">crate::instructions_test!</span> (
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">mod </span>tests <span class="kw">for </span>hq_box(t) {
+<a href=#74 id=74 data-nosnippet>74</a>        fields = <span class="kw">super</span>::Fields { output_ty: IrType::Any };
+<a href=#75 id=75 data-nosnippet>75</a>    }
+<a href=#76 id=76 data-nosnippet>76</a>);
 </code></pre></div></section></main></body></html>
