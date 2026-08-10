@@ -29,10 +29,16 @@ export default defineConfig({
   },
   build: {
     target: "esnext",
+    lib: {
+      name: "hyperquark",
+      formats: ["es"],
+      entry: ["../fuzz-libafl/scripts/run-project.mjs", "index.html"],
+    },
+    sourcemap: 'inline'
   },
   test: {
     root: ".",
-    plugins: [wasm()],
+    plugins: () => [wasm()],
     pool: "forks",
     poolOptions: {
       forks: {

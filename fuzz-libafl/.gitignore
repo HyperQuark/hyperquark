@@ -1,0 +1,5 @@
+crash-artifacts
+crashes
+target
+*.json
+.cur_input*

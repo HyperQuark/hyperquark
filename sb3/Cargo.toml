@@ -5,9 +5,16 @@ edition = "2024"
 publish = false
 
 [dependencies]
+arbitrary = { version = "1.4.2", features = ["derive"] }
 enum-field-getter = { path = "../enum-field-getter" }
+mutatis = { version = "0.5.3", features = ["derive", "alloc", "std"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+libafl_bolts = { version = "=0.15.3", optional = true }
+libafl = { version = "=0.15.3", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+
+[features]
+fuzz = ["libafl", "libafl_bolts"]
