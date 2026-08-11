@@ -213,6 +213,16 @@ pub enum StepTarget {
     Sprite(u32),
 }
 
+impl StepTarget {
+    #[must_use]
+    pub fn suffix_id(&self) -> Cow<'_, str> {
+        match self {
+            Self::Stage => "_stage".into(),
+            Self::Sprite(id) => format!("_{id}").into(),
+        }
+    }
+}
+
 /// representation of a step's function
 #[derive(Clone)]
 pub struct StepFunc {

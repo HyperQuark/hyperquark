@@ -1,9 +1,11 @@
 use core::ops::Deref;
+use core::fmt::Display;
 
 use wasm_encoder::{ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ValType};
 
 use crate::prelude::*;
 use crate::registry::MapRegistry;
+use crate::wasm::StepTarget;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -29,6 +31,39 @@ pub type GlobalRegistry =
     MapRegistry<Box<str>, (ValType, ConstExpr, GlobalMutable, GlobalExportable)>;
 
 impl GlobalRegistry {
+    fn threads_count_with_id<N, S>(&self, id: S) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+        S: Display,
+    {
+        self.register(
+            format!("threads_count{id}").into(),
+            (
+                ValType::I32,
+                ConstExpr::i32_const(0),
+                GlobalMutable(true),
+                GlobalExportable(true),
+            ),
+        )
+    }
+
+    pub fn threads_count<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.threads_count_with_id("")
+    }
+
+    pub fn target_threads_count<N>(&self, target: StepTarget) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.threads_count_with_id(target.suffix_id())
+    }
+
     pub fn finish(
         self,
         globals: &mut GlobalSection,

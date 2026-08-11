@@ -11,7 +11,7 @@ pub use functions::{ExternalFunctionRegistry, StaticFunctionRegistry};
 pub use globals::{GlobalExportable, GlobalMutable, GlobalRegistry};
 pub use lists::ListRegistry;
 pub use strings::{StringRegistry, TabledStringRegistry};
-pub use tables::{StepsTable, StringsTable, TableRegistry, ThreadsTable};
+pub use tables::{StringsTable, TableRegistry};
 pub use targets::SpriteRegistry;
 pub use types::TypeRegistry;
 pub use variables::VariableRegistry;

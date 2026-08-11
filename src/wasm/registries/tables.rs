@@ -3,6 +3,8 @@ use wasm_encoder::{
 };
 
 use crate::prelude::*;
+use crate::wasm::StepTarget;
+use crate::wasm::registries::TypeRegistry;
 
 #[derive(Clone, Debug)]
 pub struct TableOptions {
@@ -22,6 +24,26 @@ impl RegistryType for TableRegistrar {
 pub type TableRegistry = NamedRegistry<TableRegistrar>;
 
 impl TableRegistry {
+    pub fn threads_table<N>(&self, target: StepTarget, types: &Rc<TypeRegistry>) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.register_dyn(
+            format!("threads{}", target.suffix_id()).into(),
+            TableOptions {
+                element_type: RefType {
+                    nullable: true,
+                    heap_type: HeapType::Concrete(types.thread_struct_type()?),
+                },
+                min: 0,
+                max: None,
+                init: None,
+                export_name: Some("threads"),
+            },
+        )
+    }
+
     pub fn finish(self, tables: &mut TableSection, exports: &mut ExportSection) {
         for (
             _key,
@@ -73,51 +95,51 @@ impl NamedRegistryItem<TableOptions> for StringsTable {
     };
 }
 
-pub struct StepsTable;
-impl NamedRegistryItem<TableOptions> for StepsTable {
-    const VALUE: TableOptions = TableOptions {
-        element_type: RefType::FUNCREF,
-        min: 0,
-        max: None,
-        init: None,
-        export_name: None,
-    };
-}
-impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
-    fn r#override(step_count: u64) -> TableOptions {
-        TableOptions {
-            element_type: RefType::FUNCREF,
-            min: step_count,
-            max: Some(step_count),
-            init: None,
-            export_name: None,
-        }
-    }
-}
+// pub struct StepsTable;
+// impl NamedRegistryItem<TableOptions> for StepsTable {
+//     const VALUE: TableOptions = TableOptions {
+//         element_type: RefType::FUNCREF,
+//         min: 0,
+//         max: None,
+//         init: None,
+//         export_name: None,
+//     };
+// }
+// impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
+//     fn r#override(step_count: u64) -> TableOptions {
+//         TableOptions {
+//             element_type: RefType::FUNCREF,
+//             min: step_count,
+//             max: Some(step_count),
+//             init: None,
+//             export_name: None,
+//         }
+//     }
+// }
 
-pub struct ThreadsTable;
-impl NamedRegistryItem<TableOptions> for ThreadsTable {
-    const VALUE: TableOptions = TableOptions {
-        element_type: RefType::ARRAYREF,
-        min: 0,
-        max: None,
-        init: None,
-        export_name: Some("threads"),
-    };
-}
-impl NamedRegistryItemOverride<TableOptions, u32> for ThreadsTable {
-    fn r#override(stack_struct_ty: u32) -> TableOptions {
-        // todo: if we don't need any stacks (i.e. no non-warped procedure, no broadcast & wait),
-        // revert to old behaviour and just store funcrefs (noop for null).
-        TableOptions {
-            element_type: RefType {
-                nullable: true,
-                heap_type: HeapType::Concrete(stack_struct_ty),
-            },
-            min: 0,
-            max: None,
-            init: None,
-            export_name: Some("threads"),
-        }
-    }
-}
+// pub struct ThreadsTable;
+// impl NamedRegistryItem<TableOptions> for ThreadsTable {
+//     const VALUE: TableOptions = TableOptions {
+//         element_type: RefType::ARRAYREF,
+//         min: 0,
+//         max: None,
+//         init: None,
+//         export_name: Some("threads"),
+//     };
+// }
+// impl NamedRegistryItemOverride<TableOptions, u32> for ThreadsTable {
+//     fn r#override(stack_struct_ty: u32) -> TableOptions {
+//         // todo: if we don't need any stacks (i.e. no non-warped procedure, no broadcast & wait),
+//         // revert to old behaviour and just store funcrefs (noop for null).
+//         TableOptions {
+//             element_type: RefType {
+//                 nullable: true,
+//                 heap_type: HeapType::Concrete(stack_struct_ty),
+//             },
+//             min: 0,
+//             max: None,
+//             init: None,
+//             export_name: Some("threads"),
+//         }
+//     }
+// }

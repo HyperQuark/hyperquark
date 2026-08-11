@@ -8,7 +8,7 @@ use wasm_encoder::{
 };
 use wasm_gen::wasm;
 
-use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
+use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
@@ -407,15 +407,7 @@ impl WasmProject {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.registries().globals().register(
-            "threads_count".into(),
-            (
-                ValType::I32,
-                ConstExpr::i32_const(0),
-                GlobalMutable(true),
-                GlobalExportable(true),
-            ),
-        )
+        self.registries().globals().threads_count()
     }
 
     #[expect(clippy::needless_pass_by_value, reason = "annoying to borrow a box")]

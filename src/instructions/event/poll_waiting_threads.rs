@@ -7,7 +7,7 @@
 use wasm_encoder::{BlockType as WasmBlockType, FieldType, HeapType, StorageType};
 
 use super::super::prelude::*;
-use crate::wasm::{StepFunc, ThreadsTable};
+use crate::wasm::StepFunc;
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let i32_array_type = func
@@ -35,7 +35,10 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
     func.free_local(i_local)?;
     func.free_local(wait_local)?;
 
-    let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+    let threads_table = func
+        .registries()
+        .tables()
+        .threads_table(func.target(), func.registries().types())?;
 
     Ok(wasm![
         LocalGet(1), // this should never have additional function arguments so this is fine

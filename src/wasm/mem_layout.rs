@@ -100,8 +100,8 @@ memory_layout! {
     PEN_DOWN: i8
     /// non-zero if sprite is visible, 0 otherwise (i8)
     VISIBLE: i8
-    /// bytes 58-59 padding
-    _PADDING: i16
+    /// sprite layer - 0 is bottom (not including stage! as that is always lowest)
+    LAYER: i16
     /// current costume number, 0-indexed (i32)
     COSTUME: i32
     /// sprite size, where default is 100(%) (f64)

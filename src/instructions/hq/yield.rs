@@ -1,9 +1,9 @@
-use wasm_encoder::{BlockType, ConstExpr, HeapType};
+use wasm_encoder::{BlockType, HeapType};
 
 use super::super::prelude::*;
 use crate::instructions_test;
 use crate::ir::{Step, StepIndex};
-use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
+use crate::wasm::StepFunc;
 
 #[derive(Debug, Clone)]
 pub enum YieldMode {
@@ -55,19 +55,14 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     Fields { mode: yield_mode }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let threads_count = func.registries().globals().register(
-        "threads_count".into(),
-        (
-            ValType::I32,
-            ConstExpr::i32_const(0),
-            GlobalMutable(true),
-            GlobalExportable(true),
-        ),
-    )?;
+    let threads_count = func.registries().globals().threads_count()?;
 
     Ok(match yield_mode {
         YieldMode::None => {
-            let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+            let threads_table = func
+                .registries()
+                .tables()
+                .threads_table(func.target(), func.registries().types())?;
             let thread_struct_ty = func.registries().types().thread_struct_type()?;
             let stack_array_ty = func.registries().types().stack_array_type()?;
             let stack_struct_ty = func.registries().types().stack_struct_type()?;
@@ -146,7 +141,10 @@ pub fn wasm(
             func.compile_inner_step(Rc::clone(step))?
         }
         YieldMode::Schedule(step_index) => {
-            let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+            let threads_table = func
+                .registries()
+                .tables()
+                .threads_table(func.target(), func.registries().types())?;
             let thread_struct_ty = func.registries().types().thread_struct_type()?;
             let local = func.local(ValType::Ref(RefType {
                 nullable: false,
