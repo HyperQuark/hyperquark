@@ -4,24 +4,22 @@
     {{ error }}
   </details>
   <template v-else>
-    <span class=".inline-block"
-      >Enter a project id:
-      <span
-        class="projinput inline-block"
-        tabindex="0"
-        @focus="() => numInput.focus()"
-        >https://scratch.mit.edu/projects/<input
-          type="text"
-          ref="numInput"
-          v-model="projId" /></span
-      ><button
-        @click="handleNumInput"
-        :disabled="goDisabled"
-        :title="buttonTooltip"
-      >
+    <form class="inline-block" @submit.prevent="handleNumInput">
+      <label for="project-id"
+        >Enter a project ID:
+        <span class="projinput inline-block"
+          >https://scratch.mit.edu/projects/<input
+            id="project-id"
+            type="text"
+            ref="numInput"
+            v-model="projId"
+            inputmode="numeric"
+            required /></span
+      ></label>
+      <button type="submit" :disabled="goDisabled" :title="buttonTooltip">
         Go!
-      </button></span
-    >
+      </button>
+    </form>
     <span class="inline-block"
       >or upload a project: <ProjectFileInput @error="err"></ProjectFileInput
     ></span>
