@@ -1,11 +1,13 @@
 use core::ops::Deref;
-use core::fmt::Display;
 
-use wasm_encoder::{ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ValType};
+use wasm_encoder::{
+    ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, Instruction,
+    RefType, ValType,
+};
 
 use crate::prelude::*;
 use crate::registry::MapRegistry;
-use crate::wasm::StepTarget;
+use crate::wasm::registries::TypeRegistry;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -31,14 +33,13 @@ pub type GlobalRegistry =
     MapRegistry<Box<str>, (ValType, ConstExpr, GlobalMutable, GlobalExportable)>;
 
 impl GlobalRegistry {
-    fn threads_count_with_id<N, S>(&self, id: S) -> HQResult<N>
+    pub fn threads_count<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
-        S: Display,
     {
         self.register(
-            format!("threads_count{id}").into(),
+            "threads_count".into(),
             (
                 ValType::I32,
                 ConstExpr::i32_const(0),
@@ -48,20 +49,44 @@ impl GlobalRegistry {
         )
     }
 
-    pub fn threads_count<N>(&self) -> HQResult<N>
+    // threadss isn't a typo here - using the Haskell convention of adding extra s's to
+    // the end of identifiers for nested lists
+    pub fn threadss<N>(&self, types: &Rc<TypeRegistry>, num_sprites: u32) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.threads_count_with_id("")
-    }
-
-    pub fn target_threads_count<N>(&self, target: StepTarget) -> HQResult<N>
-    where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
-    {
-        self.threads_count_with_id(target.suffix_id())
+        let array_array_type = types.thread_list_array_type()?;
+        let array_type = types.thread_array_type()?;
+        self.register(
+            "threadss".into(),
+            (
+                ValType::Ref(RefType {
+                    nullable: false,
+                    heap_type: wasm_encoder::HeapType::Concrete(array_array_type),
+                }),
+                ConstExpr::extended(
+                    (0..num_sprites)
+                        .map(|i| {
+                            [
+                                Instruction::I32Const(i as i32),
+                                Instruction::I32Const(0),
+                                Instruction::ArrayNewFixed {
+                                    array_type_index: array_type,
+                                    array_size: 0,
+                                },
+                            ]
+                        })
+                        .flatten()
+                        .chain([Instruction::ArrayNewFixed {
+                            array_type_index: array_array_type,
+                            array_size: num_sprites,
+                        }]),
+                ), // TODO: initialise properly
+                GlobalMutable(true),
+                GlobalExportable(false),
+            ),
+        )
     }
 
     pub fn finish(

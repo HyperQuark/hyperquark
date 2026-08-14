@@ -127,16 +127,17 @@ impl NamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadInStackOverride>
 /// Spawn a new thread with the provided step function. This does not call it
 /// immediately, instead leaving that for the scheduler or calling function to do so.
 ///
-/// Takes 2 parameters:
-/// - step funcref - the step to spawn
+/// Takes 3 parameters:
+/// - step funcref    - the step to spawn
 /// - ref null struct - the stack struct to spawn it with
+/// - i32             - the index of the sprite to spawn a thread for, or -1 for the stage
 ///
 /// Override with:
 /// - u32 - the index of the step func type
 /// - u32 - the index of the stack struct type
 /// - u32 - the index of the stack array type
 /// - u32 - the index of the thread struct type
-/// - u32 - the index of the threads table
+/// - u32 - the index of the threads array
 pub struct SpawnNewThread;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
@@ -144,10 +145,25 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
         maybe_populate: || None,
     };
 }
-pub type SpawnNewThreadOverride = (u32, u32, u32, u32, u32);
+pub struct SpawnNewThreadOverride {
+    func_ty: u32,
+    stack_struct_ty: u32,
+    stack_array_ty: u32,
+    thread_struct_ty: u32,
+    threads_array_index: u32,
+    threads_array_ty: u32,
+}
+
 impl NamedRegistryItemOverride<MaybeStaticFunction, SpawnNewThreadOverride> for SpawnNewThread {
     fn r#override(
-        (func_ty, stack_struct_ty, stack_array_ty, thread_struct_ty, threads_table_index): SpawnNewThreadOverride,
+        SpawnNewThreadOverride {
+            func_ty,
+            stack_struct_ty,
+            stack_array_ty,
+            thread_struct_ty,
+            threads_array_index,
+            threads_array_ty,
+        }: SpawnNewThreadOverride,
     ) -> MaybeStaticFunction {
         MaybeStaticFunction {
             static_function: Some(StaticFunction {
@@ -166,31 +182,31 @@ impl NamedRegistryItemOverride<MaybeStaticFunction, SpawnNewThreadOverride> for 
                     }),
                 ]),
                 returns: Box::from([]),
-                locals: Box::from([]),
-                instructions: (wasm_const![
-                    I32Const(1),
-                    LocalGet(0),
-                    LocalGet(1),
-                    StructNew(stack_struct_ty),
-                    // todo: play around with initial size of stack array
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    RefNull(HeapType::Concrete(stack_struct_ty)),
-                    ArrayNewFixed {
-                        array_size: 8,
-                        array_type_index: stack_array_ty,
-                    },
-                    StructNew(thread_struct_ty),
-                    I32Const(1),
-                    TableGrow(threads_table_index),
-                    Drop,
-                    End,
-                ] as &[_])
-                    .into(),
+                locals: Box::from([ValType::Ref(RefType {
+                    nullable: false,
+                    heap_type: HeapType::Concrete(stack_array_ty),
+                })]),
+                instructions: {
+                    const STACK_ARRAY_LOCAL: u32 = 3;
+                    (wasm_const![
+                        // TODO get
+                        I32Const(1), // stack size
+                        // todo: play around with initial size of stack array
+                        I32Const(8),
+                        ArrayNewDefault(stack_array_ty),
+                        LocalTee(STACK_ARRAY_LOCAL),
+                        StructNew(thread_struct_ty),
+                        I32Const(0),                // index 0 into stack array
+                        I32Const(1),                // stack size
+                        LocalGet(0),                // step func
+                        LocalGet(1),                // stack struct param
+                        StructNew(stack_struct_ty), // stack struct
+                        ArraySet(stack_array_ty), // set 0th element of stack array to stack struct
+                        ArraySet(threads_array_ty),
+                        End,
+                    ] as &[_])
+                        .into()
+                },
             }),
             maybe_populate: || None,
         }

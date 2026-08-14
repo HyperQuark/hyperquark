@@ -49,17 +49,37 @@ impl TypeRegistry {
         },
     });
 
-    pub fn step_func_type(&self) -> HQResult<u32> {
+    pub fn step_func(&self) -> HQResult<u32> {
         self.function(vec![ValType::I32, Self::STRUCT_REF], vec![])
+    }
+
+    pub fn dyn_array_container(&self, field: ValType) -> HQResult<u32> {
+        let arr_type = self.array(StorageType::Val(field), true)?;
+        self.struct_(vec![FieldType {
+            element_type: Self::ref_storage(arr_type, false),
+            mutable: true,
+        }])
+    }
+
+    pub fn ref_(heap_type: u32, nullable: bool) -> RefType {
+        RefType {
+            nullable,
+            heap_type: HeapType::Concrete(heap_type),
+        }
+    }
+
+    pub fn ref_val(heap_type: u32, nullable: bool) -> ValType {
+        ValType::Ref(Self::ref_(heap_type, nullable))
+    }
+
+    pub fn ref_storage(heap_type: u32, nullable: bool) -> StorageType {
+        StorageType::Val(Self::ref_val(heap_type, nullable))
     }
 
     pub fn stack_struct_type(&self) -> HQResult<u32> {
         self.struct_(vec![
             FieldType {
-                element_type: StorageType::Val(ValType::Ref(RefType {
-                    nullable: false,
-                    heap_type: HeapType::Concrete(self.step_func_type()?),
-                })),
+                element_type: Self::ref_storage(self.step_func()?, false),
                 mutable: true,
             },
             FieldType {
@@ -70,13 +90,7 @@ impl TypeRegistry {
     }
 
     pub fn stack_array_type(&self) -> HQResult<u32> {
-        self.array(
-            StorageType::Val(ValType::Ref(RefType {
-                nullable: true,
-                heap_type: HeapType::Concrete(self.stack_struct_type()?),
-            })),
-            true,
-        )
+        self.array(Self::ref_storage(self.stack_struct_type()?, true), true)
     }
 
     pub fn thread_struct_type(&self) -> HQResult<u32> {
@@ -86,13 +100,43 @@ impl TypeRegistry {
                 mutable: true,
             },
             FieldType {
-                element_type: StorageType::Val(ValType::Ref(RefType {
-                    nullable: false,
-                    heap_type: HeapType::Concrete(self.stack_array_type()?),
-                })),
+                element_type: Self::ref_storage(self.stack_array_type()?, false),
                 mutable: true,
             },
         ])
+    }
+
+    pub fn thread_array_type(&self) -> HQResult<u32> {
+        self.array(Self::ref_storage(self.thread_struct_type()?, true), true)
+    }
+
+    pub fn thread_list_struct_type(&self) -> HQResult<u32> {
+        self.struct_(vec![
+            // target index
+            FieldType {
+                element_type: StorageType::Val(ValType::I32),
+                mutable: true,
+            },
+            // number of threads
+            FieldType {
+                element_type: StorageType::Val(ValType::I32),
+                mutable: true,
+            },
+            FieldType {
+                element_type: Self::ref_storage(self.thread_array_type()?, false),
+                mutable: true,
+            },
+        ])
+    }
+
+    pub fn thread_list_array_type(&self) -> HQResult<u32> {
+        self.array(
+            StorageType::Val(ValType::Ref(RefType {
+                nullable: true,
+                heap_type: HeapType::Concrete(self.thread_list_struct_type()?),
+            })),
+            true,
+        )
     }
 
     pub fn proc_arg_struct_type(

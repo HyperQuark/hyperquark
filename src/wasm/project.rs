@@ -14,7 +14,7 @@ use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
     MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
 };
-use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
+use crate::wasm::{StepFunc, StepTarget, StringsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
@@ -139,7 +139,7 @@ impl WasmProject {
         self.registries()
             .static_functions()
             .register_override::<SpawnNewThread, usize, _>((
-                self.registries().types().step_func_type()?,
+                self.registries().types().step_func()?,
                 self.registries().types().stack_struct_type()?,
                 self.registries().types().stack_array_type()?,
                 self.registries().types().thread_struct_type()?,
@@ -149,7 +149,7 @@ impl WasmProject {
         self.registries()
             .static_functions()
             .register_override::<SpawnThreadInStack, usize, _>((
-                self.registries().types().step_func_type()?,
+                self.registries().types().step_func()?,
                 self.registries().types().stack_struct_type()?,
                 self.registries().types().stack_array_type()?,
                 self.registries().types().thread_struct_type()?,
@@ -201,12 +201,6 @@ impl WasmProject {
         let start_section = StartSection {
             function_index: self.imported_func_count()? + functions.len() - 1,
         };
-
-        self.registries()
-            .tables()
-            .register_override::<ThreadsTable, usize, _>(
-                self.registries().types().thread_struct_type()?,
-            )?;
 
         elements.declared(Elements::Functions(
             (self.imported_func_count()? + self.static_func_count()?
@@ -374,12 +368,12 @@ impl WasmProject {
         Ok(())
     }
 
-    fn threads_table_index<N>(&self) -> HQResult<N>
+    fn threads_table_index<N>(&self, target: StepTarget) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.registries().tables().register::<ThreadsTable, _>()
+        self.registries().tables().threads_table(target, self.registries().types())
     }
 
     fn spawn_new_thread_func<N>(&self) -> HQResult<N>
@@ -620,7 +614,7 @@ impl WasmProject {
             ),
         ]);
 
-        let step_func_ty = self.registries().types().step_func_type()?;
+        let step_func_ty = self.registries().types().step_func()?;
         let stack_array_ty = self.registries().types().stack_array_type()?;
 
         let instructions = wasm![
