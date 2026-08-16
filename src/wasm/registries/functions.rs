@@ -1,5 +1,6 @@
 #![allow(clippy::cast_possible_wrap, reason = "can't use try_into in const")]
 
+mod dyn_array;
 mod mark_waiting_flag;
 mod pen_colour;
 mod spawn_threads;

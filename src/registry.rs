@@ -2,6 +2,13 @@ use core::hash::Hash;
 
 use crate::prelude::*;
 
+pub trait RegistryResult: TryFrom<usize, Error: fmt::Debug> {}
+
+impl<N> RegistryResult for N
+where
+    N: TryFrom<usize, Error: fmt::Debug>,
+{}
+
 #[derive(Clone)]
 pub struct MapRegistry<K, V>(RefCell<IndexMap<K, V>>)
 where
@@ -70,6 +77,10 @@ pub trait RegistryType {
     type Value;
 }
 
+pub trait CompTimeRegistrand<R: Registry, N: RegistryResult> {
+    fn register(registry: &R) -> HQResult<N>;
+}
+
 pub trait Registry: Sized + RegistryType {
     fn registry(&self) -> &RefCell<IndexMap<Self::Key, Self::Value>>;
 
@@ -79,8 +90,7 @@ pub trait Registry: Sized + RegistryType {
     /// the casting logic in here.
     fn register<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.registry()
             .try_borrow_mut()
@@ -98,8 +108,7 @@ pub trait Registry: Sized + RegistryType {
 
     fn register_override<N>(&self, key: Self::Key, value: Self::Value) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.registry()
             .try_borrow_mut()
@@ -115,6 +124,14 @@ pub trait Registry: Sized + RegistryType {
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
 
+    fn register_comp<R, N>(&self) -> HQResult<N>
+    where
+        R: CompTimeRegistrand<Self, N>,
+        N: RegistryResult
+    {
+        R::register(self)
+    }
+
     // TODO: register_override_ifexists or similar - for things like mark_waiting_flag,
     // which need to be overriden if they are registered, but don't actually need to be
     // registered always.
@@ -123,8 +140,7 @@ pub trait Registry: Sized + RegistryType {
 pub trait RegistryDefault: Registry<Value: Default> {
     fn register_default<N>(&self, key: Self::Key) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.register(key, Self::Value::default())
     }
@@ -234,8 +250,7 @@ where
     /// Registers a `NamedRegistryItem` using its key function and its `const VALUE`
     pub fn register<T, N>(&self) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
         T: NamedRegistryItem<R::Value>,
     {
         self.0.register(R::name::<T>(), T::VALUE)
@@ -245,8 +260,7 @@ where
     /// `Registry`
     pub fn register_dyn<N>(&self, key: R::Key, value: R::Value) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.0.register(key, value)
     }
@@ -255,8 +269,7 @@ where
     /// `register_override` on the underlying `Registry`
     pub fn register_dyn_override<N>(&self, key: R::Key, value: R::Value) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.0.register_override(key, value)
     }
@@ -265,8 +278,7 @@ where
     /// associated with the corresponding `NamedRegistryItemOverride`
     pub fn register_override<T, N, A>(&self, override_arg: A) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
         T: NamedRegistryItem<R::Value> + NamedRegistryItemOverride<R::Value, A>,
     {
         self.0
@@ -277,8 +289,7 @@ where
     /// types associated with the corresponding `TryNamedRegistryItemOverride`
     pub fn try_register_override<T, N, A>(&self, override_arg: A) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
         T: NamedRegistryItem<R::Value> + TryNamedRegistryItemOverride<R::Value, A>,
     {
         self.0

@@ -2,19 +2,21 @@ use wasm_encoder::{
     AbstractHeapType, FieldType, HeapType, RefType, StorageType, TypeSection, ValType,
 };
 
+use core::marker::PhantomData;
+
 use crate::ir::RcVar;
 use crate::prelude::*;
-use crate::registry::SetRegistry;
+use crate::registry::{CompTimeRegistrand, RegistryResult, SetRegistry};
 use crate::wasm::WasmProject;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum WasmType {
+pub enum CompoundType {
     Function(Vec<ValType>, Vec<ValType>),
     Array(StorageType, bool),
     Struct(Vec<FieldType>),
 }
 
-pub type TypeRegistry = SetRegistry<WasmType>;
+pub type TypeRegistry = SetRegistry<CompoundType>;
 
 impl TypeRegistry {
     pub fn function<N>(&self, params: Vec<ValType>, returns: Vec<ValType>) -> HQResult<N>
@@ -22,7 +24,7 @@ impl TypeRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.register_default(WasmType::Function(params, returns))
+        self.register_default(CompoundType::Function(params, returns))
     }
 
     pub fn array<N>(&self, elem_type: StorageType, mutable: bool) -> HQResult<N>
@@ -30,7 +32,7 @@ impl TypeRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.register_default(WasmType::Array(elem_type, mutable))
+        self.register_default(CompoundType::Array(elem_type, mutable))
     }
 
     pub fn struct_<N>(&self, fields: Vec<FieldType>) -> HQResult<N>
@@ -38,7 +40,7 @@ impl TypeRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.register_default(WasmType::Struct(fields))
+        self.register_default(CompoundType::Struct(fields))
     }
 
     pub const STRUCT_REF: ValType = ValType::Ref(RefType {
@@ -161,10 +163,87 @@ impl TypeRegistry {
     pub fn finish(self, types: &mut TypeSection) {
         for ty in self.registry().take().keys().cloned() {
             match ty {
-                WasmType::Function(params, results) => types.ty().function(params, results),
-                WasmType::Array(elem_type, mutable) => types.ty().array(&elem_type, mutable),
-                WasmType::Struct(fields) => types.ty().struct_(fields),
+                CompoundType::Function(params, results) => types.ty().function(params, results),
+                CompoundType::Array(elem_type, mutable) => types.ty().array(&elem_type, mutable),
+                CompoundType::Struct(fields) => types.ty().struct_(fields),
             }
         }
+    }
+}
+
+pub trait THeapType: CompTimeRegistrand<TypeRegistry, u32> {}
+impl<T> THeapType for T where T: CompTimeRegistrand<TypeRegistry, u32> {}
+
+pub trait TRefType {
+    type HeapType: THeapType;
+    const NULLABLE: bool;
+}
+
+pub struct TNullable<T>(PhantomData<T>);
+
+pub struct TNonNullable<T>(PhantomData<T>);
+
+impl<T> TRefType for TNullable<T> where T: THeapType {
+    type HeapType = T;
+    const NULLABLE: bool = true;
+}
+
+impl<T> TRefType for TNonNullable<T> where T: THeapType {
+    type HeapType = T;
+    const NULLABLE: bool = true;
+}
+
+pub trait TValType {
+    fn val_type(types: &TypeRegistry) -> ValType;
+}
+
+pub struct DynArray<T>(PhantomData<T>);
+
+impl<T> CompTimeRegistrand<TypeRegistry, u32> for DynArray<T> where T: TRefType {
+    fn register(types: &TypeRegistry) -> HQResult<u32> {
+        types.dyn_array_container(
+            TypeRegistry::ref_val(
+                T::HeapType::register(types)?,
+                T::NULLABLE,
+            )
+        )
+    }
+}
+
+pub trait TFieldType {
+    type ValType: TValType;
+    const MUTABLE: bool;
+}
+
+trait CompTypeList {
+    fn fields(types: &TypeRegistry) -> Vec<FieldType>;
+}
+
+impl CompTypeList for () {
+    fn fields(_: &TypeRegistry) -> Vec<FieldType> {
+        vec![]
+    }
+}
+
+impl<Head, Tail> CompTypeList for (Head, Tail) where Head: CompTypeList, Tail: TFieldType {
+    fn fields(types: &TypeRegistry) -> Vec<FieldType> {
+        let mut fields = Head::fields(types);
+        fields.push(
+            FieldType {
+                mutable: Tail::MUTABLE,
+                element_type: StorageType::Val(Tail::ValType::val_type(types)),
+            }
+        );
+        fields
+    }
+}
+
+struct TStruct<Fields>(PhantomData<Fields>);
+
+impl<Fields> CompTimeRegistrand<TypeRegistry, u32> for TStruct<Fields> where Fields: CompTypeList {
+    fn register(types: &TypeRegistry) -> HQResult<u32> {
+        types.struct_(
+            Fields::fields(types)
+        )
     }
 }
