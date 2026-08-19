@@ -1,8 +1,8 @@
+use core::marker::PhantomData;
+
 use wasm_encoder::{
     AbstractHeapType, FieldType, HeapType, RefType, StorageType, TypeSection, ValType,
 };
-
-use core::marker::PhantomData;
 
 use crate::ir::RcVar;
 use crate::prelude::*;
@@ -21,24 +21,21 @@ pub type TypeRegistry = SetRegistry<CompoundType>;
 impl TypeRegistry {
     pub fn function<N>(&self, params: Vec<ValType>, returns: Vec<ValType>) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.register_default(CompoundType::Function(params, returns))
     }
 
     pub fn array<N>(&self, elem_type: StorageType, mutable: bool) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.register_default(CompoundType::Array(elem_type, mutable))
     }
 
     pub fn struct_<N>(&self, fields: Vec<FieldType>) -> HQResult<N>
     where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
+        N: RegistryResult,
     {
         self.register_default(CompoundType::Struct(fields))
     }
@@ -50,96 +47,6 @@ impl TypeRegistry {
             ty: AbstractHeapType::Struct,
         },
     });
-
-    pub fn step_func(&self) -> HQResult<u32> {
-        self.function(vec![ValType::I32, Self::STRUCT_REF], vec![])
-    }
-
-    pub fn dyn_array_container(&self, field: ValType) -> HQResult<u32> {
-        let arr_type = self.array(StorageType::Val(field), true)?;
-        self.struct_(vec![FieldType {
-            element_type: Self::ref_storage(arr_type, false),
-            mutable: true,
-        }])
-    }
-
-    pub fn ref_(heap_type: u32, nullable: bool) -> RefType {
-        RefType {
-            nullable,
-            heap_type: HeapType::Concrete(heap_type),
-        }
-    }
-
-    pub fn ref_val(heap_type: u32, nullable: bool) -> ValType {
-        ValType::Ref(Self::ref_(heap_type, nullable))
-    }
-
-    pub fn ref_storage(heap_type: u32, nullable: bool) -> StorageType {
-        StorageType::Val(Self::ref_val(heap_type, nullable))
-    }
-
-    pub fn stack_struct_type(&self) -> HQResult<u32> {
-        self.struct_(vec![
-            FieldType {
-                element_type: Self::ref_storage(self.step_func()?, false),
-                mutable: true,
-            },
-            FieldType {
-                element_type: StorageType::Val(Self::STRUCT_REF),
-                mutable: false,
-            },
-        ])
-    }
-
-    pub fn stack_array_type(&self) -> HQResult<u32> {
-        self.array(Self::ref_storage(self.stack_struct_type()?, true), true)
-    }
-
-    pub fn thread_struct_type(&self) -> HQResult<u32> {
-        self.struct_(vec![
-            FieldType {
-                element_type: StorageType::Val(ValType::I32),
-                mutable: true,
-            },
-            FieldType {
-                element_type: Self::ref_storage(self.stack_array_type()?, false),
-                mutable: true,
-            },
-        ])
-    }
-
-    pub fn thread_array_type(&self) -> HQResult<u32> {
-        self.array(Self::ref_storage(self.thread_struct_type()?, true), true)
-    }
-
-    pub fn thread_list_struct_type(&self) -> HQResult<u32> {
-        self.struct_(vec![
-            // target index
-            FieldType {
-                element_type: StorageType::Val(ValType::I32),
-                mutable: true,
-            },
-            // number of threads
-            FieldType {
-                element_type: StorageType::Val(ValType::I32),
-                mutable: true,
-            },
-            FieldType {
-                element_type: Self::ref_storage(self.thread_array_type()?, false),
-                mutable: true,
-            },
-        ])
-    }
-
-    pub fn thread_list_array_type(&self) -> HQResult<u32> {
-        self.array(
-            StorageType::Val(ValType::Ref(RefType {
-                nullable: true,
-                heap_type: HeapType::Concrete(self.thread_list_struct_type()?),
-            })),
-            true,
-        )
-    }
 
     pub fn proc_arg_struct_type(
         &self,
@@ -171,25 +78,56 @@ impl TypeRegistry {
     }
 }
 
-pub trait THeapType: CompTimeRegistrand<TypeRegistry, u32> {}
-impl<T> THeapType for T where T: CompTimeRegistrand<TypeRegistry, u32> {}
+pub trait THeapType {
+    fn heap_type(types: &TypeRegistry) -> HQResult<HeapType>;
+}
+
+impl<T> THeapType for T
+where
+    T: CompTimeRegistrand<TypeRegistry, u32>,
+{
+    fn heap_type(types: &TypeRegistry) -> HQResult<HeapType> {
+        Ok(HeapType::Concrete(types.register_comp::<T, u32>()?))
+    }
+}
+
+pub struct TStructRef;
+impl THeapType for TStructRef {
+    fn heap_type(_types: &TypeRegistry) -> HQResult<HeapType> {
+        Ok(HeapType::Abstract {
+            shared: false,
+            ty: AbstractHeapType::Struct,
+        })
+    }
+}
 
 pub trait TRefType {
     type HeapType: THeapType;
     const NULLABLE: bool;
+
+    fn ref_type(types: &TypeRegistry) -> HQResult<RefType> {
+        Ok(RefType {
+            nullable: Self::NULLABLE,
+            heap_type: Self::HeapType::heap_type(types)?,
+        })
+    }
 }
 
 pub struct TNullable<T>(PhantomData<T>);
-
-pub struct TNonNullable<T>(PhantomData<T>);
-
-impl<T> TRefType for TNullable<T> where T: THeapType {
+impl<T> TRefType for TNullable<T>
+where
+    T: THeapType,
+{
     type HeapType = T;
     const NULLABLE: bool = true;
 }
 impl<T: THeapType> TDefaultable for TNullable<T> {}
 
-impl<T> TRefType for TNonNullable<T> where T: THeapType {
+pub struct TNonNullable<T>(PhantomData<T>);
+impl<T> TRefType for TNonNullable<T>
+where
+    T: THeapType,
+{
     type HeapType = T;
     const NULLABLE: bool = true;
 }
@@ -198,19 +136,19 @@ pub trait TValType {
     fn val_type(types: &TypeRegistry) -> HQResult<ValType>;
 }
 
-impl<T> TValType for T where T: TRefType {
+impl<T> TValType for T
+where
+    T: TRefType,
+{
     fn val_type(types: &TypeRegistry) -> HQResult<ValType> {
-        Ok(TypeRegistry::ref_val(
-            T::HeapType::register(types)?,
-            T::NULLABLE,
-        ))
+        Ok(ValType::Ref(T::ref_type(types)?))
     }
 }
 
 pub struct TI32;
 
 impl TValType for TI32 {
-    fn val_type(types: &TypeRegistry) -> HQResult<ValType> {
+    fn val_type(_types: &TypeRegistry) -> HQResult<ValType> {
         Ok(ValType::I32)
     }
 }
@@ -219,6 +157,13 @@ impl TDefaultable for TI32 {}
 pub trait TFieldType {
     type ValType: TValType;
     const MUTABLE: bool;
+
+    fn field_type(types: &TypeRegistry) -> HQResult<FieldType> {
+        Ok(FieldType {
+            element_type: StorageType::Val(Self::ValType::val_type(types)?),
+            mutable: Self::MUTABLE,
+        })
+    }
 }
 
 pub struct TMutField<T>(PhantomData<T>);
@@ -227,7 +172,7 @@ pub struct TConstField<T>(PhantomData<T>);
 impl<T: TValType> TFieldType for TMutField<T> {
     type ValType = T;
     const MUTABLE: bool = true;
-} 
+}
 
 impl<T: TValType> TFieldType for TConstField<T> {
     type ValType = T;
@@ -236,37 +181,36 @@ impl<T: TValType> TFieldType for TConstField<T> {
 
 pub trait TDefaultable: TValType {}
 
-
-trait CompTypeList {
+trait TFieldList {
     fn fields(types: &TypeRegistry) -> HQResult<Vec<FieldType>>;
 }
 
-impl CompTypeList for () {
+impl TFieldList for () {
     fn fields(_: &TypeRegistry) -> HQResult<Vec<FieldType>> {
         Ok(vec![])
     }
 }
 
-impl<Head, Tail> CompTypeList for (Head, Tail) where Head: CompTypeList, Tail: TFieldType {
+impl<Head, Tail> TFieldList for (Head, Tail)
+where
+    Head: TFieldList,
+    Tail: TFieldType,
+{
     fn fields(types: &TypeRegistry) -> HQResult<Vec<FieldType>> {
         let mut fields = Head::fields(types)?;
-        fields.push(
-            FieldType {
-                mutable: Tail::MUTABLE,
-                element_type: StorageType::Val(Tail::ValType::val_type(types)?),
-            }
-        );
+        fields.push(Tail::field_type(types)?);
         Ok(fields)
     }
 }
 
 pub struct TStruct<Fields>(PhantomData<Fields>);
 
-impl<Fields> CompTimeRegistrand<TypeRegistry, u32> for TStruct<Fields> where Fields: CompTypeList {
+impl<Fields> CompTimeRegistrand<TypeRegistry, u32> for TStruct<Fields>
+where
+    Fields: TFieldList,
+{
     fn register(types: &TypeRegistry) -> HQResult<u32> {
-        types.struct_(
-            Fields::fields(types)?
-        )
+        types.struct_(Fields::fields(types)?)
     }
 }
 
@@ -281,5 +225,60 @@ impl<Field: TFieldType> CompTimeRegistrand<TypeRegistry, u32> for TArray<Field> 
     }
 }
 
+trait TValTypeList {
+    fn val_types(types: &TypeRegistry) -> HQResult<Vec<ValType>>;
+}
+
+impl TValTypeList for () {
+    fn val_types(_: &TypeRegistry) -> HQResult<Vec<ValType>> {
+        Ok(vec![])
+    }
+}
+
+impl<Head, Tail> TValTypeList for (Head, Tail)
+where
+    Head: TValTypeList,
+    Tail: TValType,
+{
+    fn val_types(types: &TypeRegistry) -> HQResult<Vec<ValType>> {
+        let mut val_types = Head::val_types(types)?;
+        val_types.push(Tail::val_type(types)?);
+        Ok(val_types)
+    }
+}
+
+pub struct TFunc<Params, Result>(PhantomData<Params>, PhantomData<Result>);
+
+impl<Params, Result> CompTimeRegistrand<TypeRegistry, u32> for TFunc<Params, Result>
+where
+    Params: TValTypeList,
+    Result: TValTypeList,
+{
+    fn register(types: &TypeRegistry) -> HQResult<u32> {
+        types.function(Params::val_types(types)?, Result::val_types(types)?)
+    }
+}
+
+pub type TStepFunc = TFunc<(((), TI32), TNullable<TStructRef>), ()>;
+
 pub type TDynArrayField<T> = TArray<TMutField<T>>;
-pub type TDynArray<T> = TStruct<(((), TMutField<TNonNullable<TDynArrayField<T>>>), TMutField<TI32>)>;
+pub type TDynArray<T> = TStruct<(
+    ((), TMutField<TNonNullable<TDynArrayField<T>>>),
+    TMutField<TI32>,
+)>;
+
+pub type TStackStruct = TStruct<(
+    ((), TMutField<TNonNullable<TStepFunc>>),
+    TConstField<TNullable<TStructRef>>,
+)>;
+
+pub type TStackArray = TDynArray<TNullable<TStackStruct>>;
+
+pub type TThreadArray = TDynArray<TNullable<TStackArray>>;
+
+pub type TTargetThreadsStruct = TStruct<(
+    (((), TMutField<TI32>), TMutField<TI32>),
+    TMutField<TNonNullable<TThreadArray>>,
+)>;
+
+pub type TTargetThreadArray = TArray<TMutField<TNonNullable<TTargetThreadsStruct>>>;

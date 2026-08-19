@@ -4,10 +4,7 @@ use crate::prelude::*;
 
 pub trait RegistryResult: TryFrom<usize, Error: fmt::Debug> {}
 
-impl<N> RegistryResult for N
-where
-    N: TryFrom<usize, Error: fmt::Debug>,
-{}
+impl<N> RegistryResult for N where N: TryFrom<usize, Error: fmt::Debug> {}
 
 #[derive(Clone)]
 pub struct MapRegistry<K, V>(RefCell<IndexMap<K, V>>)
@@ -127,7 +124,7 @@ pub trait Registry: Sized + RegistryType {
     fn register_comp<R, N>(&self) -> HQResult<N>
     where
         R: CompTimeRegistrand<Self, N>,
-        N: RegistryResult
+        N: RegistryResult,
     {
         R::register(self)
     }

@@ -14,6 +14,7 @@ use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
     MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
 };
+use crate::wasm::registries::types::{TStackStruct, TStepFunc};
 use crate::wasm::{StepFunc, StepTarget, StringsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
@@ -139,8 +140,8 @@ impl WasmProject {
         self.registries()
             .static_functions()
             .register_override::<SpawnNewThread, usize, _>((
-                self.registries().types().step_func()?,
-                self.registries().types().stack_struct_type()?,
+                self.registries().types().register_comp::<TStepFunc, _>()?,
+                self.registries().types().register_comp::<TStackStruct, _>()?,
                 self.registries().types().stack_array_type()?,
                 self.registries().types().thread_struct_type()?,
                 self.threads_table_index()?,
@@ -149,8 +150,8 @@ impl WasmProject {
         self.registries()
             .static_functions()
             .register_override::<SpawnThreadInStack, usize, _>((
-                self.registries().types().step_func()?,
-                self.registries().types().stack_struct_type()?,
+                self.registries().types().register_comp::<TStepFunc, _>()?,
+                self.registries().types().register_comp::<TStackStruct, _>()?,
                 self.registries().types().stack_array_type()?,
                 self.registries().types().thread_struct_type()?,
                 self.threads_table_index()?,
@@ -373,7 +374,9 @@ impl WasmProject {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.registries().tables().threads_table(target, self.registries().types())
+        self.registries()
+            .tables()
+            .threads_table(target, self.registries().types())
     }
 
     fn spawn_new_thread_func<N>(&self) -> HQResult<N>

@@ -4,6 +4,7 @@ use super::super::prelude::*;
 use crate::instructions_test;
 use crate::ir::{Proc, StepIndex};
 use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
+use crate::wasm::registries::types::TStepFunc;
 use crate::wasm::{StepFunc, WasmProject};
 
 #[derive(Clone, Debug)]
@@ -102,7 +103,7 @@ pub fn wasm(
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         LocalGet(arg_struct_local),
         #LazyNonWarpedProcRef(Rc::clone(proc)),
-        ReturnCallRef(func.registries().types().step_func_type()?)
+        ReturnCallRef(func.registries().types().register_comp::<TStepFunc, _>()?)
     ]);
 
     Ok(wasm)

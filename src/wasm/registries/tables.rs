@@ -5,6 +5,7 @@ use wasm_encoder::{
 use crate::prelude::*;
 use crate::wasm::StepTarget;
 use crate::wasm::registries::TypeRegistry;
+use crate::wasm::registries::types::TThreadStruct;
 
 #[derive(Clone, Debug)]
 pub struct TableOptions {
@@ -34,7 +35,7 @@ impl TableRegistry {
             TableOptions {
                 element_type: RefType {
                     nullable: true,
-                    heap_type: HeapType::Concrete(types.thread_struct_type()?),
+                    heap_type: HeapType::Concrete(types.register_comp::<TThreadStruct, _>()?),
                 },
                 min: 0,
                 max: None,

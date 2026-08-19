@@ -4,6 +4,7 @@ use super::super::prelude::*;
 use crate::instructions_test;
 use crate::ir::{Step, StepIndex};
 use crate::wasm::StepFunc;
+use crate::wasm::registries::types::TStepFunc;
 
 #[derive(Debug, Clone)]
 pub enum YieldMode {
@@ -75,7 +76,7 @@ pub fn wasm(
                 heap_type: HeapType::Concrete(stack_struct_ty),
             }))?;
             let i32_local = func.local(ValType::I32)?;
-            let step_func_ty = func.registries().types().step_func_type()?;
+            let step_func_ty = func.registries().types().register_comp::<TStepFunc, _>()?;
             func.free_local(thread_struct_local)?;
             func.free_local(stack_struct_local)?;
             func.free_local(i32_local)?;

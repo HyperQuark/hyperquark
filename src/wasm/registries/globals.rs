@@ -1,13 +1,13 @@
 use core::ops::Deref;
 
 use wasm_encoder::{
-    ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, Instruction,
-    RefType, ValType,
+    ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, Instruction, ValType,
 };
 
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::wasm::registries::TypeRegistry;
+use crate::wasm::registries::types::{TNonNullable, TTargetThreadArray, TThreadArray, TValType};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -56,15 +56,12 @@ impl GlobalRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        let array_array_type = types.thread_list_array_type()?;
-        let array_type = types.thread_array_type()?;
+        let array_array_type = types.register_comp::<TTargetThreadArray, _>()?;
+        let array_type = types.register_comp::<TThreadArray, _>()?;
         self.register(
             "threadss".into(),
             (
-                ValType::Ref(RefType {
-                    nullable: false,
-                    heap_type: wasm_encoder::HeapType::Concrete(array_array_type),
-                }),
+                <TNonNullable<TTargetThreadArray>>::val_type(&types)?,
                 ConstExpr::extended(
                     (0..num_sprites)
                         .map(|i| {
