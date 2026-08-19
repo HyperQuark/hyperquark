@@ -187,6 +187,7 @@ impl<T> TRefType for TNullable<T> where T: THeapType {
     type HeapType = T;
     const NULLABLE: bool = true;
 }
+impl<T: THeapType> TDefaultable for TNullable<T> {}
 
 impl<T> TRefType for TNonNullable<T> where T: THeapType {
     type HeapType = T;
@@ -194,56 +195,91 @@ impl<T> TRefType for TNonNullable<T> where T: THeapType {
 }
 
 pub trait TValType {
-    fn val_type(types: &TypeRegistry) -> ValType;
+    fn val_type(types: &TypeRegistry) -> HQResult<ValType>;
 }
 
-pub struct DynArray<T>(PhantomData<T>);
-
-impl<T> CompTimeRegistrand<TypeRegistry, u32> for DynArray<T> where T: TRefType {
-    fn register(types: &TypeRegistry) -> HQResult<u32> {
-        types.dyn_array_container(
-            TypeRegistry::ref_val(
-                T::HeapType::register(types)?,
-                T::NULLABLE,
-            )
-        )
+impl<T> TValType for T where T: TRefType {
+    fn val_type(types: &TypeRegistry) -> HQResult<ValType> {
+        Ok(TypeRegistry::ref_val(
+            T::HeapType::register(types)?,
+            T::NULLABLE,
+        ))
     }
 }
+
+pub struct TI32;
+
+impl TValType for TI32 {
+    fn val_type(types: &TypeRegistry) -> HQResult<ValType> {
+        Ok(ValType::I32)
+    }
+}
+impl TDefaultable for TI32 {}
 
 pub trait TFieldType {
     type ValType: TValType;
     const MUTABLE: bool;
 }
 
+pub struct TMutField<T>(PhantomData<T>);
+pub struct TConstField<T>(PhantomData<T>);
+
+impl<T: TValType> TFieldType for TMutField<T> {
+    type ValType = T;
+    const MUTABLE: bool = true;
+} 
+
+impl<T: TValType> TFieldType for TConstField<T> {
+    type ValType = T;
+    const MUTABLE: bool = false;
+}
+
+pub trait TDefaultable: TValType {}
+
+
 trait CompTypeList {
-    fn fields(types: &TypeRegistry) -> Vec<FieldType>;
+    fn fields(types: &TypeRegistry) -> HQResult<Vec<FieldType>>;
 }
 
 impl CompTypeList for () {
-    fn fields(_: &TypeRegistry) -> Vec<FieldType> {
-        vec![]
+    fn fields(_: &TypeRegistry) -> HQResult<Vec<FieldType>> {
+        Ok(vec![])
     }
 }
 
 impl<Head, Tail> CompTypeList for (Head, Tail) where Head: CompTypeList, Tail: TFieldType {
-    fn fields(types: &TypeRegistry) -> Vec<FieldType> {
-        let mut fields = Head::fields(types);
+    fn fields(types: &TypeRegistry) -> HQResult<Vec<FieldType>> {
+        let mut fields = Head::fields(types)?;
         fields.push(
             FieldType {
                 mutable: Tail::MUTABLE,
-                element_type: StorageType::Val(Tail::ValType::val_type(types)),
+                element_type: StorageType::Val(Tail::ValType::val_type(types)?),
             }
         );
-        fields
+        Ok(fields)
     }
 }
 
-struct TStruct<Fields>(PhantomData<Fields>);
+pub struct TStruct<Fields>(PhantomData<Fields>);
 
 impl<Fields> CompTimeRegistrand<TypeRegistry, u32> for TStruct<Fields> where Fields: CompTypeList {
     fn register(types: &TypeRegistry) -> HQResult<u32> {
         types.struct_(
-            Fields::fields(types)
+            Fields::fields(types)?
         )
     }
 }
+
+pub struct TArray<Field>(PhantomData<Field>);
+
+impl<Field: TFieldType> CompTimeRegistrand<TypeRegistry, u32> for TArray<Field> {
+    fn register(types: &TypeRegistry) -> HQResult<u32> {
+        types.array(
+            StorageType::Val(Field::ValType::val_type(types)?),
+            Field::MUTABLE,
+        )
+    }
+}
+
+pub type TDynArrayField<T> = TArray<TMutField<T>>;
+pub type TDynArray<T> = TStruct<(((), TMutField<TNonNullable<TDynArrayField<T>>>), TMutField<TI32>)>;
