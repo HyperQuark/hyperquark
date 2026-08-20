@@ -107,9 +107,10 @@ impl StaticFunctionRegistry {
 }
 
 pub mod static_functions {
+    pub use super::dyn_array::{
+        DynArrayFuncOverride, DynArrayGet, DynArrayNew, DynArrayPop, DynArrayPush,
+    };
     pub use super::mark_waiting_flag::MarkWaitingFlag;
     pub use super::pen_colour::{UpdatePenColorFromHSV, UpdatePenColorFromRGB};
-    pub use super::spawn_threads::{
-        SpawnNewThread, SpawnNewThreadOverride, SpawnThreadInStack,
-    };
+    pub use super::spawn_threads::{SpawnNewThread, SpawnThreadFuncOverride, SpawnThreadInStack};
 }

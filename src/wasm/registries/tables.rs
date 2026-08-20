@@ -1,11 +1,6 @@
-use wasm_encoder::{
-    ConstExpr, ExportKind, ExportSection, HeapType, RefType, TableSection, TableType,
-};
+use wasm_encoder::{ConstExpr, ExportKind, ExportSection, RefType, TableSection, TableType};
 
 use crate::prelude::*;
-use crate::wasm::StepTarget;
-use crate::wasm::registries::TypeRegistry;
-use crate::wasm::registries::types::TThreadStruct;
 
 #[derive(Clone, Debug)]
 pub struct TableOptions {
@@ -25,26 +20,6 @@ impl RegistryType for TableRegistrar {
 pub type TableRegistry = NamedRegistry<TableRegistrar>;
 
 impl TableRegistry {
-    pub fn threads_table<N>(&self, target: StepTarget, types: &Rc<TypeRegistry>) -> HQResult<N>
-    where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
-    {
-        self.register_dyn(
-            format!("threads{}", target.suffix_id()).into(),
-            TableOptions {
-                element_type: RefType {
-                    nullable: true,
-                    heap_type: HeapType::Concrete(types.register_comp::<TThreadStruct, _>()?),
-                },
-                min: 0,
-                max: None,
-                init: None,
-                export_name: Some("threads"),
-            },
-        )
-    }
-
     pub fn finish(self, tables: &mut TableSection, exports: &mut ExportSection) {
         for (
             _key,

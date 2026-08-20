@@ -12,9 +12,9 @@ use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
-    MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
+    MarkWaitingFlag, SpawnNewThread, SpawnThreadFuncOverride, SpawnThreadInStack,
 };
-use crate::wasm::registries::types::{TStackStruct, TStepFunc};
+use crate::wasm::registries::types::{TStackArray, TStackStruct, TStepFunc};
 use crate::wasm::{StepFunc, StepTarget, StringsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
@@ -137,25 +137,23 @@ impl WasmProject {
             .clone()
             .finish(&mut imports, self.registries().types())?;
 
-        self.registries()
-            .static_functions()
-            .register_override::<SpawnNewThread, usize, _>((
-                self.registries().types().register_comp::<TStepFunc, _>()?,
-                self.registries().types().register_comp::<TStackStruct, _>()?,
-                self.registries().types().stack_array_type()?,
-                self.registries().types().thread_struct_type()?,
-                self.threads_table_index()?,
-            ))?;
+        let spawn_thread_func_override = SpawnThreadFuncOverride {
+            types: Rc::clone(self.registries().types()),
+            static_functions: Rc::clone(self.registries().static_functions()),
+            globals: Rc::clone(self.registries().globals()),
+            num_sprites: self.costume_names().len() as u32,
+            imported_func_count: self.imported_func_count()?,
+        };
 
         self.registries()
             .static_functions()
-            .register_override::<SpawnThreadInStack, usize, _>((
-                self.registries().types().register_comp::<TStepFunc, _>()?,
-                self.registries().types().register_comp::<TStackStruct, _>()?,
-                self.registries().types().stack_array_type()?,
-                self.registries().types().thread_struct_type()?,
-                self.threads_table_index()?,
-            ))?;
+            .try_register_override::<SpawnNewThread, usize, _>(
+                spawn_thread_func_override.clone(),
+            )?;
+
+        self.registries()
+            .static_functions()
+            .try_register_override::<SpawnThreadInStack, usize, _>(spawn_thread_func_override)?;
 
         self.registries()
             .static_functions()
@@ -166,7 +164,7 @@ impl WasmProject {
                 }],
             )?)?;
 
-        self.registries().static_functions().clone().finish(
+        Rc::unwrap_or_clone(self.registries().static_functions().clone()).finish(
             &mut functions,
             &mut exports,
             &mut codes,
@@ -183,7 +181,7 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
@@ -276,7 +274,7 @@ impl WasmProject {
 
         exports.export("memory", ExportKind::Memory, 0);
 
-        self.registries().globals().clone().finish(
+        Rc::unwrap_or_clone(self.registries().globals().clone()).finish(
             &mut globals,
             &mut exports,
             self.imported_global_count()?,
@@ -369,16 +367,6 @@ impl WasmProject {
         Ok(())
     }
 
-    fn threads_table_index<N>(&self, target: StepTarget) -> HQResult<N>
-    where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
-    {
-        self.registries()
-            .tables()
-            .threads_table(target, self.registries().types())
-    }
-
     fn spawn_new_thread_func<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
@@ -405,6 +393,16 @@ impl WasmProject {
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
         self.registries().globals().threads_count()
+    }
+
+    fn threadss_global<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.registries()
+            .globals()
+            .threadss(self.registries().types(), self.costume_names().len() as u32)
     }
 
     #[expect(clippy::needless_pass_by_value, reason = "annoying to borrow a box")]
@@ -444,7 +442,7 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
@@ -467,7 +465,7 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
@@ -566,7 +564,7 @@ impl WasmProject {
                     self.threads_count_global()?,
                     self.spawn_new_thread_func()?,
                     self.spawn_thread_in_stack_func()?,
-                    self.threads_table_index()?,
+                    self.threadss_global()?,
                     self.imported_func_count()?,
                     self.static_func_count()?,
                     self.imported_global_count()?,
@@ -596,8 +594,14 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
     ) -> HQResult<()> {
-        let thread_struct_type = self.registries().types().thread_struct_type()?;
-        let stack_struct_ty = self.registries().types().stack_struct_type()?;
+        let thread_struct_type = self
+            .registries()
+            .types()
+            .register_comp::<TStackArray, _>()?;
+        let stack_struct_ty = self
+            .registries()
+            .types()
+            .register_comp::<TStackStruct, _>()?;
 
         let mut tick_func = Function::new(vec![
             (2, ValType::I32),

@@ -63,7 +63,7 @@ impl GlobalRegistry {
             (
                 <TNonNullable<TTargetThreadArray>>::val_type(&types)?,
                 ConstExpr::extended(
-                    (0..num_sprites)
+                    (0..=num_sprites) // stage + sprites
                         .map(|i| {
                             [
                                 Instruction::I32Const(i as i32),

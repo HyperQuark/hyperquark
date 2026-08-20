@@ -1,25 +1,28 @@
-use wasm_encoder::{
-    AbstractHeapType, BlockType as WasmBlockType, HeapType, MemArg, RefType, ValType,
-};
+use wasm_encoder::{BlockType as WasmBlockType, MemArg, ValType};
 use wasm_gen::wasm_const;
 
 use super::{MaybeStaticFunction, StaticFunction};
 use crate::prelude::*;
 use crate::wasm::mem_layout;
-use crate::wasm::registries::functions::dyn_array::{DynArrayGet, DynArrayPop, DynArrayPush};
+use crate::wasm::registries::functions::dyn_array::{
+    DynArrayGet, DynArrayNew, DynArrayPop, DynArrayPush,
+};
 use crate::wasm::registries::types::{
-    THeapType, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TStructRef,
-    TTargetThreadArray, TValType,
+    THeapType, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
+    TThreadArray, TValType,
 };
 use crate::wasm::registries::{GlobalRegistry, StaticFunctionRegistry, TypeRegistry};
 
+#[derive(Clone)]
 pub struct SpawnThreadFuncOverride {
-    types: Rc<TypeRegistry>,
-    globals: Rc<GlobalRegistry>,
-    static_functions: Rc<StaticFunctionRegistry>,
-    num_sprites: u32,
-    imported_func_count: u32,
+    pub types: Rc<TypeRegistry>,
+    pub globals: Rc<GlobalRegistry>,
+    pub static_functions: Rc<StaticFunctionRegistry>,
+    pub num_sprites: u32,
+    pub imported_func_count: u32,
 }
+
+type StackStructRef = TNullable<TStackStruct>;
 
 /// Spawns a new thread in the same stack (i.e. a thread that yields back to the current
 /// thread once it completes.) The step that is provided to return to will be written into
@@ -55,8 +58,7 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
         let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
         let target_threads_type = types.register_comp::<TTargetThreadArray, _>()?;
         let target_threads_global = globals.threadss(&types, num_sprites)?;
-        let dyn_array_push = static_functions.register::<DynArrayPush<StackStruct>, u32>()?;
-        type StackStruct = TNullable<TStackStruct>;
+        let dyn_array_push = static_functions.register::<DynArrayPush<StackStructRef>, u32>()?;
         Ok(MaybeStaticFunction {
             static_function: Some(StaticFunction {
                 export: None,
@@ -86,7 +88,7 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
                     LocalTee(5),
                     Call(
                         imported_func_count
-                            + static_functions.register::<DynArrayPop<StackStruct>, u32>()?
+                            + static_functions.register::<DynArrayPop<StackStructRef>, u32>()?
                     ),
                     Drop,
                     LocalGet(5),
@@ -104,13 +106,11 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
                     ValType::I32,
                     ValType::I32,
                     <TNonNullable<TStepFunc>>::val_type(&types)?,
-                    <TNullable<TStructRef>>::val_type(&types)?,
+                    StackStructRef::val_type(&types)?,
                     <TNonNullable<TStepFunc>>::val_type(&types)?,
                 ]),
                 returns: Box::from([]),
-                locals: Box::from([
-                    <TNonNullable<TStackArray>>::val_type(&types)?,
-                ]),
+                locals: Box::from([<TNonNullable<TStackArray>>::val_type(&types)?]),
             }),
             maybe_populate: || None,
         })
@@ -121,9 +121,9 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
 /// immediately, instead leaving that for the scheduler or calling function to do so.
 ///
 /// Takes 3 parameters:
+/// - i32             - the index of the target to spawn a thread for
 /// - step funcref    - the step to spawn
 /// - ref null struct - the stack struct to spawn it with
-/// - i32             - the index of the sprite to spawn a thread for, or -1 for the stage
 ///
 /// Override with:
 /// - u32 - the index of the step func type
@@ -138,70 +138,76 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
         maybe_populate: || None,
     };
 }
-pub struct SpawnNewThreadOverride {
-    func_ty: u32,
-    stack_struct_ty: u32,
-    stack_array_ty: u32,
-    thread_struct_ty: u32,
-    threads_array_index: u32,
-    threads_array_ty: u32,
-}
 
-impl NamedRegistryItemOverride<MaybeStaticFunction, SpawnNewThreadOverride> for SpawnNewThread {
-    fn r#override(
-        SpawnNewThreadOverride {
-            func_ty,
-            stack_struct_ty,
-            stack_array_ty,
-            thread_struct_ty,
-            threads_array_index,
-            threads_array_ty,
-        }: SpawnNewThreadOverride,
-    ) -> MaybeStaticFunction {
-        MaybeStaticFunction {
+impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> for SpawnNewThread {
+    fn try_override(
+        SpawnThreadFuncOverride {
+            types,
+            globals,
+            static_functions,
+            num_sprites,
+            imported_func_count,
+        }: SpawnThreadFuncOverride,
+    ) -> HQResult<MaybeStaticFunction> {
+        let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
+        let target_threads_type = types.register_comp::<TTargetThreadArray, _>()?;
+        let target_threads_global = globals.threadss(&types, num_sprites)?;
+        Ok(MaybeStaticFunction {
             static_function: Some(StaticFunction {
                 export: None,
                 params: Box::from([
-                    ValType::Ref(RefType {
-                        nullable: false,
-                        heap_type: HeapType::Concrete(func_ty),
-                    }),
-                    ValType::Ref(RefType {
-                        nullable: true,
-                        heap_type: wasm_encoder::HeapType::Abstract {
-                            shared: false,
-                            ty: AbstractHeapType::Struct,
-                        },
-                    }),
+                    ValType::I32,
+                    <TNonNullable<TStepFunc>>::val_type(&types)?,
+                    StackStructRef::val_type(&types)?,
                 ]),
                 returns: Box::from([]),
-                locals: Box::from([ValType::Ref(RefType {
-                    nullable: false,
-                    heap_type: HeapType::Concrete(stack_array_ty),
-                })]),
+                locals: Box::from([<TNonNullable<TThreadArray>>::val_type(&types)?]),
                 instructions: {
-                    const STACK_ARRAY_LOCAL: u32 = 3;
                     (wasm_const![
-                        // TODO get
-                        I32Const(1), // stack size
-                        // todo: play around with initial size of stack array
+                        LocalGet(0),
+                        I32Eqz, // if this is not the stage, we need to find its layer
+                        If(WasmBlockType::Empty),
+                        LocalGet(0),
+                        I32Const(mem_layout::sprite::BLOCK_SIZE as i32),
+                        I32Mul,
+                        I32Load16U(MemArg {
+                            offset: (mem_layout::stage::BLOCK_SIZE + mem_layout::sprite::LAYER)
+                                as u64,
+                            align: 1,
+                            memory_index: 0,
+                        }),
+                        LocalSet(0), // local 0 is now index of sprite in
+                        End,
+                        GlobalGet(target_threads_global),
+                        LocalGet(0),
+                        ArrayGet(target_threads_type),
                         I32Const(8),
-                        ArrayNewDefault(stack_array_ty),
-                        LocalTee(STACK_ARRAY_LOCAL),
-                        StructNew(thread_struct_ty),
-                        I32Const(0),                // index 0 into stack array
-                        I32Const(1),                // stack size
-                        LocalGet(0),                // step func
-                        LocalGet(1),                // stack struct param
-                        StructNew(stack_struct_ty), // stack struct
-                        ArraySet(stack_array_ty), // set 0th element of stack array to stack struct
-                        ArraySet(threads_array_ty),
+                        Call(
+                            imported_func_count
+                                + static_functions
+                                    .register::<DynArrayNew<StackStructRef>, u32>()?
+                        ),
+                        LocalTee(3),
+                        LocalGet(1),
+                        LocalGet(2),
+                        StructNew(stack_struct_type),
+                        Call(
+                            imported_func_count
+                                + static_functions
+                                    .register::<DynArrayPush<StackStructRef>, u32>()?
+                        ),
+                        LocalGet(3),
+                        Call(
+                            imported_func_count
+                                + static_functions
+                                    .register::<DynArrayPush<TNullable<TStackArray>>, u32>()?
+                        ),
                         End,
                     ] as &[_])
                         .into()
                 },
             }),
             maybe_populate: || None,
-        }
+        })
     }
 }

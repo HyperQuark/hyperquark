@@ -22,7 +22,7 @@ pub struct Registries {
     strings: Rc<StringRegistry>,
     tabled_strings: Rc<TabledStringRegistry>,
     external_functions: ExternalFunctionRegistry,
-    static_functions: StaticFunctionRegistry,
+    static_functions: Rc<StaticFunctionRegistry>,
     types: Rc<TypeRegistry>,
     tables: TableRegistry,
     globals: Rc<GlobalRegistry>,
@@ -39,6 +39,7 @@ impl Default for Registries {
         let types = Rc::new(TypeRegistry::default());
         let variables = VariableRegistry::new(&globals, &strings, &tabled_strings);
         let lists = ListRegistry::new(&globals, &types, &strings, &tabled_strings);
+        let static_functions = Rc::new(StaticFunctionRegistry::default());
         Self {
             globals,
             variables,
@@ -48,7 +49,7 @@ impl Default for Registries {
             tables: TableRegistry::default(),
             types,
             sprites: SpriteRegistry::default(),
-            static_functions: StaticFunctionRegistry::default(),
+            static_functions,
             lists,
         }
     }
@@ -67,7 +68,7 @@ impl Registries {
         &self.external_functions
     }
 
-    pub const fn static_functions(&self) -> &StaticFunctionRegistry {
+    pub const fn static_functions(&self) -> &Rc<StaticFunctionRegistry> {
         &self.static_functions
     }
 
@@ -79,7 +80,7 @@ impl Registries {
         &self.tables
     }
 
-    pub fn globals(&self) -> &GlobalRegistry {
+    pub fn globals(&self) -> &Rc<GlobalRegistry> {
         &self.globals
     }
 
