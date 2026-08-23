@@ -2,7 +2,7 @@ use wasm_encoder::{AbstractHeapType, HeapType};
 
 use super::super::prelude::*;
 use crate::ir::RcVar;
-use crate::wasm::registries::types::WasmType;
+use crate::wasm::registries::types::CompoundType;
 use crate::wasm::{StepFunc, WasmProject};
 
 #[derive(Clone, Debug)]
@@ -72,7 +72,7 @@ pub fn wasm(
             .proc_arg_struct_type(&(**arg_vars).borrow())?;
         let registries = func.registries();
         let type_registry = registries.types().registry().borrow();
-        let WasmType::Struct(struct_type_fields) = type_registry
+        let CompoundType::Struct(struct_type_fields) = type_registry
             .get_index(struct_type_index as usize)
             .ok_or_else(|| make_hq_bug!("type index not found in type registry"))?
             .0

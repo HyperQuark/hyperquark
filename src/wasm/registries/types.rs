@@ -277,7 +277,7 @@ pub type TStackArray = TDynArray<TNullable<TStackStruct>>;
 pub type TThreadArray = TDynArray<TNullable<TStackArray>>;
 
 pub type TTargetThreadsStruct = TStruct<(
-    (((), TMutField<TI32>), TMutField<TI32>),
+    ((), TMutField<TI32>),
     TMutField<TNonNullable<TThreadArray>>,
 )>;
 

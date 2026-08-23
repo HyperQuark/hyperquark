@@ -12,10 +12,14 @@ use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
-    MarkWaitingFlag, SpawnNewThread, SpawnThreadFuncOverride, SpawnThreadInStack,
+    DynArrayGet, DynArrayLen, MarkWaitingFlag, SpawnNewThread, SpawnThreadFuncOverride,
+    SpawnThreadInStack,
 };
-use crate::wasm::registries::types::{TStackArray, TStackStruct, TStepFunc};
-use crate::wasm::{StepFunc, StepTarget, StringsTable, WasmFlags};
+use crate::wasm::registries::types::{
+    TFunc, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
+    TTargetThreadsStruct, TThreadArray, TValType,
+};
+use crate::wasm::{StepFunc, StringsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
@@ -143,6 +147,7 @@ impl WasmProject {
             globals: Rc::clone(self.registries().globals()),
             num_sprites: self.costume_names().len() as u32,
             imported_func_count: self.imported_func_count()?,
+            imported_global_count: self.imported_global_count()?,
         };
 
         self.registries()
@@ -594,92 +599,101 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
     ) -> HQResult<()> {
-        let thread_struct_type = self
-            .registries()
-            .types()
-            .register_comp::<TStackArray, _>()?;
-        let stack_struct_ty = self
-            .registries()
-            .types()
-            .register_comp::<TStackStruct, _>()?;
+        let types = Rc::clone(self.registries().types());
 
         let mut tick_func = Function::new(vec![
-            (2, ValType::I32),
-            (
-                1,
-                ValType::Ref(RefType {
-                    nullable: true,
-                    heap_type: HeapType::Concrete(thread_struct_type),
-                }),
-            ),
-            (
-                1,
-                ValType::Ref(RefType {
-                    nullable: false,
-                    heap_type: HeapType::Concrete(stack_struct_ty),
-                }),
-            ),
+            (3, ValType::I32),
+            (1, <TNonNullable<TThreadArray>>::val_type(&types)?),
+            (1, <TNonNullable<TStackArray>>::val_type(&types)?),
+            (1, <TNonNullable<TStackStruct>>::val_type(&types)?),
         ]);
 
-        let step_func_ty = self.registries().types().step_func()?;
-        let stack_array_ty = self.registries().types().stack_array_type()?;
+        let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
+        let target_thread_struct_type = types.register_comp::<TTargetThreadsStruct, _>()?;
+        let target_threads_array_type = types.register_comp::<TTargetThreadArray, _>()?;
+        let step_func_ty = types.register_comp::<TStepFunc, _>()?;
+
+        let threadss_global = self.threadss_global()?;
+
+        let targets_num = 1 + self.costume_names().len() as i32;
+
+        hq_assert!(targets_num > 0);
+
+        const LOCAL_TARGET_INDEX: u32 = 0;
+        const LOCAL_STACK_INDEX: u32 = 1;
+        const LOCAL_THREADS_NUM: u32 = 2;
+        const LOCAL_THREAD_LIST: u32 = 3;
+        const LOCAL_THREAD: u32 = 4;
+        const LOCAL_STEP: u32 = 5;
 
         let instructions = wasm![
-            TableSize(self.threads_table_index()?),
-            LocalTee(1),
+            Loop(WasmBlockType::Empty),
+            #LazyGlobalGet(threadss_global),
+            LocalGet(LOCAL_TARGET_INDEX),
+            ArrayGet(target_threads_array_type),
+            StructGet {
+                struct_type_index: target_thread_struct_type,
+                field_index: 1,
+            },
+            LocalTee(LOCAL_THREAD_LIST),
+            #StaticFunctionCall(
+                self.registries()
+                    .static_functions()
+                    .register::<DynArrayLen<TNullable<TThreadArray>>, u32>()?
+            ),
+            LocalTee(LOCAL_THREADS_NUM),
             I32Eqz,
             BrIf(0),
+            I32Const(0),
+            LocalSet(LOCAL_STACK_INDEX),
             Loop(WasmBlockType::Empty),
-            LocalGet(0),
-            LocalGet(0),
-            TableGet(self.threads_table_index()?),
-            LocalTee(2),
-            RefIsNull,
-            If(WasmBlockType::Empty),
-            LocalGet(0),
-            I32Const(1),
-            I32Add,
-            LocalTee(0),
-            LocalGet(1),
-            I32LtS,
-            If(WasmBlockType::Empty),
-            Br(2),
-            Else,
-            Return,
-            End,
-            End,
-            LocalGet(2),
+            LocalGet(LOCAL_THREAD_LIST),
+            LocalGet(LOCAL_STACK_INDEX),
+            #StaticFunctionCall(
+                self.registries()
+                    .static_functions()
+                    .register::<DynArrayGet<TNullable<TStackArray>>, u32>()?
+            ),
             RefAsNonNull,
-            StructGet {
-                struct_type_index: thread_struct_type,
-                field_index: 1
-            },
-            LocalGet(2),
-            RefAsNonNull,
-            StructGet {
-                struct_type_index: thread_struct_type,
-                field_index: 0
-            },
+            LocalTee(LOCAL_THREAD),
+            LocalGet(LOCAL_THREAD),
+            #StaticFunctionCall(
+                self.registries()
+                    .static_functions()
+                    .register::<DynArrayLen<TNullable<TStackStruct>>, u32>()?
+            ),
             I32Const(1),
             I32Sub,
-            ArrayGet(stack_array_ty),
+            #StaticFunctionCall(
+                self.registries()
+                    .static_functions()
+                    .register::<DynArrayGet<TNullable<TStackStruct>>, u32>()?
+            ),
+            LocalTee(LOCAL_STEP),
             RefAsNonNull,
-            LocalTee(3),
             StructGet {
-                struct_type_index: stack_struct_ty,
-                field_index: 1
+                struct_type_index: stack_struct_type,
+                field_index: 1,
             },
             LocalGet(3),
             StructGet {
-                struct_type_index: stack_struct_ty,
-                field_index: 0
+                struct_type_index: stack_struct_type,
+                field_index: 0,
             },
             CallRef(step_func_ty),
-            LocalGet(0),
+            LocalGet(LOCAL_STACK_INDEX),
             I32Const(1),
             I32Add,
-            LocalTee(0),
-            LocalGet(1),
+            LocalTee(LOCAL_STACK_INDEX),
+            LocalGet(LOCAL_THREADS_NUM),
+            I32LtS,
+            BrIf(0),
+            End,
+            LocalGet(LOCAL_TARGET_INDEX),
+            I32Const(1),
+            I32Add,
+            LocalTee(LOCAL_TARGET_INDEX),
+            I32Const(targets_num),
             I32LtS,
             BrIf(0),
             End,
@@ -691,7 +705,7 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
                 self.static_func_count()?,
                 self.imported_global_count()?,
@@ -700,7 +714,7 @@ impl WasmProject {
             }
         }
         tick_func.instruction(&Instruction::End);
-        funcs.function(self.registries().types().function(vec![], vec![])?);
+        funcs.function(types.register_comp::<TFunc<(), ()>, _>()?);
         codes.function(&tick_func);
         exports.export(
             "tick",

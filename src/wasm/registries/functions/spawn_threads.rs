@@ -20,6 +20,7 @@ pub struct SpawnThreadFuncOverride {
     pub static_functions: Rc<StaticFunctionRegistry>,
     pub num_sprites: u32,
     pub imported_func_count: u32,
+    pub imported_global_count: u32,
 }
 
 type StackStructRef = TNullable<TStackStruct>;
@@ -53,11 +54,12 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
             static_functions,
             num_sprites,
             imported_func_count,
+            imported_global_count,
         }: SpawnThreadFuncOverride,
     ) -> HQResult<MaybeStaticFunction> {
         let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
         let target_threads_type = types.register_comp::<TTargetThreadArray, _>()?;
-        let target_threads_global = globals.threadss(&types, num_sprites)?;
+        let target_threads_global: u32 = globals.threadss(&types, num_sprites)?;
         let dyn_array_push = static_functions.register::<DynArrayPush<StackStructRef>, u32>()?;
         Ok(MaybeStaticFunction {
             static_function: Some(StaticFunction {
@@ -76,7 +78,7 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
                     }),
                     LocalSet(0), // local 0 is now index of sprite in
                     End,
-                    GlobalGet(target_threads_global),
+                    GlobalGet(imported_global_count + target_threads_global),
                     LocalGet(0),
                     ArrayGet(target_threads_type),
                     LocalGet(1),
@@ -147,11 +149,12 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> 
             static_functions,
             num_sprites,
             imported_func_count,
+            imported_global_count,
         }: SpawnThreadFuncOverride,
     ) -> HQResult<MaybeStaticFunction> {
         let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
         let target_threads_type = types.register_comp::<TTargetThreadArray, _>()?;
-        let target_threads_global = globals.threadss(&types, num_sprites)?;
+        let target_threads_global: u32 = globals.threadss(&types, num_sprites)?;
         Ok(MaybeStaticFunction {
             static_function: Some(StaticFunction {
                 export: None,
@@ -178,7 +181,7 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> 
                         }),
                         LocalSet(0), // local 0 is now index of sprite in
                         End,
-                        GlobalGet(target_threads_global),
+                        GlobalGet(imported_global_count + target_threads_global),
                         LocalGet(0),
                         ArrayGet(target_threads_type),
                         I32Const(8),
