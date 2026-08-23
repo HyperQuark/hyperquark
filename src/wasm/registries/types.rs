@@ -259,7 +259,7 @@ where
     }
 }
 
-pub type TStepFunc = TFunc<(((), TI32), TNullable<TStructRef>), ()>;
+pub type TStepFunc = TFunc<(((), TNonNullable<TStackArray>), TNullable<TStructRef>), ()>;
 
 pub type TDynArrayField<T> = TArray<TMutField<T>>;
 pub type TDynArray<T> = TStruct<(
