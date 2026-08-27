@@ -1,0 +1,16 @@
+[package]
+name = "hyperquark-libafl-fuzz"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+arbitrary = "1.4.2"
+hyperquark = { path = ".." }
+itertools = "0.15.0"
+libafl = { version = "=0.15.3", features = ["prelude"] }
+libafl_bolts = "=0.15.3"
+mutatis = "0.5.3"
+sb3 = { path = "../sb3", features = ["fuzz"] }
+serde = "1.0.228"
+serde_json = "1.0"

@@ -1,3 +1,5 @@
+#![feature(macro_attr)]
+
 pub mod raw;
 pub mod structured;
 
