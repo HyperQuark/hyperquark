@@ -7,7 +7,7 @@ use crate::wasm::mem_layout;
 use crate::wasm::registries::functions::dyn_array::{DynArrayNew, DynArrayPop, DynArrayPush};
 use crate::wasm::registries::types::{
     TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
-    TThreadArray, TValType,
+    TThreadArray, TType,
 };
 use crate::wasm::registries::{GlobalRegistry, StaticFunctionRegistry, TypeRegistry};
 
@@ -79,10 +79,10 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
                     Call(imported_func_count + dyn_array_push),
                 ] as &[_]),
                 params: Box::from([
-                    <TNonNullable<TStackArray>>::val_type(&types)?,
-                    <TNonNullable<TStepFunc>>::val_type(&types)?,
-                    StackStructRef::val_type(&types)?,
-                    <TNonNullable<TStepFunc>>::val_type(&types)?,
+                    <TNonNullable<TStackArray>>::ty(&types)?,
+                    <TNonNullable<TStepFunc>>::ty(&types)?,
+                    StackStructRef::ty(&types)?,
+                    <TNonNullable<TStepFunc>>::ty(&types)?,
                 ]),
                 returns: Box::from([]),
                 locals: Box::from([]),
@@ -126,11 +126,11 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> 
                 export: None,
                 params: Box::from([
                     ValType::I32,
-                    <TNonNullable<TStepFunc>>::val_type(&types)?,
-                    StackStructRef::val_type(&types)?,
+                    <TNonNullable<TStepFunc>>::ty(&types)?,
+                    StackStructRef::ty(&types)?,
                 ]),
                 returns: Box::from([]),
-                locals: Box::from([<TNonNullable<TThreadArray>>::val_type(&types)?]),
+                locals: Box::from([<TNonNullable<TThreadArray>>::ty(&types)?]),
                 instructions: {
                     (wasm_const![
                         LocalGet(0),

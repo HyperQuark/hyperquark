@@ -106,7 +106,7 @@ pub fn from_special_block(
             9 => {
                 let hex = (*SHORTHAND_HEX_COLOUR_REGEX).replace(value, "$1$1$2$2$3$3");
                 if let Some(captures) = (*HEX_COLOUR_REGEX).captures(&hex) {
-                    if let box [r, g, b] = (1..4)
+                    if let deref!([r, g, b]) = (1..4)
                         .map(|i| &captures[i])
                         .map(|capture| {
                             u8::from_str_radix(capture, 16)

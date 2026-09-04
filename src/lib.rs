@@ -1,9 +1,14 @@
 #![feature(stmt_expr_attributes)] // used in error.rs for panic mode
 #![feature(associated_type_defaults)] // used in registry.rs for default key type for NamedRegistry
-#![feature(box_patterns)] // used in ir/blocks/special.rs to match Box<[_]> as array
+#![feature(deref_patterns)] // used in ir/blocks/special.rs to match Box<[_]> as array
 #![feature(iterator_try_reduce)] // used in instructions/input_switcher.rs for building return type
 #![feature(try_find)] // used in ir/proc.rs for finding prototype/def blocks
 #![feature(arbitrary_self_types)] // used in ir/types.rs to take `&mut Rc<Self>` as self type for `TypeStack`
+#![feature(macro_metavar_expr_concat)]
+#![feature(macro_metavar_expr)]
+#![feature(impl_restriction)]
+#![feature(min_specialization)]
+
 #![doc(html_logo_url = "https://hyperquark.edgecompute.app/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.edgecompute.app/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]

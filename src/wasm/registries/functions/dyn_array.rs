@@ -7,7 +7,7 @@ use super::{MaybeStaticFunction, StaticFunction};
 use crate::prelude::*;
 use crate::wasm::registries::TypeRegistry;
 use crate::wasm::registries::types::{
-    TDefaultable, TDynArray, TDynArrayField, TNonNullable, TValType,
+    TDefaultable, TDynArray, TDynArrayField, TNonNullable, TType,
 };
 
 #[derive(Clone)]
@@ -21,14 +21,14 @@ pub struct DynArrayFuncOverride {
 /// ref dynamic_array<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
 /// t                    - the element
 pub struct DynArrayPush<T>(PhantomData<T>);
-impl<T: TValType + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPush<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPush<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TValType + TDefaultable>
+impl<T: TType<ValType> + TDefaultable>
     TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayPush<T>
 {
     fn try_override(
@@ -96,13 +96,13 @@ impl<T: TValType + TDefaultable>
                     },
                 ] as &[_]),
                 params: Box::from([
-                    <TNonNullable<TDynArray<T>>>::val_type(&types)?,
-                    T::val_type(&types)?,
+                    <TNonNullable<TDynArray<T>>>::ty(&types)?,
+                    T::ty(&types)?,
                 ]),
                 returns: Box::from([]),
                 locals: Box::from([
                     ValType::I32,
-                    <TNonNullable<TDynArrayField<T>>>::val_type(&types)?,
+                    <TNonNullable<TDynArrayField<T>>>::ty(&types)?,
                 ]),
             }),
             maybe_populate: || None,
@@ -146,10 +146,10 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                     ArrayGet(array_type),
                 ] as &[_]),
                 params: Box::from([
-                    <TNonNullable<TDynArray<T>>>::val_type(&types)?,
+                    <TNonNullable<TDynArray<T>>>::ty(&types)?,
                     ValType::I32,
                 ]),
-                returns: Box::from([T::val_type(&types)?]),
+                returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([]),
             }),
             maybe_populate: || None,
@@ -193,11 +193,11 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                     ArrayGet(array_type),
                 ] as &[_]),
                 params: Box::from([
-                    <TNonNullable<TDynArray<T>>>::val_type(&types)?,
+                    <TNonNullable<TDynArray<T>>>::ty(&types)?,
                     ValType::I32,
-                    T::val_type(&types)?,
+                    T::ty(&types)?,
                 ]),
-                returns: Box::from([T::val_type(&types)?]),
+                returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([]),
             }),
             maybe_populate: || None,
@@ -252,8 +252,8 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                         field_index: 1,
                     },
                 ] as &[_]),
-                params: Box::from([<TNonNullable<TDynArray<T>>>::val_type(&types)?]),
-                returns: Box::from([T::val_type(&types)?]),
+                params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
+                returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([ValType::I32]),
             }),
             maybe_populate: || None,
@@ -293,7 +293,7 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                     StructNew(struct_type),
                 ] as &[_]),
                 params: Box::from([ValType::I32]),
-                returns: Box::from([<TNonNullable<TDynArray<T>>>::val_type(&types)?]),
+                returns: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 locals: Box::from([]),
             }),
             maybe_populate: || None,
@@ -332,7 +332,7 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                         field_index: 1
                     },
                 ] as &[_]),
-                params: Box::from([<TNonNullable<TDynArray<T>>>::val_type(&types)?]),
+                params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([ValType::I32]),
                 locals: Box::from([]),
             }),
@@ -371,7 +371,7 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                         field_index: 1
                     },
                 ] as &[_]),
-                params: Box::from([<TNonNullable<TDynArray<T>>>::val_type(&types)?]),
+                params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([ValType::I32]),
                 locals: Box::from([]),
             }),

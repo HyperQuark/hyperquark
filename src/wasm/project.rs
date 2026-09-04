@@ -17,7 +17,7 @@ use crate::wasm::registries::functions::static_functions::{
 };
 use crate::wasm::registries::types::{
     TFunc, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
-    TTargetThreadsStruct, TThreadArray, TValType,
+    TTargetThreadsStruct, TThreadArray, TType,
 };
 use crate::wasm::{StepFunc, StringsTable, WasmFlags};
 
@@ -603,9 +603,9 @@ impl WasmProject {
 
         let mut tick_func = Function::new(vec![
             (3, ValType::I32),
-            (1, <TNonNullable<TThreadArray>>::val_type(&types)?),
-            (1, <TNonNullable<TStackArray>>::val_type(&types)?),
-            (1, <TNonNullable<TStackStruct>>::val_type(&types)?),
+            (1, <TNonNullable<TThreadArray>>::ty(&types)?),
+            (1, <TNonNullable<TStackArray>>::ty(&types)?),
+            (1, <TNonNullable<TStackStruct>>::ty(&types)?),
         ]);
 
         let stack_struct_type = types.register_comp::<TStackStruct, _>()?;

@@ -7,7 +7,7 @@ use wasm_encoder::{
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::wasm::registries::TypeRegistry;
-use crate::wasm::registries::types::{TNonNullable, TTargetThreadArray, TThreadArray, TValType};
+use crate::wasm::registries::types::{TNonNullable, TTargetThreadArray, TThreadArray, TType};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -61,7 +61,7 @@ impl GlobalRegistry {
         self.register(
             "threadss".into(),
             (
-                <TNonNullable<TTargetThreadArray>>::val_type(&types)?,
+                <TNonNullable<TTargetThreadArray> as TType<ValType>>::ty(&types)?,
                 ConstExpr::extended(
                     (0..=num_sprites) // stage + sprites
                         .map(|i| {
