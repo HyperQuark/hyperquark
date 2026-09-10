@@ -10,12 +10,12 @@ use super::super::prelude::*;
 use crate::wasm::StepFunc;
 use crate::wasm::registries::functions::static_functions::DynArrayLen;
 use crate::wasm::registries::types::{
-    TArray, TConstField, THeapType, TMutField, TNonNullable, TNullable, TStackArray, TStackStruct,
-    TStruct, TValType,
+    TArray, TConstField, TMutField, TNonNullable, TNullable, TStackArray, TStackStruct, TStruct,
+    TType,
 };
 
 type TWaitingThreadArray = TArray<TMutField<TNullable<TStackArray>>>;
-type TPollStruct = TStruct<((), TConstField<TNonNullable<TWaitingThreadArray>>)>;
+type TPollStruct = TStruct<(TConstField<TNonNullable<TWaitingThreadArray>>, ())>;
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let types = Rc::clone(func.registries().types());
@@ -23,12 +23,12 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
     let thread_array_type = types.register_comp::<TWaitingThreadArray, _>()?;
     let poll_struct_type = types.register_comp::<TPollStruct, _>()?;
 
-    let arr_local = func.local(<TNonNullable<TWaitingThreadArray>>::val_type(&types)?)?;
+    let arr_local = func.local(<TNonNullable<TWaitingThreadArray>>::ty(&types)?)?;
     func.free_local(arr_local)?;
 
     let arr_len_local = func.local(ValType::I32)?;
     let i_local = func.local(ValType::I32)?;
-    let stack_local = func.local(<TNullable<TStackStruct>>::val_type(&types)?)?;
+    let stack_local = func.local(<TNullable<TStackStruct>>::ty(&types)?)?;
     let wait_local = func.local(ValType::I32)?;
     func.free_local(arr_len_local)?;
     func.free_local(stack_local)?;
@@ -42,7 +42,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
 
     Ok(wasm![
         LocalGet(1), // this step should never have additional function arguments so this is fine
-        RefCastNonNull(TPollStruct::heap_type(&types)?),
+        RefCastNonNull(TPollStruct::ty(&types)?),
         StructGet {
             struct_type_index: poll_struct_type,
             field_index: 0,
@@ -78,7 +78,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
             If(WasmBlockType::Empty),
                 LocalGet(arr_local),
                 LocalGet(i_local),
-                RefNull(TStackArray::heap_type(&types)?),
+                RefNull(TStackArray::ty(&types)?),
                 Br(1),
             End,
 

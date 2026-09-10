@@ -669,13 +669,13 @@ impl WasmProject {
                     .static_functions()
                     .register::<DynArrayGet<TNullable<TStackStruct>>, u32>()?
             ),
-            LocalTee(LOCAL_STEP),
             RefAsNonNull,
+            LocalTee(LOCAL_STEP),
             StructGet {
                 struct_type_index: stack_struct_type,
                 field_index: 1,
             },
-            LocalGet(3),
+            LocalGet(LOCAL_STEP),
             StructGet {
                 struct_type_index: stack_struct_type,
                 field_index: 0,

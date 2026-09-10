@@ -18,10 +18,12 @@ pub struct DynArrayFuncOverride {
 /// Pushes an element to a dynamic (resizeable) array
 ///
 /// Takes 2 parameters:
-/// ref dynamic_array<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
+/// ref `dynamic_array`<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
 /// t                    - the element
 pub struct DynArrayPush<T>(PhantomData<T>);
-impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPush<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction>
+    for DynArrayPush<T>
+{
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
@@ -95,15 +97,9 @@ impl<T: TType<ValType> + TDefaultable>
                         field_index: 1,
                     },
                 ] as &[_]),
-                params: Box::from([
-                    <TNonNullable<TDynArray<T>>>::ty(&types)?,
-                    T::ty(&types)?,
-                ]),
+                params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?, T::ty(&types)?]),
                 returns: Box::from([]),
-                locals: Box::from([
-                    ValType::I32,
-                    <TNonNullable<TDynArrayField<T>>>::ty(&types)?,
-                ]),
+                locals: Box::from([ValType::I32, <TNonNullable<TDynArrayField<T>>>::ty(&types)?]),
             }),
             maybe_populate: || None,
         })
@@ -113,20 +109,20 @@ impl<T: TType<ValType> + TDefaultable>
 /// Gets an element of a dynamic (resizeable) array
 ///
 /// Takes 2 parameters:
-/// ref dynamic_array<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
+/// ref `dynamic_array`<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
 /// i32                  - the index
 ///
 /// Returns t
 pub struct DynArrayGet<T>(PhantomData<T>);
-impl<T: TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayGet<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayGet<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride>
-    for DynArrayGet<T>
+impl<T: TType<ValType> + TDefaultable>
+    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayGet<T>
 {
     fn try_override(
         DynArrayFuncOverride { types }: DynArrayFuncOverride,
@@ -145,10 +141,7 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
                     LocalGet(1),
                     ArrayGet(array_type),
                 ] as &[_]),
-                params: Box::from([
-                    <TNonNullable<TDynArray<T>>>::ty(&types)?,
-                    ValType::I32,
-                ]),
+                params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?, ValType::I32]),
                 returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([]),
             }),
@@ -160,19 +153,19 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
 /// Sets an element of a dynamic (resizeable) array
 ///
 /// Takes 3 parameters:
-/// ref dynamic_array<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
+/// ref `dynamic_array`<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
 /// i32                  - the index
 /// t                    - the element
 pub struct DynArraySet<T>(PhantomData<T>);
-impl<T: TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArraySet<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArraySet<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride>
-    for DynArraySet<T>
+impl<T: TType<ValType> + TDefaultable>
+    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArraySet<T>
 {
     fn try_override(
         DynArrayFuncOverride { types }: DynArrayFuncOverride,
@@ -207,20 +200,20 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
 
 /// Pops the last element from a dynamic (resizeable) array
 ///
-/// Takes 1 parameters:
-/// ref dynamic_array<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
+/// Takes 1 parameter:
+/// ref `dynamic_array`<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
 ///
 /// Returns t
 pub struct DynArrayPop<T>(PhantomData<T>);
-impl<T: TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPop<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPop<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride>
-    for DynArrayPop<T>
+impl<T: TType<ValType> + TDefaultable>
+    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayPop<T>
 {
     fn try_override(
         DynArrayFuncOverride { types }: DynArrayFuncOverride,
@@ -263,20 +256,20 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
 
 /// Creates a new dynamic (resizeable) array of the given capacity
 ///
-/// Takes 1 parameters:
+/// Takes 1 parameter:
 /// i32 - the initial capacity of the array to create
 ///
-/// Returns ref dynamic_array<t>
+/// Returns ref `dynamic_array`<t>
 pub struct DynArrayNew<T>(PhantomData<T>);
-impl<T: TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayNew<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayNew<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride>
-    for DynArrayNew<T>
+impl<T: TType<ValType> + TDefaultable>
+    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayNew<T>
 {
     fn try_override(
         DynArrayFuncOverride { types }: DynArrayFuncOverride,
@@ -303,20 +296,20 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
 
 /// Returns the length (not capacity) of the given dynamic array
 ///
-/// Takes 1 parameters:
-/// ref dynamic_array<t> - the dynamic array
+/// Takes 1 parameter:
+/// ref `dynamic_array`<t> - the dynamic array
 ///
 /// Returns i32
 pub struct DynArrayLen<T>(PhantomData<T>);
-impl<T: TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayLen<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayLen<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride>
-    for DynArrayLen<T>
+impl<T: TType<ValType> + TDefaultable>
+    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayLen<T>
 {
     fn try_override(
         DynArrayFuncOverride { types }: DynArrayFuncOverride,
@@ -343,18 +336,18 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
 
 /// Clears the given dynamic array to length 0 (but doesn't actually drop any of the elements)
 ///
-/// Takes 1 parameters:
-/// ref dynamic_array<t> - the dynamic array
+/// Takes 1 parameter:
+/// ref `dynamic_array`<t> - the dynamic array
 pub struct DynArrayClear<T>(PhantomData<T>);
-impl<T: TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayClear<T> {
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayClear<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
         maybe_populate: || None,
     };
 }
 
-impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride>
-    for DynArrayClear<T>
+impl<T: TType<ValType> + TDefaultable>
+    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayClear<T>
 {
     fn try_override(
         DynArrayFuncOverride { types }: DynArrayFuncOverride,
@@ -379,6 +372,3 @@ impl<T: TDefaultable> TryNamedRegistryItemOverride<MaybeStaticFunction, DynArray
         })
     }
 }
-
-
-

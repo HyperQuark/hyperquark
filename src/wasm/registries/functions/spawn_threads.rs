@@ -24,16 +24,18 @@ pub struct SpawnThreadFuncOverride {
 type StackStructRef = TNullable<TStackStruct>;
 
 /// Spawns a new thread in the same stack (i.e. a thread that yields back to the current
-/// thread once it completes.) The step that is provided to return to will be written into
+/// thread once it completes).
+/// 
+/// The step that is provided to return to will be written into
 /// the current stack frame, and the new thread's step is added to the top of the current
 /// frame with the provided struct argument so that that will run until completion before
 /// yielding to the provided next step.
 ///
 /// Takes 4 parameters:
-/// - ref stack_array - the current stack
-/// - ref step_func - the step to spawn
+/// - ref `stack_array`` - the current stack
+/// - ref `step_func`` - the step to spawn
 /// - structref - the structref to pass to the step being spawned
-/// - ref step_func - the step to return to after
+/// - ref `step_func`` - the step to return to after
 pub struct SpawnThreadInStack;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {

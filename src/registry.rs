@@ -75,7 +75,9 @@ pub trait RegistryType {
 }
 
 pub trait CompTimeRegistrand<R: Registry, N: RegistryResult> {
-    fn register(registry: &R) -> HQResult<N>;
+    type Receiver: core::ops::Deref<Target = R>;
+
+    fn register(registry: &Self::Receiver) -> HQResult<N>;
 }
 
 pub trait Registry: Sized + RegistryType {
@@ -121,7 +123,7 @@ pub trait Registry: Sized + RegistryType {
         .map_err(|_| make_hq_bug!("registry item index out of bounds"))
     }
 
-    fn register_comp<R, N>(&self) -> HQResult<N>
+    fn register_comp<R, N>(self: &R::Receiver) -> HQResult<N>
     where
         R: CompTimeRegistrand<Self, N>,
         N: RegistryResult,

@@ -6,8 +6,9 @@
 #![feature(arbitrary_self_types)] // used in ir/types.rs to take `&mut Rc<Self>` as self type for `TypeStack`
 #![feature(macro_metavar_expr_concat)]
 #![feature(macro_metavar_expr)]
-#![feature(impl_restriction)]
-#![feature(min_specialization)]
+#![feature(specialization)]
+#![feature(const_type_name)]
+#![feature(generic_const_exprs)]
 
 #![doc(html_logo_url = "https://hyperquark.edgecompute.app/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.edgecompute.app/favicon.ico")]

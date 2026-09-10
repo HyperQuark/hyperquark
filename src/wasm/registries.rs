@@ -80,7 +80,7 @@ impl Registries {
         &self.tables
     }
 
-    pub fn globals(&self) -> &Rc<GlobalRegistry> {
+    pub const fn globals(&self) -> &Rc<GlobalRegistry> {
         &self.globals
     }
 

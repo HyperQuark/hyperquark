@@ -61,10 +61,10 @@ impl GlobalRegistry {
         self.register(
             "threadss".into(),
             (
-                <TNonNullable<TTargetThreadArray> as TType<ValType>>::ty(&types)?,
+                <TNonNullable<TTargetThreadArray> as TType<ValType>>::ty(types)?,
                 ConstExpr::extended(
                     (0..=num_sprites) // stage + sprites
-                        .map(|i| {
+                        .flat_map(|i| {
                             [
                                 Instruction::I32Const(i as i32),
                                 Instruction::I32Const(0),
@@ -74,7 +74,6 @@ impl GlobalRegistry {
                                 },
                             ]
                         })
-                        .flatten()
                         .chain([Instruction::ArrayNewFixed {
                             array_type_index: array_array_type,
                             array_size: num_sprites,
