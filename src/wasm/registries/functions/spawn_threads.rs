@@ -4,6 +4,7 @@ use wasm_gen::wasm_const;
 use super::{MaybeStaticFunction, StaticFunction};
 use crate::prelude::*;
 use crate::wasm::mem_layout;
+use crate::wasm::registries::StaticFunctionRegistry;
 use crate::wasm::registries::functions::StaticFunctionRegistrar;
 use crate::wasm::registries::functions::dyn_array::{DynArrayNew, DynArrayPop, DynArrayPush};
 use crate::wasm::registries::types::{
@@ -30,9 +31,10 @@ pub struct SpawnThreadInStack;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |static_funcs| {
-            static_funcs.register::<DynArrayPop<StackStructRef>, usize>()?;
-            Ok(())
+        register_deps: || {
+            vec![StaticFunctionRegistry::registration::<
+                DynArrayPop<StackStructRef>,
+            >()]
         },
         maybe_populate: |proj, static_funcs| {
             let imported_func_count = proj.imported_func_count()?;
@@ -69,6 +71,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
                     LocalGet(2),
                     StructNew(stack_struct_type),
                     Call(imported_func_count + dyn_array_push),
+                    End,
                 ] as &[_]),
                 params: Box::from([
                     <TNonNullable<TStackArray>>::ty(&types)?,
@@ -94,11 +97,12 @@ pub struct SpawnNewThread;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |static_funcs| {
-            static_funcs.register::<DynArrayNew<StackStructRef>, usize>()?;
-            static_funcs.register::<DynArrayPush<StackStructRef>, usize>()?;
-            static_funcs.register::<DynArrayPush<TNullable<TStackArray>>, usize>()?;
-            Ok(())
+        register_deps: || {
+            vec![
+                StaticFunctionRegistry::registration::<DynArrayNew<StackStructRef>>(),
+                StaticFunctionRegistry::registration::<DynArrayPush<StackStructRef>>(),
+                StaticFunctionRegistry::registration::<DynArrayPush<TNullable<TStackArray>>>(),
+            ]
         },
         maybe_populate: |proj, static_funcs| {
             let types = Rc::clone(proj.registries().types());

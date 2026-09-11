@@ -10,27 +10,19 @@ use crate::wasm::WasmProject;
 
 #[derive(Clone, Debug, Eq)]
 pub struct RecGroup {
-    pub types: Vec<(&'static str, RefCell<CompoundType>)>,
+    pub name: Box<str>,
+    pub types: Vec<CompoundType>,
 }
 
 impl PartialEq for RecGroup {
     fn eq(&self, other: &Self) -> bool {
-        self.types.len() == other.types.len()
-            && self
-                .types
-                .iter()
-                .zip(&other.types)
-                .all(|((fst, _), (snd, _))| fst == snd)
+        self.name == other.name
     }
 }
 
 impl core::hash::Hash for RecGroup {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.types
-            .iter()
-            .map(|(tystr, _)| tystr)
-            .collect::<Box<[_]>>()
-            .hash(state);
+        self.name.hash(state);
     }
 }
 
@@ -137,13 +129,9 @@ impl TypeRegistry {
             match ty {
                 RegistryItem::Type(ty) => types.ty().subtype(&Self::type_to_subtype(ty)),
                 RegistryItem::RecGroupItem(rec_group, 0) => {
-                    types.ty().rec(
-                        rec_group
-                            .types
-                            .iter()
-                            .map(|(_, compound_ty)| compound_ty.borrow().clone())
-                            .map(Self::type_to_subtype),
-                    );
+                    types
+                        .ty()
+                        .rec(rec_group.types.iter().cloned().map(Self::type_to_subtype));
                 }
                 RegistryItem::RecGroupItem(_, _) => (),
             }

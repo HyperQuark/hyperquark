@@ -12,7 +12,7 @@ use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
-    DynArrayGet, DynArrayLen, SpawnNewThread, SpawnThreadInStack,
+    DynArrayGet, DynArrayLen, SpawnNewThread, SpawnThreadInStack, Tick, UnreachableDbg,
 };
 use crate::wasm::registries::types::{
     TFunc, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
@@ -140,7 +140,17 @@ impl WasmProject {
             .clone()
             .finish(&mut imports, self.registries().types())?;
 
-        Rc::unwrap_or_clone(self.registries().static_functions().clone()).finish(
+        self.registries()
+            .static_functions()
+            .register::<Tick, usize>()?;
+        self.registries()
+            .static_functions()
+            .register::<UnreachableDbg, usize>()?;
+        self.registries()
+            .static_functions()
+            .register::<SpawnNewThread, usize>()?; // required for events finishing
+
+        Rc::unwrap_or_clone(Rc::clone(self.registries().static_functions())).finish(
             &self,
             &mut functions,
             &mut exports,
@@ -165,11 +175,7 @@ impl WasmProject {
             )?;
         }
 
-        self.tick_func(&mut functions, &mut codes, &mut exports)?;
-
         self.finish_events(&mut functions, &mut codes, &mut exports)?;
-
-        self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
 
         codes.function(&start_func);
         functions.function(self.registries().types().function(vec![], vec![])?);
@@ -180,8 +186,8 @@ impl WasmProject {
 
         elements.declared(Elements::Functions(
             (self.imported_func_count()? + self.static_func_count()?
-                ..self.imported_func_count()?
-                    + self.static_func_count()?
+                ..dbg!(self.imported_func_count()?)
+                    + dbg!(self.static_func_count()?)
                     + u32::try_from(self.steps().try_borrow()?.len())
                         .map_err(|_| make_hq_bug!("steps len out of bounds"))?)
                 .collect(),
@@ -322,26 +328,6 @@ impl WasmProject {
             .len()
             .try_into()
             .map_err(|_| make_hq_bug!("string registry len out of bounds"))
-    }
-
-    pub fn unreachable_dbg_func(
-        &self,
-        functions: &mut FunctionSection,
-        codes: &mut CodeSection,
-        exports: &mut ExportSection,
-    ) -> HQResult<()> {
-        let mut func = Function::new(vec![]);
-        func.instruction(&Instruction::Unreachable);
-        func.instruction(&Instruction::End);
-        codes.function(&func);
-        functions.function(self.registries().types().function(vec![], vec![])?);
-        exports.export(
-            "unreachable_dbg",
-            ExportKind::Func,
-            self.imported_func_count()? + functions.len() - 1,
-        );
-
-        Ok(())
     }
 
     pub fn spawn_new_thread_func<N>(&self) -> HQResult<N>
@@ -562,137 +548,6 @@ impl WasmProject {
             );
         }
 
-        Ok(())
-    }
-
-    fn tick_func(
-        &self,
-        funcs: &mut FunctionSection,
-        codes: &mut CodeSection,
-        exports: &mut ExportSection,
-    ) -> HQResult<()> {
-        let types = Rc::clone(self.registries().types());
-
-        let mut tick_func = Function::new(vec![
-            (3, ValType::I32),
-            (1, <TNonNullable<TThreadArray>>::ty(&types)?),
-            (1, <TNonNullable<TStackArray>>::ty(&types)?),
-            (1, <TNonNullable<TStackStruct>>::ty(&types)?),
-        ]);
-
-        let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
-        let target_thread_struct_type = types.register_comp::<TTargetThreadsStruct, _>()?;
-        let target_threads_array_type = types.register_comp::<TTargetThreadArray, _>()?;
-        let step_func_ty = types.register_comp::<TStepFunc, _>()?;
-
-        let threadss_global = self.threadss_global()?;
-
-        let targets_num = 1 + self.costume_names().len() as i32;
-
-        hq_assert!(targets_num > 0);
-
-        const LOCAL_TARGET_INDEX: u32 = 0;
-        const LOCAL_STACK_INDEX: u32 = 1;
-        const LOCAL_THREADS_NUM: u32 = 2;
-        const LOCAL_THREAD_LIST: u32 = 3;
-        const LOCAL_THREAD: u32 = 4;
-        const LOCAL_STEP: u32 = 5;
-
-        let instructions = wasm![
-            Loop(WasmBlockType::Empty),
-            #LazyGlobalGet(threadss_global),
-            LocalGet(LOCAL_TARGET_INDEX),
-            ArrayGet(target_threads_array_type),
-            StructGet {
-                struct_type_index: target_thread_struct_type,
-                field_index: 1,
-            },
-            LocalTee(LOCAL_THREAD_LIST),
-            #StaticFunctionCall(
-                self.registries()
-                    .static_functions()
-                    .register::<DynArrayLen<TNullable<TThreadArray>>, u32>()?
-            ),
-            LocalTee(LOCAL_THREADS_NUM),
-            I32Eqz,
-            BrIf(0),
-            I32Const(0),
-            LocalSet(LOCAL_STACK_INDEX),
-            Loop(WasmBlockType::Empty),
-            LocalGet(LOCAL_THREAD_LIST),
-            LocalGet(LOCAL_STACK_INDEX),
-            #StaticFunctionCall(
-                self.registries()
-                    .static_functions()
-                    .register::<DynArrayGet<TNullable<TStackArray>>, u32>()?
-            ),
-            RefAsNonNull,
-            LocalTee(LOCAL_THREAD),
-            LocalGet(LOCAL_THREAD),
-            #StaticFunctionCall(
-                self.registries()
-                    .static_functions()
-                    .register::<DynArrayLen<TNullable<TStackStruct>>, u32>()?
-            ),
-            I32Const(1),
-            I32Sub,
-            #StaticFunctionCall(
-                self.registries()
-                    .static_functions()
-                    .register::<DynArrayGet<TNullable<TStackStruct>>, u32>()?
-            ),
-            RefAsNonNull,
-            LocalTee(LOCAL_STEP),
-            StructGet {
-                struct_type_index: stack_struct_type,
-                field_index: 1,
-            },
-            LocalGet(LOCAL_STEP),
-            StructGet {
-                struct_type_index: stack_struct_type,
-                field_index: 0,
-            },
-            CallRef(step_func_ty),
-            LocalGet(LOCAL_STACK_INDEX),
-            I32Const(1),
-            I32Add,
-            LocalTee(LOCAL_STACK_INDEX),
-            LocalGet(LOCAL_THREADS_NUM),
-            I32LtS,
-            BrIf(0),
-            End,
-            LocalGet(LOCAL_TARGET_INDEX),
-            I32Const(1),
-            I32Add,
-            LocalTee(LOCAL_TARGET_INDEX),
-            I32Const(targets_num),
-            I32LtS,
-            BrIf(0),
-            End,
-        ];
-        for instr in instructions {
-            for real_instruction in instr.eval(
-                &self.events,
-                self.registries().types(),
-                self.threads_count_global()?,
-                self.spawn_new_thread_func()?,
-                self.spawn_thread_in_stack_func()?,
-                self.threadss_global()?,
-                self.imported_func_count()?,
-                self.static_func_count()?,
-                self.imported_global_count()?,
-            )? {
-                tick_func.instruction(&real_instruction);
-            }
-        }
-        tick_func.instruction(&Instruction::End);
-        funcs.function(types.register_comp::<TFunc<(), ()>, _>()?);
-        codes.function(&tick_func);
-        exports.export(
-            "tick",
-            ExportKind::Func,
-            funcs.len() + self.imported_func_count()? - 1,
-        );
         Ok(())
     }
 

@@ -5,38 +5,51 @@ use wasm_encoder::{AbstractHeapType, FieldType, HeapType, RefType, StorageType, 
 use super::tyfp::List;
 use super::{CompoundType, RegistryItem, TypeRegistry};
 use crate::prelude::*;
-use crate::registry::CompTimeRegistrand;
+use crate::registry::{CompTimeRegistrand, RegistryResult};
 
-pub trait TypeRegisteringInfo {
-    fn types(&self) -> &TypeRegistry;
+pub trait TypeRegistryLike {
+    fn register<N>(&self, ty: CompoundType) -> HQResult<N>
+    where
+        N: RegistryResult;
 }
 
-impl TypeRegisteringInfo for Rc<TypeRegistry> {
-    fn types(&self) -> &TypeRegistry {
-        self
+impl TypeRegistryLike for Rc<TypeRegistry> {
+    fn register<N>(&self, ty: CompoundType) -> HQResult<N>
+    where
+        N: RegistryResult,
+    {
+        self.register_default(RegistryItem::Type(ty))
     }
 }
 
-pub trait TRecGroupType<T, I: TypeRegisteringInfo> {
+// pub trait TypeRegisteringInfo {
+//     fn types(&self) -> &impl TypeRegistryLike;
+// }
+
+// impl TypeRegisteringInfo for Rc<TypeRegistry> {
+//     fn types(&self) -> &impl TypeRegistryLike {
+//         self
+//     }
+// }
+
+pub trait TRecGroupType<T, I: TypeRegistryLike> {
     fn rec_group_ty(registering_info: &I) -> HQResult<T>;
 }
 
 impl<T, I> TRecGroupType<u32, I> for T
 where
     T: TRecGroupType<CompoundType, I>,
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
 {
     default fn rec_group_ty(types: &I) -> HQResult<u32> {
-        types
-            .types()
-            .register_default(RegistryItem::Type(T::rec_group_ty(types)?))
+        types.register(T::rec_group_ty(types)?)
     }
 }
 
 impl<T, I> TRecGroupType<HeapType, I> for T
 where
     T: TRecGroupType<u32, I>,
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
 {
     default fn rec_group_ty(types: &I) -> HQResult<HeapType> {
         Ok(HeapType::Concrete(T::rec_group_ty(types)?))
@@ -81,7 +94,7 @@ impl<I> RegTypeList<I> for () {
 
 impl<HeadT, Head, Tail, I> RegTypeList<I> for ((HeadT, Head), Tail)
 where
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
     Head: TRecGroupType<HeadT, I>,
     Tail: RegTypeList<I>,
 {
@@ -92,17 +105,17 @@ where
 }
 
 pub struct TStructRef;
-impl<I: TypeRegisteringInfo> TRecGroupType<CompoundType, I> for TStructRef {
+impl<I: TypeRegistryLike> TRecGroupType<CompoundType, I> for TStructRef {
     fn rec_group_ty(_types: &I) -> HQResult<CompoundType> {
         panic!("this shouldn't be called ever!!! evil!!!")
     }
 }
-impl<I: TypeRegisteringInfo> TRecGroupType<u32, I> for TStructRef {
+impl<I: TypeRegistryLike> TRecGroupType<u32, I> for TStructRef {
     fn rec_group_ty(_types: &I) -> HQResult<u32> {
         panic!("this shouldn't be called ever!!! evil!!!")
     }
 }
-impl<I: TypeRegisteringInfo> TRecGroupType<HeapType, I> for TStructRef {
+impl<I: TypeRegistryLike> TRecGroupType<HeapType, I> for TStructRef {
     fn rec_group_ty(_types: &I) -> HQResult<HeapType> {
         Ok(HeapType::Abstract {
             shared: false,
@@ -120,7 +133,7 @@ impl<T, I> TRecGroupType<RefType, I> for T
 where
     T: TRefType,
     T::HeapType: TRecGroupType<HeapType, I>,
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
 {
     fn rec_group_ty(types: &I) -> HQResult<RefType> {
         Ok(RefType {
@@ -147,7 +160,7 @@ impl<T, I> TRecGroupType<ValType, I> for T
 where
     T: TRefType,
     T::HeapType: TRecGroupType<HeapType, I>,
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
 {
     fn rec_group_ty(types: &I) -> HQResult<ValType> {
         Ok(ValType::Ref(
@@ -158,7 +171,7 @@ where
 
 pub struct TI32;
 
-impl<I: TypeRegisteringInfo> TRecGroupType<ValType, I> for TI32 {
+impl<I: TypeRegistryLike> TRecGroupType<ValType, I> for TI32 {
     fn rec_group_ty(_types: &I) -> HQResult<ValType> {
         Ok(ValType::I32)
     }
@@ -173,7 +186,7 @@ pub trait TFieldType {
 impl<T, I> TRecGroupType<FieldType, I> for T
 where
     T: TFieldType,
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
     T::ValType: TRecGroupType<ValType, I>,
 {
     fn rec_group_ty(types: &I) -> HQResult<FieldType> {
@@ -197,7 +210,7 @@ impl<T> TFieldType for TConstField<T> {
     const MUTABLE: bool = false;
 }
 
-impl<T, I: TypeRegisteringInfo> TRecGroupType<Vec<T>, I> for () {
+impl<T, I: TypeRegistryLike> TRecGroupType<Vec<T>, I> for () {
     fn rec_group_ty(_types: &I) -> HQResult<Vec<T>> {
         Ok(vec![])
     }
@@ -205,7 +218,7 @@ impl<T, I: TypeRegisteringInfo> TRecGroupType<Vec<T>, I> for () {
 
 impl<T, I, Head, Tail> TRecGroupType<Vec<T>, I> for (Head, Tail)
 where
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
     Head: TRecGroupType<T, I>,
     Tail: TRecGroupType<Vec<T>, I>,
 {
@@ -220,7 +233,7 @@ pub struct TStruct<Fields>(PhantomData<Fields>);
 
 impl<Fields, I> TRecGroupType<CompoundType, I> for TStruct<Fields>
 where
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
     Fields: TRecGroupType<Vec<FieldType>, I>,
 {
     fn rec_group_ty(types: &I) -> HQResult<CompoundType> {
@@ -232,7 +245,7 @@ pub struct TArray<Field>(PhantomData<Field>);
 
 impl<Field, I> TRecGroupType<CompoundType, I> for TArray<Field>
 where
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
     Field: TFieldType,
     Field::ValType: TRecGroupType<ValType, I>,
 {
@@ -248,7 +261,7 @@ pub struct TFunc<Params, Result>(PhantomData<Params>, PhantomData<Result>);
 
 impl<Params, Result, I> TRecGroupType<CompoundType, I> for TFunc<Params, Result>
 where
-    I: TypeRegisteringInfo,
+    I: TypeRegistryLike,
     Params: TRecGroupType<Vec<ValType>, I>,
     Result: TRecGroupType<Vec<ValType>, I>,
 {

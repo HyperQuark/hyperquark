@@ -252,7 +252,15 @@ where
         N: RegistryResult,
         T: NamedRegistryItem<R::Value>,
     {
-        self.0.register(R::name::<T>(), T::VALUE)
+        let (key, value) = Self::registration::<T>();
+        self.0.register(key, value)
+    }
+
+    pub fn registration<T>() -> (R::Key, R::Value)
+    where
+        T: NamedRegistryItem<R::Value>,
+    {
+        (R::name::<T>(), T::VALUE)
     }
 
     /// Registers a runtime key-value pair; just calls `register` on the underlying

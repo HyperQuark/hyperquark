@@ -16,7 +16,7 @@ pub struct MarkWaitingFlag;
 impl NamedRegistryItem<MaybeStaticFunction> for MarkWaitingFlag {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let i8_struct_ty = proj.registries().types().struct_(vec![FieldType {
                 element_type: StorageType::I8,

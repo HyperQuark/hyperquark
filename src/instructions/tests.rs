@@ -324,6 +324,8 @@ mod test_util {
 
         let wasm_bytes = proj.finish().unwrap().wasm_bytes;
 
+        std::fs::write("./wasm.wasm", &wasm_bytes);
+
         println!("{}", wasmprinter::print_bytes(wasm_bytes.clone()).unwrap());
 
         wasmparser::validate(&wasm_bytes).map_err(|err| {

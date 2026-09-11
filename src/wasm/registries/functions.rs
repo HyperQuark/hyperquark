@@ -4,6 +4,8 @@ mod dyn_array;
 mod mark_waiting_flag;
 mod pen_colour;
 mod spawn_threads;
+mod tick;
+mod unreachable_dbg;
 
 use wasm_encoder::{
     CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection,
@@ -53,7 +55,7 @@ pub struct MaybeStaticFunction {
         &WasmProject,
         &IndexMap<Box<str>, MaybeStaticFunction>,
     ) -> HQResult<Option<StaticFunction>>,
-    pub register_deps: fn(&StaticFunctionRegistry) -> HQResult<()>,
+    pub register_deps: fn() -> Vec<(Box<str>, MaybeStaticFunction)>,
 }
 
 pub struct StaticFunctionRegistrar;
@@ -72,14 +74,18 @@ impl StaticFunctionRegistry {
         type_registry: &TypeRegistry,
         imported_func_count: u32,
     ) -> HQResult<()> {
-        let mut num_funcs = self.registry().borrow().len();
+        let mut num_funcs = dbg!(self.registry().borrow().len());
+        let mut to_register = vec![];
         loop {
             for (_name, MaybeStaticFunction { register_deps, .. }) in
                 self.registry().borrow().iter()
             {
-                register_deps(&self)?;
+                to_register.extend(register_deps());
             }
-            let new_num_funcs = self.registry().borrow().len();
+            for (key, val) in core::mem::take(&mut to_register) {
+                self.register_dyn::<usize>(key, val)?;
+            }
+            let new_num_funcs = dbg!(self.registry().borrow().len());
             if new_num_funcs == num_funcs {
                 break;
             }
@@ -95,6 +101,7 @@ impl StaticFunctionRegistry {
             },
         ) in &registry
         {
+            dbg!(_name);
             let Some(StaticFunction {
                 instructions,
                 params,
@@ -137,4 +144,6 @@ pub mod static_functions {
     pub use super::mark_waiting_flag::MarkWaitingFlag;
     pub use super::pen_colour::{UpdatePenColorFromHSV, UpdatePenColorFromRGB};
     pub use super::spawn_threads::{SpawnNewThread, SpawnThreadInStack};
+    pub use super::tick::Tick;
+    pub use super::unreachable_dbg::UnreachableDbg;
 }

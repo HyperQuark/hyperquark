@@ -24,7 +24,7 @@ pub struct DynArrayPush<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPush<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -86,6 +86,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                         struct_type_index: struct_type,
                         field_index: 1,
                     },
+                    End
                 ] as &[_]),
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?, T::ty(&types)?]),
                 returns: Box::from([]),
@@ -106,7 +107,7 @@ pub struct DynArrayGet<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayGet<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -121,6 +122,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                     },
                     LocalGet(1),
                     ArrayGet(array_type),
+                    End,
                 ] as &[_]),
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?, ValType::I32]),
                 returns: Box::from([T::ty(&types)?]),
@@ -140,7 +142,7 @@ pub struct DynArraySet<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArraySet<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -156,6 +158,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                     LocalGet(1),
                     LocalGet(2),
                     ArrayGet(array_type),
+                    End,
                 ] as &[_]),
                 params: Box::from([
                     <TNonNullable<TDynArray<T>>>::ty(&types)?,
@@ -179,7 +182,7 @@ pub struct DynArrayPop<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPop<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -207,6 +210,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                         struct_type_index: struct_type,
                         field_index: 1,
                     },
+                    End,
                 ] as &[_]),
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([T::ty(&types)?]),
@@ -226,7 +230,7 @@ pub struct DynArrayNew<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayNew<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -238,6 +242,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                     ArrayNewDefault(array_type),
                     I32Const(0),
                     StructNew(struct_type),
+                    End,
                 ] as &[_]),
                 params: Box::from([ValType::I32]),
                 returns: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
@@ -257,7 +262,7 @@ pub struct DynArrayLen<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayLen<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -269,6 +274,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                         struct_type_index: struct_type,
                         field_index: 1
                     },
+                    End,
                 ] as &[_]),
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([ValType::I32]),
@@ -286,7 +292,7 @@ pub struct DynArrayClear<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayClear<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        register_deps: |_| Ok(()),
+        register_deps: || vec![],
         maybe_populate: |proj, _| {
             let types = Rc::clone(proj.registries().types());
             let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
@@ -299,6 +305,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                         struct_type_index: struct_type,
                         field_index: 1
                     },
+                    End,
                 ] as &[_]),
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([ValType::I32]),

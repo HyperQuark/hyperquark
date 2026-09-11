@@ -7,7 +7,10 @@ use wasm_encoder::{
 use crate::prelude::*;
 use crate::registry::MapRegistry;
 use crate::wasm::registries::TypeRegistry;
-use crate::wasm::registries::types::{TNonNullable, TTargetThreadArray, TThreadArray, TType};
+use crate::wasm::registries::types::{
+    ListItem, StructSubTypes, TNonNullable, TRefType, TTargetThreadArray, TTargetThreadsStruct,
+    TThreadArray, TType,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -56,8 +59,11 @@ impl GlobalRegistry {
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        let array_array_type = types.register_comp::<TTargetThreadArray, _>()?;
-        let array_type = types.register_comp::<TThreadArray, _>()?;
+        let array_array_type = TTargetThreadArray::ty(types)?;
+        let target_threads_struct_type = TTargetThreadsStruct::ty(types)?;
+        let dyn_array_type = types.register_comp::<TThreadArray, _>()?;
+        let array_type = <<<TThreadArray as StructSubTypes>::Fields as ListItem<0>>::Get as TRefType>::HeapType::ty(types)?;
+
         self.register(
             "threadss".into(),
             (
@@ -67,16 +73,16 @@ impl GlobalRegistry {
                         .flat_map(|i| {
                             [
                                 Instruction::I32Const(i as i32),
-                                Instruction::I32Const(0),
-                                Instruction::ArrayNewFixed {
-                                    array_type_index: array_type,
-                                    array_size: 0,
-                                },
+                                Instruction::I32Const(8),
+                                Instruction::ArrayNewDefault(array_type),
+                                Instruction::I32Const(8),
+                                Instruction::StructNew(dyn_array_type),
+                                Instruction::StructNew(target_threads_struct_type),
                             ]
                         })
                         .chain([Instruction::ArrayNewFixed {
                             array_type_index: array_array_type,
-                            array_size: num_sprites,
+                            array_size: num_sprites + 1,
                         }]),
                 ), // TODO: initialise properly
                 GlobalMutable(true),

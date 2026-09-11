@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use wasm_encoder::{FieldType, HeapType, RefType, ValType};
 
 use super::TypeRegistry;
-use super::rec_group::RecGroupInfo;
+use super::rec_group::RecGroupRegistry;
 use super::registration::{
     TArray, TFieldType, TFunc, TI32, TRecGroupType, TRefType, TStruct, TStructRef, TType,
 };
@@ -97,7 +97,7 @@ where
 
 impl<Fields, Head, Tail> CompoundTypeDependencies<Fields, (Head, Tail)> for TStruct<Fields>
 where
-    Fields: TRecGroupType<Vec<FieldType>, RecGroupInfo>
+    Fields: TRecGroupType<Vec<FieldType>, RecGroupRegistry>
         + HasTypeDependencies<TTypeListMarker<FieldType>>,
     Fields::RecGroupDependencies: List,
 {
@@ -109,7 +109,7 @@ where
 
 impl<Fields> HasTypeDependencies<HeapType> for TStruct<Fields>
 where
-    Fields: TRecGroupType<Vec<FieldType>, RecGroupInfo>
+    Fields: TRecGroupType<Vec<FieldType>, RecGroupRegistry>
         + HasTypeDependencies<TTypeListMarker<FieldType>>,
     Self: CompoundTypeDependencies<
             Fields,
@@ -166,10 +166,10 @@ where
 
 impl<Params, Results> CompoundTypeDependencies<(Params, Results), ()> for TFunc<Params, Results>
 where
-    Params:
-        TRecGroupType<Vec<ValType>, RecGroupInfo> + HasTypeDependencies<TTypeListMarker<ValType>>,
-    Results:
-        TRecGroupType<Vec<ValType>, RecGroupInfo> + HasTypeDependencies<TTypeListMarker<ValType>>,
+    Params: TRecGroupType<Vec<ValType>, RecGroupRegistry>
+        + HasTypeDependencies<TTypeListMarker<ValType>>,
+    Results: TRecGroupType<Vec<ValType>, RecGroupRegistry>
+        + HasTypeDependencies<TTypeListMarker<ValType>>,
 {
     type Dependencies =
         <<((HeapType, Self), ()) as List>::Concat<Params::Dependencies> as List>::Concat<
@@ -182,10 +182,10 @@ where
 impl<Params, Results, Head, Tail> CompoundTypeDependencies<(Params, Results), (Head, Tail)>
     for TFunc<Params, Results>
 where
-    Params:
-        TRecGroupType<Vec<ValType>, RecGroupInfo> + HasTypeDependencies<TTypeListMarker<ValType>>,
-    Results:
-        TRecGroupType<Vec<ValType>, RecGroupInfo> + HasTypeDependencies<TTypeListMarker<ValType>>,
+    Params: TRecGroupType<Vec<ValType>, RecGroupRegistry>
+        + HasTypeDependencies<TTypeListMarker<ValType>>,
+    Results: TRecGroupType<Vec<ValType>, RecGroupRegistry>
+        + HasTypeDependencies<TTypeListMarker<ValType>>,
 {
     type Dependencies = <Params::Dependencies as List>::Concat<Results::Dependencies>;
 
@@ -197,9 +197,9 @@ where
 impl<Params, Results> HasTypeDependencies<HeapType> for TFunc<Params, Results>
 where
     Params:
-        TRecGroupType<Vec<ValType>, RecGroupInfo> + HasTypeDependencies<TTypeListMarker<ValType>>,
+        TRecGroupType<Vec<ValType>, RecGroupRegistry> + HasTypeDependencies<TTypeListMarker<ValType>>,
     Results:
-        TRecGroupType<Vec<ValType>, RecGroupInfo> + HasTypeDependencies<TTypeListMarker<ValType>>,
+        TRecGroupType<Vec<ValType>, RecGroupRegistry> + HasTypeDependencies<TTypeListMarker<ValType>>,
     Self: CompoundTypeDependencies<
             (Params, Results),
             <<Params as HasTypeDependencies<TTypeListMarker<ValType>>>::RecGroupDependencies as List>::Concat<<Results as HasTypeDependencies<TTypeListMarker<ValType>>>::RecGroupDependencies>,
