@@ -8,8 +8,8 @@ use crate::wasm::registries::StaticFunctionRegistry;
 use crate::wasm::registries::functions::StaticFunctionRegistrar;
 use crate::wasm::registries::functions::dyn_array::{DynArrayNew, DynArrayPop, DynArrayPush};
 use crate::wasm::registries::types::{
-    TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
-    TThreadArray, TType,
+    TDynArray, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TStructRef,
+    TTargetThreadArray, TTargetThreadsStruct, TThreadArray, TType,
 };
 
 type StackStructRef = TNullable<TStackStruct>;
@@ -122,10 +122,10 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
                 params: Box::from([
                     ValType::I32,
                     <TNonNullable<TStepFunc>>::ty(&types)?,
-                    StackStructRef::ty(&types)?,
+                    <TNullable<TStructRef>>::ty(&types)?,
                 ]),
                 returns: Box::from([]),
-                locals: Box::from([<TNonNullable<TThreadArray>>::ty(&types)?]),
+                locals: Box::from([<TNonNullable<TDynArray<StackStructRef>>>::ty(&types)?]),
                 instructions: {
                     (wasm_const![
                         LocalGet(0),
@@ -145,6 +145,10 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
                         GlobalGet(imported_global_count + target_threads_global),
                         LocalGet(0),
                         ArrayGet(target_threads_type),
+                        StructGet {
+                            struct_type_index: TTargetThreadsStruct::ty(&types)?,
+                            field_index: 1,
+                        },
                         I32Const(8),
                         Call(
                             imported_func_count
@@ -171,6 +175,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
                                     ))? as u32)
                         ),
                         LocalGet(3),
+                        RefCastNonNull(TStackArray::ty(&types)?),
                         Call(
                             imported_func_count
                                 + (static_funcs

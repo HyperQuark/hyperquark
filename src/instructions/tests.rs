@@ -330,9 +330,10 @@ mod test_util {
 
         wasmparser::validate(&wasm_bytes).map_err(|err| {
             make_hq_bug!(
-                "invalid wasm module with types {:?}. Original error message: {}",
+                "invalid wasm module with types {:?}. Original error message: {}. At offset {}",
                 types,
-                err.message()
+                err.message(),
+                err.offset()
             )
         })?;
 

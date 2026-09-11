@@ -7,7 +7,7 @@ use crate::wasm::registries::StaticFunctionRegistry;
 use crate::wasm::registries::functions::StaticFunctionRegistrar;
 use crate::wasm::registries::functions::dyn_array::{DynArrayGet, DynArrayLen};
 use crate::wasm::registries::types::{
-    TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
+    TDynArray, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
     TTargetThreadsStruct, TThreadArray, TType,
 };
 
@@ -17,7 +17,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for Tick {
         static_function: None,
         register_deps: || {
             vec![
-                StaticFunctionRegistry::registration::<DynArrayLen<TNullable<TThreadArray>>>(),
+                StaticFunctionRegistry::registration::<DynArrayLen<TNullable<TStackArray>>>(),
                 StaticFunctionRegistry::registration::<DynArrayGet<TNullable<TStackArray>>>(),
                 StaticFunctionRegistry::registration::<DynArrayLen<TNullable<TStackStruct>>>(),
                 StaticFunctionRegistry::registration::<DynArrayGet<TNullable<TStackStruct>>>(),
@@ -66,7 +66,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for Tick {
                         imported_func_count
                             + static_functions
                                 .get_index_of(&StaticFunctionRegistrar::name::<
-                                    DynArrayLen<TNullable<TThreadArray>>,
+                                    DynArrayLen<TNullable<TStackArray>>,
                                 >())
                                 .ok_or_else(|| make_hq_bug!(
                                     "static function dependency not registered"
@@ -93,6 +93,9 @@ impl NamedRegistryItem<MaybeStaticFunction> for Tick {
                     RefAsNonNull,
                     LocalTee(LOCAL_THREAD),
                     LocalGet(LOCAL_THREAD),
+                    RefCastNonNull(<TDynArray<TNullable<TStackStruct>>>::ty(&types)?),
+                    LocalGet(LOCAL_THREAD),
+                    RefCastNonNull(<TDynArray<TNullable<TStackStruct>>>::ty(&types)?),
                     Call(
                         imported_func_count
                             + static_functions
