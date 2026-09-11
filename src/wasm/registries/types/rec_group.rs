@@ -4,7 +4,7 @@ use wasm_encoder::HeapType;
 
 use super::dependencies::HasTypeDependencies;
 use super::registration::TRecGroupType;
-use super::tyfp::{Func, Bool};
+use super::tyfp::{Bool, Func};
 use super::{TypeRegisteringInfo, TypeRegistry};
 use crate::prelude::*;
 use crate::wasm::registries::types::CompoundType;

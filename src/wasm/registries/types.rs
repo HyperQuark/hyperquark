@@ -7,14 +7,14 @@ mod registration;
 #[macro_use]
 mod rec_group;
 mod registry;
-mod tyfp;
 mod subtypes;
+mod tyfp;
 
 pub use rec_group::*;
 pub use registration::*;
 pub use registry::{CompoundType, RecGroup, RegistryItem, TypeRegistry};
-pub use tyfp::*;
 pub use subtypes::*;
+pub use tyfp::*;
 
 rec_group! {
     rec_grp {

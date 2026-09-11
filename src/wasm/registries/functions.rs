@@ -10,6 +10,7 @@ use wasm_encoder::{
     Instruction as WInstruction, ValType,
 };
 
+use super::super::WasmProject;
 use super::TypeRegistry;
 use crate::prelude::*;
 use crate::registry::{MapRegistry, Registry};
@@ -48,7 +49,11 @@ pub struct StaticFunction {
 #[derive(Clone)]
 pub struct MaybeStaticFunction {
     pub static_function: Option<StaticFunction>,
-    pub maybe_populate: fn() -> Option<StaticFunction>,
+    pub maybe_populate: fn(
+        &WasmProject,
+        &IndexMap<Box<str>, MaybeStaticFunction>,
+    ) -> HQResult<Option<StaticFunction>>,
+    pub register_deps: fn(&StaticFunctionRegistry) -> HQResult<()>,
 }
 
 pub struct StaticFunctionRegistrar;
@@ -60,19 +65,35 @@ pub type StaticFunctionRegistry = NamedRegistry<StaticFunctionRegistrar>;
 impl StaticFunctionRegistry {
     pub fn finish(
         self,
+        wasm_proj: &WasmProject,
         functions: &mut FunctionSection,
         exports: &mut ExportSection,
         codes: &mut CodeSection,
         type_registry: &TypeRegistry,
         imported_func_count: u32,
     ) -> HQResult<()> {
+        let mut num_funcs = self.registry().borrow().len();
+        loop {
+            for (_name, MaybeStaticFunction { register_deps, .. }) in
+                self.registry().borrow().iter()
+            {
+                register_deps(&self)?;
+            }
+            let new_num_funcs = self.registry().borrow().len();
+            if new_num_funcs == num_funcs {
+                break;
+            }
+            num_funcs = new_num_funcs;
+        }
+        let registry = self.registry().take();
         for (
             _name,
             MaybeStaticFunction {
                 static_function,
                 maybe_populate,
+                ..
             },
-        ) in self.registry().take()
+        ) in &registry
         {
             let Some(StaticFunction {
                 instructions,
@@ -80,7 +101,9 @@ impl StaticFunctionRegistry {
                 returns,
                 locals,
                 export,
-            }) = static_function.map_or_else(maybe_populate, Some)
+            }) = static_function
+                .clone()
+                .map_or_else(|| maybe_populate(wasm_proj, &registry), |sf| Ok(Some(sf)))?
             else {
                 hq_bug!(
                     "static functions must either be overriden, or have a non-None maybe_populate \
@@ -113,5 +136,5 @@ pub mod static_functions {
     };
     pub use super::mark_waiting_flag::MarkWaitingFlag;
     pub use super::pen_colour::{UpdatePenColorFromHSV, UpdatePenColorFromRGB};
-    pub use super::spawn_threads::{SpawnNewThread, SpawnThreadFuncOverride, SpawnThreadInStack};
+    pub use super::spawn_threads::{SpawnNewThread, SpawnThreadInStack};
 }

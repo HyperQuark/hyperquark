@@ -9,7 +9,6 @@
 #![feature(specialization)]
 #![feature(const_type_name)]
 #![feature(generic_const_exprs)]
-
 #![doc(html_logo_url = "https://hyperquark.edgecompute.app/logo.png")]
 #![doc(html_favicon_url = "https://hyperquark.edgecompute.app/favicon.ico")]
 #![warn(clippy::cargo, clippy::nursery, clippy::pedantic)]

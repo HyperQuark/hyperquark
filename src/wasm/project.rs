@@ -2,9 +2,9 @@ use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection,
-    DataSection, ElementSection, Elements, ExportKind, ExportSection, FieldType, Function,
-    FunctionSection, GlobalSection, HeapType, ImportSection, Instruction, MemorySection,
-    MemoryType, Module, RefType, StartSection, StorageType, TableSection, TypeSection, ValType,
+    DataSection, ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection,
+    GlobalSection, HeapType, ImportSection, Instruction, MemorySection, MemoryType, Module,
+    RefType, StartSection, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
@@ -12,8 +12,7 @@ use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::functions::static_functions::{
-    DynArrayGet, DynArrayLen, MarkWaitingFlag, SpawnNewThread, SpawnThreadFuncOverride,
-    SpawnThreadInStack,
+    DynArrayGet, DynArrayLen, SpawnNewThread, SpawnThreadInStack,
 };
 use crate::wasm::registries::types::{
     TFunc, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
@@ -141,35 +140,8 @@ impl WasmProject {
             .clone()
             .finish(&mut imports, self.registries().types())?;
 
-        let spawn_thread_func_override = SpawnThreadFuncOverride {
-            types: Rc::clone(self.registries().types()),
-            static_functions: Rc::clone(self.registries().static_functions()),
-            globals: Rc::clone(self.registries().globals()),
-            num_sprites: self.costume_names().len() as u32,
-            imported_func_count: self.imported_func_count()?,
-            imported_global_count: self.imported_global_count()?,
-        };
-
-        self.registries()
-            .static_functions()
-            .try_register_override::<SpawnNewThread, usize, _>(
-                spawn_thread_func_override.clone(),
-            )?;
-
-        self.registries()
-            .static_functions()
-            .try_register_override::<SpawnThreadInStack, usize, _>(spawn_thread_func_override)?;
-
-        self.registries()
-            .static_functions()
-            .register_override::<MarkWaitingFlag, usize, _>(self.registries().types().struct_(
-                vec![FieldType {
-                    element_type: StorageType::I8,
-                    mutable: true,
-                }],
-            )?)?;
-
         Rc::unwrap_or_clone(self.registries().static_functions().clone()).finish(
+            &self,
             &mut functions,
             &mut exports,
             &mut codes,
@@ -322,7 +294,7 @@ impl WasmProject {
         })
     }
 
-    fn imported_func_count(&self) -> HQResult<u32> {
+    pub fn imported_func_count(&self) -> HQResult<u32> {
         self.registries()
             .external_functions()
             .registry()
@@ -332,7 +304,7 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
     }
 
-    fn static_func_count(&self) -> HQResult<u32> {
+    pub fn static_func_count(&self) -> HQResult<u32> {
         self.registries()
             .static_functions()
             .registry()
@@ -342,7 +314,7 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("static function map len out of bounds"))
     }
 
-    fn imported_global_count(&self) -> HQResult<u32> {
+    pub fn imported_global_count(&self) -> HQResult<u32> {
         self.registries()
             .strings()
             .registry()
@@ -352,7 +324,7 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("string registry len out of bounds"))
     }
 
-    fn unreachable_dbg_func(
+    pub fn unreachable_dbg_func(
         &self,
         functions: &mut FunctionSection,
         codes: &mut CodeSection,
@@ -372,7 +344,7 @@ impl WasmProject {
         Ok(())
     }
 
-    fn spawn_new_thread_func<N>(&self) -> HQResult<N>
+    pub fn spawn_new_thread_func<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
@@ -382,7 +354,7 @@ impl WasmProject {
             .register::<SpawnNewThread, _>()
     }
 
-    fn spawn_thread_in_stack_func<N>(&self) -> HQResult<N>
+    pub fn spawn_thread_in_stack_func<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
@@ -392,7 +364,7 @@ impl WasmProject {
             .register::<SpawnThreadInStack, _>()
     }
 
-    fn threads_count_global<N>(&self) -> HQResult<N>
+    pub fn threads_count_global<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
@@ -400,7 +372,7 @@ impl WasmProject {
         self.registries().globals().threads_count()
     }
 
-    fn threadss_global<N>(&self) -> HQResult<N>
+    pub fn threadss_global<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,

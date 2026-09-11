@@ -1,4 +1,4 @@
-use wasm_encoder::{HeapType, RefType, ValType};
+use wasm_encoder::{FieldType, HeapType, RefType, StorageType, ValType};
 use wasm_gen::wasm_const;
 
 use super::{MaybeStaticFunction, StaticFunction};
@@ -16,14 +16,13 @@ pub struct MarkWaitingFlag;
 impl NamedRegistryItem<MaybeStaticFunction> for MarkWaitingFlag {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-pub type MarkWaitingFlagOverride = u32;
-impl NamedRegistryItemOverride<MaybeStaticFunction, MarkWaitingFlagOverride> for MarkWaitingFlag {
-    fn r#override(i8_struct_ty: u32) -> MaybeStaticFunction {
-        MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let i8_struct_ty = proj.registries().types().struct_(vec![FieldType {
+                element_type: StorageType::I8,
+                mutable: true,
+            }])?;
+            Ok(Some(StaticFunction {
                 export: Some("mark_waiting_flag".into()),
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -40,8 +39,7 @@ impl NamedRegistryItemOverride<MaybeStaticFunction, MarkWaitingFlagOverride> for
                 })]),
                 returns: Box::new([]),
                 locals: Box::new([]),
-            }),
-            maybe_populate: || None,
-        }
-    }
+            }))
+        },
+    };
 }

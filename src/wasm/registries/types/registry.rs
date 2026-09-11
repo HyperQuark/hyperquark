@@ -1,5 +1,6 @@
 use wasm_encoder::{
-    AbstractHeapType, FieldType, HeapType, RefType, StorageType, TypeSection, ValType,
+    AbstractHeapType, ArrayType, CompositeInnerType, CompositeType, FieldType, FuncType, HeapType,
+    RefType, StorageType, StructType, SubType, TypeSection, ValType,
 };
 
 use crate::ir::RcVar;
@@ -97,21 +98,54 @@ impl TypeRegistry {
         )
     }
 
-    fn finish_type(ty: CompoundType, types: &mut TypeSection) {
+    fn type_to_composite_inner(ty: CompoundType) -> CompositeInnerType {
         match ty {
-            CompoundType::Function(params, results) => types.ty().function(params, results),
-            CompoundType::Array(elem_type, mutable) => types.ty().array(&elem_type, mutable),
-            CompoundType::Struct(fields) => types.ty().struct_(fields),
+            CompoundType::Function(params, results) => {
+                CompositeInnerType::Func(FuncType::new(params, results))
+            }
+            CompoundType::Struct(fields) => CompositeInnerType::Struct(StructType {
+                fields: fields.into(),
+            }),
+            CompoundType::Array(element_type, mutable) => {
+                CompositeInnerType::Array(ArrayType(FieldType {
+                    element_type,
+                    mutable,
+                }))
+            }
+        }
+    }
+
+    fn type_to_composite(ty: CompoundType) -> CompositeType {
+        CompositeType {
+            inner: Self::type_to_composite_inner(ty),
+            shared: false,
+            describes: None,
+            descriptor: None,
+        }
+    }
+
+    fn type_to_subtype(ty: CompoundType) -> SubType {
+        SubType {
+            is_final: true,
+            supertype_idx: None,
+            composite_type: Self::type_to_composite(ty),
         }
     }
 
     pub fn finish(self, types: &mut TypeSection) {
         for ty in self.registry().take().keys().cloned() {
             match ty {
-                RegistryItem::Type(ty) => Self::finish_type(ty, types),
-                RegistryItem::RecGroupItem(rec_group, index) => {
-                    Self::finish_type(rec_group.types[index as usize].1.borrow().clone(), types);
+                RegistryItem::Type(ty) => types.ty().subtype(&Self::type_to_subtype(ty)),
+                RegistryItem::RecGroupItem(rec_group, 0) => {
+                    types.ty().rec(
+                        rec_group
+                            .types
+                            .iter()
+                            .map(|(_, compound_ty)| compound_ty.borrow().clone())
+                            .map(Self::type_to_subtype),
+                    );
                 }
+                RegistryItem::RecGroupItem(_, _) => (),
             }
         }
     }

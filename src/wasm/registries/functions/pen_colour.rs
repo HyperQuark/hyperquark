@@ -27,8 +27,9 @@ pub struct UpdatePenColorFromHSV;
 impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || {
-            Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |_, _| {
+            Ok(Some(StaticFunction {
                 export: None,
                 params: Box::from([ValType::I32]),
                 returns: Box::from([]),
@@ -283,7 +284,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromHSV {
                     End,
                 ] as &[_])
                     .into(),
-            })
+            }))
         },
     };
 }
@@ -306,8 +307,9 @@ pub struct UpdatePenColorFromRGB;
 impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || {
-            Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |_, _| {
+            Ok(Some(StaticFunction {
                 export: None,
                 params: Box::from([ValType::I32]),
                 returns: Box::from([]),
@@ -520,7 +522,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for UpdatePenColorFromRGB {
                     End,
                 ] as &[_])
                     .into(),
-            })
+            }))
         },
     };
 }

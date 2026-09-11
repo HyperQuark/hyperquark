@@ -21,25 +21,15 @@ pub struct DynArrayFuncOverride {
 /// ref `dynamic_array`<t> - the dynamic array struct (obtained from `TDynArray<T>` for `T: TDefaultable`)
 /// t                    - the element
 pub struct DynArrayPush<T>(PhantomData<T>);
-impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction>
-    for DynArrayPush<T>
-{
+impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPush<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayPush<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -100,10 +90,9 @@ impl<T: TType<ValType> + TDefaultable>
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?, T::ty(&types)?]),
                 returns: Box::from([]),
                 locals: Box::from([ValType::I32, <TNonNullable<TDynArrayField<T>>>::ty(&types)?]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Gets an element of a dynamic (resizeable) array
@@ -117,20 +106,12 @@ pub struct DynArrayGet<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayGet<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayGet<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -144,10 +125,9 @@ impl<T: TType<ValType> + TDefaultable>
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?, ValType::I32]),
                 returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Sets an element of a dynamic (resizeable) array
@@ -160,20 +140,12 @@ pub struct DynArraySet<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArraySet<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArraySet<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -192,10 +164,9 @@ impl<T: TType<ValType> + TDefaultable>
                 ]),
                 returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Pops the last element from a dynamic (resizeable) array
@@ -208,20 +179,12 @@ pub struct DynArrayPop<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayPop<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayPop<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -248,10 +211,9 @@ impl<T: TType<ValType> + TDefaultable>
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([T::ty(&types)?]),
                 locals: Box::from([ValType::I32]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Creates a new dynamic (resizeable) array of the given capacity
@@ -264,20 +226,12 @@ pub struct DynArrayNew<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayNew<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayNew<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            let array_type = types.register_comp::<TDynArrayField<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -288,10 +242,9 @@ impl<T: TType<ValType> + TDefaultable>
                 params: Box::from([ValType::I32]),
                 returns: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 locals: Box::from([]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Returns the length (not capacity) of the given dynamic array
@@ -304,19 +257,11 @@ pub struct DynArrayLen<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayLen<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayLen<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -328,10 +273,9 @@ impl<T: TType<ValType> + TDefaultable>
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([ValType::I32]),
                 locals: Box::from([]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Clears the given dynamic array to length 0 (but doesn't actually drop any of the elements)
@@ -342,19 +286,11 @@ pub struct DynArrayClear<T>(PhantomData<T>);
 impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> for DynArrayClear<T> {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-
-impl<T: TType<ValType> + TDefaultable>
-    TryNamedRegistryItemOverride<MaybeStaticFunction, DynArrayFuncOverride> for DynArrayClear<T>
-{
-    fn try_override(
-        DynArrayFuncOverride { types }: DynArrayFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |_| Ok(()),
+        maybe_populate: |proj, _| {
+            let types = Rc::clone(proj.registries().types());
+            let struct_type = types.register_comp::<TDynArray<T>, u32>()?;
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
@@ -367,8 +303,7 @@ impl<T: TType<ValType> + TDefaultable>
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
                 returns: Box::from([ValType::I32]),
                 locals: Box::from([]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }

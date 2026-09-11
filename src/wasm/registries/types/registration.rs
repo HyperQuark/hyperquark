@@ -61,7 +61,7 @@ where
     T: TType<u32>,
 {
     type Receiver = Rc<TypeRegistry>;
-    
+
     fn register(types: &Rc<TypeRegistry>) -> HQResult<u32> {
         T::ty(types)
     }

@@ -73,7 +73,7 @@ pub fn wasm(
         let registries = func.registries();
         let type_registry = registries.types().registry().borrow();
         let RegistryItem::Type(CompoundType::Struct(struct_type_fields)) = // TODO: do we need to consider the possibility of rec group items?
-            type_registry 
+            type_registry
                 .get_index(struct_type_index as usize)
                 .ok_or_else(|| make_hq_bug!("type index not found in type registry"))?
                 .0

@@ -4,67 +4,57 @@ use wasm_gen::wasm_const;
 use super::{MaybeStaticFunction, StaticFunction};
 use crate::prelude::*;
 use crate::wasm::mem_layout;
+use crate::wasm::registries::functions::StaticFunctionRegistrar;
 use crate::wasm::registries::functions::dyn_array::{DynArrayNew, DynArrayPop, DynArrayPush};
 use crate::wasm::registries::types::{
     TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
     TThreadArray, TType,
 };
-use crate::wasm::registries::{GlobalRegistry, StaticFunctionRegistry, TypeRegistry};
-
-#[derive(Clone)]
-pub struct SpawnThreadFuncOverride {
-    pub types: Rc<TypeRegistry>,
-    pub globals: Rc<GlobalRegistry>,
-    pub static_functions: Rc<StaticFunctionRegistry>,
-    pub num_sprites: u32,
-    pub imported_func_count: u32,
-    pub imported_global_count: u32,
-}
 
 type StackStructRef = TNullable<TStackStruct>;
 
 /// Spawns a new thread in the same stack (i.e. a thread that yields back to the current
 /// thread once it completes).
-/// 
+///
 /// The step that is provided to return to will be written into
 /// the current stack frame, and the new thread's step is added to the top of the current
 /// frame with the provided struct argument so that that will run until completion before
 /// yielding to the provided next step.
 ///
 /// Takes 4 parameters:
-/// - ref `stack_array`` - the current stack
-/// - ref `step_func`` - the step to spawn
+/// - ref `stack_array` - the current stack
+/// - ref `step_func` - the step to spawn
 /// - structref - the structref to pass to the step being spawned
-/// - ref `step_func`` - the step to return to after
+/// - ref `step_func` - the step to return to after
 pub struct SpawnThreadInStack;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
-impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
-    for SpawnThreadInStack
-{
-    fn try_override(
-        SpawnThreadFuncOverride {
-            types,
-            static_functions,
-            imported_func_count,
-            ..
-        }: SpawnThreadFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
-        let dyn_array_push = static_functions.register::<DynArrayPush<StackStructRef>, u32>()?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+        register_deps: |static_funcs| {
+            static_funcs.register::<DynArrayPop<StackStructRef>, usize>()?;
+            Ok(())
+        },
+        maybe_populate: |proj, static_funcs| {
+            let imported_func_count = proj.imported_func_count()?;
+
+            let types = Rc::clone(proj.registries().types());
+
+            let stack_struct_type = TStackStruct::ty(&types)?;
+
+            let dyn_array_pop = static_funcs
+                .get_index_of(&StaticFunctionRegistrar::name::<DynArrayPop<StackStructRef>>())
+                .ok_or_else(|| make_hq_bug!("static function dependency not registered"))?
+                as u32;
+            let dyn_array_push = static_funcs
+                .get_index_of(&StaticFunctionRegistrar::name::<DynArrayPush<StackStructRef>>())
+                .ok_or_else(|| make_hq_bug!("static function dependency not registered"))?
+                as u32;
+
+            Ok(Some(StaticFunction {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
-                    Call(
-                        imported_func_count
-                            + static_functions.register::<DynArrayPop<StackStructRef>, u32>()?
-                    ),
+                    Call(imported_func_count + dyn_array_pop),
                     Drop,
                     LocalGet(0),
                     LocalGet(3),
@@ -88,10 +78,9 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride>
                 ]),
                 returns: Box::from([]),
                 locals: Box::from([]),
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
 
 /// Spawn a new thread with the provided step function. This does not call it
@@ -105,26 +94,26 @@ pub struct SpawnNewThread;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
         static_function: None,
-        maybe_populate: || None,
-    };
-}
+        register_deps: |static_funcs| {
+            static_funcs.register::<DynArrayNew<StackStructRef>, usize>()?;
+            static_funcs.register::<DynArrayPush<StackStructRef>, usize>()?;
+            static_funcs.register::<DynArrayPush<TNullable<TStackArray>>, usize>()?;
+            Ok(())
+        },
+        maybe_populate: |proj, static_funcs| {
+            let types = Rc::clone(proj.registries().types());
 
-impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> for SpawnNewThread {
-    fn try_override(
-        SpawnThreadFuncOverride {
-            types,
-            globals,
-            static_functions,
-            num_sprites,
-            imported_func_count,
-            imported_global_count,
-        }: SpawnThreadFuncOverride,
-    ) -> HQResult<MaybeStaticFunction> {
-        let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
-        let target_threads_type = types.register_comp::<TTargetThreadArray, _>()?;
-        let target_threads_global: u32 = globals.threadss(&types, num_sprites)?;
-        Ok(MaybeStaticFunction {
-            static_function: Some(StaticFunction {
+            let stack_struct_type = types.register_comp::<TStackStruct, _>()?;
+            let target_threads_type = types.register_comp::<TTargetThreadArray, _>()?;
+            let target_threads_global: u32 = proj
+                .registries()
+                .globals
+                .threadss(&types, proj.costume_names().len() as u32)?;
+
+            let imported_global_count = proj.imported_global_count()?;
+            let imported_func_count = proj.imported_func_count()?;
+
+            Ok(Some(StaticFunction {
                 export: None,
                 params: Box::from([
                     ValType::I32,
@@ -143,7 +132,7 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> 
                         I32Mul,
                         I32Load16U(MemArg {
                             offset: (mem_layout::stage::BLOCK_SIZE + mem_layout::sprite::LAYER)
-                                as u64,
+                                .into(),
                             align: 1,
                             memory_index: 0,
                         }),
@@ -155,8 +144,13 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> 
                         I32Const(8),
                         Call(
                             imported_func_count
-                                + static_functions
-                                    .register::<DynArrayNew<StackStructRef>, u32>()?
+                                + (static_funcs
+                                    .get_index_of(&StaticFunctionRegistrar::name::<
+                                        DynArrayNew<StackStructRef>,
+                                    >())
+                                    .ok_or_else(|| make_hq_bug!(
+                                        "static function dependency not registered"
+                                    ))? as u32)
                         ),
                         LocalTee(3),
                         LocalGet(1),
@@ -164,21 +158,30 @@ impl TryNamedRegistryItemOverride<MaybeStaticFunction, SpawnThreadFuncOverride> 
                         StructNew(stack_struct_type),
                         Call(
                             imported_func_count
-                                + static_functions
-                                    .register::<DynArrayPush<StackStructRef>, u32>()?
+                                + (static_funcs
+                                    .get_index_of(&StaticFunctionRegistrar::name::<
+                                        DynArrayPush<StackStructRef>,
+                                    >())
+                                    .ok_or_else(|| make_hq_bug!(
+                                        "static function dependency not registered"
+                                    ))? as u32)
                         ),
                         LocalGet(3),
                         Call(
                             imported_func_count
-                                + static_functions
-                                    .register::<DynArrayPush<TNullable<TStackArray>>, u32>()?
+                                + (static_funcs
+                                    .get_index_of(&StaticFunctionRegistrar::name::<
+                                        DynArrayPush<TNullable<TStackArray>>,
+                                    >())
+                                    .ok_or_else(|| make_hq_bug!(
+                                        "static function dependency not registered"
+                                    ))? as u32)
                         ),
                         End,
                     ] as &[_])
                         .into()
                 },
-            }),
-            maybe_populate: || None,
-        })
-    }
+            }))
+        },
+    };
 }
