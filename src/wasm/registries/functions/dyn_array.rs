@@ -308,7 +308,7 @@ impl<T: TType<ValType> + TDefaultable> NamedRegistryItem<MaybeStaticFunction> fo
                     End,
                 ] as &[_]),
                 params: Box::from([<TNonNullable<TDynArray<T>>>::ty(&types)?]),
-                returns: Box::from([ValType::I32]),
+                returns: Box::from([]),
                 locals: Box::from([]),
             }))
         },

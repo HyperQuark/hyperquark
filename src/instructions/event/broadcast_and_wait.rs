@@ -74,6 +74,7 @@ mod test {
     use super::*;
     use crate::instructions::tests::assert_valid_json;
     use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
     use crate::wasm::{StepTarget, WasmFlags, WasmProject};
 
     #[test]
@@ -92,7 +93,10 @@ mod test {
 
     pub fn setup_project(wasm_proj: &WasmProject, flags: WasmFlags) {
         let step_func = StepFunc::new_with_types(
-            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
+            Box::from([
+                <TNonNullable<TStackArray>>::ty(wasm_proj.registries().types()).unwrap(),
+                TypeRegistry::STRUCT_REF,
+            ]),
             Box::from([]),
             wasm_proj.registries(),
             flags,

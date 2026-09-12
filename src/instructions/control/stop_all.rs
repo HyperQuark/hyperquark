@@ -3,7 +3,9 @@ use wasm_encoder::HeapType;
 use super::super::prelude::*;
 use crate::instructions_test;
 use crate::wasm::registries::functions::static_functions::DynArrayClear;
-use crate::wasm::registries::types::{TNullable, TTargetThreadArray, TThreadArray};
+use crate::wasm::registries::types::{
+    TNullable, TStackArray, TTargetThreadArray, TTargetThreadsStruct, TThreadArray, TType,
+};
 
 fn clear_thread(
     threads_count: u32,
@@ -36,7 +38,7 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
     let dyn_array_clear = func
         .registries()
         .static_functions()
-        .register::<DynArrayClear<TNullable<TThreadArray>>, _>()?;
+        .register::<DynArrayClear<TNullable<TStackArray>>, _>()?;
 
     Ok(wasm![
         I32Const(0),
@@ -47,6 +49,10 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
         #LazyGlobalGet(threadss_global),
         LocalGet(local_target_counter),
         ArrayGet(array_type),
+        StructGet {
+            struct_type_index: TTargetThreadsStruct::ty(func.registries().types())?,
+            field_index: 1,
+        },
         #StaticFunctionCall(dyn_array_clear),
         LocalGet(local_target_counter),
         I32Const(1),
