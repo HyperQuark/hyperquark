@@ -81,7 +81,7 @@ macro_rules! instructions_test {
                     $($setup(&mut proj, flags());)?
                     let output_type_result = output_type(types.clone().into(), $(&$fields)?);
                     let registries = Rc::new(Registries::default());
-                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::clone(proj.costume_names()));
+                    let step_func = StepFunc::new(Rc::clone(&registries), flags(), StepTarget::Sprite(0), 0, Rc::clone(proj.costume_names())).unwrap();
                     let wasm_result = wasm(&step_func, types);
                     match (output_type_result.clone(), wasm_result.clone()) {
                         (Err(..), Ok(..)) | (Ok(..), Err(..)) => panic!("output_type result doesn't match wasm result for type(s) {:?}:\noutput_type: {:?},\nwasm: {:?}", ($($($type_arg,)*)?), output_type_result, wasm_result),
@@ -228,12 +228,11 @@ pub use test_util::*;
 
 #[cfg(test)]
 mod test_util {
-    use wasm_encoder::ValType;
-
     use crate::instructions::IrOpcode;
     use crate::ir::{IrType, ReturnType, Step, StepContext, Target};
     use crate::prelude::*;
     use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
     use crate::wasm::{InternalInstruction, StepFunc, StepTarget, WasmFlags, WasmProject};
 
     pub fn make_target() -> Rc<Target> {
@@ -289,7 +288,7 @@ mod test_util {
             .iter()
             .copied()
             .map(WasmProject::ir_type_to_wasm)
-            .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+            .chain([<TNonNullable<TStackArray>>::ty(registries.types())?, TypeRegistry::STRUCT_REF])
             .collect::<Vec<_>>();
         let result = match output_type {
             ReturnType::Singleton(output) => vec![WasmProject::ir_type_to_wasm(output)],
@@ -362,7 +361,10 @@ mod test_util {
             .iter()
             .copied()
             .map(WasmProject::ir_type_to_wasm)
-            .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+            .chain([
+                <TNonNullable<TStackArray>>::ty(registries.types())?,
+                TypeRegistry::STRUCT_REF,
+            ])
             .collect::<Vec<_>>();
         let result = vec![];
         let step_func = StepFunc::new_with_types(

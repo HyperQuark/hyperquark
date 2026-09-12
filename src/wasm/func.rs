@@ -12,6 +12,7 @@ use crate::instructions::{IrOpcode, wrap_instructions};
 use crate::ir::{Event, PartialStep, Proc, RcVar, Step, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::TypeRegistry;
+use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
@@ -41,11 +42,6 @@ impl Instruction {
     ) -> HQResult<Box<[WInstruction<'static>]>> {
         Ok(match self {
             Self::Immediate(instr) => Box::from([instr.clone()]),
-            #[cfg(test)]
-            Self::LazyStepRef(_step) => Box::from([WInstruction::RefFunc(
-                imported_func_count + static_func_count,
-            )]),
-            #[cfg(not(test))]
             Self::LazyStepRef(step_index) => Box::from([WInstruction::RefFunc(
                 imported_func_count
                     + static_func_count
@@ -274,19 +270,21 @@ impl StepFunc {
     }
 
     /// creates a new step function, with one paramter
-    #[must_use]
     pub fn new(
         registries: Rc<Registries>,
         flags: WasmFlags,
         target: StepTarget,
         target_index: u32,
         costume_names: Rc<Vec<Vec<Box<str>>>>,
-    ) -> Self {
-        Self {
+    ) -> HQResult<Self> {
+        Ok(Self {
             locals: RefCell::new(vec![]),
             available_locals: RefCell::new(BTreeMap::new()),
             instructions: RefCell::new(vec![]),
-            params: Box::new([ValType::I32, TypeRegistry::STRUCT_REF]),
+            params: Box::new([
+                <TNonNullable<TStackArray>>::ty(registries.types())?,
+                TypeRegistry::STRUCT_REF,
+            ]),
             output: Box::new([]),
             registries,
             flags,
@@ -294,7 +292,7 @@ impl StepFunc {
             target,
             target_index,
             costume_names,
-        }
+        })
     }
 
     /// creates a new step function with the specified amount of paramters.
@@ -477,10 +475,10 @@ impl StepFunc {
                     .borrow()
                     .iter()
                     .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                    .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+                    .chain([<TNonNullable<TStackArray>>::ty(registries.types())?, TypeRegistry::STRUCT_REF])
                     .collect()
             } else {
-                Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
+                Box::from([<TNonNullable<TStackArray>>::ty(registries.types())?, TypeRegistry::STRUCT_REF])
             };
             let outputs = if step.try_borrow()?.context().warp {
                 (*proc_context.ret_vars)
@@ -501,7 +499,7 @@ impl StepFunc {
                 costume_names,
             )
         } else {
-            Self::new(registries, flags, target, target_index, costume_names)
+            Self::new(registries, flags, target, target_index, costume_names)?
         };
         if let Some(ref proc_context) = step.try_borrow()?.context().proc_context
             && !step.try_borrow()?.context().warp

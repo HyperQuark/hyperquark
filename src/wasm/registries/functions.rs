@@ -65,6 +65,7 @@ impl RegistryType for StaticFunctionRegistrar {
 pub type StaticFunctionRegistry = NamedRegistry<StaticFunctionRegistrar>;
 
 impl StaticFunctionRegistry {
+    /// Finishes the registry. Returns the final size of the registry.
     pub fn finish(
         self,
         wasm_proj: &WasmProject,
@@ -73,8 +74,8 @@ impl StaticFunctionRegistry {
         codes: &mut CodeSection,
         type_registry: &TypeRegistry,
         imported_func_count: u32,
-    ) -> HQResult<()> {
-        let mut num_funcs = dbg!(self.registry().borrow().len());
+    ) -> HQResult<u32> {
+        let mut num_funcs = self.registry().borrow().len();
         let mut to_register = vec![];
         loop {
             for (_name, MaybeStaticFunction { register_deps, .. }) in
@@ -85,7 +86,7 @@ impl StaticFunctionRegistry {
             for (key, val) in core::mem::take(&mut to_register) {
                 self.register_dyn::<usize>(key, val)?;
             }
-            let new_num_funcs = dbg!(self.registry().borrow().len());
+            let new_num_funcs = self.registry().borrow().len();
             if new_num_funcs == num_funcs {
                 break;
             }
@@ -101,7 +102,6 @@ impl StaticFunctionRegistry {
             },
         ) in &registry
         {
-            dbg!(_name);
             let Some(StaticFunction {
                 instructions,
                 params,
@@ -132,7 +132,7 @@ impl StaticFunctionRegistry {
                 );
             }
         }
-        Ok(())
+        Ok(num_funcs as u32)
     }
 }
 

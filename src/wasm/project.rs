@@ -150,7 +150,7 @@ impl WasmProject {
             .static_functions()
             .register::<SpawnNewThread, usize>()?; // required for events finishing
 
-        Rc::unwrap_or_clone(Rc::clone(self.registries().static_functions())).finish(
+        let static_func_count = Rc::unwrap_or_clone(Rc::clone(self.registries().static_functions())).finish(
             &self,
             &mut functions,
             &mut exports,
@@ -170,12 +170,12 @@ impl WasmProject {
                 self.spawn_thread_in_stack_func()?,
                 self.threadss_global()?,
                 self.imported_func_count()?,
-                self.static_func_count()?,
+                static_func_count,
                 self.imported_global_count()?,
             )?;
         }
 
-        self.finish_events(&mut functions, &mut codes, &mut exports)?;
+        self.finish_events(&mut functions, &mut codes, &mut exports, static_func_count)?;
 
         codes.function(&start_func);
         functions.function(self.registries().types().function(vec![], vec![])?);
@@ -185,9 +185,9 @@ impl WasmProject {
         };
 
         elements.declared(Elements::Functions(
-            (self.imported_func_count()? + self.static_func_count()?
-                ..dbg!(self.imported_func_count()?)
-                    + dbg!(self.static_func_count()?)
+            (self.imported_func_count()? + static_func_count
+                ..self.imported_func_count()?
+                    + static_func_count
                     + u32::try_from(self.steps().try_borrow()?.len())
                         .map_err(|_| make_hq_bug!("steps len out of bounds"))?)
                 .collect(),
@@ -262,7 +262,7 @@ impl WasmProject {
             &mut exports,
             self.imported_global_count()?,
             self.imported_func_count()?,
-            self.static_func_count()?,
+            static_func_count,
         );
 
         module
@@ -310,15 +310,15 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
     }
 
-    pub fn static_func_count(&self) -> HQResult<u32> {
-        self.registries()
-            .static_functions()
-            .registry()
-            .try_borrow()?
-            .len()
-            .try_into()
-            .map_err(|_| make_hq_bug!("static function map len out of bounds"))
-    }
+    // pub fn static_func_count(&self) -> HQResult<u32> {
+    //     self.registries()
+    //         .static_functions()
+    //         .registry()
+    //         .try_borrow()?
+    //         .len()
+    //         .try_into()
+    //         .map_err(|_| make_hq_bug!("static function map len out of bounds"))
+    // }
 
     pub fn imported_global_count(&self) -> HQResult<u32> {
         self.registries()
@@ -376,6 +376,7 @@ impl WasmProject {
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
+        static_func_count: u32,
     ) -> HQResult<u32> {
         let mut func = Function::new(vec![]);
 
@@ -387,7 +388,7 @@ impl WasmProject {
             .iter()
             .map(|&i| {
                 Ok(wasm![
-                    RefFunc(i + self.imported_func_count()? + self.static_func_count()?),
+                    RefFunc(i + self.imported_func_count()? + static_func_count),
                     RefNull(HeapType::Abstract {
                         shared: false,
                         ty: AbstractHeapType::Struct
@@ -407,7 +408,7 @@ impl WasmProject {
                 self.spawn_thread_in_stack_func()?,
                 self.threadss_global()?,
                 self.imported_func_count()?,
-                self.static_func_count()?,
+                static_func_count,
                 self.imported_global_count()?,
             )? {
                 func.instruction(&real_instruction);
@@ -430,7 +431,7 @@ impl WasmProject {
                 self.spawn_thread_in_stack_func()?,
                 self.threadss_global()?,
                 self.imported_func_count()?,
-                self.static_func_count()?,
+                static_func_count,
                 self.imported_global_count()?,
             )? {
                 func.instruction(&real_instruction);
@@ -454,6 +455,7 @@ impl WasmProject {
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
+        static_func_count: u32,
     ) -> HQResult<()> {
         let event_funcs = self
             .events
@@ -473,6 +475,7 @@ impl WasmProject {
                         funcs,
                         codes,
                         exports,
+                        static_func_count,
                     )?,
                 )))
             })
@@ -529,7 +532,7 @@ impl WasmProject {
                     self.spawn_thread_in_stack_func()?,
                     self.threadss_global()?,
                     self.imported_func_count()?,
-                    self.static_func_count()?,
+                    static_func_count,
                     self.imported_global_count()?,
                 )? {
                     sprite_clicked_func.instruction(&real_instruction);

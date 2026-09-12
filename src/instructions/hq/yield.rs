@@ -5,7 +5,9 @@ use crate::instructions_test;
 use crate::ir::{Step, StepIndex};
 use crate::wasm::StepFunc;
 use crate::wasm::registries::functions::static_functions::{DynArrayGet, DynArrayLen, DynArrayPop};
-use crate::wasm::registries::types::{TNonNullable, TNullable, TStackStruct, TStepFunc, TType};
+use crate::wasm::registries::types::{
+    TDynArray, TNonNullable, TNullable, TStackStruct, TStepFunc, TType,
+};
 
 #[derive(Debug, Clone)]
 pub enum YieldMode {
@@ -69,7 +71,10 @@ pub fn wasm(
             let stack_get =
                 static_functions.register::<DynArrayGet<TNullable<TStackStruct>>, _>()?;
 
+            let stack_array_ty = <TDynArray<TNullable<TStackStruct>>>::ty(&types)?;
             let step_struct_ty = TStackStruct::ty(&types)?;
+
+            let stack_local = (func.params().len() - 2) as u32;
 
             let stack_len_local = func.local(ValType::I32)?;
             let step_struct_local = func.local(<TNonNullable<TStackStruct>>::ty(&types)?)?;
@@ -77,18 +82,23 @@ pub fn wasm(
             func.free_local(stack_len_local)?;
 
             wasm![
-                LocalGet(0),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
                 #StaticFunctionCall(pop_stack),
-                LocalGet(0),
+                Drop,
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
                 #StaticFunctionCall(stack_len),
+                LocalTee(stack_len_local),
                 I32Eqz,
                 If(BlockType::Empty),
                 // Empty stack cleanup (if it happens at all) will happen in scheduler, not here.
                 Return,
                 Else,
-                LocalGet(0),
-                LocalGet(0),
-                LocalGet(0),
+                LocalGet(stack_local),
+                LocalGet(stack_local),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
                 LocalGet(stack_len_local),
                 I32Const(1),
                 I32Sub,
@@ -120,20 +130,28 @@ pub fn wasm(
             let static_functions = Rc::clone(func.registries().static_functions());
             let types = Rc::clone(func.registries().types());
 
+            let stack_array_ty = <TDynArray<TNullable<TStackStruct>>>::ty(&types)?;
+            let step_func_ty = TStepFunc::ty(&types)?;
+
+            let stack_local = (func.params().len() - 2) as u32;
+
             let stack_len =
                 static_functions.register::<DynArrayLen<TNullable<TStackStruct>>, _>()?;
             let stack_get =
                 static_functions.register::<DynArrayGet<TNullable<TStackStruct>>, _>()?;
 
             wasm![
-                LocalGet(0),
-                LocalGet(0),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
                 #StaticFunctionCall(stack_len),
                 I32Const(1),
                 I32Sub,
                 #StaticFunctionCall(stack_get),
                 RefAsNonNull,
                 #LazyStepRef(*step_index),
+                RefCastNonNull(step_func_ty),
                 StructSet { struct_type_index: TStackStruct::ty(&types)?, field_index: 0 },
                 Return
             ]

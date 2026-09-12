@@ -42,6 +42,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
             let types = Rc::clone(proj.registries().types());
 
             let stack_struct_type = TStackStruct::ty(&types)?;
+            let stack_array_ty = <TDynArray<StackStructRef>>::ty(&types)?;
 
             let dyn_array_pop = static_funcs
                 .get_index_of(&StaticFunctionRegistrar::name::<DynArrayPop<StackStructRef>>())
@@ -56,9 +57,11 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
                 export: None,
                 instructions: Box::from(wasm_const![
                     LocalGet(0),
+                    RefCastNonNull(stack_array_ty),
                     Call(imported_func_count + dyn_array_pop),
                     Drop,
                     LocalGet(0),
+                    RefCastNonNull(stack_array_ty),
                     LocalGet(3),
                     RefNull(HeapType::Abstract {
                         shared: false,
@@ -67,6 +70,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
                     StructNew(stack_struct_type),
                     Call(imported_func_count + dyn_array_push), // TODO: this will do unnecessary bounds checks. Just mutate the last element.
                     LocalGet(0),
+                    RefCastNonNull(stack_array_ty),
                     LocalGet(1),
                     LocalGet(2),
                     StructNew(stack_struct_type),
@@ -76,7 +80,7 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
                 params: Box::from([
                     <TNonNullable<TStackArray>>::ty(&types)?,
                     <TNonNullable<TStepFunc>>::ty(&types)?,
-                    StackStructRef::ty(&types)?,
+                    <TNullable<TStructRef>>::ty(&types)?,
                     <TNonNullable<TStepFunc>>::ty(&types)?,
                 ]),
                 returns: Box::from([]),
