@@ -1,6 +1,4 @@
-use wasm_encoder::{
-    ConstExpr, ExportKind, ExportSection, HeapType, RefType, TableSection, TableType,
-};
+use wasm_encoder::{ConstExpr, ExportKind, ExportSection, RefType, TableSection, TableType};
 
 use crate::prelude::*;
 
@@ -73,51 +71,51 @@ impl NamedRegistryItem<TableOptions> for StringsTable {
     };
 }
 
-pub struct StepsTable;
-impl NamedRegistryItem<TableOptions> for StepsTable {
-    const VALUE: TableOptions = TableOptions {
-        element_type: RefType::FUNCREF,
-        min: 0,
-        max: None,
-        init: None,
-        export_name: None,
-    };
-}
-impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
-    fn r#override(step_count: u64) -> TableOptions {
-        TableOptions {
-            element_type: RefType::FUNCREF,
-            min: step_count,
-            max: Some(step_count),
-            init: None,
-            export_name: None,
-        }
-    }
-}
+// pub struct StepsTable;
+// impl NamedRegistryItem<TableOptions> for StepsTable {
+//     const VALUE: TableOptions = TableOptions {
+//         element_type: RefType::FUNCREF,
+//         min: 0,
+//         max: None,
+//         init: None,
+//         export_name: None,
+//     };
+// }
+// impl NamedRegistryItemOverride<TableOptions, u64> for StepsTable {
+//     fn r#override(step_count: u64) -> TableOptions {
+//         TableOptions {
+//             element_type: RefType::FUNCREF,
+//             min: step_count,
+//             max: Some(step_count),
+//             init: None,
+//             export_name: None,
+//         }
+//     }
+// }
 
-pub struct ThreadsTable;
-impl NamedRegistryItem<TableOptions> for ThreadsTable {
-    const VALUE: TableOptions = TableOptions {
-        element_type: RefType::ARRAYREF,
-        min: 0,
-        max: None,
-        init: None,
-        export_name: Some("threads"),
-    };
-}
-impl NamedRegistryItemOverride<TableOptions, u32> for ThreadsTable {
-    fn r#override(stack_struct_ty: u32) -> TableOptions {
-        // todo: if we don't need any stacks (i.e. no non-warped procedure, no broadcast & wait),
-        // revert to old behaviour and just store funcrefs (noop for null).
-        TableOptions {
-            element_type: RefType {
-                nullable: true,
-                heap_type: HeapType::Concrete(stack_struct_ty),
-            },
-            min: 0,
-            max: None,
-            init: None,
-            export_name: Some("threads"),
-        }
-    }
-}
+// pub struct ThreadsTable;
+// impl NamedRegistryItem<TableOptions> for ThreadsTable {
+//     const VALUE: TableOptions = TableOptions {
+//         element_type: RefType::ARRAYREF,
+//         min: 0,
+//         max: None,
+//         init: None,
+//         export_name: Some("threads"),
+//     };
+// }
+// impl NamedRegistryItemOverride<TableOptions, u32> for ThreadsTable {
+//     fn r#override(stack_struct_ty: u32) -> TableOptions {
+//         // todo: if we don't need any stacks (i.e. no non-warped procedure, no broadcast & wait),
+//         // revert to old behaviour and just store funcrefs (noop for null).
+//         TableOptions {
+//             element_type: RefType {
+//                 nullable: true,
+//                 heap_type: HeapType::Concrete(stack_struct_ty),
+//             },
+//             min: 0,
+//             max: None,
+//             init: None,
+//             export_name: Some("threads"),
+//         }
+//     }
+// }

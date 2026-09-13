@@ -4,6 +4,7 @@ use super::super::prelude::*;
 use crate::ir::StepIndex;
 use crate::wasm::StepFunc;
 use crate::wasm::registries::functions::static_functions::{MarkWaitingFlag, SpawnThreadInStack};
+use crate::wasm::registries::types::{TStepFunc, TType};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
@@ -39,7 +40,10 @@ pub fn wasm(
     let struct_valtype = ValType::Ref(RefType {
         nullable: false,
         heap_type: HeapType::Concrete(i8_struct_type),
-    });
+    }); // TODO: rust-type-ify these types
+
+    let step_func_ty = TStepFunc::ty(func.registries().types())?;
+
     let struct_local = func.local(struct_valtype)?;
     func.free_local(struct_local)?;
 
@@ -66,9 +70,11 @@ pub fn wasm(
                 .map_err(|_| make_hq_bug!("local index out of bounds"))?
         ),
         #LazyStepRef(*poll_step),
+        RefCastNonNull(step_func_ty),
         StructNewDefault(i8_struct_type),
         LocalTee(struct_local),
         #LazyStepRef(*next_step),
+        RefCastNonNull(step_func_ty),
         #StaticFunctionCall(spawn_thread_func),
         LocalGet(struct_local),
         Call(queue_ask),
@@ -98,6 +104,7 @@ mod test {
     use super::super::super::tests::*;
     use super::*;
     use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
     use crate::wasm::{StepTarget, WasmFlags, WasmProject};
 
     #[test]
@@ -115,7 +122,10 @@ mod test {
 
     pub fn setup_project(wasm_proj: &WasmProject, flags: WasmFlags) {
         let step_func = StepFunc::new_with_types(
-            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
+            Box::from([
+                <TNonNullable<TStackArray>>::ty(wasm_proj.registries().types()).unwrap(),
+                TypeRegistry::STRUCT_REF,
+            ]),
             Box::from([]),
             wasm_proj.registries(),
             flags,

@@ -26,6 +26,8 @@ mod pen;
 mod procedures;
 mod sensing;
 
+pub use event::poll_waiting_threads::{TPollStruct, TWaitingThreadArray};
+
 #[macro_use]
 mod tests;
 

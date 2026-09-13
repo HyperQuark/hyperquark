@@ -1,9 +1,16 @@
 use core::ops::Deref;
 
-use wasm_encoder::{ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, ValType};
+use wasm_encoder::{
+    ConstExpr, ExportKind, ExportSection, GlobalSection, GlobalType, Instruction, ValType,
+};
 
 use crate::prelude::*;
 use crate::registry::MapRegistry;
+use crate::wasm::registries::TypeRegistry;
+use crate::wasm::registries::types::{
+    ListItem, StructSubTypes, TNonNullable, TRefType, TTargetThreadArray, TTargetThreadsStruct,
+    TThreadArray, TType,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalMutable(pub bool);
@@ -29,6 +36,61 @@ pub type GlobalRegistry =
     MapRegistry<Box<str>, (ValType, ConstExpr, GlobalMutable, GlobalExportable)>;
 
 impl GlobalRegistry {
+    pub fn threads_count<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.register(
+            "threads_count".into(),
+            (
+                ValType::I32,
+                ConstExpr::i32_const(0),
+                GlobalMutable(true),
+                GlobalExportable(true),
+            ),
+        )
+    }
+
+    // threadss isn't a typo here - using the Haskell convention of adding extra s's to
+    // the end of identifiers for nested lists
+    pub fn threadss<N>(&self, types: &Rc<TypeRegistry>, num_sprites: u32) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        let array_array_type = TTargetThreadArray::ty(types)?;
+        let target_threads_struct_type = TTargetThreadsStruct::ty(types)?;
+        let dyn_array_type = types.register_comp::<TThreadArray, _>()?;
+        let array_type = <<<TThreadArray as StructSubTypes>::Fields as ListItem<0>>::Get as TRefType>::HeapType::ty(types)?;
+
+        self.register(
+            "threadss".into(),
+            (
+                <TNonNullable<TTargetThreadArray> as TType<ValType>>::ty(types)?,
+                ConstExpr::extended(
+                    (0..=num_sprites) // stage + sprites
+                        .flat_map(|i| {
+                            [
+                                Instruction::I32Const(i as i32),
+                                Instruction::I32Const(8),
+                                Instruction::ArrayNewDefault(array_type),
+                                Instruction::I32Const(8),
+                                Instruction::StructNew(dyn_array_type),
+                                Instruction::StructNew(target_threads_struct_type),
+                            ]
+                        })
+                        .chain([Instruction::ArrayNewFixed {
+                            array_type_index: array_array_type,
+                            array_size: num_sprites + 1,
+                        }]),
+                ), // TODO: initialise properly
+                GlobalMutable(true),
+                GlobalExportable(false),
+            ),
+        )
+    }
+
     pub fn finish(
         self,
         globals: &mut GlobalSection,
