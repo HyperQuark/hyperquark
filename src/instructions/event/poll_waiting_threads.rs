@@ -14,8 +14,8 @@ use crate::wasm::registries::types::{
     TType,
 };
 
-type TWaitingThreadArray = TArray<TMutField<TNullable<TStackArray>>>;
-type TPollStruct = TStruct<(TConstField<TNonNullable<TWaitingThreadArray>>, ())>;
+pub type TWaitingThreadArray = TArray<TMutField<TNullable<TStackArray>>>;
+pub type TPollStruct = TStruct<(TConstField<TNonNullable<TWaitingThreadArray>>, ())>;
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
     let types = Rc::clone(func.registries().types());

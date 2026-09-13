@@ -97,6 +97,8 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnThreadInStack {
 /// - i32             - the index of the target to spawn a thread for
 /// - step funcref    - the step to spawn
 /// - ref null struct - the stack struct to spawn it with
+/// 
+/// Returns ref TStackArray
 pub struct SpawnNewThread;
 impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
     const VALUE: MaybeStaticFunction = MaybeStaticFunction {
@@ -128,7 +130,9 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
                     <TNonNullable<TStepFunc>>::ty(&types)?,
                     <TNullable<TStructRef>>::ty(&types)?,
                 ]),
-                returns: Box::from([]),
+                returns: Box::from([
+                    <TNonNullable<TStackArray>>::ty(&types)?,
+                ]),
                 locals: Box::from([<TNonNullable<TDynArray<StackStructRef>>>::ty(&types)?]),
                 instructions: {
                     (wasm_const![
@@ -190,6 +194,8 @@ impl NamedRegistryItem<MaybeStaticFunction> for SpawnNewThread {
                                         "static function dependency not registered"
                                     ))? as u32)
                         ),
+                        LocalGet(3),
+                        RefCastNonNull(TStackArray::ty(&types)?),
                         End,
                     ] as &[_])
                         .into()

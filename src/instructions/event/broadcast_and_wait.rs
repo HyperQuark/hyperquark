@@ -1,9 +1,9 @@
-use wasm_encoder::{HeapType, StorageType};
-
 use super::super::prelude::*;
+use crate::instructions::TWaitingThreadArray;
 use crate::instructions_test;
 use crate::ir::StepIndex;
 use crate::wasm::StepFunc;
+use crate::wasm::registries::types::{TNonNullable, TType};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
@@ -35,14 +35,9 @@ pub fn wasm(
         next_step,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let i32_array_type = func
-        .registries()
-        .types()
-        .array(StorageType::Val(ValType::I32), true)?;
-    let arr_local = func.local(ValType::Ref(RefType {
-        nullable: false,
-        heap_type: HeapType::Concrete(i32_array_type),
-    }))?;
+    let arr_local = func.local(<TNonNullable<TWaitingThreadArray>>::ty(
+        func.registries().types(),
+    )?)?;
     func.free_local(arr_local)?;
 
     Ok(wasm![

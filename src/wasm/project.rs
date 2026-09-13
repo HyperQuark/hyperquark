@@ -11,13 +11,11 @@ use wasm_gen::wasm;
 use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
+use crate::wasm::registries::TypeRegistry;
 use crate::wasm::registries::functions::static_functions::{
-    DynArrayGet, DynArrayLen, SpawnNewThread, SpawnThreadInStack, Tick, UnreachableDbg,
+    SpawnNewThread, SpawnThreadInStack, Tick, UnreachableDbg,
 };
-use crate::wasm::registries::types::{
-    TFunc, TNonNullable, TNullable, TStackArray, TStackStruct, TStepFunc, TTargetThreadArray,
-    TTargetThreadsStruct, TThreadArray, TType,
-};
+use crate::wasm::registries::types::{TStepFunc, TType};
 use crate::wasm::{StepFunc, StringsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
@@ -149,15 +147,19 @@ impl WasmProject {
         self.registries()
             .static_functions()
             .register::<SpawnNewThread, usize>()?; // required for events finishing
+        self.registries()
+            .static_functions()
+            .register::<SpawnThreadInStack, usize>()?; // required for broadcasts
 
-        let static_func_count = Rc::unwrap_or_clone(Rc::clone(self.registries().static_functions())).finish(
-            &self,
-            &mut functions,
-            &mut exports,
-            &mut codes,
-            self.registries.types(),
-            self.imported_func_count()?,
-        )?;
+        let static_func_count =
+            Rc::unwrap_or_clone(Rc::clone(self.registries().static_functions())).finish(
+                &self,
+                &mut functions,
+                &mut exports,
+                &mut codes,
+                self.registries.types(),
+                self.imported_func_count()?,
+            )?;
 
         for step_func in self.steps().try_borrow()?.iter().cloned() {
             step_func.finish(
@@ -172,10 +174,18 @@ impl WasmProject {
                 self.imported_func_count()?,
                 static_func_count,
                 self.imported_global_count()?,
+                self.steps(),
             )?;
         }
 
-        self.finish_events(&mut functions, &mut codes, &mut exports, static_func_count)?;
+        self.finish_events(
+            &mut functions,
+            &mut codes,
+            &mut exports,
+            static_func_count,
+            self.steps(),
+            self.registries().types(),
+        )?;
 
         codes.function(&start_func);
         functions.function(self.registries().types().function(vec![], vec![])?);
@@ -377,6 +387,8 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
         static_func_count: u32,
+        steps: &Rc<RefCell<Vec<StepFunc>>>,
+        types: &Rc<TypeRegistry>,
     ) -> HQResult<u32> {
         let mut func = Function::new(vec![]);
 
@@ -388,12 +400,21 @@ impl WasmProject {
             .iter()
             .map(|&i| {
                 Ok(wasm![
+                    I32Const(
+                        steps
+                            .try_borrow()?
+                            .get(i as usize)
+                            .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                            .target_index() as i32
+                    ),
                     RefFunc(i + self.imported_func_count()? + static_func_count),
+                    RefCastNonNull(TStepFunc::ty(types)?),
                     RefNull(HeapType::Abstract {
                         shared: false,
                         ty: AbstractHeapType::Struct
                     }),
                     #StaticFunctionCall(spawn_new_thread),
+                    Drop,
                 ])
             })
             .flatten_ok()
@@ -410,6 +431,7 @@ impl WasmProject {
                 self.imported_func_count()?,
                 static_func_count,
                 self.imported_global_count()?,
+                self.steps(),
             )? {
                 func.instruction(&real_instruction);
             }
@@ -433,6 +455,7 @@ impl WasmProject {
                 self.imported_func_count()?,
                 static_func_count,
                 self.imported_global_count()?,
+                self.steps(),
             )? {
                 func.instruction(&real_instruction);
             }
@@ -456,6 +479,8 @@ impl WasmProject {
         codes: &mut CodeSection,
         exports: &mut ExportSection,
         static_func_count: u32,
+        steps: &Rc<RefCell<Vec<StepFunc>>>,
+        types: &Rc<TypeRegistry>,
     ) -> HQResult<()> {
         let event_funcs = self
             .events
@@ -476,6 +501,8 @@ impl WasmProject {
                         codes,
                         exports,
                         static_func_count,
+                        steps,
+                        types,
                     )?,
                 )))
             })
@@ -534,6 +561,7 @@ impl WasmProject {
                     self.imported_func_count()?,
                     static_func_count,
                     self.imported_global_count()?,
+                    self.steps(),
                 )? {
                     sprite_clicked_func.instruction(&real_instruction);
                 }
