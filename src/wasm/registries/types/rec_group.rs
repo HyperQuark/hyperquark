@@ -45,6 +45,26 @@ impl TypeRegistryLike for RecGroupRegistry {
     }
 }
 
+pub struct RecGroupMember<Marker, T>(PhantomData<(Marker, T)>);
+
+impl<Marker, T, U> HasTypeDependencies<U> for RecGroupMember<Marker, T>
+where
+    T: HasTypeDependencies<U>,
+{
+    type Dependencies = T::Dependencies;
+    type RecGroupDependencies = T::RecGroupDependencies;
+}
+
+impl<Marker, T> TRecGroupType<CompoundType, RecGroupRegistry> for RecGroupMember<Marker, T>
+where
+    T: TRecGroupType<CompoundType, RecGroupRegistry>,
+    // I: TypeRegistryLike,
+{
+    fn rec_group_ty(types: &RecGroupRegistry) -> HQResult<CompoundType> {
+        T::rec_group_ty(types)
+    }
+}
+
 #[macro_export]
 macro_rules! rec_group {
     (
@@ -148,10 +168,16 @@ macro_rules! rec_group {
             Ok(())
         }
 
+        #[expect(non_camel_case_types, reason = "name given in snake_case")]
+        pub struct ${concat(Marker_, $rec_group_name)};
+
         $(
-            pub type $name = ${ concat($rec_group_name, _sub_rec_group_types) }!(
-                $typename{$($typeparams)+}
-            );
+            pub type $name = $crate::wasm::registries::types::rec_group::RecGroupMember<
+                ${concat(Marker_, $rec_group_name)},
+                ${ concat($rec_group_name, _sub_rec_group_types) }!(
+                    $typename{$($typeparams)+}
+                )
+            >;
 
             // type ${concat($name, CompoundTypeRecGroupDependencies)} = <
             //     <<
