@@ -39,28 +39,107 @@ pub enum RegistryItem {
     RecGroupItem(Rc<RecGroup>, u32),
 }
 
+#[must_use]
+pub const fn immediate_val_dep(val: &ValType) -> Option<u32> {
+    if let ValType::Ref(RefType {
+        heap_type: HeapType::Concrete(conc),
+        ..
+    }) = val
+    {
+        Some(*conc)
+    } else {
+        None
+    }
+}
+
+const fn immediate_field_dep(field: &StorageType) -> Option<u32> {
+    match field {
+        StorageType::Val(val) => immediate_val_dep(val),
+        StorageType::I16 | StorageType::I8 => None,
+    }
+}
+
+fn immediate_deps(ty: &CompoundType) -> Vec<u32> {
+    match ty {
+        CompoundType::Array(field, _) => immediate_field_dep(field).into_iter().collect(),
+        CompoundType::Struct(fields) => fields
+            .iter()
+            .map(|field| &field.element_type)
+            .filter_map(immediate_field_dep)
+            .collect(),
+        CompoundType::Function(params, results) => params
+            .iter()
+            .chain(results)
+            .filter_map(immediate_val_dep)
+            .collect(),
+    }
+}
+
+fn extract_rec_group(item: RegistryItem) -> Option<Rc<RecGroup>> {
+    match item {
+        RegistryItem::RecGroupItem(rec_group, _) => Some(Rc::clone(&rec_group)),
+        RegistryItem::Type(_) => None,
+    }
+}
+
+fn find_compound_type_in_rec_group(
+    compound_type: &CompoundType,
+    rec_group: &Rc<RecGroup>,
+) -> Option<u32> {
+    rec_group
+        .types
+        .iter()
+        .find_position(|other| compound_type == *other)
+        .map(|(index, _)| index as u32)
+}
+
 pub type TypeRegistry = SetRegistry<RegistryItem>;
 
 impl TypeRegistry {
+    pub fn register_compound_type<N>(&self, compound_type: CompoundType) -> HQResult<N>
+    where
+        N: RegistryResult,
+    {
+        let equivalent_in_rec_group = immediate_deps(&compound_type)
+            .into_iter()
+            .filter_map(|index| {
+                self.registry()
+                    .borrow()
+                    .get_index(index as usize)
+                    .map(|(item, ())| item)
+                    .cloned()
+            })
+            .filter_map(extract_rec_group)
+            .find_map(|rec_group| {
+                find_compound_type_in_rec_group(&compound_type, &rec_group)
+                    .map(|found| (rec_group, found))
+            });
+        if let Some((rec_group, found_index)) = equivalent_in_rec_group {
+            self.register_default(RegistryItem::RecGroupItem(rec_group, found_index))
+        } else {
+            self.register_default(RegistryItem::Type(compound_type))
+        }
+    }
+
     pub fn function<N>(&self, params: Vec<ValType>, returns: Vec<ValType>) -> HQResult<N>
     where
         N: RegistryResult,
     {
-        self.register_default(RegistryItem::Type(CompoundType::Function(params, returns)))
+        self.register_compound_type(CompoundType::Function(params, returns))
     }
 
     pub fn array<N>(&self, elem_type: StorageType, mutable: bool) -> HQResult<N>
     where
         N: RegistryResult,
     {
-        self.register_default(RegistryItem::Type(CompoundType::Array(elem_type, mutable)))
+        self.register_compound_type(CompoundType::Array(elem_type, mutable))
     }
 
     pub fn struct_<N>(&self, fields: Vec<FieldType>) -> HQResult<N>
     where
         N: RegistryResult,
     {
-        self.register_default(RegistryItem::Type(CompoundType::Struct(fields)))
+        self.register_compound_type(CompoundType::Struct(fields))
     }
 
     pub const STRUCT_REF: ValType = ValType::Ref(RefType {

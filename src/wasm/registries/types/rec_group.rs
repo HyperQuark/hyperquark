@@ -5,9 +5,9 @@ use wasm_encoder::HeapType;
 use super::TypeRegistry;
 use super::dependencies::HasTypeDependencies;
 use super::registration::TRecGroupType;
-use super::tyfp::{Bool, Func};
 use crate::prelude::*;
-use crate::wasm::registries::types::{CompoundType, RegistryItem, TypeRegistryLike};
+use crate::registry::RegistryResult;
+use crate::wasm::registries::types::{CompoundType, List, RegistryItem, TypeRegistryLike};
 
 pub struct RecGroupRegistry {
     pub types: Rc<TypeRegistry>,
@@ -19,7 +19,7 @@ pub struct RecGroupRegistry {
 impl TypeRegistryLike for RecGroupRegistry {
     fn register<N>(&self, ty: CompoundType) -> HQResult<N>
     where
-        N: crate::registry::RegistryResult,
+        N: RegistryResult,
     {
         let idx = if let Some(idx) = self
             .types
@@ -58,143 +58,27 @@ where
 impl<Marker, T> TRecGroupType<CompoundType, RecGroupRegistry> for RecGroupMember<Marker, T>
 where
     T: TRecGroupType<CompoundType, RecGroupRegistry>,
-    // I: TypeRegistryLike,
 {
     fn rec_group_ty(types: &RecGroupRegistry) -> HQResult<CompoundType> {
         T::rec_group_ty(types)
     }
 }
 
-#[macro_export]
-macro_rules! rec_group {
-    (
-        $rec_group_name:ident {
-            $($name:ident = $typename:ident{$($typeparams:tt)+};)+
-        }
-    ) => {
-        macro_rules! ${ concat($rec_group_name, _sub_rec_group_types) } {
-            (
-                ${concat($rec_group_name, _sub_rec_group_types)}!($$($$macro_args:tt)+)
-            ) => {
-                ${concat($rec_group_name, _sub_rec_group_types)}!($$($$macro_args)+)
-            };
-            (
-                $$ty:ident{$$({$$($$params:tt)+}),+}
-            ) => {
-                $$ty<
-                    $$(
-                        ${concat($rec_group_name, _sub_rec_group_types)}!(
-                            $$($$params)+
-                        )
-                    ),+
-                >
-            };
-            $(
-                ($name) => {
-                    TRecGroupItem<${ index() }>
-                };
-            )+
-            ($$ty:ident) => {
-                $$ty
-            };
-            (()) => {()};
-            (
-                ({$$($$first:tt)+},)
-            ) => {
-                (
-                    ${concat($rec_group_name, _sub_rec_group_types)}!(
-                        $$($$first)+
-                    ),
-                    ()
-                )
-            };
-            (
-                ({$$($$first:tt)+}, $$({$$($$rest:tt)+}),+ $$(,)?)
-            ) => {
-                (
-                    ${concat($rec_group_name, _sub_rec_group_types)}!(
-                        $$($$first)+
-                    ),
-                    ${concat($rec_group_name, _sub_rec_group_types)}!(
-                        ($$({$$($$rest)+},)+)
-                    )
-                )
-            };
-        }
+pub trait RecGroupMarker {
+    const NAME: &str;
 
-        fn ${concat($rec_group_name, _dummy_rec_group)}() -> Rc<RecGroup> {
-            Rc::new(RecGroup {
-                name: stringify!($rec_group_name).into(),
-                types: vec![]
-            })
-        }
+    type Types: List;
+}
 
-        fn ${ concat($rec_group_name, _register_rec_group) }(types: &Rc<TypeRegistry>) -> HQResult<()> {
-            use $crate::wasm::registries::types::dependencies::*;
-            use $crate::wasm::registries::types::rec_group::RecGroupRegistry;
-            // let rec_group_types = ${concat($rec_group_name, _construct_rec_group)}();
-            if types.registry().borrow().contains_key(&RegistryItem::RecGroupItem(${concat($rec_group_name, _dummy_rec_group)}(), 0)) {
-                return Ok(());
-            }
-            $(
-                <$name as HasTypeDependencies<HeapType>>::Dependencies::register_each(types)?;
-            )+
-            // for i in 0u32..(rec_group_types.types.len() as u32) {
-            //     types.register_default::<u32>(RegistryItem::RecGroupItem(Rc::clone(&rec_group_types), i))?;
-            // }
-            let start_index = types.registry().borrow().len() as u32;
-            let rec_group_info = RecGroupRegistry {
-                types: Rc::clone(types),
-                rec_group_start: start_index,
-                main_rec_types_num: ${count($name)},
-                rec_type_deps: RefCell::new(vec![]),
-            };
-            let mut compound_types: Vec<CompoundType> = vec![];
-            $(
-                compound_types.push($name::rec_group_ty(&rec_group_info)?);
-            )+
-            compound_types.extend(rec_group_info.rec_type_deps.take());
-            let num_types = compound_types.len() as u32;
-            let rec_group = Rc::new(RecGroup {
-                name: stringify!($rec_group_name).into(),
-                types: compound_types,
-            });
-            for i in 0..num_types {
-                types.register_default::<usize>(RegistryItem::RecGroupItem(
-                    Rc::clone(&rec_group),
-                    i
-                ))?;
-            }
-            Ok(())
-        }
+pub trait IsRecGroupMember {
+    type Marker: RecGroupMarker;
+}
 
-        #[expect(non_camel_case_types, reason = "name given in snake_case")]
-        pub struct ${concat(Marker_, $rec_group_name)};
-
-        $(
-            pub type $name = $crate::wasm::registries::types::rec_group::RecGroupMember<
-                ${concat(Marker_, $rec_group_name)},
-                ${ concat($rec_group_name, _sub_rec_group_types) }!(
-                    $typename{$($typeparams)+}
-                )
-            >;
-
-            // type ${concat($name, CompoundTypeRecGroupDependencies)} = <
-            //     <<
-            //         $name as $crate::wasm::registries::types::dependencies::HasTypeDependencies<HeapType>
-            //     >::RecGroupDependencies as List>::Tail
-            //     as $crate::wasm::registries::types::tyfp::Filter<$crate::wasm::registries::types::rec_group::HasCompoundTypeRegistration>
-            // >::Filtered;
-
-            impl TRecGroupType<u32, Rc<TypeRegistry>> for $name {
-                fn rec_group_ty(types: &Rc<TypeRegistry>) -> HQResult<u32> {
-                    ${ concat($rec_group_name, _register_rec_group) }(types)?;
-                    let rec_group_types = ${concat($rec_group_name, _dummy_rec_group)}();
-                    types.register_default(RegistryItem::RecGroupItem(rec_group_types, ${index()}))
-                }
-            }
-        )+
-    }
+impl<Marker, T> IsRecGroupMember for RecGroupMember<Marker, T>
+where
+    Marker: RecGroupMarker,
+{
+    type Marker = Marker;
 }
 
 pub struct TRecGroupItem<const I: u32>;
@@ -210,20 +94,140 @@ impl<const I: u32> TRecGroupType<HeapType, RecGroupRegistry> for TRecGroupItem<I
     }
 }
 
-pub struct HasCompoundTypeRegistration;
-impl Func for HasCompoundTypeRegistration {
-    type Func<T> = CompoundTypeRegistrationTester<T>;
-}
+#[macro_export]
+macro_rules! rec_group {
+    (
+        $rec_group_name:ident {
+            $($name:ident = $typename:ident{$($typeparams:tt)+};)+
+        }
+    ) => {
+        mod $rec_group_name {
+            use $crate::wasm::registries::types::*;
+            use $crate::wasm::registries::types::dependencies::HasTypeDependencies;
 
-pub struct CompoundTypeRegistrationTester<T>(PhantomData<T>);
+            macro_rules! sub_rec_group_types {
+                (
+                    sub_rec_group_types!($$($$macro_args:tt)+)
+                ) => {
+                    sub_rec_group_types!($$($$macro_args)+)
+                };
+                (
+                    $$ty:ident{$$({$$($$params:tt)+}),+}
+                ) => {
+                    $$ty<
+                        $$(
+                            sub_rec_group_types!(
+                                $$($$params)+
+                            )
+                        ),+
+                    >
+                };
+                $(
+                    ($name) => {
+                        TRecGroupItem<${ index() }>
+                    };
+                )+
+                ($$ty:ident) => {
+                    $$ty
+                };
+                (()) => {()};
+                (
+                    ({$$($$first:tt)+},)
+                ) => {
+                    (
+                        sub_rec_group_types!(
+                            $$($$first)+
+                        ),
+                        ()
+                    )
+                };
+                (
+                    ({$$($$first:tt)+}, $$({$$($$rest:tt)+}),+ $$(,)?)
+                ) => {
+                    (
+                        sub_rec_group_types!(
+                            $$($$first)+
+                        ),
+                        sub_rec_group_types!(
+                            ($$({$$($$rest)+},)+)
+                        )
+                    )
+                };
+            }
 
-impl<T> Bool for CompoundTypeRegistrationTester<T> {
-    default const BOOL: bool = false;
-}
+            fn dummy_rec_group() -> Rc<RecGroup> {
+                Rc::new(RecGroup {
+                    name: stringify!($rec_group_name).into(),
+                    types: vec![]
+                })
+            }
 
-impl<HeadT, Head> Bool for CompoundTypeRegistrationTester<(HeadT, Head)>
-where
-    Head: TRecGroupType<CompoundType, RecGroupRegistry>,
-{
-    const BOOL: bool = true;
+            fn register_rec_group(types: &Rc<TypeRegistry>) -> HQResult<()> {
+                if types.registry().borrow().contains_key(&RegistryItem::RecGroupItem(dummy_rec_group(), 0)) {
+                    return Ok(());
+                }
+                $(
+                    <$name as HasTypeDependencies<HeapType>>::Dependencies::register_each(types)?;
+                )+
+                let start_index = types.registry().borrow().len() as u32;
+                let rec_group_info = RecGroupRegistry {
+                    types: Rc::clone(types),
+                    rec_group_start: start_index,
+                    main_rec_types_num: ${count($name)},
+                    rec_type_deps: RefCell::new(vec![]),
+                };
+                let mut compound_types: Vec<CompoundType> = vec![];
+                $(
+                    compound_types.push($name::rec_group_ty(&rec_group_info)?);
+                )+
+                compound_types.extend(rec_group_info.rec_type_deps.take());
+                let num_types = compound_types.len() as u32;
+                let rec_group = Rc::new(RecGroup {
+                    name: stringify!($rec_group_name).into(),
+                    types: compound_types,
+                });
+                for i in 0..num_types {
+                    types.register_default::<usize>(RegistryItem::RecGroupItem(
+                        Rc::clone(&rec_group),
+                        i
+                    ))?;
+                }
+                Ok(())
+            }
+
+            pub struct Marker;
+
+            impl RecGroupMarker for Marker {
+                const NAME: &str = stringify!($rec_group_name);
+
+                type Types = ty_list!($($name),+);
+            }
+
+            $(
+                pub type $name = RecGroupMember<
+                    Marker,
+                    sub_rec_group_types!(
+                        $typename{$($typeparams)+}
+                    )
+                >;
+
+                // type ${concat($name, CompoundTypeRecGroupDependencies)} = <
+                //     <<
+                //         $name as $crate::wasm::registries::types::dependencies::HasTypeDependencies<HeapType>
+                //     >::RecGroupDependencies as List>::Tail
+                //     as $crate::wasm::registries::types::tyfp::Filter<$crate::wasm::registries::types::rec_group::HasCompoundTypeRegistration>
+                // >::Filtered;
+
+                impl TRecGroupType<u32, Rc<TypeRegistry>> for $name {
+                    fn rec_group_ty(types: &Rc<TypeRegistry>) -> HQResult<u32> {
+                        register_rec_group(types)?;
+                        let rec_group_types = dummy_rec_group();
+                        types.register_default(RegistryItem::RecGroupItem(rec_group_types, ${index()}))
+                    }
+                }
+            )+
+        }
+
+        pub use $rec_group_name::{$($name),+};
+    }
 }

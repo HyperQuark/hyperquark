@@ -1,5 +1,12 @@
 //! Functional programming in the type system. Or something like that.
 
+#[macro_export]
+macro_rules! ty_list {
+    ($first:ty, $($rest:ty),*) => {($first, ty_list!($($rest),*))};
+    ($first:ty) => {($first, ())};
+    () => {()};
+}
+
 pub trait List {
     type Head;
     type Tail: List;

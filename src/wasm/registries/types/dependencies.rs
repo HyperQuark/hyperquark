@@ -9,6 +9,7 @@ use super::registration::{
 };
 use super::tyfp::List;
 use crate::prelude::*;
+use crate::wasm::registries::types::TRecGroupItem;
 
 pub trait HasTypeDependencies<T> {
     type Dependencies: List;

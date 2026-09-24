@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use wasm_encoder::{AbstractHeapType, FieldType, HeapType, RefType, StorageType, ValType};
 
 use super::tyfp::List;
-use super::{CompoundType, RegistryItem, TypeRegistry};
+use super::{CompoundType, TypeRegistry};
 use crate::prelude::*;
 use crate::registry::{CompTimeRegistrand, RegistryResult};
 
@@ -18,7 +18,7 @@ impl TypeRegistryLike for Rc<TypeRegistry> {
     where
         N: RegistryResult,
     {
-        self.register_default(RegistryItem::Type(ty))
+        self.register_compound_type(ty)
     }
 }
 
@@ -107,14 +107,22 @@ where
 pub struct TStructRef;
 impl<I: TypeRegistryLike> TRecGroupType<CompoundType, I> for TStructRef {
     fn rec_group_ty(_types: &I) -> HQResult<CompoundType> {
-        panic!("this shouldn't be called ever!!! evil!!!")
+        // generic in `T` to make const-evaluation lazy
+        // so that the panic is only reached if the function is used
+        #[expect(clippy::extra_unused_type_parameters, reason = "explained above")]
+        const fn error<T>() {
+            const {
+                panic!(
+                    "tried to register `TStructRef` as a `CompoundType`!
+                this implementation exists only to satisfy the trait solver.",
+                )
+            }
+        }
+        error::<()>();
+        unreachable!();
     }
 }
-impl<I: TypeRegistryLike> TRecGroupType<u32, I> for TStructRef {
-    fn rec_group_ty(_types: &I) -> HQResult<u32> {
-        panic!("this shouldn't be called ever!!! evil!!!")
-    }
-}
+
 impl<I: TypeRegistryLike> TRecGroupType<HeapType, I> for TStructRef {
     fn rec_group_ty(_types: &I) -> HQResult<HeapType> {
         Ok(HeapType::Abstract {

@@ -8,6 +8,7 @@ mod registration;
 mod rec_group;
 mod registry;
 mod subtypes;
+#[macro_use]
 mod tyfp;
 
 pub use rec_group::*;
