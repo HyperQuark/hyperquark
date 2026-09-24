@@ -8,10 +8,13 @@ use wasm_encoder::{
 use wasm_gen::wasm;
 
 use super::{Registries, WasmFlags, WasmProject};
-use crate::instructions::{IrOpcode, wrap_instructions};
+use crate::instructions::{IrOpcode, TPollStruct, TWaitingThreadArray, wrap_instructions};
 use crate::ir::{Event, PartialStep, Proc, RcVar, Step, StepIndex};
 use crate::prelude::*;
 use crate::wasm::registries::TypeRegistry;
+use crate::wasm::registries::types::{
+    TArray, TConstField, TMutField, TNonNullable, TStackArray, TStepFunc, TStruct, TType,
+};
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
@@ -34,18 +37,14 @@ impl Instruction {
         threads_count_global: u32,
         spawn_new_thread_func: u32,
         spawn_thread_in_stack_func: u32,
-        threads_table: u32,
+        threadss_global: u32,
         imported_func_count: u32,
         static_func_count: u32,
         imported_global_count: u32,
+        steps: &Rc<RefCell<Vec<StepFunc>>>,
     ) -> HQResult<Box<[WInstruction<'static>]>> {
         Ok(match self {
             Self::Immediate(instr) => Box::from([instr.clone()]),
-            #[cfg(test)]
-            Self::LazyStepRef(_step) => Box::from([WInstruction::RefFunc(
-                imported_func_count + static_func_count,
-            )]),
-            #[cfg(not(test))]
             Self::LazyStepRef(step_index) => Box::from([WInstruction::RefFunc(
                 imported_func_count
                     + static_func_count
@@ -56,20 +55,34 @@ impl Instruction {
                 let broadcast_indices = events
                     .get(&Event::Broadcast(broadcast.clone()))
                     .cloned()
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|i| {
+                        HQResult::Ok((
+                            i,
+                            steps
+                                .try_borrow()?
+                                .get(i as usize)
+                                .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                                .target_index() as i32,
+                        ))
+                    })
+                    .collect::<HQResult<Vec<_>>>()?;
 
                 // todo: these should begin execution in the same step, I think, possibly immediately?
 
                 broadcast_indices
                     .iter()
-                    .flat_map(|&i| {
+                    .flat_map(|&(i, target)| {
                         [
+                            WInstruction::I32Const(target),
                             WInstruction::RefFunc(i + imported_func_count + static_func_count),
                             WInstruction::RefNull(HeapType::Abstract {
                                 shared: false,
                                 ty: AbstractHeapType::Struct,
                             }),
                             WInstruction::Call(spawn_new_thread_func + imported_func_count),
+                            WInstruction::Drop,
                         ]
                     })
                     .chain([
@@ -84,19 +97,25 @@ impl Instruction {
                     .collect()
             }
             Self::LazyBroadcastSpawnAndWait((broadcast, poll_step, next_step, arr_local)) => {
-                let broadcast_indices = events
+                let broadcast_and_target_indices = events
                     .get(&Event::Broadcast(broadcast.clone()))
                     .cloned()
-                    .unwrap_or_default();
-
-                let i32_array_type = types.array(StorageType::Val(ValType::I32), true)?;
-                let thread_poll_struct = types.struct_(vec![FieldType {
-                    element_type: StorageType::Val(ValType::Ref(RefType {
-                        nullable: false,
-                        heap_type: HeapType::Concrete(i32_array_type),
-                    })),
-                    mutable: false,
-                }])?;
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|i| {
+                        HQResult::Ok((
+                            i,
+                            steps
+                                .try_borrow()?
+                                .get(i as usize)
+                                .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                                .target_index(),
+                        ))
+                    })
+                    .collect::<HQResult<Vec<_>>>()?;
+                let waiting_thread_array_type = TWaitingThreadArray::ty(types)?;
+                let poll_struct_type = TPollStruct::ty(types)?;
+                let step_func_type = TStepFunc::ty(types)?;
 
                 let poll_step_index: u32 = poll_step
                     .0
@@ -108,35 +127,31 @@ impl Instruction {
                     .try_into()
                     .map_err(|_| make_hq_bug!("next_step index out of bounds"))?;
 
-                let broadcast_num = i32::try_from(broadcast_indices.len())
+                let broadcast_num = i32::try_from(broadcast_and_target_indices.len())
                     .map_err(|_| make_hq_bug!("indices len out of bounds"))?;
 
                 [
                     WInstruction::I32Const(broadcast_num),
-                    WInstruction::ArrayNewDefault(i32_array_type),
+                    WInstruction::ArrayNewDefault(waiting_thread_array_type),
                     WInstruction::LocalSet(*arr_local),
                 ]
                 .into_iter()
                 .chain(
-                    broadcast_indices
+                    broadcast_and_target_indices
                         .iter()
-                        .enumerate()
-                        .map(|(j, &i)| {
+                        .map(|&(i, target)| {
                             // todo: should these should begin execution in the same step?
                             Ok([
                                 WInstruction::LocalGet(*arr_local),
-                                WInstruction::I32Const(
-                                    j.try_into()
-                                        .map_err(|_| make_hq_bug!("index out of bounds"))?,
-                                ),
-                                WInstruction::TableSize(threads_table),
-                                WInstruction::ArraySet(i32_array_type),
+                                WInstruction::I32Const(target as i32),
                                 WInstruction::RefFunc(i + imported_func_count + static_func_count),
+                                WInstruction::RefCastNonNull(step_func_type),
                                 WInstruction::RefNull(HeapType::Abstract {
                                     shared: false,
                                     ty: AbstractHeapType::Struct,
                                 }),
                                 WInstruction::Call(spawn_new_thread_func + imported_func_count),
+                                WInstruction::ArraySet(waiting_thread_array_type),
                             ])
                         })
                         .collect::<HQResult<Box<[_]>>>()?
@@ -151,11 +166,13 @@ impl Instruction {
                     WInstruction::RefFunc(
                         poll_step_index + imported_func_count + static_func_count,
                     ),
+                    WInstruction::RefCastNonNull(step_func_type),
                     WInstruction::LocalGet(*arr_local),
-                    WInstruction::StructNew(thread_poll_struct),
+                    WInstruction::StructNew(poll_struct_type),
                     WInstruction::RefFunc(
                         next_step_index + imported_func_count + static_func_count,
                     ),
+                    WInstruction::RefCastNonNull(step_func_type),
                     WInstruction::Call(spawn_thread_in_stack_func + imported_func_count),
                 ])
                 .collect()
@@ -213,6 +230,16 @@ pub enum StepTarget {
     Sprite(u32),
 }
 
+impl StepTarget {
+    #[must_use]
+    pub fn suffix_id(&self) -> Cow<'_, str> {
+        match self {
+            Self::Stage => "_stage".into(),
+            Self::Sprite(id) => format!("_{id}").into(),
+        }
+    }
+}
+
 /// representation of a step's function
 #[derive(Clone)]
 pub struct StepFunc {
@@ -264,19 +291,21 @@ impl StepFunc {
     }
 
     /// creates a new step function, with one paramter
-    #[must_use]
     pub fn new(
         registries: Rc<Registries>,
         flags: WasmFlags,
         target: StepTarget,
         target_index: u32,
         costume_names: Rc<Vec<Vec<Box<str>>>>,
-    ) -> Self {
-        Self {
+    ) -> HQResult<Self> {
+        Ok(Self {
             locals: RefCell::new(vec![]),
             available_locals: RefCell::new(BTreeMap::new()),
             instructions: RefCell::new(vec![]),
-            params: Box::new([ValType::I32, TypeRegistry::STRUCT_REF]),
+            params: Box::new([
+                <TNonNullable<TStackArray>>::ty(registries.types())?,
+                TypeRegistry::STRUCT_REF,
+            ]),
             output: Box::new([]),
             registries,
             flags,
@@ -284,7 +313,7 @@ impl StepFunc {
             target,
             target_index,
             costume_names,
-        }
+        })
     }
 
     /// creates a new step function with the specified amount of paramters.
@@ -395,10 +424,11 @@ impl StepFunc {
         threads_count_global: u32,
         spawn_new_thread_func: u32,
         spawn_thread_in_stack_func: u32,
-        threads_table: u32,
+        threadss_global: u32,
         imported_func_count: u32,
         static_func_count: u32,
         imported_global_count: u32,
+        steps: &Rc<RefCell<Vec<StepFunc>>>,
     ) -> HQResult<()> {
         let mut func = Function::new_with_locals_types(self.locals.take());
         for instruction in self.instructions().take() {
@@ -408,10 +438,11 @@ impl StepFunc {
                 threads_count_global,
                 spawn_new_thread_func,
                 spawn_thread_in_stack_func,
-                threads_table,
+                threadss_global,
                 imported_func_count,
                 static_func_count,
                 imported_global_count,
+                steps,
             )? {
                 func.instruction(&real_instruction);
             }
@@ -467,10 +498,16 @@ impl StepFunc {
                     .borrow()
                     .iter()
                     .map(|var| WasmProject::ir_type_to_wasm(*var.possible_types()))
-                    .chain([ValType::I32, TypeRegistry::STRUCT_REF])
+                    .chain([
+                        <TNonNullable<TStackArray>>::ty(registries.types())?,
+                        TypeRegistry::STRUCT_REF,
+                    ])
                     .collect()
             } else {
-                Box::from([ValType::I32, TypeRegistry::STRUCT_REF])
+                Box::from([
+                    <TNonNullable<TStackArray>>::ty(registries.types())?,
+                    TypeRegistry::STRUCT_REF,
+                ])
             };
             let outputs = if step.try_borrow()?.context().warp {
                 (*proc_context.ret_vars)
@@ -491,7 +528,7 @@ impl StepFunc {
                 costume_names,
             )
         } else {
-            Self::new(registries, flags, target, target_index, costume_names)
+            Self::new(registries, flags, target, target_index, costume_names)?
         };
         if let Some(ref proc_context) = step.try_borrow()?.context().proc_context
             && !step.try_borrow()?.context().warp

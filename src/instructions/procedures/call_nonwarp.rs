@@ -4,6 +4,7 @@ use super::super::prelude::*;
 use crate::instructions_test;
 use crate::ir::{Proc, StepIndex};
 use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
+use crate::wasm::registries::types::{TStepFunc, TType};
 use crate::wasm::{StepFunc, WasmProject};
 
 #[derive(Clone, Debug)]
@@ -34,6 +35,8 @@ pub fn wasm(
     let Some(ref nonwarped_specific_proc) = *proc.nonwarped_specific_proc() else {
         hq_bug!("nonwarped_specific_proc didn't exist for call_nonwarp")
     };
+
+    let step_func_ty = TStepFunc::ty(func.registries().types())?;
 
     let arg_struct_type = func.registries().types().struct_(
         (*nonwarped_specific_proc.arg_vars())
@@ -96,13 +99,16 @@ pub fn wasm(
         LocalSet(arg_struct_local),
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         #LazyNonWarpedProcRef(Rc::clone(proc)),
+        RefCastNonNull(step_func_ty),
         LocalGet(arg_struct_local),
         #LazyStepRef(*next_step),
+        RefCastNonNull(step_func_ty),
         #StaticFunctionCall(spawn_thread_in_stack),
         LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
         LocalGet(arg_struct_local),
         #LazyNonWarpedProcRef(Rc::clone(proc)),
-        ReturnCallRef(func.registries().types().step_func_type()?)
+        RefCastNonNull(step_func_ty),
+        ReturnCallRef(func.registries().types().register_comp::<TStepFunc, _>()?)
     ]);
 
     Ok(wasm)
@@ -140,6 +146,7 @@ mod test {
     use super::super::super::tests::*;
     use super::*;
     use crate::ir::{PartialStep, StepIndex};
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
 
     #[test]
     fn fields_display_is_valid_json() {
@@ -150,7 +157,7 @@ mod test {
     pub fn test_project_setup(wasm_proj: &WasmProject, flags: crate::wasm::WasmFlags) {
         let proc_step_func = StepFunc::new_with_types(
             Box::from([
-                ValType::I32,
+                <TNonNullable<TStackArray>>::ty(wasm_proj.registries().types()).unwrap(),
                 crate::wasm::registries::TypeRegistry::STRUCT_REF,
             ]),
             vec![].into(),

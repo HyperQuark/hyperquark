@@ -4,45 +4,48 @@
 //!
 //! Returns 1 if still waiting on any threads, 0 otherwise.
 
-use wasm_encoder::{BlockType as WasmBlockType, FieldType, HeapType, StorageType};
+use wasm_encoder::BlockType as WasmBlockType;
 
 use super::super::prelude::*;
-use crate::wasm::{StepFunc, ThreadsTable};
+use crate::wasm::StepFunc;
+use crate::wasm::registries::functions::static_functions::DynArrayLen;
+use crate::wasm::registries::types::{
+    TArray, TConstField, TMutField, TNonNullable, TNullable, TStackArray, TStackStruct, TStruct,
+    TType,
+};
+
+pub type TWaitingThreadArray = TArray<TMutField<TNullable<TStackArray>>>;
+pub type TPollStruct = TStruct<(TConstField<TNonNullable<TWaitingThreadArray>>, ())>;
 
 pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInstruction>> {
-    let i32_array_type = func
-        .registries()
-        .types()
-        .array(StorageType::Val(ValType::I32), true)?;
-    let poll_struct_type = func.registries().types().struct_(vec![FieldType {
-        mutable: false,
-        element_type: StorageType::Val(ValType::Ref(RefType {
-            nullable: false,
-            heap_type: HeapType::Concrete(i32_array_type),
-        })),
-    }])?;
+    let types = Rc::clone(func.registries().types());
 
-    let arr_local = func.local(ValType::Ref(RefType {
-        nullable: false,
-        heap_type: HeapType::Concrete(i32_array_type),
-    }))?;
+    let thread_array_type = types.register_comp::<TWaitingThreadArray, _>()?;
+    let poll_struct_type = types.register_comp::<TPollStruct, _>()?;
+
+    let arr_local = func.local(<TNonNullable<TWaitingThreadArray>>::ty(&types)?)?;
     func.free_local(arr_local)?;
 
     let arr_len_local = func.local(ValType::I32)?;
     let i_local = func.local(ValType::I32)?;
+    let stack_local = func.local(<TNullable<TStackStruct>>::ty(&types)?)?;
     let wait_local = func.local(ValType::I32)?;
     func.free_local(arr_len_local)?;
+    func.free_local(stack_local)?;
     func.free_local(i_local)?;
     func.free_local(wait_local)?;
 
-    let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
+    let dyn_array_len = func
+        .registries()
+        .static_functions()
+        .register::<DynArrayLen<TNullable<TStackArray>>, _>()?;
 
     Ok(wasm![
-        LocalGet(1), // this should never have additional function arguments so this is fine
-        RefCastNonNull(HeapType::Concrete(poll_struct_type)),
+        LocalGet(1), // this step should never have additional function arguments so this is fine
+        RefCastNonNull(TPollStruct::ty(&types)?),
         StructGet {
             struct_type_index: poll_struct_type,
-            field_index: 0
+            field_index: 0,
         },
         LocalTee(arr_local),
         ArrayLen,
@@ -51,35 +54,37 @@ pub fn wasm(func: &StepFunc, _inputs: Rc<[IrType]>) -> HQResult<Vec<InternalInst
         LocalSet(i_local),
         I32Const(0),
         LocalSet(wait_local),
+
         Block(WasmBlockType::Empty),
         Loop(WasmBlockType::Empty),
-        LocalGet(i_local),
-        I32Const(1),
-        I32Add,
-        LocalTee(i_local),
-        LocalGet(arr_len_local),
-        I32Eq,
-        BrIf(1),
-        LocalGet(i_local),
-        I32Const(0),
-        I32LtS,
-        BrIf(0),
-        Block(WasmBlockType::Empty),
-        LocalGet(arr_local),
-        LocalGet(i_local),
-        ArrayGet(i32_array_type),
-        TableGet(threads_table),
-        RefIsNull,
-        BrIf(0),
-        I32Const(1),
-        LocalSet(wait_local),
-        Br(1),
-        End,
-        LocalGet(arr_local),
-        LocalGet(i_local),
-        I32Const(-1),
-        ArraySet(i32_array_type),
-        Br(0),
+            LocalGet(i_local),
+            I32Const(1),
+            I32Add,
+            LocalTee(i_local),
+            LocalGet(arr_len_local),
+            I32Eq,
+            BrIf(1),
+
+            LocalGet(arr_local),
+            LocalGet(i_local),
+            ArrayGet(thread_array_type),
+            LocalTee(stack_local),
+            RefIsNull,
+            BrIf(0),
+
+            LocalGet(stack_local),
+            #StaticFunctionCall(dyn_array_len),
+            I32Eqz,
+            If(WasmBlockType::Empty),
+                LocalGet(arr_local),
+                LocalGet(i_local),
+                RefNull(TStackArray::ty(&types)?),
+                Br(1),
+            End,
+
+            I32Const(1),
+            LocalSet(wait_local),
+            Br(1),
         End,
         End,
         LocalGet(wait_local),

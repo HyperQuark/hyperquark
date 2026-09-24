@@ -2,19 +2,21 @@ use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
     AbstractHeapType, BlockType as WasmBlockType, CodeSection, ConstExpr, DataCountSection,
-    DataSection, ElementSection, Elements, ExportKind, ExportSection, FieldType, Function,
-    FunctionSection, GlobalSection, HeapType, ImportSection, Instruction, MemorySection,
-    MemoryType, Module, RefType, StartSection, StorageType, TableSection, TypeSection, ValType,
+    DataSection, ElementSection, Elements, ExportKind, ExportSection, Function, FunctionSection,
+    GlobalSection, HeapType, ImportSection, Instruction, MemorySection, MemoryType, Module,
+    RefType, StartSection, TableSection, TypeSection, ValType,
 };
 use wasm_gen::wasm;
 
-use super::{ExternalEnvironment, GlobalExportable, GlobalMutable, Registries};
+use super::{ExternalEnvironment, Registries};
 use crate::ir::{Event, IrProject, IrType, StepIndex};
 use crate::prelude::*;
+use crate::wasm::registries::TypeRegistry;
 use crate::wasm::registries::functions::static_functions::{
-    MarkWaitingFlag, SpawnNewThread, SpawnThreadInStack,
+    SpawnNewThread, SpawnThreadInStack, Tick, UnreachableDbg,
 };
-use crate::wasm::{StepFunc, StringsTable, ThreadsTable, WasmFlags};
+use crate::wasm::registries::types::{TStepFunc, TType};
+use crate::wasm::{StepFunc, StringsTable, WasmFlags};
 
 /// A respresentation of a WASM representation of a project. Cannot be created directly;
 /// use `TryFrom<IrProject>`.
@@ -138,40 +140,26 @@ impl WasmProject {
 
         self.registries()
             .static_functions()
-            .register_override::<SpawnNewThread, usize, _>((
-                self.registries().types().step_func_type()?,
-                self.registries().types().stack_struct_type()?,
-                self.registries().types().stack_array_type()?,
-                self.registries().types().thread_struct_type()?,
-                self.threads_table_index()?,
-            ))?;
-
+            .register::<Tick, usize>()?;
         self.registries()
             .static_functions()
-            .register_override::<SpawnThreadInStack, usize, _>((
-                self.registries().types().step_func_type()?,
-                self.registries().types().stack_struct_type()?,
-                self.registries().types().stack_array_type()?,
-                self.registries().types().thread_struct_type()?,
-                self.threads_table_index()?,
-            ))?;
-
+            .register::<UnreachableDbg, usize>()?;
         self.registries()
             .static_functions()
-            .register_override::<MarkWaitingFlag, usize, _>(self.registries().types().struct_(
-                vec![FieldType {
-                    element_type: StorageType::I8,
-                    mutable: true,
-                }],
-            )?)?;
+            .register::<SpawnNewThread, usize>()?; // required for events finishing
+        self.registries()
+            .static_functions()
+            .register::<SpawnThreadInStack, usize>()?; // required for broadcasts
 
-        self.registries().static_functions().clone().finish(
-            &mut functions,
-            &mut exports,
-            &mut codes,
-            self.registries.types(),
-            self.imported_func_count()?,
-        )?;
+        let static_func_count =
+            Rc::unwrap_or_clone(Rc::clone(self.registries().static_functions())).finish(
+                &self,
+                &mut functions,
+                &mut exports,
+                &mut codes,
+                self.registries.types(),
+                self.imported_func_count()?,
+            )?;
 
         for step_func in self.steps().try_borrow()?.iter().cloned() {
             step_func.finish(
@@ -182,18 +170,22 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
-                self.static_func_count()?,
+                static_func_count,
                 self.imported_global_count()?,
+                self.steps(),
             )?;
         }
 
-        self.tick_func(&mut functions, &mut codes, &mut exports)?;
-
-        self.finish_events(&mut functions, &mut codes, &mut exports)?;
-
-        self.unreachable_dbg_func(&mut functions, &mut codes, &mut exports)?;
+        self.finish_events(
+            &mut functions,
+            &mut codes,
+            &mut exports,
+            static_func_count,
+            self.steps(),
+            self.registries().types(),
+        )?;
 
         codes.function(&start_func);
         functions.function(self.registries().types().function(vec![], vec![])?);
@@ -202,16 +194,10 @@ impl WasmProject {
             function_index: self.imported_func_count()? + functions.len() - 1,
         };
 
-        self.registries()
-            .tables()
-            .register_override::<ThreadsTable, usize, _>(
-                self.registries().types().thread_struct_type()?,
-            )?;
-
         elements.declared(Elements::Functions(
-            (self.imported_func_count()? + self.static_func_count()?
+            (self.imported_func_count()? + static_func_count
                 ..self.imported_func_count()?
-                    + self.static_func_count()?
+                    + static_func_count
                     + u32::try_from(self.steps().try_borrow()?.len())
                         .map_err(|_| make_hq_bug!("steps len out of bounds"))?)
                 .collect(),
@@ -281,12 +267,12 @@ impl WasmProject {
 
         exports.export("memory", ExportKind::Memory, 0);
 
-        self.registries().globals().clone().finish(
+        Rc::unwrap_or_clone(self.registries().globals().clone()).finish(
             &mut globals,
             &mut exports,
             self.imported_global_count()?,
             self.imported_func_count()?,
-            self.static_func_count()?,
+            static_func_count,
         );
 
         module
@@ -324,7 +310,7 @@ impl WasmProject {
         })
     }
 
-    fn imported_func_count(&self) -> HQResult<u32> {
+    pub fn imported_func_count(&self) -> HQResult<u32> {
         self.registries()
             .external_functions()
             .registry()
@@ -334,17 +320,17 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("external function map len out of bounds"))
     }
 
-    fn static_func_count(&self) -> HQResult<u32> {
-        self.registries()
-            .static_functions()
-            .registry()
-            .try_borrow()?
-            .len()
-            .try_into()
-            .map_err(|_| make_hq_bug!("static function map len out of bounds"))
-    }
+    // pub fn static_func_count(&self) -> HQResult<u32> {
+    //     self.registries()
+    //         .static_functions()
+    //         .registry()
+    //         .try_borrow()?
+    //         .len()
+    //         .try_into()
+    //         .map_err(|_| make_hq_bug!("static function map len out of bounds"))
+    // }
 
-    fn imported_global_count(&self) -> HQResult<u32> {
+    pub fn imported_global_count(&self) -> HQResult<u32> {
         self.registries()
             .strings()
             .registry()
@@ -354,35 +340,7 @@ impl WasmProject {
             .map_err(|_| make_hq_bug!("string registry len out of bounds"))
     }
 
-    fn unreachable_dbg_func(
-        &self,
-        functions: &mut FunctionSection,
-        codes: &mut CodeSection,
-        exports: &mut ExportSection,
-    ) -> HQResult<()> {
-        let mut func = Function::new(vec![]);
-        func.instruction(&Instruction::Unreachable);
-        func.instruction(&Instruction::End);
-        codes.function(&func);
-        functions.function(self.registries().types().function(vec![], vec![])?);
-        exports.export(
-            "unreachable_dbg",
-            ExportKind::Func,
-            self.imported_func_count()? + functions.len() - 1,
-        );
-
-        Ok(())
-    }
-
-    fn threads_table_index<N>(&self) -> HQResult<N>
-    where
-        N: TryFrom<usize>,
-        <N as TryFrom<usize>>::Error: fmt::Debug,
-    {
-        self.registries().tables().register::<ThreadsTable, _>()
-    }
-
-    fn spawn_new_thread_func<N>(&self) -> HQResult<N>
+    pub fn spawn_new_thread_func<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
@@ -392,7 +350,7 @@ impl WasmProject {
             .register::<SpawnNewThread, _>()
     }
 
-    fn spawn_thread_in_stack_func<N>(&self) -> HQResult<N>
+    pub fn spawn_thread_in_stack_func<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
@@ -402,20 +360,22 @@ impl WasmProject {
             .register::<SpawnThreadInStack, _>()
     }
 
-    fn threads_count_global<N>(&self) -> HQResult<N>
+    pub fn threads_count_global<N>(&self) -> HQResult<N>
     where
         N: TryFrom<usize>,
         <N as TryFrom<usize>>::Error: fmt::Debug,
     {
-        self.registries().globals().register(
-            "threads_count".into(),
-            (
-                ValType::I32,
-                ConstExpr::i32_const(0),
-                GlobalMutable(true),
-                GlobalExportable(true),
-            ),
-        )
+        self.registries().globals().threads_count()
+    }
+
+    pub fn threadss_global<N>(&self) -> HQResult<N>
+    where
+        N: TryFrom<usize>,
+        <N as TryFrom<usize>>::Error: fmt::Debug,
+    {
+        self.registries()
+            .globals()
+            .threadss(self.registries().types(), self.costume_names().len() as u32)
     }
 
     #[expect(clippy::needless_pass_by_value, reason = "annoying to borrow a box")]
@@ -426,6 +386,9 @@ impl WasmProject {
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
+        static_func_count: u32,
+        steps: &Rc<RefCell<Vec<StepFunc>>>,
+        types: &Rc<TypeRegistry>,
     ) -> HQResult<u32> {
         let mut func = Function::new(vec![]);
 
@@ -437,12 +400,21 @@ impl WasmProject {
             .iter()
             .map(|&i| {
                 Ok(wasm![
-                    RefFunc(i + self.imported_func_count()? + self.static_func_count()?),
+                    I32Const(
+                        steps
+                            .try_borrow()?
+                            .get(i as usize)
+                            .ok_or_else(|| make_hq_bug!("step index out of bounds"))?
+                            .target_index() as i32
+                    ),
+                    RefFunc(i + self.imported_func_count()? + static_func_count),
+                    RefCastNonNull(TStepFunc::ty(types)?),
                     RefNull(HeapType::Abstract {
                         shared: false,
                         ty: AbstractHeapType::Struct
                     }),
                     #StaticFunctionCall(spawn_new_thread),
+                    Drop,
                 ])
             })
             .flatten_ok()
@@ -455,10 +427,11 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
-                self.static_func_count()?,
+                static_func_count,
                 self.imported_global_count()?,
+                self.steps(),
             )? {
                 func.instruction(&real_instruction);
             }
@@ -478,10 +451,11 @@ impl WasmProject {
                 self.threads_count_global()?,
                 self.spawn_new_thread_func()?,
                 self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
+                self.threadss_global()?,
                 self.imported_func_count()?,
-                self.static_func_count()?,
+                static_func_count,
                 self.imported_global_count()?,
+                self.steps(),
             )? {
                 func.instruction(&real_instruction);
             }
@@ -504,6 +478,9 @@ impl WasmProject {
         funcs: &mut FunctionSection,
         codes: &mut CodeSection,
         exports: &mut ExportSection,
+        static_func_count: u32,
+        steps: &Rc<RefCell<Vec<StepFunc>>>,
+        types: &Rc<TypeRegistry>,
     ) -> HQResult<()> {
         let event_funcs = self
             .events
@@ -523,6 +500,9 @@ impl WasmProject {
                         funcs,
                         codes,
                         exports,
+                        static_func_count,
+                        steps,
+                        types,
                     )?,
                 )))
             })
@@ -577,10 +557,11 @@ impl WasmProject {
                     self.threads_count_global()?,
                     self.spawn_new_thread_func()?,
                     self.spawn_thread_in_stack_func()?,
-                    self.threads_table_index()?,
+                    self.threadss_global()?,
                     self.imported_func_count()?,
-                    self.static_func_count()?,
+                    static_func_count,
                     self.imported_global_count()?,
+                    self.steps(),
                 )? {
                     sprite_clicked_func.instruction(&real_instruction);
                 }
@@ -598,122 +579,6 @@ impl WasmProject {
             );
         }
 
-        Ok(())
-    }
-
-    fn tick_func(
-        &self,
-        funcs: &mut FunctionSection,
-        codes: &mut CodeSection,
-        exports: &mut ExportSection,
-    ) -> HQResult<()> {
-        let thread_struct_type = self.registries().types().thread_struct_type()?;
-        let stack_struct_ty = self.registries().types().stack_struct_type()?;
-
-        let mut tick_func = Function::new(vec![
-            (2, ValType::I32),
-            (
-                1,
-                ValType::Ref(RefType {
-                    nullable: true,
-                    heap_type: HeapType::Concrete(thread_struct_type),
-                }),
-            ),
-            (
-                1,
-                ValType::Ref(RefType {
-                    nullable: false,
-                    heap_type: HeapType::Concrete(stack_struct_ty),
-                }),
-            ),
-        ]);
-
-        let step_func_ty = self.registries().types().step_func_type()?;
-        let stack_array_ty = self.registries().types().stack_array_type()?;
-
-        let instructions = wasm![
-            TableSize(self.threads_table_index()?),
-            LocalTee(1),
-            I32Eqz,
-            BrIf(0),
-            Loop(WasmBlockType::Empty),
-            LocalGet(0),
-            LocalGet(0),
-            TableGet(self.threads_table_index()?),
-            LocalTee(2),
-            RefIsNull,
-            If(WasmBlockType::Empty),
-            LocalGet(0),
-            I32Const(1),
-            I32Add,
-            LocalTee(0),
-            LocalGet(1),
-            I32LtS,
-            If(WasmBlockType::Empty),
-            Br(2),
-            Else,
-            Return,
-            End,
-            End,
-            LocalGet(2),
-            RefAsNonNull,
-            StructGet {
-                struct_type_index: thread_struct_type,
-                field_index: 1
-            },
-            LocalGet(2),
-            RefAsNonNull,
-            StructGet {
-                struct_type_index: thread_struct_type,
-                field_index: 0
-            },
-            I32Const(1),
-            I32Sub,
-            ArrayGet(stack_array_ty),
-            RefAsNonNull,
-            LocalTee(3),
-            StructGet {
-                struct_type_index: stack_struct_ty,
-                field_index: 1
-            },
-            LocalGet(3),
-            StructGet {
-                struct_type_index: stack_struct_ty,
-                field_index: 0
-            },
-            CallRef(step_func_ty),
-            LocalGet(0),
-            I32Const(1),
-            I32Add,
-            LocalTee(0),
-            LocalGet(1),
-            I32LtS,
-            BrIf(0),
-            End,
-        ];
-        for instr in instructions {
-            for real_instruction in instr.eval(
-                &self.events,
-                self.registries().types(),
-                self.threads_count_global()?,
-                self.spawn_new_thread_func()?,
-                self.spawn_thread_in_stack_func()?,
-                self.threads_table_index()?,
-                self.imported_func_count()?,
-                self.static_func_count()?,
-                self.imported_global_count()?,
-            )? {
-                tick_func.instruction(&real_instruction);
-            }
-        }
-        tick_func.instruction(&Instruction::End);
-        funcs.function(self.registries().types().function(vec![], vec![])?);
-        codes.function(&tick_func);
-        exports.export(
-            "tick",
-            ExportKind::Func,
-            funcs.len() + self.imported_func_count()? - 1,
-        );
         Ok(())
     }
 

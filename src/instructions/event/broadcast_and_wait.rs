@@ -1,9 +1,9 @@
-use wasm_encoder::{HeapType, StorageType};
-
 use super::super::prelude::*;
+use crate::instructions::TWaitingThreadArray;
 use crate::instructions_test;
 use crate::ir::StepIndex;
 use crate::wasm::StepFunc;
+use crate::wasm::registries::types::{TNonNullable, TType};
 
 #[derive(Clone, Debug)]
 pub struct Fields {
@@ -35,14 +35,9 @@ pub fn wasm(
         next_step,
     }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let i32_array_type = func
-        .registries()
-        .types()
-        .array(StorageType::Val(ValType::I32), true)?;
-    let arr_local = func.local(ValType::Ref(RefType {
-        nullable: false,
-        heap_type: HeapType::Concrete(i32_array_type),
-    }))?;
+    let arr_local = func.local(<TNonNullable<TWaitingThreadArray>>::ty(
+        func.registries().types(),
+    )?)?;
     func.free_local(arr_local)?;
 
     Ok(wasm![
@@ -74,6 +69,7 @@ mod test {
     use super::*;
     use crate::instructions::tests::assert_valid_json;
     use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
     use crate::wasm::{StepTarget, WasmFlags, WasmProject};
 
     #[test]
@@ -92,7 +88,10 @@ mod test {
 
     pub fn setup_project(wasm_proj: &WasmProject, flags: WasmFlags) {
         let step_func = StepFunc::new_with_types(
-            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
+            Box::from([
+                <TNonNullable<TStackArray>>::ty(wasm_proj.registries().types()).unwrap(),
+                TypeRegistry::STRUCT_REF,
+            ]),
             Box::from([]),
             wasm_proj.registries(),
             flags,

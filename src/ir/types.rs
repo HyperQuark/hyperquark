@@ -105,7 +105,6 @@ impl Type {
             .find(|&ty| ty.contains(self))
     }
 
-    #[must_use]
     pub fn base_types(self) -> Box<dyn Iterator<Item = Self>> {
         if self.is_none() {
             return Box::new(core::iter::empty());

@@ -112,6 +112,7 @@ mod test {
     use super::super::super::tests::*;
     use super::*;
     use crate::ir::{PartialStep, StepIndex};
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
 
     #[test]
     fn fields_display_is_valid_json() {
@@ -129,7 +130,7 @@ mod test {
                 .iter()
                 .map(|ty| WasmProject::ir_type_to_wasm(*ty))
                 .chain([
-                    ValType::I32,
+                    <TNonNullable<TStackArray>>::ty(wasm_proj.registries().types()).unwrap(),
                     crate::wasm::registries::TypeRegistry::STRUCT_REF,
                 ])
                 .collect(),

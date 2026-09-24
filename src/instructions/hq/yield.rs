@@ -1,9 +1,13 @@
-use wasm_encoder::{BlockType, ConstExpr, HeapType};
+use wasm_encoder::BlockType;
 
 use super::super::prelude::*;
 use crate::instructions_test;
 use crate::ir::{Step, StepIndex};
-use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc, ThreadsTable};
+use crate::wasm::StepFunc;
+use crate::wasm::registries::functions::static_functions::{DynArrayGet, DynArrayLen, DynArrayPop};
+use crate::wasm::registries::types::{
+    TDynArray, TNonNullable, TNullable, TStackStruct, TStepFunc, TType,
+};
 
 #[derive(Debug, Clone)]
 pub enum YieldMode {
@@ -55,85 +59,62 @@ pub fn wasm(
     _inputs: Rc<[IrType]>,
     Fields { mode: yield_mode }: &Fields,
 ) -> HQResult<Vec<InternalInstruction>> {
-    let threads_count = func.registries().globals().register(
-        "threads_count".into(),
-        (
-            ValType::I32,
-            ConstExpr::i32_const(0),
-            GlobalMutable(true),
-            GlobalExportable(true),
-        ),
-    )?;
-
     Ok(match yield_mode {
         YieldMode::None => {
-            let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
-            let thread_struct_ty = func.registries().types().thread_struct_type()?;
-            let stack_array_ty = func.registries().types().stack_array_type()?;
-            let stack_struct_ty = func.registries().types().stack_struct_type()?;
-            let thread_struct_local = func.local(ValType::Ref(RefType {
-                nullable: false,
-                heap_type: HeapType::Concrete(thread_struct_ty),
-            }))?;
-            let stack_struct_local = func.local(ValType::Ref(RefType {
-                nullable: false,
-                heap_type: HeapType::Concrete(stack_struct_ty),
-            }))?;
-            let i32_local = func.local(ValType::I32)?;
-            let step_func_ty = func.registries().types().step_func_type()?;
-            func.free_local(thread_struct_local)?;
-            func.free_local(stack_struct_local)?;
-            func.free_local(i32_local)?;
+            let static_functions = Rc::clone(func.registries().static_functions());
+            let types = Rc::clone(func.registries().types());
+
+            let pop_stack =
+                static_functions.register::<DynArrayPop<TNullable<TStackStruct>>, _>()?;
+            let stack_len =
+                static_functions.register::<DynArrayLen<TNullable<TStackStruct>>, _>()?;
+            let stack_get =
+                static_functions.register::<DynArrayGet<TNullable<TStackStruct>>, _>()?;
+
+            let stack_array_ty = <TDynArray<TNullable<TStackStruct>>>::ty(&types)?;
+            let step_struct_ty = TStackStruct::ty(&types)?;
+
+            let stack_local = (func.params().len() - 2) as u32;
+
+            let stack_len_local = func.local(ValType::I32)?;
+            let step_struct_local = func.local(<TNonNullable<TStackStruct>>::ty(&types)?)?;
+            func.free_local(step_struct_local)?;
+            func.free_local(stack_len_local)?;
 
             wasm![
-                LocalGet(0),
-                TableGet(threads_table),
-                RefAsNonNull,
-                LocalTee(thread_struct_local),
-                StructGet { struct_type_index: thread_struct_ty, field_index: 0 },
-                I32Const(1),
-                I32Sub,
-                LocalTee(i32_local),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
+                #StaticFunctionCall(pop_stack),
+                Drop,
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
+                #StaticFunctionCall(stack_len),
+                LocalTee(stack_len_local),
                 I32Eqz,
                 If(BlockType::Empty),
-                #LazyGlobalGet(threads_count),
-                I32Const(1),
-                I32Sub,
-                #LazyGlobalSet(threads_count),
-                LocalGet(0),
-                RefNull(HeapType::Concrete(thread_struct_ty)),
-                TableSet(threads_table),
+                // Empty stack cleanup (if it happens at all) will happen in scheduler, not here.
                 Return,
                 Else,
-                LocalGet(thread_struct_local),
-                LocalGet(i32_local),
-                StructSet {
-                    struct_type_index: thread_struct_ty,
-                    field_index: 0,
-                },
-                LocalGet(thread_struct_local),
-                StructGet {
-                    struct_type_index: thread_struct_ty,
-                    field_index: 1,
-                },
-                LocalGet(i32_local),
+                LocalGet(stack_local),
+                LocalGet(stack_local),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
+                LocalGet(stack_len_local),
                 I32Const(1),
                 I32Sub,
-                ArrayGet(stack_array_ty),
+                #StaticFunctionCall(stack_get),
                 RefAsNonNull,
-                LocalSet(stack_struct_local),
-                LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
-                LocalGet(stack_struct_local),
+                LocalTee(step_struct_local),
                 StructGet {
-                    struct_type_index: stack_struct_ty,
+                    struct_type_index: step_struct_ty,
                     field_index: 1,
                 },
-                LocalGet(stack_struct_local),
+                LocalGet(step_struct_local),
                 StructGet {
-                    struct_type_index: stack_struct_ty,
+                    struct_type_index: step_struct_ty,
                     field_index: 0,
                 },
-                ReturnCallRef(step_func_ty),
+                ReturnCallRef(TStepFunc::ty(&types)?),
                 End,
             ]
         }
@@ -146,30 +127,32 @@ pub fn wasm(
             func.compile_inner_step(Rc::clone(step))?
         }
         YieldMode::Schedule(step_index) => {
-            let threads_table = func.registries().tables().register::<ThreadsTable, _>()?;
-            let thread_struct_ty = func.registries().types().thread_struct_type()?;
-            let local = func.local(ValType::Ref(RefType {
-                nullable: false,
-                heap_type: HeapType::Concrete(thread_struct_ty),
-            }))?;
-            func.free_local(local)?;
-            let stack_array_ty = func.registries().types().stack_array_type()?;
-            let stack_struct_ty = func.registries().types().stack_struct_type()?;
+            let static_functions = Rc::clone(func.registries().static_functions());
+            let types = Rc::clone(func.registries().types());
+
+            let stack_array_ty = <TDynArray<TNullable<TStackStruct>>>::ty(&types)?;
+            let step_func_ty = TStepFunc::ty(&types)?;
+
+            let stack_local = (func.params().len() - 2) as u32;
+
+            let stack_len =
+                static_functions.register::<DynArrayLen<TNullable<TStackStruct>>, _>()?;
+            let stack_get =
+                static_functions.register::<DynArrayGet<TNullable<TStackStruct>>, _>()?;
 
             wasm![
-                LocalGet(0),
-                TableGet(threads_table),
-                RefAsNonNull,
-                LocalTee(local),
-                StructGet { struct_type_index: thread_struct_ty, field_index: 1 },
-                LocalGet(local),
-                StructGet { struct_type_index: thread_struct_ty, field_index: 0 },
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
+                LocalGet(stack_local),
+                RefCastNonNull(stack_array_ty),
+                #StaticFunctionCall(stack_len),
                 I32Const(1),
                 I32Sub,
-                ArrayGet(stack_array_ty),
+                #StaticFunctionCall(stack_get),
                 RefAsNonNull,
                 #LazyStepRef(*step_index),
-                StructSet { struct_type_index: stack_struct_ty, field_index: 0 },
+                RefCastNonNull(step_func_ty),
+                StructSet { struct_type_index: TStackStruct::ty(&types)?, field_index: 0 },
                 Return
             ]
         }

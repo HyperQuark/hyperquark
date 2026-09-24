@@ -4,6 +4,7 @@ use super::super::prelude::*;
 use crate::instructions_test;
 use crate::ir::StepIndex;
 use crate::wasm::registries::functions::static_functions::SpawnThreadInStack;
+use crate::wasm::registries::types::{TStepFunc, TType};
 use crate::wasm::{GlobalExportable, GlobalMutable, StepFunc};
 
 #[derive(Clone, Debug)]
@@ -62,6 +63,8 @@ pub fn wasm(
         ),
     )?;
 
+    let step_func_ty = TStepFunc::ty(func.registries().types())?;
+
     Ok(
         if t1.contains(IrType::FloatNeg) {
             wasm![
@@ -79,9 +82,11 @@ pub fn wasm(
                 LocalSet(struct_local),
                 LocalGet((func.params().len() - 2).try_into().map_err(|_| make_hq_bug!("local index out of bounds"))?),
                 #LazyStepRef(*poll_step),
+                RefCastNonNull(step_func_ty),
                 LocalGet(struct_local),
                 RefCastNullable(HeapType::Abstract { shared: false, ty: AbstractHeapType::Struct }),
                 #LazyStepRef(*next_step),
+                RefCastNonNull(step_func_ty),
                 #StaticFunctionCall(spawn_thread_in_stack_func),
             ]
         ).collect()
@@ -111,6 +116,7 @@ mod test {
     use super::super::super::tests::*;
     use super::*;
     use crate::wasm::registries::TypeRegistry;
+    use crate::wasm::registries::types::{TNonNullable, TStackArray, TType};
     use crate::wasm::{StepTarget, WasmFlags, WasmProject};
 
     #[test]
@@ -122,13 +128,16 @@ mod test {
     pub fn make_fields() -> Fields {
         Fields {
             poll_step: StepIndex(0),
-            next_step: StepIndex(1),
+            next_step: StepIndex(0),
         }
     }
 
     pub fn setup_project(wasm_proj: &WasmProject, flags: WasmFlags) {
         let step_func = StepFunc::new_with_types(
-            Box::from([ValType::I32, TypeRegistry::STRUCT_REF]),
+            Box::from([
+                <TNonNullable<TStackArray>>::ty(wasm_proj.registries().types()).unwrap(),
+                TypeRegistry::STRUCT_REF,
+            ]),
             Box::from([]),
             wasm_proj.registries(),
             flags,
